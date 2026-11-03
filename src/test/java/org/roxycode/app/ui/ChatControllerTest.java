@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
+import javax.swing.JComboBox;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -439,9 +440,12 @@ class ChatControllerTest extends ChatTestFixture {
         flushEdt();
         assertTrue(taskPanel.userInputPromptPanel.isVisible());
 
-        JButton gradleBtn = SwingTestUtils.findButton(taskPanel.userInputPromptPanel, "Gradle");
-        assertNotNull(gradleBtn);
-        SwingTestUtils.clickOnEdt(gradleBtn);
+        JComboBox<?> comboBox = SwingTestUtils.findComponent(taskPanel.userInputPromptPanel, JComboBox.class);
+        assertNotNull(comboBox);
+        SwingTestUtils.runOnEdt(() -> comboBox.setSelectedItem("Gradle"));
+        JButton submitBtn = SwingTestUtils.findButton(taskPanel.userInputPromptPanel, "Submit");
+        assertNotNull(submitBtn);
+        SwingTestUtils.clickOnEdt(submitBtn);
         assertEquals("Gradle", singleFuture.get(5, TimeUnit.SECONDS));
         assertFalse(taskPanel.userInputPromptPanel.isVisible());
 

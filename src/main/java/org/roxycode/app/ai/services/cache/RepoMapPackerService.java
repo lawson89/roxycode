@@ -184,7 +184,7 @@ public class RepoMapPackerService {
         return !ext.isEmpty() && SOURCE_EXTENSIONS.contains(ext);
     }
 
-    static boolean isTestFile(String relPath) {
+    public static boolean isTestFile(String relPath) {
         if (relPath == null || relPath.isBlank()) {
             return false;
         }

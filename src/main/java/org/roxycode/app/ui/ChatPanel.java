@@ -74,6 +74,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     static final String DEFAULT_PLACEHOLDER_TEXT = "Type a message... (Enter to send, Shift+Enter for newline, @ to mention files, Ctrl+V to paste image)";
     static final String NO_PROJECT_PLACEHOLDER_TEXT = "Select a project folder in the top bar (Change Project...) to start chatting...";
     private static final String TOOLBAR_BUTTON_STYLE = "arc: 8; font: -1; foreground: $Label.disabledForeground";
+    private static final String ACCENT_BUTTON_STYLE = "background: $Component.accentColor; focusedBackground: $Component.accentColor; hoverBackground: darken($Component.accentColor, 8%); pressedBackground: darken($Component.accentColor, 14%); foreground: #ffffff";
     private static final String GROW_FILL_COL = "[grow, fill]";
     private static final int CTX_USAGE_CRITICAL_PCT = 90;
     private static final int CTX_USAGE_WARNING_PCT = 75;
@@ -198,13 +199,11 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
                 e -> controller.approvePhase());
         approveButton.setEnabled(false);
 
-        viewPlanButton = createActionButton("View Plan", Codicons.LIST_ORDERED, null, false,
-                "background: $Component.accentColor; focusedBackground: $Component.accentColor; hoverBackground: darken($Component.accentColor, 8%); pressedBackground: darken($Component.accentColor, 14%); foreground: #ffffff",
-                e -> {
-                    if (onViewPlanAction != null) {
-                        onViewPlanAction.run();
-                    }
-                });
+        viewPlanButton = createActionButton("View Plan", Codicons.LIST_ORDERED, null, false, ACCENT_BUTTON_STYLE, e -> {
+            if (onViewPlanAction != null) {
+                onViewPlanAction.run();
+            }
+        });
         viewPlanButton.setVisible(false);
 
         rejectButton = createActionButton("Reject", Codicons.CLOSE, null, false,
@@ -291,8 +290,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         fileMentionPopup = new FileMentionPopup(inputArea, inputScrollPane);
 
         sendButton = createActionButton("Send", Codicons.CHEVRON_RIGHT, new Insets(5, 14, 5, 14), false,
-                "arc: 8; font: bold; background: $Component.accentColor; focusedBackground: $Component.accentColor; hoverBackground: darken($Component.accentColor, 8%); pressedBackground: darken($Component.accentColor, 14%); foreground: #ffffff",
-                this::sendMessage);
+                "arc: 8; font: bold; " + ACCENT_BUTTON_STYLE, this::sendMessage);
 
         stopButton = createActionButton("Stop", Codicons.DEBUG_STOP, new Insets(5, 14, 5, 14), false,
                 "arc: 8; font: bold; background: $Actions.Red; focusedBackground: $Actions.Red; hoverBackground: darken($Actions.Red, 8%); pressedBackground: darken($Actions.Red, 14%); foreground: #ffffff",
@@ -698,12 +696,11 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         } else if (promptType == PromptType.SINGLE_SELECT) {
             JPanel optionsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
             optionsPanel.setOpaque(false);
-            for (String option : event.options()) {
-                JButton optionButton = new JButton(option);
-                optionButton.putClientProperty(FlatClientProperties.STYLE, "arc: 8");
-                optionButton.addActionListener(e -> onResponse.accept(option));
-                optionsPanel.add(optionButton);
-            }
+            JComboBox<String> comboBox = new JComboBox<>(event.options().toArray(new String[0]));
+            optionsPanel.add(comboBox);
+            JButton submitButton = createActionButton("Submit", Codicons.CHECK, null, false, ACCENT_BUTTON_STYLE,
+                    e -> onResponse.accept((String) comboBox.getSelectedItem()));
+            optionsPanel.add(submitButton);
             userInputPromptPanel.add(optionsPanel);
         } else if (promptType == PromptType.MULTI_SELECT) {
             JPanel checksPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 4));
@@ -715,17 +712,15 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
                 checkBoxes.add(checkBox);
                 checksPanel.add(checkBox);
             }
-            JButton submitButton = createActionButton("Submit", Codicons.CHECK, null, false,
-                    "background: $Component.accentColor; focusedBackground: $Component.accentColor; hoverBackground: darken($Component.accentColor, 8%); pressedBackground: darken($Component.accentColor, 14%); foreground: #ffffff",
-                    e -> {
-                        List<String> selected = new ArrayList<>();
-                        for (JCheckBox cb : checkBoxes) {
-                            if (cb.isSelected()) {
-                                selected.add(cb.getText());
-                            }
-                        }
-                        onResponse.accept(List.copyOf(selected));
-                    });
+            JButton submitButton = createActionButton("Submit", Codicons.CHECK, null, false, ACCENT_BUTTON_STYLE, e -> {
+                List<String> selected = new ArrayList<>();
+                for (JCheckBox cb : checkBoxes) {
+                    if (cb.isSelected()) {
+                        selected.add(cb.getText());
+                    }
+                }
+                onResponse.accept(List.copyOf(selected));
+            });
             checksPanel.add(submitButton);
             userInputPromptPanel.add(checksPanel);
         } else if (promptType == PromptType.TEXT) {
@@ -734,8 +729,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
             JTextField textField = new JTextField(StringUtils.defaultString(event.defaultValue()));
             ActionListener submitAction = e -> onResponse.accept(textField.getText());
             textField.addActionListener(submitAction);
-            JButton submitButton = createActionButton("Submit", Codicons.CHECK, null, false,
-                    "background: $Component.accentColor; focusedBackground: $Component.accentColor; hoverBackground: darken($Component.accentColor, 8%); pressedBackground: darken($Component.accentColor, 14%); foreground: #ffffff",
+            JButton submitButton = createActionButton("Submit", Codicons.CHECK, null, false, ACCENT_BUTTON_STYLE,
                     submitAction);
             textPanel.add(textField, "growx");
             textPanel.add(submitButton);

@@ -190,4 +190,23 @@ class GrepServiceTest {
         }
     }
 
+    @Test
+    void testGrepWordMatchesUsesWordBoundaryOrLiteralFlag() {
+        try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
+            runner.when(() -> ProcessRunner.run(anyList(), eq(tempDir), eq(false)))
+                    .thenReturn(new ProcessResult(0, "src/App.java:10:5:app.executeJexl();" + NL, "", false));
+
+            List<String> wordHits = grepService.grepWordMatches("executeJexl", "src", true);
+            assertEquals(List.of("src/App.java:10:5:app.executeJexl();"), wordHits);
+            runner.verify(() -> ProcessRunner.run(
+                    eq(List.of("rg", "--vimgrep", "--no-heading", "--color=never", "-w", "--", "executeJexl", "src")),
+                    eq(tempDir), eq(false)));
+
+            grepService.grepWordMatches("operator+", ".", false);
+            runner.verify(() -> ProcessRunner.run(
+                    eq(List.of("rg", "--vimgrep", "--no-heading", "--color=never", "-F", "--", "operator+", ".")),
+                    eq(tempDir), eq(false)));
+        }
+    }
+
 }

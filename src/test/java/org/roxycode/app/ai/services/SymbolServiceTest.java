@@ -268,4 +268,104 @@ class SymbolServiceTest {
         when(projectService.hasActiveProject()).thenReturn(false);
         assertTrue(symbolService.findSymbol("targetMethod").isEmpty());
     }
+
+    @Test
+    void testFindUsagesFiltersDefinitionsCommentsImportsAndEnrichesWithSingleBatchCtags() throws IOException {
+        Path toolFile = Files.createDirectories(tempDir.resolve("src/main/java/demo")).resolve("JexlTool.java");
+        Path callerFile = Files.createDirectories(tempDir.resolve("src/main/java/app")).resolve("Caller.java");
+        Path otherFile = Files.createDirectories(tempDir.resolve("src/main/java/other")).resolve("OtherTool.java");
+        Path testFile = Files.createDirectories(tempDir.resolve("src/test/java/app")).resolve("CallerTest.java");
+
+        Files.writeString(toolFile, String.join(NL, "package demo;", "public class JexlTool {",
+                "    public String executeJexl(String script) {", "        return script;", "    }", "}"));
+        Files.writeString(callerFile,
+                String.join(NL, "package app;", "import demo.JexlTool;", "public class Caller {",
+                        "    // executeJexl comment should be ignored", "    void run(JexlTool tool) {",
+                        "        tool.executeJexl('1+1');", "    }", "}"));
+        Files.writeString(otherFile,
+                String.join(NL, "package other;", "public class OtherTool {", "    public void executeJexl() {}", "}"));
+        Files.writeString(testFile, String.join(NL, "package app;", "class CallerTest {", "    void testRun() {",
+                "        new JexlTool().executeJexl('test');", "    }", "}"));
+
+        List<String> vimgrepLines = List.of("src/main/java/app/Caller.java:2:8:import demo.JexlTool;",
+                "src/main/java/app/Caller.java:4:8:    // executeJexl comment should be ignored",
+                "src/main/java/demo/JexlTool.java:3:19:    public String executeJexl(String script) {",
+                "src/main/java/other/OtherTool.java:3:17:    public void executeJexl() {}",
+                "./src/test/java/app/CallerTest.java:4:24:        new JexlTool().executeJexl('test');",
+                "src/main/java/app/Caller.java:6:14:        tool.executeJexl('1+1');",
+                "src/main/java/app/Caller.java:6:28:        tool.executeJexl('1+1');");
+        when(grepService.grepWordMatches("executeJexl", ".", true)).thenReturn(vimgrepLines);
+
+        List<List<String>> ctagsCalls = new ArrayList<>();
+        String ctagsOutput = String.join(NL, tagJson("JexlTool", toolFile, 2, 6, "class", null, null),
+                tagJson("executeJexl", toolFile, 3, 5, "method", "JexlTool", "(String script)"),
+                tagJson("Caller", callerFile, 3, 8, "class", null, null),
+                tagJson("run", callerFile, 5, 7, "method", "Caller", "(JexlTool tool)"),
+                tagJson("OtherTool", otherFile, 2, 4, "class", null, null),
+                tagJson("executeJexl", otherFile, 3, 3, "method", "OtherTool", "()"),
+                tagJson("CallerTest", testFile, 2, 6, "class", null, null),
+                tagJson("testRun", testFile, 3, 5, "method", "CallerTest", "()"));
+        symbolService.setCtagsRunner(cmd -> {
+            ctagsCalls.add(cmd);
+            return new ProcessResult(0, ctagsOutput, "", false);
+        });
+
+        List<SymbolUsage> usages = symbolService.findUsages("JexlTool.executeJexl");
+        assertEquals(1, ctagsCalls.size());
+        assertEquals(2, usages.size());
+
+        SymbolUsage prodUsage = usages.get(0);
+        assertEquals("src/main/java/app/Caller.java", prodUsage.getPath());
+        assertEquals(6, prodUsage.getLine());
+        assertEquals(14, prodUsage.getColumn());
+        assertEquals("tool.executeJexl('1+1');", prodUsage.getSnippet());
+        assertEquals("Caller.run", prodUsage.getEnclosingSymbol());
+        assertFalse(prodUsage.isTestFile());
+
+        SymbolUsage testUsage = usages.get(1);
+        assertEquals("src/test/java/app/CallerTest.java", testUsage.getPath());
+        assertEquals(4, testUsage.getLine());
+        assertEquals("CallerTest.testRun", testUsage.getEnclosingSymbol());
+        assertTrue(testUsage.isTestFile());
+
+        assertTrue(symbolService.findUsages(null).isEmpty());
+        assertTrue(symbolService.findUsages("   ").isEmpty());
+    }
+
+    @Test
+    void testFindRelatedTestsCoversMirroredTier1ConventionsTier2FallbackAndTestFileSelfCheck() throws IOException {
+        Path existingTest = Files.createDirectories(tempDir.resolve("src/test/java/org/roxycode/service"))
+                .resolve("SymbolServiceTest.java");
+        Files.writeString(existingTest, "class SymbolServiceTest {}");
+
+        assertEquals(List.of("src/test/java/org/roxycode/service/SymbolServiceTest.java"),
+                symbolService.findRelatedTests("src/test/java/org/roxycode/service/SymbolServiceTest.java"));
+
+        when(grepService.listFiles()).thenReturn(List.of("src/main/java/org/roxycode/service/SymbolService.java",
+                "src/test/java/org/roxycode/other/SymbolServiceTest.java",
+                "src/test/java/org/roxycode/service/SymbolServiceTest.java",
+                "src/test/java/org/roxycode/service/SymbolServiceIT.java", "tests/service/test_symbol_service.py",
+                "frontend/src/components/Button.spec.tsx"));
+        when(grepService.findMatchingFiles((char) 92 + "bSymbolService" + (char) 92 + "b"))
+                .thenReturn(List.of("src/main/java/org/roxycode/ai/JexlServiceRegistry.java",
+                        "src/test/java/org/roxycode/ai/JexlServiceRegistryTest.java",
+                        "src/test/java/org/roxycode/service/SymbolServiceTest.java"));
+
+        List<String> relatedJava = symbolService
+                .findRelatedTests("src/main/java/org/roxycode/service/SymbolService.java");
+        assertEquals(List.of("src/test/java/org/roxycode/service/SymbolServiceIT.java",
+                "src/test/java/org/roxycode/service/SymbolServiceTest.java",
+                "src/test/java/org/roxycode/other/SymbolServiceTest.java",
+                "src/test/java/org/roxycode/ai/JexlServiceRegistryTest.java"), relatedJava);
+
+        assertTrue(SymbolService.matchesTestNamingConvention("test_symbol_service.py", "symbol_service"));
+        assertTrue(SymbolService.matchesTestNamingConvention("symbol_service_test.go", "symbol_service"));
+        assertTrue(SymbolService.matchesTestNamingConvention("Button.spec.tsx", "Button"));
+        assertTrue(SymbolService.matchesTestNamingConvention("Button.test.ts", "Button"));
+        assertTrue(SymbolService.matchesTestNamingConvention("engine_tests.rs", "engine"));
+        assertFalse(SymbolService.matchesTestNamingConvention("OtherTest.java", "SymbolService"));
+
+        assertTrue(symbolService.findRelatedTests(null).isEmpty());
+        assertTrue(symbolService.findRelatedTests("   ").isEmpty());
+    }
 }

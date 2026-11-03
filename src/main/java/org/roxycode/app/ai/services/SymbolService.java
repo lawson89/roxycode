@@ -6,10 +6,15 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.apache.commons.lang3.StringUtils;
@@ -17,8 +22,10 @@ import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.services.CtagsRunner.CtagsEntry;
+import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.util.ExceptionUtils;
+import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,25 +36,40 @@ public class SymbolService {
     private static final Logger log = LoggerFactory.getLogger(SymbolService.class);
 
     private static final String DOC_FILE_PATH = "The file path relative to the project root";
+    private static final String DOC_SEARCH_PATH = "The directory or file path relative to the project root to scope the search";
     private static final String DOC_SYMBOL_NAME = "The symbol name (e.g., 'myMethod' or 'MyClass.myMethod')";
     private static final String DOC_SYMBOL_NAMES = "Array of symbol names to read from the file";
     private static final String ERROR_PREFIX = "Error: ";
     private static final String CANCELLED_MSG = "Symbol operation cancelled";
+    private static final String CURRENT_DIR = ".";
     private static final List<String> CTAGS_OUTLINE_FLAGS = List.of("--fields=+neKSs");
+    private static final List<String> SOURCE_DIR_PREFIXES = List.of("src/main/java/", "src/main/kotlin/",
+            "src/main/scala/", "src/main/groovy/", "src/main/", "src/", "lib/", "app/");
+    private static final List<String> TEST_DIR_PREFIXES = List.of("src/test/java/", "src/test/kotlin/",
+            "src/test/scala/", "src/test/groovy/", "src/test/", "tests/", "test/", "__tests__/");
 
     static final int MAX_PRECEDING_CONTEXT_LINES = 5;
     static final int MAX_FIND_SYMBOL_FILES = 25;
+    static final int MAX_USAGES = 100;
+    static final int MAX_RELATED_TESTS = 15;
     private static final int SINGLE_FILE_COUNT = 1;
     private static final int MIN_LINE_NUMBER = 1;
     private static final int NOT_FOUND_INDEX = -1;
     private static final char DOT_CHAR = '.';
+    private static final char COLON_CHAR = ':';
     private static final char BACKSLASH_CHAR = 92;
     private static final char SLASH_CHAR = '/';
+    private static final String WORD_BOUNDARY = String.valueOf(BACKSLASH_CHAR) + 'b';
+    private static final String IMPORT_TAB_PREFIX = "import" + (char) 9;
+    private static final String PACKAGE_TAB_PREFIX = "package" + (char) 9;
     private static final String DOUBLE_NEWLINE = String.valueOf((char) 10) + (char) 10;
 
     private static final Pattern SIMPLE_IDENTIFIER_PATTERN = Pattern.compile("^[A-Za-z0-9_$]+$");
-
+    private static final Pattern VIMGREP_LINE_PATTERN = Pattern.compile("^(.+?):([0-9]+):([0-9]+):(.*)$");
     private record LineRange(int startLine, int endLine) {
+    }
+
+    private record RawUsageHit(String path, int line, int column, String snippet) {
     }
 
     private final ProjectService projectService;
@@ -186,6 +208,343 @@ public class SymbolService {
         matches.sort(Comparator.comparing(SymbolInfo::path).thenComparingInt(SymbolInfo::startLine)
                 .thenComparingInt(SymbolInfo::endLine).thenComparing(SymbolInfo::name));
         return matches;
+    }
+
+    @AgentDoc(value = "Finds all usages of symbolName across the project (excluding definitions, comments, and imports), enriched with the enclosing symbol and test file classification.", examples = {
+            "symbolService.findUsages('executeJexl')", "symbolService.findUsages('JexlTool.executeJexl')"})
+    public List<SymbolUsage> findUsages(@AgentDoc(DOC_SYMBOL_NAME) String symbolName) {
+        return findUsages(symbolName, CURRENT_DIR);
+    }
+
+    @AgentDoc(value = "Finds all usages of symbolName within the specified relative path (excluding definitions, comments, and imports), enriched with the enclosing symbol and test file classification.", examples = "symbolService.findUsages('executeJexl', 'src/main')")
+    public List<SymbolUsage> findUsages(@AgentDoc(DOC_SYMBOL_NAME) String symbolName,
+            @AgentDoc(DOC_SEARCH_PATH) String relativePath) {
+        ExceptionUtils.checkInterrupted(CANCELLED_MSG);
+        if (symbolName == null || symbolName.isBlank() || !projectService.hasActiveProject()) {
+            return List.of();
+        }
+        String trimmedQuery = symbolName.trim();
+        String unqualifiedName = extractUnqualifiedName(trimmedQuery);
+        if (unqualifiedName.isEmpty()) {
+            return List.of();
+        }
+
+        String effectivePath = CURRENT_DIR;
+        if (relativePath != null && !relativePath.isBlank()) {
+            effectivePath = relativePath.trim();
+        }
+        boolean fixedWord = SIMPLE_IDENTIFIER_PATTERN.matcher(unqualifiedName).matches();
+        List<String> rawMatches = grepService.grepWordMatches(unqualifiedName, effectivePath, fixedWord);
+        if (rawMatches == null || rawMatches.isEmpty()) {
+            return List.of();
+        }
+
+        List<RawUsageHit> filteredHits = parseAndFilterUsageHits(rawMatches);
+        if (filteredHits.isEmpty()) {
+            return List.of();
+        }
+        Map<String, List<SymbolInfo>> outlinesByRelPath = resolveOutlinesForUsageHits(filteredHits);
+        List<SymbolUsage> usages = new ArrayList<>();
+        for (RawUsageHit hit : filteredHits) {
+            List<SymbolInfo> outline = outlinesByRelPath.getOrDefault(hit.path(), List.of());
+            if (isDeclarationInOutline(hit.line(), outline, trimmedQuery, unqualifiedName)) {
+                continue;
+            }
+            String enclosing = findEnclosingSymbolName(outline, hit.line());
+            boolean testFile = RepoMapPackerService.isTestFile(hit.path());
+            usages.add(new SymbolUsage(hit.path(), hit.line(), hit.column(), hit.snippet(), enclosing, testFile));
+            if (usages.size() >= MAX_USAGES) {
+                break;
+            }
+        }
+
+        usages.sort(Comparator.comparing(SymbolUsage::isTestFile).thenComparing(SymbolUsage::path)
+                .thenComparingInt(SymbolUsage::line).thenComparingInt(SymbolUsage::column));
+        return usages;
+    }
+
+    @AgentDoc(value = "Finds test files related to the given source file path using naming conventions, mirrored directory structure, and symbol reference analysis.", examples = "symbolService.findRelatedTests('src/main/java/org/roxycode/app/ai/services/SymbolService.java')")
+    public List<String> findRelatedTests(@AgentDoc(DOC_FILE_PATH) String relativePath) {
+        ExceptionUtils.checkInterrupted(CANCELLED_MSG);
+        if (relativePath == null || relativePath.isBlank() || !projectService.hasActiveProject()) {
+            return List.of();
+        }
+        String normalizedPath = normalizeInputRelativePath(relativePath);
+        if (normalizedPath.isEmpty() || CURRENT_DIR.equals(normalizedPath)) {
+            return List.of();
+        }
+        if (RepoMapPackerService.isTestFile(normalizedPath)) {
+            if (isExistingRegularFile(normalizedPath)) {
+                return List.of(normalizedPath);
+            }
+            return List.of();
+        }
+
+        String fileName = PathUtils.getFileName(normalizedPath);
+        String stem = stripExtension(fileName);
+        if (stem.isBlank()) {
+            return List.of();
+        }
+
+        String sourceSubpath = extractNormalizedSubpath(normalizedPath, SOURCE_DIR_PREFIXES);
+        List<String> allFiles = grepService.listFiles();
+        List<String> mirroredTier1 = new ArrayList<>();
+        List<String> otherTier1 = new ArrayList<>();
+        if (allFiles != null) {
+            for (String candidate : allFiles) {
+                if (candidate == null || candidate.isBlank()) {
+                    continue;
+                }
+                String normCandidate = PathUtils.normalizeRelativePath(candidate.trim());
+                if (normCandidate.equals(normalizedPath) || !RepoMapPackerService.isTestFile(normCandidate)) {
+                    continue;
+                }
+                String candidateFileName = PathUtils.getFileName(normCandidate);
+                if (matchesTestNamingConvention(candidateFileName, stem)) {
+                    String testSubpath = extractNormalizedSubpath(normCandidate, TEST_DIR_PREFIXES);
+                    if (!sourceSubpath.isEmpty() && sourceSubpath.equals(testSubpath)) {
+                        mirroredTier1.add(normCandidate);
+                    } else {
+                        otherTier1.add(normCandidate);
+                    }
+                }
+            }
+        }
+        mirroredTier1.sort(Comparator.naturalOrder());
+        otherTier1.sort(Comparator.naturalOrder());
+
+        Set<String> orderedResults = new LinkedHashSet<>();
+        orderedResults.addAll(mirroredTier1);
+        orderedResults.addAll(otherTier1);
+
+        String referencePattern = Pattern.quote(stem);
+        if (SIMPLE_IDENTIFIER_PATTERN.matcher(stem).matches()) {
+            referencePattern = WORD_BOUNDARY + stem + WORD_BOUNDARY;
+        }
+        List<String> referencingFiles = grepService.findMatchingFiles(referencePattern);
+        if (referencingFiles != null) {
+            List<String> tier2 = new ArrayList<>();
+            for (String refFile : referencingFiles) {
+                if (refFile == null || refFile.isBlank()) {
+                    continue;
+                }
+                String normRef = PathUtils.normalizeRelativePath(refFile.trim());
+                if (!normRef.equals(normalizedPath) && RepoMapPackerService.isTestFile(normRef)
+                        && !orderedResults.contains(normRef)) {
+                    tier2.add(normRef);
+                }
+            }
+            tier2.sort(Comparator.naturalOrder());
+            for (String item : tier2) {
+                if (orderedResults.size() >= MAX_RELATED_TESTS) {
+                    break;
+                }
+                orderedResults.add(item);
+            }
+        }
+
+        List<String> finalResults = new ArrayList<>(orderedResults);
+        if (finalResults.size() > MAX_RELATED_TESTS) {
+            return new ArrayList<>(finalResults.subList(0, MAX_RELATED_TESTS));
+        }
+        return finalResults;
+    }
+
+    private List<RawUsageHit> parseAndFilterUsageHits(List<String> rawMatches) {
+        List<RawUsageHit> hits = new ArrayList<>();
+        Set<String> seenLineLocations = new HashSet<>();
+        for (String rawLine : rawMatches) {
+            if (rawLine == null || rawLine.isBlank()) {
+                continue;
+            }
+            Matcher matcher = VIMGREP_LINE_PATTERN.matcher(rawLine);
+            if (!matcher.matches()) {
+                continue;
+            }
+            String path = PathUtils.normalizeRelativePath(matcher.group(1).trim());
+            int line = parsePositiveInt(matcher.group(2));
+            int column = parsePositiveInt(matcher.group(3));
+            String snippet = matcher.group(4).trim();
+            if (line < MIN_LINE_NUMBER || isNonUsageSnippet(snippet)) {
+                continue;
+            }
+            String locationKey = formatLocationKey(path, line);
+            if (!seenLineLocations.add(locationKey)) {
+                continue;
+            }
+            hits.add(new RawUsageHit(path, line, column, snippet));
+        }
+        return hits;
+    }
+
+    private Map<String, List<SymbolInfo>> resolveOutlinesForUsageHits(List<RawUsageHit> hits) {
+        List<Path> candidatePaths = new ArrayList<>();
+        Map<Path, String> relPathByAbsPath = new LinkedHashMap<>();
+        for (RawUsageHit hit : hits) {
+            try {
+                Path resolved = projectService.resolvePath(hit.path()).toAbsolutePath().normalize();
+                if (Files.isRegularFile(resolved) && !relPathByAbsPath.containsKey(resolved)) {
+                    relPathByAbsPath.put(resolved, hit.path());
+                    candidatePaths.add(resolved);
+                    if (candidatePaths.size() >= MAX_FIND_SYMBOL_FILES) {
+                        break;
+                    }
+                }
+            } catch (Exception e) {
+                ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
+                log.debug("Skipping usage outline resolution for {}: {}", hit.path(), e.getMessage());
+            }
+        }
+        if (candidatePaths.isEmpty()) {
+            return Map.of();
+        }
+        Map<Path, List<CtagsEntry>> entriesByPath = ctagsRunner.runAndParse(candidatePaths, CTAGS_OUTLINE_FLAGS,
+                objectMapper, CANCELLED_MSG);
+        Map<String, List<SymbolInfo>> outlines = new LinkedHashMap<>();
+        for (Path filePath : candidatePaths) {
+            List<CtagsEntry> entries = entriesByPath.get(filePath);
+            if (entries == null || entries.isEmpty()) {
+                continue;
+            }
+            String relPath = relPathByAbsPath.get(filePath);
+            outlines.put(relPath, finalizeSymbolsForFile(entries, relPath, filePath, -1));
+        }
+        return outlines;
+    }
+
+    static boolean isDeclarationInOutline(int line, List<SymbolInfo> outline, String trimmedQuery,
+            String unqualifiedName) {
+        for (SymbolInfo symbol : outline) {
+            if (symbol.startLine() == line) {
+                if (matchesSymbol(symbol, trimmedQuery) || symbol.name().equals(unqualifiedName)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    static String findEnclosingSymbolName(List<SymbolInfo> outline, int line) {
+        SymbolInfo best = null;
+        int bestSpan = Integer.MAX_VALUE;
+        for (SymbolInfo symbol : outline) {
+            if (symbol.startLine() <= line && line <= symbol.endLine()) {
+                int span = symbol.endLine() - symbol.startLine();
+                if (best == null || span <= bestSpan) {
+                    best = symbol;
+                    bestSpan = span;
+                }
+            }
+        }
+        if (best == null) {
+            return "";
+        }
+        if (best.scope().isEmpty()) {
+            return best.name();
+        }
+        return best.scope() + DOT_CHAR + best.name();
+    }
+
+    static boolean isNonUsageSnippet(String trimmedSnippet) {
+        if (trimmedSnippet == null || trimmedSnippet.isEmpty()) {
+            return true;
+        }
+        if (trimmedSnippet.startsWith("//") || trimmedSnippet.startsWith("/*") || trimmedSnippet.startsWith("*")
+                || trimmedSnippet.startsWith("*/")) {
+            return true;
+        }
+        if (trimmedSnippet.startsWith("import ") || trimmedSnippet.startsWith(IMPORT_TAB_PREFIX)
+                || trimmedSnippet.startsWith("package ") || trimmedSnippet.startsWith(PACKAGE_TAB_PREFIX)) {
+            return true;
+        }
+        return trimmedSnippet.startsWith("from ") && trimmedSnippet.contains(" import ");
+    }
+
+    static boolean matchesTestNamingConvention(String candidateFileName, String stem) {
+        if (candidateFileName == null || candidateFileName.isBlank() || stem == null || stem.isBlank()) {
+            return false;
+        }
+        String candidateStem = stripExtension(candidateFileName);
+        if (candidateStem.equals(stem + "Test") || candidateStem.equals(stem + "Tests")
+                || candidateStem.equals(stem + "IT") || candidateStem.equals("Test" + stem)) {
+            return true;
+        }
+        String lowerCandidateStem = candidateStem.toLowerCase(Locale.ROOT);
+        String lowerStem = stem.toLowerCase(Locale.ROOT);
+        return lowerCandidateStem.equals("test_" + lowerStem) || lowerCandidateStem.equals(lowerStem + "_test")
+                || lowerCandidateStem.equals(lowerStem + "_tests") || lowerCandidateStem.equals(lowerStem + ".test")
+                || lowerCandidateStem.equals(lowerStem + ".spec");
+    }
+
+    private String normalizeInputRelativePath(String relativePath) {
+        String fallback = PathUtils.normalizeRelativePath(relativePath.trim());
+        try {
+            Path resolved = projectService.resolvePath(relativePath);
+            if (resolved != null) {
+                return normalizeRelativePath(resolved.toAbsolutePath().normalize(), fallback);
+            }
+        } catch (Exception e) {
+            ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
+        }
+        return fallback;
+    }
+
+    private boolean isExistingRegularFile(String normalizedPath) {
+        try {
+            Path resolved = projectService.resolvePath(normalizedPath);
+            if (resolved != null && Files.isRegularFile(resolved)) {
+                return true;
+            }
+        } catch (Exception e) {
+            ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
+        }
+        List<String> allFiles = grepService.listFiles();
+        if (allFiles != null) {
+            for (String file : allFiles) {
+                if (normalizedPath.equals(PathUtils.normalizeRelativePath(file))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static String stripExtension(String fileName) {
+        int lastDot = fileName.lastIndexOf(DOT_CHAR);
+        if (lastDot > 0) {
+            return fileName.substring(0, lastDot);
+        }
+        return fileName;
+    }
+
+    private static String extractNormalizedSubpath(String normalizedPath, List<String> prefixes) {
+        int lastSlash = normalizedPath.lastIndexOf(SLASH_CHAR);
+        if (lastSlash <= 0) {
+            return "";
+        }
+        String dirPath = normalizedPath.substring(0, lastSlash);
+        for (String prefix : prefixes) {
+            String prefixWithoutTrailing = prefix.substring(0, prefix.length() - 1);
+            if (dirPath.equals(prefixWithoutTrailing)) {
+                return "";
+            }
+            if (dirPath.startsWith(prefix)) {
+                return dirPath.substring(prefix.length());
+            }
+        }
+        return dirPath;
+    }
+
+    private static String formatLocationKey(String path, int line) {
+        return path + COLON_CHAR + line;
+    }
+
+    private static int parsePositiveInt(String value) {
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            return NOT_FOUND_INDEX;
+        }
     }
 
     private List<SymbolInfo> getFileOutlineWithLines(Path filePath, String relativePath, int totalLines) {

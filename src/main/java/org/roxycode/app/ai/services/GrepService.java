@@ -142,6 +142,23 @@ public class GrepService {
         return fileReadService.readFiles(matchingFiles);
     }
 
+    List<String> grepWordMatches(String wordOrPattern, String relativePath, boolean fixedWord) {
+        if (!projectService.hasActiveProject() || wordOrPattern == null || wordOrPattern.isEmpty()) {
+            return new ArrayList<>();
+        }
+        Path root = projectService.getCurrentProjectRoot().toAbsolutePath().normalize();
+        String targetArg = projectService.resolveRelativePath(relativePath);
+
+        List<String> command = new ArrayList<>(List.of(RG_CMD, "--vimgrep", "--no-heading", COLOR_NEVER_ARG));
+        if (fixedWord) {
+            command.add("-w");
+        } else {
+            command.add("-F");
+        }
+        command.addAll(List.of(END_OF_OPTIONS, wordOrPattern, targetArg));
+        return runRipGrepLines(command, root, false);
+    }
+
     private EditorResult executeRipGrep(String pattern, String relativePath, String filePattern, int contextLines,
             boolean fixedStrings, boolean ignoreCase) {
         if (!projectService.hasActiveProject()) {
