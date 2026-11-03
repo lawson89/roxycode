@@ -372,6 +372,43 @@ class ChatControllerTest extends ChatTestFixture {
     }
 
     @Test
+    void testPerConversationTokenTelemetryAndIsolation() {
+        ChatPanel qaPanel = createExploreChatPanel(directExecutor);
+        ChatPanel taskPanel = createFeatureChatPanel(directExecutor);
+
+        // 1. Isolation: qa:default event ignored by taskPanel
+        TokenUsageEvent qaEvent = new TokenUsageEvent("qa:default", "gemini-1.5-pro", 1_000_000, 10_000, 8_000, 2_000,
+                500, 200, 10_700, 0.005);
+        qaPanel.onTokenUsage(qaEvent);
+        taskPanel.onTokenUsage(qaEvent);
+        flushEdt();
+
+        assertEquals("Context Usage: 10.0k / 1.0M (1%)", qaPanel.ctxLabel.getText());
+        assertEquals("Cache Hit: 8.0k / 10.0k (80%)", qaPanel.cacheLabel.getText());
+        assertEquals("Context Usage: 0 / 1.0M (0%)", taskPanel.ctxLabel.getText());
+
+        // 2. task:default event updates taskPanel
+        TokenUsageEvent taskEvent = new TokenUsageEvent("task:default", "gemini-1.5-pro", 1_000_000, 20_000, 10_000,
+                10_000, 1_000, 500, 21_500, 0.012);
+        taskPanel.onTokenUsage(taskEvent);
+        flushEdt();
+
+        assertEquals("Context Usage: 20.0k / 1.0M (2%)", taskPanel.ctxLabel.getText());
+        assertEquals("Cache Hit: 10.0k / 20.0k (50%)", taskPanel.cacheLabel.getText());
+
+        // 3. Reset session resets telemetry for that panel
+        taskPanel.controller.performResetSession();
+        flushEdt();
+        assertEquals("Context Usage: 0 / 1.0M (0%)", taskPanel.ctxLabel.getText());
+        assertEquals("Context Usage: 10.0k / 1.0M (1%)", qaPanel.ctxLabel.getText()); // Still there
+
+        // 4. Project change resets telemetry
+        qaPanel.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/new-project")));
+        flushEdt();
+        assertEquals("Context Usage: 0 / 1.0M (0%)", qaPanel.ctxLabel.getText());
+    }
+
+    @Test
     void testUserInputPromptCardsConversationFilteringAndLifecycleCleanup() throws Exception {
         ChatPanel qaPanel = createExploreChatPanel(directExecutor);
         ChatPanel taskPanel = createFeatureChatPanel(directExecutor);

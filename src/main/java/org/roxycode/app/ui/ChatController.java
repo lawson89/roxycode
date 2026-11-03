@@ -17,6 +17,7 @@ import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.UserInputService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.AgentTurnEvent;
+import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.ArchiveUpdatedEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
@@ -24,6 +25,9 @@ import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.events.UserInputRequestEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
+import org.roxycode.app.events.TokenUsageEvent;
+import org.roxycode.app.model.GeminiModelConfig;
+import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.AiService;
@@ -52,6 +56,7 @@ public final class ChatController implements AutoCloseable {
     private final ApplicationEventPublisher eventPublisher;
     private final ChatMemory chatMemory;
     private final SettingsService settingsService;
+    private ProjectService projectService;
     private final PlanService planService;
     private MemoryService memoryService;
     private EnvironmentService environmentService;
@@ -77,6 +82,11 @@ public final class ChatController implements AutoCloseable {
         this.settingsService = settingsService;
         this.turnExecutorOwned = turnExecutor == null;
         this.turnExecutor = Objects.requireNonNullElseGet(turnExecutor, Executors::newVirtualThreadPerTaskExecutor);
+    }
+
+    void setProjectService(ProjectService projectService) {
+        this.projectService = projectService;
+        resetTelemetry();
     }
 
     void setTopicArchiveServices(MemoryService memoryService, EnvironmentService environmentService) {
@@ -299,6 +309,7 @@ public final class ChatController implements AutoCloseable {
         }
         model.clearPendingImages();
         model.setCurrentTurn(0);
+        resetTelemetry();
         if (clearMemory) {
             chatMemory.clear(model.getConversationId());
         }
@@ -478,6 +489,50 @@ public final class ChatController implements AutoCloseable {
         return "Phase changed to " + event.to() + ". Please proceed with the tasks in the new phase.";
     }
 
+    private int resolveConfiguredContextWindowTokens() {
+        String modelName = "";
+        if (projectService != null) {
+            modelName = projectService.getEffectiveGeminiModel();
+        } else if (settingsService != null) {
+            modelName = SettingsService.resolveGlobalGeminiModel(settingsService);
+        }
+        if (settingsService != null) {
+            GeminiModelConfig cfg = settingsService.resolveModelConfig(modelName);
+            if (cfg != null && cfg.contextWindowTokens() > 0) {
+                return cfg.contextWindowTokens();
+            }
+        }
+        if (StringUtils.isNotBlank(modelName)) {
+            return GeminiModelConfig.defaultForApiName(modelName).contextWindowTokens();
+        }
+        return GeminiModelConfig.DEFAULT_CONTEXT_WINDOW_TOKENS;
+    }
+
+    void onProjectChanged(ProjectChangedEvent event) {
+        resetTelemetry();
+        Edt.run(view::updateTurnLabel);
+    }
+
+    void onTokenUsage(TokenUsageEvent event) {
+        if (event == null || !model.getConversationId().equals(event.conversationId())) {
+            return;
+        }
+        model.setLastPromptTokens(Math.max(0, event.promptTokens()));
+        model.setLastCachedInputTokens(Math.max(0, event.cachedInputTokens()));
+        if (event.contextWindowTokens() > 0) {
+            model.setLastContextWindowTokens(event.contextWindowTokens());
+        } else {
+            model.setLastContextWindowTokens(resolveConfiguredContextWindowTokens());
+        }
+        Edt.run(view::updateTurnLabel);
+    }
+
+    private void resetTelemetry() {
+        model.setLastPromptTokens(0);
+        model.setLastCachedInputTokens(0);
+        model.setLastContextWindowTokens(resolveConfiguredContextWindowTokens());
+    }
+
     private boolean isMatchingActiveTurnEvent(String conversationId) {
         return model.getConversationId().equals(conversationId) && !model.isTurnCancelled();
     }
@@ -517,6 +572,7 @@ public final class ChatController implements AutoCloseable {
     }
 
     void onSettingsChanged(SettingsChangedEvent event) {
+        model.setLastContextWindowTokens(resolveConfiguredContextWindowTokens());
         Edt.run(view::updateTurnLabel);
     }
 

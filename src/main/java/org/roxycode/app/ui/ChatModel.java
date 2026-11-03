@@ -28,6 +28,9 @@ public final class ChatModel {
     private final AtomicBoolean turnCancelled = new AtomicBoolean(false);
     private final List<BufferedImage> pendingImages = new ArrayList<>();
     private volatile int currentTurn = 0;
+    private volatile long lastPromptTokens = 0;
+    private volatile long lastCachedInputTokens = 0;
+    private volatile int lastContextWindowTokens = 1000000; // Default fallback
 
     public ChatModel(String sessionPrefix, WorkflowPhase lockedPhase, boolean taskMode) {
         this.conversationId = defaultConversationId(sessionPrefix);
@@ -60,6 +63,30 @@ public final class ChatModel {
 
     public void setCurrentTurn(int currentTurn) {
         this.currentTurn = currentTurn;
+    }
+
+    public long getLastPromptTokens() {
+        return lastPromptTokens;
+    }
+
+    public void setLastPromptTokens(long lastPromptTokens) {
+        this.lastPromptTokens = lastPromptTokens;
+    }
+
+    public long getLastCachedInputTokens() {
+        return lastCachedInputTokens;
+    }
+
+    public void setLastCachedInputTokens(long lastCachedInputTokens) {
+        this.lastCachedInputTokens = lastCachedInputTokens;
+    }
+
+    public int getLastContextWindowTokens() {
+        return lastContextWindowTokens;
+    }
+
+    public void setLastContextWindowTokens(int lastContextWindowTokens) {
+        this.lastContextWindowTokens = lastContextWindowTokens;
     }
 
     public boolean isTurnCancelled() {

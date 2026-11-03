@@ -30,6 +30,7 @@ import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.UserInputService;
+import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.FileChangedEvent;
@@ -93,6 +94,10 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     final JPanel userInputPromptPanel;
     JLabel transitionLabel;
     JLabel turnLabel;
+    JLabel ctxLabel;
+    JProgressBar ctxProgressBar;
+    JLabel cacheLabel;
+    JProgressBar cacheProgressBar;
     private JScrollPane outputScrollPane;
     private JPanel attachmentPanel;
     transient FileMentionPopup fileMentionPopup;
@@ -251,6 +256,27 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         JPanel inputSection = new JPanel(new MigLayout("fill, insets 8 12 10 12", GROW_FILL_COL, GROW_FILL_COL));
         inputSection.setMinimumSize(new Dimension(0, 95));
 
+        JPanel telemetryBar = new JPanel(new MigLayout("insets 0 4 4 4", "[] 6 [] 12 [] 6 []", "center"));
+        telemetryBar.setOpaque(false);
+
+        Font statusFont = getFont().deriveFont(11f);
+        ctxLabel = new JLabel();
+        ctxLabel.setFont(statusFont);
+        ctxProgressBar = new JProgressBar(0, 100);
+        ctxProgressBar.setStringPainted(false);
+        ctxProgressBar.putClientProperty(FlatClientProperties.STYLE, "arc: 6");
+
+        cacheLabel = new JLabel();
+        cacheLabel.setFont(statusFont);
+        cacheProgressBar = new JProgressBar(0, 100);
+        cacheProgressBar.setStringPainted(false);
+        cacheProgressBar.putClientProperty(FlatClientProperties.STYLE, "arc: 6");
+
+        telemetryBar.add(ctxLabel);
+        telemetryBar.add(ctxProgressBar, "w 60!, h 8!");
+        telemetryBar.add(cacheLabel);
+        telemetryBar.add(cacheProgressBar, "w 60!, h 8!");
+
         JPanel composerCard = new JPanel(new BorderLayout());
         composerCard.putClientProperty(FlatClientProperties.STYLE,
                 "arc: 12; background: $TextArea.background; border: 1,1,1,1,$Component.borderColor");
@@ -318,6 +344,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         composerCard.add(inputScrollPane, BorderLayout.CENTER);
         composerCard.add(actionToolbar, BorderLayout.SOUTH);
 
+        inputSection.add(telemetryBar, "wrap");
         inputSection.add(composerCard, "grow");
         return inputSection;
     }
@@ -408,6 +435,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     @Autowired(required = false)
     public void setProjectService(ProjectService projectService) {
         this.projectService = projectService;
+        controller.setProjectService(projectService);
         updateProjectComposerState();
     }
 
@@ -476,6 +504,11 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     @EventListener
+    public void onTokenUsage(TokenUsageEvent event) {
+        controller.onTokenUsage(event);
+    }
+
+    @EventListener
     public void onAgentTurnComplete(AgentTurnCompleteEvent event) {
         controller.onAgentTurnComplete(event);
     }
@@ -488,6 +521,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
         fileMentionPopup.invalidateCache();
+        controller.onProjectChanged(event);
         Edt.run(this::updateProjectComposerState);
     }
 
@@ -519,6 +553,40 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
     void updateTurnLabel() {
         turnLabel.setText(controller.formatCurrentTurnStatus());
+        updateTelemetry();
+    }
+
+    private void updateTelemetry() {
+        long lastPromptTokens = model.getLastPromptTokens();
+        long lastCachedInputTokens = model.getLastCachedInputTokens();
+        int contextWindow = Math.max(1, model.getLastContextWindowTokens());
+        int ctxPct = (int) Math.min(100L, Math.max(0L, Math.round((lastPromptTokens * 100.0) / contextWindow)));
+        int lastCacheHitPct = org.roxycode.app.util.TokenUtils.computeCacheHitPercent(lastCachedInputTokens,
+                lastPromptTokens);
+
+        if (lastPromptTokens > 0) {
+            ctxLabel.setText(String.format(java.util.Locale.US, "Context Usage: %s / %s (%d%%)",
+                    org.roxycode.app.util.TokenUtils.formatTokenCount(lastPromptTokens),
+                    org.roxycode.app.util.TokenUtils.formatTokenCount(contextWindow), ctxPct));
+            cacheLabel.setText(String.format(java.util.Locale.US, "Cache Hit: %s / %s (%d%%)",
+                    org.roxycode.app.util.TokenUtils.formatTokenCount(lastCachedInputTokens),
+                    org.roxycode.app.util.TokenUtils.formatTokenCount(lastPromptTokens), lastCacheHitPct));
+        } else {
+            ctxLabel.setText(String.format(java.util.Locale.US, "Context Usage: 0 / %s (0%%)",
+                    org.roxycode.app.util.TokenUtils.formatTokenCount(contextWindow)));
+            cacheLabel.setText("Cache Hit: 0 / 0 (0%)");
+        }
+        ctxProgressBar.setValue(ctxPct);
+        String ctxTooltip = String.format(java.util.Locale.US, "Context window usage: %,d / %,d tokens (%d%%)",
+                lastPromptTokens, contextWindow, ctxPct);
+        ctxLabel.setToolTipText(ctxTooltip);
+        ctxProgressBar.setToolTipText(ctxTooltip);
+
+        cacheProgressBar.setValue(lastCacheHitPct);
+        String cacheTooltip = String.format(java.util.Locale.US, "Implicit cache hit: %,d / %,d input tokens (%d%%)",
+                lastCachedInputTokens, lastPromptTokens, lastCacheHitPct);
+        cacheLabel.setToolTipText(cacheTooltip);
+        cacheProgressBar.setToolTipText(cacheTooltip);
     }
 
     void appendMessage(String role, String content) {
