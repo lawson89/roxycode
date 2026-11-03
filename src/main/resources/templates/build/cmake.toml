@@ -16,6 +16,7 @@ ROXY_CODE = "true"
 [parse]
 error_regex = '(^|:\d+:\d+:\s*)error:'
 test_failure_regex = '^\s*\d+/\d+\s+Test\s+#\d+:.*Failed'
+context_lines = 5
 
 [sandbox]
 # Isolation mode: "none" | "native" (Linux bwrap / macOS sandbox-exec) | "docker"

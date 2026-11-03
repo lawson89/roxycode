@@ -16,6 +16,8 @@ ROXY_CODE = "true"
 [parse]
 error_regex = '\[ERROR\].*\[\d+,\d+\]|PMD Failure:'
 test_failure_regex = '\[ERROR\]\s+[\w.#]+:\d+.*|<<< FAILURE!|<<< ERROR!'
+context_lines = 5
+junit_xml_paths = ["target/surefire-reports", "target/failsafe-reports"]
 
 [sandbox]
 # Isolation mode: "none" | "native" (Linux bwrap / macOS sandbox-exec) | "docker"

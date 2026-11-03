@@ -53,9 +53,21 @@ public class GenericBuildToolService {
     private static final String CONFIG_FILE = "build.toml";
     static final String BUILD_LOG_REL_PATH = "tmp/build.log";
     static final int MAX_LOG_TAIL_BYTES = 4096;
+    public static final int DEFAULT_CONTEXT_LINES = 5;
+    public static final int MAX_EXTRACTED_BLOCKS = 30;
+    static final int MAX_JUNIT_FAILURE_LINES = 6;
+    static final long JUNIT_XML_CLOCK_SKEW_MS = 2_000L;
+    private static final String RG_BLOCK_SEPARATOR = "--";
+    private static final String TAG_FAILURE = "failure";
+    private static final String TAG_ERROR = "error";
+    public static final List<String> DEFAULT_JUNIT_XML_PATHS = List.of("target/surefire-reports",
+            "target/failsafe-reports", "build/test-results");
     static final String LOG_TRUNCATED_PREFIX = "... [Log truncated. Full log saved to .roxycode/tmp/build.log]"
             + (char) 10;
     private static final Duration BUILD_TIMEOUT = Duration.ofMinutes(10);
+    private static final char ESC_CHAR = (char) 27;
+    private static final java.util.regex.Pattern ANSI_ESCAPE_PATTERN = java.util.regex.Pattern
+            .compile(ESC_CHAR + "" + (char) 92 + "[[;" + (char) 92 + "d]*[ -/]*[@-~]");
     private static final String DEFAULT_FALLBACK_TOML = """
             [commands]
             install = ""
@@ -110,8 +122,33 @@ public class GenericBuildToolService {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record ParseSection(@JsonProperty("error_regex") String errorRegex,
-            @JsonProperty("test_failure_regex") String testFailureRegex) {
-        public static final ParseSection EMPTY = new ParseSection(null, null);
+            @JsonProperty("test_failure_regex") String testFailureRegex,
+            @JsonProperty("context_lines") Integer contextLines,
+            @JsonProperty("junit_xml_paths") List<String> junitXmlPaths) {
+        public static final ParseSection EMPTY = new ParseSection(null, null, null, null);
+
+        public int resolvedContextLines() {
+            if (contextLines == null) {
+                return DEFAULT_CONTEXT_LINES;
+            }
+            if (contextLines <= 0) {
+                return 0;
+            }
+            return contextLines;
+        }
+
+        public List<String> resolvedJunitXmlPaths() {
+            if (junitXmlPaths == null) {
+                return DEFAULT_JUNIT_XML_PATHS;
+            }
+            List<String> sanitized = new ArrayList<>();
+            for (String path : junitXmlPaths) {
+                if (path != null && !path.isBlank()) {
+                    sanitized.add(path.trim());
+                }
+            }
+            return Collections.unmodifiableList(sanitized);
+        }
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
@@ -341,8 +378,7 @@ public class GenericBuildToolService {
             if (!placeholders.isEmpty()) {
                 command = new StringSubstitutor(placeholders, "{", "}").replace(command);
             }
-            String errorRegex = config.parse().errorRegex();
-            String testFailureRegex = config.parse().testFailureRegex();
+            ParseSection parseSection = config.parse();
             Map<String, String> env = config.env();
             SandboxConfig sandboxConfig = config.sandbox();
             SandboxMode mode = sandboxConfig.resolvedMode();
@@ -354,7 +390,7 @@ public class GenericBuildToolService {
                             + (char) 34 + "docker" + (char) 34 + " is configured in build.toml.";
                     return new BuildResult(false, -1, msg, List.of(msg), List.of());
                 }
-                return executeInContainer(command, sandboxConfig, env, logFile, errorRegex, testFailureRegex);
+                return executeInContainer(command, sandboxConfig, env, logFile, parseSection);
             }
             if (mode == SandboxMode.NATIVE) {
                 stopActiveContainer();
@@ -366,10 +402,10 @@ public class GenericBuildToolService {
                 }
                 List<String> sandboxCmd = buildContainerService
                         .buildNativeSandboxCommand(projectService.getCurrentProjectRoot(), sandboxConfig, command);
-                return executeCommandList(sandboxCmd, env, logFile, errorRegex, testFailureRegex);
+                return executeCommandList(sandboxCmd, env, logFile, parseSection);
             }
             stopActiveContainer();
-            return execute(command, env, logFile, errorRegex, testFailureRegex);
+            return execute(command, env, logFile, parseSection);
         } catch (CancellationException e) {
             throw e;
         } catch (Exception e) {
@@ -573,21 +609,32 @@ public class GenericBuildToolService {
         return true;
     }
 
+    static String stripAnsiCodes(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+        if (text.indexOf(ESC_CHAR) < 0) {
+            return text;
+        }
+        return ANSI_ESCAPE_PATTERN.matcher(text).replaceAll("");
+    }
+
     @SuppressWarnings("PMD.PreserveStackTrace")
     private BuildResult executeInContainer(String command, SandboxConfig sandboxConfig, Map<String, String> env,
-            Path logFile, String errorRegex, String testFailureRegex) {
+            Path logFile, ParseSection parseSection) {
         log.info("Executing build command in container ({}): {}", sandboxConfig.image(), command);
         List<String> errors = new ArrayList<>();
         int exitCode = -1;
         String fullOutput;
+        long startTimeMillis = System.currentTimeMillis();
 
         try {
             ContainerExecResult result = buildContainerService.executeCommand(projectService.getCurrentProjectRoot(),
                     sandboxConfig, env, command);
-            fullOutput = result.combinedOutput();
+            fullOutput = stripAnsiCodes(result.combinedOutput());
             exitCode = result.exitCode();
             Files.writeString(logFile, fullOutput, StandardCharsets.UTF_8);
-            return buildResultFromExecution(exitCode, fullOutput, logFile, errors, errorRegex, testFailureRegex);
+            return buildResultFromExecution(exitCode, fullOutput, logFile, errors, parseSection, startTimeMillis);
         } catch (CancellationException e) {
             stopActiveContainer();
             throw e;
@@ -598,15 +645,14 @@ public class GenericBuildToolService {
         } catch (Exception e) {
             log.error("Container execution failed", e);
             stopActiveContainer();
-            String errorMsg = org.roxycode.app.util.ExceptionUtils.getMessageOrSimpleName(e);
+            String errorMsg = stripAnsiCodes(org.roxycode.app.util.ExceptionUtils.getMessageOrSimpleName(e));
             errors.add("Container execution failed: " + errorMsg);
             fullOutput = errorMsg;
-            return buildResultFromExecution(exitCode, fullOutput, logFile, errors, errorRegex, testFailureRegex);
+            return buildResultFromExecution(exitCode, fullOutput, logFile, errors, parseSection, startTimeMillis);
         }
     }
 
-    private BuildResult execute(String command, Map<String, String> env, Path logFile, String errorRegex,
-            String testFailureRegex) {
+    private BuildResult execute(String command, Map<String, String> env, Path logFile, ParseSection parseSection) {
         log.info("Executing build command: {}", command);
         List<String> shellCommand;
         if (SystemUtils.IS_OS_WINDOWS) {
@@ -614,14 +660,15 @@ public class GenericBuildToolService {
         } else {
             shellCommand = List.of("sh", "-c", command);
         }
-        return executeCommandList(shellCommand, env, logFile, errorRegex, testFailureRegex);
+        return executeCommandList(shellCommand, env, logFile, parseSection);
     }
 
     private BuildResult executeCommandList(List<String> commandList, Map<String, String> env, Path logFile,
-            String errorRegex, String testFailureRegex) {
+            ParseSection parseSection) {
         List<String> errors = new ArrayList<>();
         int exitCode = -1;
         String fullOutput = "";
+        long startTimeMillis = System.currentTimeMillis();
 
         try {
             ProcessResult result;
@@ -629,47 +676,339 @@ public class GenericBuildToolService {
                 result = ProcessRunner.run(commandList, projectService.getCurrentProjectRoot(), env, BUILD_TIMEOUT,
                         true, fileOut);
             }
-            fullOutput = result.output();
+            fullOutput = stripAnsiCodes(result.output());
+            Files.writeString(logFile, fullOutput, StandardCharsets.UTF_8);
             exitCode = result.exitCode();
             if (result.timedOut()) {
                 errors.add("Command timed out after 10 minutes");
             } else if (exitCode < 0 && !result.errorOutput().isBlank()) {
-                errors.add(result.errorOutput());
+                errors.add(stripAnsiCodes(result.errorOutput()));
             }
-            return buildResultFromExecution(exitCode, fullOutput, logFile, errors, errorRegex, testFailureRegex);
+            return buildResultFromExecution(exitCode, fullOutput, logFile, errors, parseSection, startTimeMillis);
         } catch (IOException e) {
             log.error("Process execution failed", e);
             errors.add(ExceptionUtils.getStackTrace(e));
-            return buildResultFromExecution(exitCode, fullOutput, logFile, errors, errorRegex, testFailureRegex);
+            return buildResultFromExecution(exitCode, fullOutput, logFile, errors, parseSection, startTimeMillis);
         }
     }
 
     private BuildResult buildResultFromExecution(int exitCode, String fullOutput, Path logFile, List<String> errors,
-            String errorRegex, String testFailureRegex) {
-        errors.addAll(extractWithRipGrep(errorRegex, logFile));
-        List<String> failedTests = new ArrayList<>(extractWithRipGrep(testFailureRegex, logFile));
+            ParseSection parseSection, long startTimeMillis) {
+        ParseSection effectiveParse = Objects.requireNonNullElse(parseSection, ParseSection.EMPTY);
+        int contextLines = effectiveParse.resolvedContextLines();
+        errors.addAll(extractWithRipGrep(effectiveParse.errorRegex(), logFile, contextLines));
+        List<String> failedTests = new ArrayList<>(
+                extractWithRipGrep(effectiveParse.testFailureRegex(), logFile, contextLines));
+        if (exitCode != 0) {
+            List<String> xmlFailures = extractJunitXmlFailures(effectiveParse.resolvedJunitXmlPaths(), startTimeMillis);
+            for (String xmlFailure : xmlFailures) {
+                if (failedTests.size() >= MAX_EXTRACTED_BLOCKS) {
+                    break;
+                }
+                if (!failedTests.contains(xmlFailure)) {
+                    failedTests.add(xmlFailure);
+                }
+            }
+        }
         boolean success = exitCode == 0 && errors.isEmpty() && failedTests.isEmpty();
         String tailOutput = getLogTail(fullOutput);
         return new BuildResult(success, exitCode, tailOutput, errors, failedTests);
     }
 
     static String getLogTail(String fullOutput) {
-        if (fullOutput == null || fullOutput.isEmpty()) {
+        String sanitized = stripAnsiCodes(fullOutput);
+        if (sanitized.isEmpty()) {
             return "";
         }
-        if (fullOutput.length() <= MAX_LOG_TAIL_BYTES) {
-            return fullOutput;
+        if (sanitized.length() <= MAX_LOG_TAIL_BYTES) {
+            return sanitized;
         }
-        return LOG_TRUNCATED_PREFIX + fullOutput.substring(fullOutput.length() - MAX_LOG_TAIL_BYTES);
+        return LOG_TRUNCATED_PREFIX + sanitized.substring(sanitized.length() - MAX_LOG_TAIL_BYTES);
     }
 
     List<String> extractWithRipGrep(String regex, Path logFile) {
+        return extractWithRipGrep(regex, logFile, DEFAULT_CONTEXT_LINES);
+    }
+
+    List<String> extractWithRipGrep(String regex, Path logFile, int contextLines) {
         if (regex == null || regex.isBlank() || logFile == null || !Files.exists(logFile)) {
             return List.of();
         }
-        List<String> command = List.of("rg", "--color=never", "-N", "-e", regex, logFile.toString());
-        return GrepService.runRipGrepLines(command, null, false).stream().map(String::trim)
-                .filter(line -> !line.isEmpty()).toList();
+        List<String> command = new ArrayList<>();
+        command.add("rg");
+        command.add("--color=never");
+        command.add("-N");
+        if (contextLines > 0) {
+            command.add("-A");
+            command.add(String.valueOf(contextLines));
+        }
+        command.add("-e");
+        command.add(regex);
+        command.add(logFile.toString());
+
+        ProcessResult result = ProcessRunner.run(command, null, false);
+        if (result.timedOut() || !result.isSuccess()) {
+            return List.of();
+        }
+        return parseRipGrepOutput(result.output(), contextLines);
+    }
+
+    static List<String> parseRipGrepOutput(String rawOutput, int contextLines) {
+        String sanitized = stripAnsiCodes(rawOutput);
+        if (sanitized.isBlank()) {
+            return List.of();
+        }
+        List<String> blocks = new ArrayList<>();
+        if (contextLines <= 0) {
+            for (String line : sanitized.lines().toList()) {
+                String trimmed = line.trim();
+                if (!trimmed.isEmpty() && !blocks.contains(trimmed)) {
+                    blocks.add(trimmed);
+                    if (blocks.size() >= MAX_EXTRACTED_BLOCKS) {
+                        break;
+                    }
+                }
+            }
+            return Collections.unmodifiableList(blocks);
+        }
+
+        List<String> currentBlockLines = new ArrayList<>();
+        for (String line : sanitized.lines().toList()) {
+            if (RG_BLOCK_SEPARATOR.equals(StringUtils.stripEnd(line, null))) {
+                addFinalizedBlock(blocks, currentBlockLines);
+                currentBlockLines.clear();
+                if (blocks.size() >= MAX_EXTRACTED_BLOCKS) {
+                    return Collections.unmodifiableList(blocks);
+                }
+            } else {
+                currentBlockLines.add(line);
+            }
+        }
+        if (blocks.size() < MAX_EXTRACTED_BLOCKS) {
+            addFinalizedBlock(blocks, currentBlockLines);
+        }
+        return Collections.unmodifiableList(blocks);
+    }
+
+    private static void addFinalizedBlock(List<String> blocks, List<String> rawBlockLines) {
+        int start = 0;
+        int end = rawBlockLines.size();
+        while (start < end && rawBlockLines.get(start).isBlank()) {
+            start++;
+        }
+        while (end > start && rawBlockLines.get(end - 1).isBlank()) {
+            end--;
+        }
+        if (start >= end) {
+            return;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = start; i < end; i++) {
+            if (i > start) {
+                sb.append((char) 10);
+            }
+            sb.append(StringUtils.stripEnd(rawBlockLines.get(i), null));
+        }
+        String block = sb.toString();
+        if (!block.isEmpty() && !blocks.contains(block)) {
+            blocks.add(block);
+        }
+    }
+
+    List<String> extractJunitXmlFailures(List<String> configuredPaths, long commandStartTimeMillis) {
+        if (!projectService.hasActiveProject() || configuredPaths == null || configuredPaths.isEmpty()) {
+            return List.of();
+        }
+        Path projectRoot = projectService.getCurrentProjectRoot();
+        if (projectRoot == null || !Files.exists(projectRoot)) {
+            return List.of();
+        }
+        Path normalizedRoot = projectRoot.toAbsolutePath().normalize();
+        long thresholdMillis = commandStartTimeMillis - JUNIT_XML_CLOCK_SKEW_MS;
+        List<Path> xmlFiles = discoverRecentJunitXmlFiles(normalizedRoot, configuredPaths, thresholdMillis);
+        if (xmlFiles.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> failures = new ArrayList<>();
+        try {
+            javax.xml.parsers.DocumentBuilder builder = createSafeDocumentBuilder();
+            for (Path xmlFile : xmlFiles) {
+                parseJunitXmlFile(builder, xmlFile, failures);
+                if (failures.size() >= MAX_EXTRACTED_BLOCKS) {
+                    break;
+                }
+            }
+        } catch (javax.xml.parsers.ParserConfigurationException e) {
+            log.warn("Failed to configure JUnit XML parser: {}", e.getMessage());
+        }
+        return Collections.unmodifiableList(failures);
+    }
+
+    private static List<Path> discoverRecentJunitXmlFiles(Path normalizedRoot, List<String> configuredPaths,
+            long thresholdMillis) {
+        List<Path> discovered = new ArrayList<>();
+        for (String rawPath : configuredPaths) {
+            if (rawPath == null || rawPath.isBlank()) {
+                continue;
+            }
+            Path candidate = normalizedRoot.resolve(rawPath.trim()).normalize();
+            if (!candidate.startsWith(normalizedRoot) || !Files.exists(candidate)) {
+                continue;
+            }
+            if (Files.isRegularFile(candidate)) {
+                if (isRecentXmlFile(candidate, thresholdMillis) && !discovered.contains(candidate)) {
+                    discovered.add(candidate);
+                }
+                continue;
+            }
+            if (Files.isDirectory(candidate)) {
+                collectRecentXmlFilesInDirectory(candidate, thresholdMillis, discovered);
+            }
+        }
+        return discovered;
+    }
+
+    private static void collectRecentXmlFilesInDirectory(Path directory, long thresholdMillis, List<Path> target) {
+        try (java.util.stream.Stream<Path> walk = Files.walk(directory)) {
+            List<Path> matched = walk.filter(Files::isRegularFile)
+                    .filter(path -> isRecentXmlFile(path, thresholdMillis)).sorted().toList();
+            for (Path path : matched) {
+                if (!target.contains(path)) {
+                    target.add(path);
+                }
+            }
+        } catch (IOException e) {
+            log.debug("Failed to scan JUnit XML directory {}: {}", directory, e.getMessage());
+        }
+    }
+
+    private static boolean isRecentXmlFile(Path file, long thresholdMillis) {
+        Path fileName = file.getFileName();
+        if (fileName == null) {
+            return false;
+        }
+        String nameLower = fileName.toString().toLowerCase(java.util.Locale.ROOT);
+        if (!nameLower.endsWith(".xml")) {
+            return false;
+        }
+        try {
+            return Files.getLastModifiedTime(file).toMillis() >= thresholdMillis;
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static javax.xml.parsers.DocumentBuilder createSafeDocumentBuilder()
+            throws javax.xml.parsers.ParserConfigurationException {
+        javax.xml.parsers.DocumentBuilderFactory factory = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+        factory.setFeature(javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING, true);
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+        factory.setXIncludeAware(false);
+        factory.setExpandEntityReferences(false);
+        return factory.newDocumentBuilder();
+    }
+
+    private static void parseJunitXmlFile(javax.xml.parsers.DocumentBuilder builder, Path xmlFile,
+            List<String> failures) {
+        try (java.io.InputStream in = Files.newInputStream(xmlFile)) {
+            org.w3c.dom.Document doc = builder.parse(in);
+            org.w3c.dom.NodeList testCases = doc.getElementsByTagName("testcase");
+            for (int i = 0; i < testCases.getLength(); i++) {
+                org.w3c.dom.Node node = testCases.item(i);
+                if (node instanceof org.w3c.dom.Element testCase) {
+                    extractTestCaseFailures(testCase, failures);
+                    if (failures.size() >= MAX_EXTRACTED_BLOCKS) {
+                        return;
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.debug("Skipping unreadable JUnit XML file {}: {}", xmlFile, e.getMessage());
+        }
+    }
+
+    private static void extractTestCaseFailures(org.w3c.dom.Element testCase, List<String> failures) {
+        String className = StringUtils.trimToEmpty(testCase.getAttribute("classname"));
+        String testName = StringUtils.trimToEmpty(testCase.getAttribute("name"));
+        String testId = formatTestCaseIdentifier(className, testName);
+        org.w3c.dom.NodeList children = testCase.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            org.w3c.dom.Node child = children.item(i);
+            if (child instanceof org.w3c.dom.Element childElem) {
+                String tag = childElem.getTagName();
+                if (TAG_FAILURE.equals(tag) || TAG_ERROR.equals(tag)) {
+                    String formatted = formatJunitFailureElement(testId, tag, childElem);
+                    if (!formatted.isEmpty() && !failures.contains(formatted)) {
+                        failures.add(formatted);
+                        if (failures.size() >= MAX_EXTRACTED_BLOCKS) {
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static String formatTestCaseIdentifier(String className, String testName) {
+        if (!className.isEmpty() && !testName.isEmpty()) {
+            return className + "#" + testName;
+        }
+        if (!testName.isEmpty()) {
+            return testName;
+        }
+        if (!className.isEmpty()) {
+            return className;
+        }
+        return "unknown";
+    }
+
+    private static String formatJunitFailureElement(String testId, String tag, org.w3c.dom.Element element) {
+        String type = stripAnsiCodes(element.getAttribute("type")).trim();
+        String message = stripAnsiCodes(element.getAttribute("message"))
+                .replace("" + (char) 13 + (char) 10, String.valueOf((char) 10)).trim();
+        String body = stripAnsiCodes(element.getTextContent());
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(testId).append(" [").append(tag.toUpperCase(java.util.Locale.ROOT)).append(']');
+        String headerDetail = formatFailureHeaderDetail(type, message);
+        if (!headerDetail.isEmpty()) {
+            sb.append(": ").append(headerDetail);
+        }
+
+        if (!body.isBlank()) {
+            int appendedLines = 0;
+            for (String rawLine : body.lines().toList()) {
+                String trimmedLine = rawLine.trim();
+                if (trimmedLine.isEmpty()) {
+                    continue;
+                }
+                if (appendedLines == 0 && (trimmedLine.equals(headerDetail) || trimmedLine.equals(message))) {
+                    continue;
+                }
+                sb.append((char) 10).append("  ").append(trimmedLine);
+                appendedLines++;
+                if (appendedLines >= MAX_JUNIT_FAILURE_LINES) {
+                    break;
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    private static String formatFailureHeaderDetail(String type, String message) {
+        if (!type.isEmpty() && !message.isEmpty()) {
+            if (message.startsWith(type)) {
+                return message;
+            }
+            return type + ": " + message;
+        }
+        if (!type.isEmpty()) {
+            return type;
+        }
+        return message;
     }
 
     public String getConfigContent() throws IOException {

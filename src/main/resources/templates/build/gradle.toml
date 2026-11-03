@@ -16,6 +16,8 @@ ROXY_CODE = "true"
 [parse]
 error_regex = '^> Compilation failed|e: file://.*:\d+:\d+'
 test_failure_regex = '^[\w.]+ > [\w.]+ FAILED'
+context_lines = 5
+junit_xml_paths = ["build/test-results"]
 
 [sandbox]
 # Isolation mode: "none" | "native" (Linux bwrap / macOS sandbox-exec) | "docker"

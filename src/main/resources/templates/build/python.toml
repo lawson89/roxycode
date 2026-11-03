@@ -16,6 +16,7 @@ ROXY_CODE = "true"
 [parse]
 error_regex = '^(E\s+|SyntaxError:|IndentationError:)'
 test_failure_regex = '^FAILED '
+context_lines = 5
 
 [sandbox]
 # Isolation mode: "none" | "native" (Linux bwrap / macOS sandbox-exec) | "docker"

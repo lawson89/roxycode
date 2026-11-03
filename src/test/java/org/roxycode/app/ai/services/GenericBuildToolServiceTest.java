@@ -381,4 +381,108 @@ class GenericBuildToolServiceTest {
                 () -> buildToolService.saveConfigContent("[commands" + nl + "compile = " + dq + "unclosed"));
         assertEquals(beforeInvalidSave, Files.readString(configPath));
     }
+
+    @Test
+    void testAnsiStrippingMultiLineRipGrepBlocksAndJunitXmlExtraction() throws IOException {
+        String esc = String.valueOf((char) 27);
+        String nl = String.valueOf((char) 10);
+        String bs = String.valueOf((char) 92);
+        String ansiLog = esc + "[1;31m[ERROR] /workspace/src/Foo.java:[42,15] cannot find symbol" + esc + "[0m" + nl
+                + "  symbol:   method bar()" + nl + "  location: class com.example.Foo" + nl + "[INFO] 1 error" + nl
+                + "[INFO] Building next module" + nl + "[INFO] Checking rust crate..." + nl + esc
+                + "[31merror[E0308]: mismatched types" + esc + "[0m" + nl + "  --> src/main.rs:14:9" + nl + "   |" + nl
+                + "14 |     foo('hello')" + nl + "   |         ^^^^^^^ expected 'i32', found '&str'" + nl
+                + "normal output line" + nl + "--- FAIL: TestAuth (0.01s)" + nl
+                + "    auth_test.go:42: expected 200, got 401" + nl;
+
+        String stripped = GenericBuildToolService.stripAnsiCodes(ansiLog);
+        assertFalse(stripped.contains(esc));
+        assertTrue(stripped.startsWith("[ERROR] /workspace/src/Foo.java:[42,15] cannot find symbol"));
+
+        Path logFile = projectDataDir.resolve("tmp/build.log");
+        Files.createDirectories(logFile.getParent());
+        Files.writeString(logFile, stripped);
+
+        String rustAndJavacRegex = "^(" + bs + "[ERROR" + bs + "].*" + bs + "[" + bs + "d+," + bs + "d+" + bs
+                + "]|error" + bs + "[E" + bs + "d+" + bs + "]:)";
+        List<String> javacAndRustErrors = buildToolService.extractWithRipGrep(rustAndJavacRegex, logFile, 4);
+        assertEquals(2, javacAndRustErrors.size());
+        assertContainsAll(javacAndRustErrors.get(0), "[ERROR] /workspace/src/Foo.java:[42,15] cannot find symbol",
+                "  symbol:   method bar()", "  location: class com.example.Foo");
+        assertContainsAll(javacAndRustErrors.get(1), "error[E0308]: mismatched types", "  --> src/main.rs:14:9",
+                "   |         ^^^^^^^ expected 'i32', found '&str'");
+
+        List<String> goFailures = buildToolService.extractWithRipGrep("^--- FAIL:", logFile, 1);
+        assertEquals(1, goFailures.size());
+        assertEquals("--- FAIL: TestAuth (0.01s)" + nl + "    auth_test.go:42: expected 200, got 401",
+                goFailures.get(0));
+
+        List<String> singleLineOnly = buildToolService.extractWithRipGrep("^--- FAIL:", logFile, 0);
+        assertEquals(List.of("--- FAIL: TestAuth (0.01s)"), singleLineOnly);
+
+        // Verify deduplication and MAX_EXTRACTED_BLOCKS cap in parseRipGrepOutput
+        StringBuilder manyBlocks = new StringBuilder();
+        manyBlocks.append("ERROR: duplicate").append(nl).append("  detail 1").append(nl).append("--").append(nl)
+                .append("ERROR: duplicate").append(nl).append("  detail 1").append(nl);
+        for (int i = 0; i < 40; i++) {
+            manyBlocks.append("--").append(nl).append("ERROR: unique-").append(i).append(nl).append("  line-").append(i)
+                    .append(nl);
+        }
+        List<String> cappedBlocks = GenericBuildToolService.parseRipGrepOutput(manyBlocks.toString(), 2);
+        assertEquals(GenericBuildToolService.MAX_EXTRACTED_BLOCKS, cappedBlocks.size());
+        assertEquals("ERROR: duplicate" + nl + "  detail 1", cappedBlocks.get(0));
+        assertEquals("ERROR: unique-0" + nl + "  line-0", cappedBlocks.get(1));
+
+        // Verify JUnit XML report extraction (fresh vs stale reports)
+        Path surefireDir = Files.createDirectories(projectRoot.resolve("target/surefire-reports"));
+        Path staleReport = surefireDir.resolve("TEST-com.example.StaleTest.xml");
+        Files.writeString(staleReport, """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <testsuite name="com.example.StaleTest" tests="1" failures="1">
+                  <testcase classname="com.example.StaleTest" name="oldFailure">
+                    <failure type="java.lang.AssertionError" message="stale error">java.lang.AssertionError: stale error
+                        at com.example.StaleTest.oldFailure(StaleTest.java:10)</failure>
+                  </testcase>
+                </testsuite>
+                """);
+        Files.setLastModifiedTime(staleReport,
+                java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() - 60_000L));
+
+        Path freshReport = surefireDir.resolve("TEST-com.example.FreshTest.xml");
+        Files.writeString(freshReport,
+                """
+                        <?xml version="1.0" encoding="UTF-8"?>
+                        <testsuite name="com.example.FreshTest" tests="2" failures="1" errors="1">
+                          <testcase classname="com.example.FreshTest" name="testAssertion">
+                            <failure type="org.opentest4j.AssertionFailedError" message="expected: &lt;200&gt; but was: &lt;401&gt;">org.opentest4j.AssertionFailedError: expected: &lt;200&gt; but was: &lt;401&gt;
+                                at com.example.FreshTest.testAssertion(FreshTest.java:25)
+                                at java.base/java.lang.reflect.Method.invoke(Method.java:580)</failure>
+                          </testcase>
+                          <testcase classname="com.example.FreshTest" name="testUnhandledError">
+                            <error type="java.lang.NullPointerException" message="Cannot invoke method on null">java.lang.NullPointerException: Cannot invoke method on null
+                                at com.example.FreshTest.testUnhandledError(FreshTest.java:39)</error>
+                          </testcase>
+                        </testsuite>
+                        """);
+
+        writeBuildToml("[commands]" + nl + "test_all = 'printf " + (char) 34 + bs + "033[31mFAIL: console failure" + bs
+                + "033[0m" + bs + "n  at ConsoleTest.java:12" + bs + "n" + (char) 34 + " && exit 1'" + nl + "[parse]"
+                + nl + "test_failure_regex = '^FAIL:'" + nl + "context_lines = 2" + nl + "junit_xml_paths = ["
+                + (char) 34 + "target/surefire-reports" + (char) 34 + "]" + nl);
+
+        BuildResult testResult = buildToolService.runTests();
+        assertFalse(testResult.isSuccess());
+        assertFalse(testResult.getOutput().contains(esc));
+        assertEquals(3, testResult.getFailedTests().size());
+        assertEquals("FAIL: console failure" + nl + "  at ConsoleTest.java:12", testResult.getFailedTests().get(0));
+        assertContainsAll(testResult.getFailedTests().get(1),
+                "com.example.FreshTest#testAssertion [FAILURE]: org.opentest4j.AssertionFailedError: expected: <200> but was: <401>",
+                "  at com.example.FreshTest.testAssertion(FreshTest.java:25)");
+        assertContainsAll(testResult.getFailedTests().get(2),
+                "com.example.FreshTest#testUnhandledError [ERROR]: java.lang.NullPointerException: Cannot invoke method on null",
+                "  at com.example.FreshTest.testUnhandledError(FreshTest.java:39)");
+        for (String failure : testResult.getFailedTests()) {
+            assertFalse(failure.contains("StaleTest"));
+        }
+    }
 }
