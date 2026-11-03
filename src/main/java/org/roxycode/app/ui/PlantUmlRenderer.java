@@ -11,12 +11,8 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
@@ -308,8 +304,7 @@ public final class PlantUmlRenderer {
             String fileUrl = pngFile.toUri().toURL().toExternalForm();
             String html = ("<table class='diagram-container' width='100%' border='0' cellpadding='8' cellspacing='0'>"
                     + "<tr><td align='center'><img src='" + SwingHtmlUtils.escapeHtml(fileUrl) + "' width='"
-                    + image.getWidth() + "' height='" + image.getHeight() + "'></td></tr></table>")
-                    .replace((char) 39, (char) 34);
+                    + image.getWidth() + "' height='" + image.getHeight() + "'></td></tr></table>").replace('\'', '"');
             return Optional.of(html);
         } catch (Exception e) {
             log.debug("Failed to render PlantUML diagram ({}): {}", key.language(), e.getMessage());
@@ -440,12 +435,7 @@ public final class PlantUmlRenderer {
     }
 
     private static String computeSha256Hex(String input) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(input.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(digest, 0, 16);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 not available", e);
-        }
+        return org.roxycode.app.util.PathUtils.computeSha256Hex(input, 16);
     }
 
     static void clearCacheForTesting() {

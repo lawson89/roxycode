@@ -62,10 +62,6 @@ public enum ThinkingLevel {
         return DEFAULT;
     }
 
-    public static ThinkingLevel fromId(@Nullable String id) {
-        return fromString(id);
-    }
-
     @Override
     public String toString() {
         return displayName;

@@ -491,10 +491,8 @@ public final class ChatController implements AutoCloseable {
 
     private int resolveConfiguredContextWindowTokens() {
         String modelName = "";
-        if (projectService != null) {
-            modelName = projectService.getEffectiveGeminiModel();
-        } else if (settingsService != null) {
-            modelName = SettingsService.resolveGlobalGeminiModel(settingsService);
+        if (projectService != null || settingsService != null) {
+            modelName = ProjectService.resolveEffectiveGeminiModel(projectService, settingsService);
         }
         if (settingsService != null) {
             GeminiModelConfig cfg = settingsService.resolveModelConfig(modelName);

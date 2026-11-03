@@ -12,14 +12,10 @@ import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
-import org.roxycode.app.service.SettingsService;
-import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.TokenUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
-import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -28,7 +24,6 @@ public final class StatusPanel extends JPanel {
     private static final long serialVersionUID = 1L;
 
     private final transient EnvironmentService envService;
-    private final transient SettingsService settingsService;
 
     final JLabel tokenCostLabel = new JLabel();
     final JLabel memLabel = new JLabel();
@@ -37,14 +32,7 @@ public final class StatusPanel extends JPanel {
     private transient ImplementationPlan.UsageSummary sessionUsage = ImplementationPlan.UsageSummary.EMPTY;
 
     public StatusPanel(EnvironmentService envService) {
-        this(envService, null, null);
-    }
-
-    @Autowired
-    public StatusPanel(EnvironmentService envService, @Nullable SettingsService settingsService,
-            @Nullable ProjectService projectService) {
         this.envService = envService;
-        this.settingsService = settingsService;
 
         setLayout(new MigLayout("insets 2 15 2 15", "[] 20 [] push [] 16 []", "center"));
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");

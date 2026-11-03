@@ -107,9 +107,7 @@ public final class PlanPanel extends JPanel {
         if (plan == null) {
             return "";
         }
-        StringBuilder sb = new StringBuilder(plan.toMarkdown(true));
-        plan.appendChangesMarkdown(sb);
-        return sb.toString();
+        return plan.toFullMarkdown();
     }
 
     static String buildPlanHtml(ImplementationPlan plan) {

@@ -95,7 +95,7 @@ public class LLMDocGenerator {
             if (examples.length > 0) {
                 sb.append(" (e.g., ").append(String.join("; ", examples)).append(")");
             }
-            sb.append((char) 10).append("    ").append(m.getName()).append("(");
+            sb.append("\n    ").append(m.getName()).append("(");
 
             Parameter[] params = m.getParameters();
             for (int i = 0; i < params.length; i++) {
@@ -106,9 +106,9 @@ public class LLMDocGenerator {
                         .append(getMethodTypeName(params[i].getType(), params[i].getParameterizedType(), extraTypes));
             }
             sb.append("): ").append(getMethodTypeName(m.getReturnType(), m.getGenericReturnType(), extraTypes))
-                    .append(";").append((char) 10);
+                    .append(";\n");
         }
-        sb.append("}").append((char) 10);
+        sb.append("}\n");
     }
 
     private String getMethodTypeName(Class<?> rawType, Type genericType, Set<Class<?>> extraTypes) {

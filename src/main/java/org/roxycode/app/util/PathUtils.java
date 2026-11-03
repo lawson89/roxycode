@@ -7,6 +7,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.HexFormat;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
@@ -138,6 +141,17 @@ public final class PathUtils {
         String tsPrefix = formatArchiveTimestamp(isoTimestamp);
         String slug = sanitizeSlug(title, maxSlugLength, fallbackSlug);
         return resolveUniqueArchiveFile(archiveDir, tsPrefix + "-" + slug);
+    }
+
+    public static String computeSha256Hex(String input, int byteCount) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(StringUtils.defaultString(input).getBytes(StandardCharsets.UTF_8));
+            int len = Math.min(Math.max(1, byteCount), digest.length);
+            return HexFormat.of().formatHex(digest, 0, len);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 algorithm not available", e);
+        }
     }
 
     @SuppressWarnings("PMD.UseProperClassLoader")

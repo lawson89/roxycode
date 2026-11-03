@@ -42,10 +42,7 @@ public record ImplementationPlan(String title, String goal, List<String> require
         private static final int TIMESTAMP_LENGTH = 19;
 
         public String formattedTimestamp() {
-            if (timestamp != null && timestamp.length() > TIMESTAMP_LENGTH) {
-                return PathUtils.formatTimestampDisplay(timestamp, TIMESTAMP_LENGTH, "");
-            }
-            return StringUtils.defaultString(timestamp);
+            return PathUtils.formatTimestampDisplay(timestamp, TIMESTAMP_LENGTH, "");
         }
     }
 
@@ -104,13 +101,6 @@ public record ImplementationPlan(String title, String goal, List<String> require
             planPhaseUsage = Objects.requireNonNullElse(planPhaseUsage, PhaseUsage.EMPTY);
             codePhaseUsage = Objects.requireNonNullElse(codePhaseUsage, PhaseUsage.EMPTY);
             reviewPhaseUsage = Objects.requireNonNullElse(reviewPhaseUsage, PhaseUsage.EMPTY);
-        }
-
-        public UsageSummary(int modelCalls, long promptTokens, long cachedInputTokens, long uncachedInputTokens,
-                long outputTokens, long thoughtsTokens, long totalTokens, double estimatedCostUsd) {
-            this(modelCalls, promptTokens, cachedInputTokens, uncachedInputTokens, outputTokens, thoughtsTokens,
-                    totalTokens, 0.0, 0.0, 0.0, 0.0, estimatedCostUsd, PhaseUsage.EMPTY, PhaseUsage.EMPTY,
-                    PhaseUsage.EMPTY);
         }
 
         public boolean hasUsage() {
@@ -213,8 +203,7 @@ public record ImplementationPlan(String title, String goal, List<String> require
     }
 
     public static String normalizeStepDescription(String description) {
-        return StringUtils.stripEnd(StringUtils.trimToEmpty(description), ".!;: " + (char) 9 + (char) 13 + (char) 10)
-                .toLowerCase(Locale.ROOT);
+        return StringUtils.stripEnd(StringUtils.trimToEmpty(description), ".!;: \t\r\n").toLowerCase(Locale.ROOT);
     }
 
     public static boolean isCompileStep(String description) {
@@ -429,39 +418,37 @@ public record ImplementationPlan(String title, String goal, List<String> require
 
     public String toMarkdown(boolean includeHandoffLog) {
         StringBuilder md = new StringBuilder("# Implementation Plan: ").append(StringUtils.defaultString(title))
-                .append((char) 10).append((char) 10).append("**Goal:** ").append(StringUtils.defaultString(goal))
-                .append((char) 10);
+                .append("\n\n**Goal:** ").append(StringUtils.defaultString(goal)).append('\n');
 
         if (hasApprovals()) {
-            md.append((char) 10).append("## Approvals").append((char) 10);
+            md.append("\n## Approvals\n");
             if (hasMoveToCodeApproval()) {
                 md.append("- **Move to Code:** Approved by ").append(StringUtils.defaultIfBlank(approvedBy, "User"))
-                        .append(" on ").append(StringUtils.defaultIfBlank(approvalTimestamp, "N/A")).append((char) 10);
+                        .append(" on ").append(StringUtils.defaultIfBlank(approvalTimestamp, "N/A")).append('\n');
             }
             if (hasFinalAcceptance()) {
                 md.append("- **Final Acceptance:** Accepted by ")
                         .append(StringUtils.defaultIfBlank(completedBy, "User")).append(" on ")
-                        .append(StringUtils.defaultIfBlank(completedOn, "N/A")).append((char) 10);
+                        .append(StringUtils.defaultIfBlank(completedOn, "N/A")).append('\n');
             }
         }
 
-        md.append((char) 10).append("## Requirements").append((char) 10);
+        md.append("\n## Requirements\n");
         for (String req : requirements) {
-            md.append("- ").append(req).append((char) 10);
+            md.append("- ").append(req).append('\n');
         }
-        md.append((char) 10).append("## Technical Steps").append((char) 10).append(formatStepsMarkdown());
+        md.append("\n## Technical Steps\n").append(formatStepsMarkdown());
 
         if (usageSummary.hasUsage()) {
             appendUsageMarkdown(md);
         }
 
         if (includeHandoffLog && !handoffLog.isEmpty()) {
-            md.append((char) 10).append("## Handoff Log").append((char) 10).append("| Timestamp | User | Message |")
-                    .append((char) 10).append("| :--- | :--- | :--- |").append((char) 10);
+            md.append("\n## Handoff Log\n| Timestamp | User | Message |\n| :--- | :--- | :--- |\n");
             for (LogEntry entry : handoffLog) {
                 md.append("| ").append(escapeMarkdownTableCell(entry.formattedTimestamp())).append(" | ")
                         .append(escapeMarkdownTableCell(entry.user())).append(" | ")
-                        .append(escapeMarkdownTableCell(entry.message())).append(" |").append((char) 10);
+                        .append(escapeMarkdownTableCell(entry.message())).append(" |\n");
             }
         }
         return md.toString();
@@ -480,49 +467,47 @@ public record ImplementationPlan(String title, String goal, List<String> require
             thinkingPct = Math.max(0, 100 - outputPct);
         }
 
-        md.append((char) 10).append("## Token Usage & Cost").append((char) 10).append((char) 10)
-                .append("### Cost by Token Category").append((char) 10);
-        md.append("| Category | Tokens | Share / Cache Hit | Cost (USD) |").append((char) 10);
-        md.append("| :--- | ---: | ---: | ---: |").append((char) 10);
+        md.append("\n## Token Usage & Cost\n\n### Cost by Token Category\n");
+        md.append("| Category | Tokens | Share / Cache Hit | Cost (USD) |\n");
+        md.append("| :--- | ---: | ---: | ---: |\n");
         md.append("| Uncached Input | ").append(TokenUtils.formatTokenCount(usageSummary.uncachedInputTokens()))
                 .append(" | ").append(uncachedInPct).append("% | ")
-                .append(TokenUtils.formatCostUsd(usageSummary.uncachedInputCostUsd())).append(" |").append((char) 10);
+                .append(TokenUtils.formatCostUsd(usageSummary.uncachedInputCostUsd())).append(" |\n");
         md.append("| Cached Input | ").append(TokenUtils.formatTokenCount(usageSummary.cachedInputTokens()))
                 .append(" | ").append(cacheHitPct).append("% hit | ")
-                .append(TokenUtils.formatCostUsd(usageSummary.cachedInputCostUsd())).append(" |").append((char) 10);
+                .append(TokenUtils.formatCostUsd(usageSummary.cachedInputCostUsd())).append(" |\n");
         md.append("| **Input Subtotal** | **").append(TokenUtils.formatTokenCount(usageSummary.promptTokens()))
                 .append("** | **100% in** | **").append(TokenUtils.formatCostUsd(usageSummary.inputCostUsd()))
-                .append("** |").append((char) 10);
+                .append("** |\n");
         md.append("| Output | ").append(TokenUtils.formatTokenCount(usageSummary.outputTokens())).append(" | ")
                 .append(outputPct).append("% | ").append(TokenUtils.formatCostUsd(usageSummary.outputCostUsd()))
-                .append(" |").append((char) 10);
+                .append(" |\n");
         md.append("| Thinking | ").append(TokenUtils.formatTokenCount(usageSummary.thoughtsTokens())).append(" | ")
                 .append(thinkingPct).append("% | ").append(TokenUtils.formatCostUsd(usageSummary.thoughtsCostUsd()))
-                .append(" |").append((char) 10);
+                .append(" |\n");
         md.append("| **Output + Thinking Subtotal** | **").append(TokenUtils.formatTokenCount(outAndThinkTokens))
                 .append("** | **100% out** | **")
-                .append(TokenUtils.formatCostUsd(usageSummary.outputAndThinkingCostUsd())).append("** |")
-                .append((char) 10);
+                .append(TokenUtils.formatCostUsd(usageSummary.outputAndThinkingCostUsd())).append("** |\n");
         md.append("| **Total (").append(usageSummary.modelCalls()).append(" calls)** | **")
                 .append(TokenUtils.formatTokenCount(usageSummary.totalTokens())).append(" (")
                 .append(usageSummary.totalTokens()).append(")** | — | **")
-                .append(TokenUtils.formatCostUsd(usageSummary.estimatedCostUsd())).append("** |").append((char) 10);
+                .append(TokenUtils.formatCostUsd(usageSummary.estimatedCostUsd())).append("** |\n");
 
-        md.append((char) 10).append("### Cost by Workflow Phase").append((char) 10);
-        md.append("| Phase | Calls | Tokens | Cost (USD) |").append((char) 10);
-        md.append("| :--- | ---: | ---: | ---: |").append((char) 10);
+        md.append("\n### Cost by Workflow Phase\n");
+        md.append("| Phase | Calls | Tokens | Cost (USD) |\n");
+        md.append("| :--- | ---: | ---: | ---: |\n");
         appendPhaseUsageRow(md, "Plan", usageSummary.planPhaseUsage());
         appendPhaseUsageRow(md, "Code", usageSummary.codePhaseUsage());
         appendPhaseUsageRow(md, "Review", usageSummary.reviewPhaseUsage());
         md.append("| **Total** | **").append(usageSummary.modelCalls()).append("** | **")
                 .append(TokenUtils.formatTokenCount(usageSummary.totalTokens())).append("** | **")
-                .append(TokenUtils.formatCostUsd(usageSummary.estimatedCostUsd())).append("** |").append((char) 10);
+                .append(TokenUtils.formatCostUsd(usageSummary.estimatedCostUsd())).append("** |\n");
     }
 
     private static void appendPhaseUsageRow(StringBuilder md, String phaseLabel, PhaseUsage phaseUsage) {
         md.append("| ").append(phaseLabel).append(" | ").append(phaseUsage.modelCalls()).append(" | ")
                 .append(TokenUtils.formatTokenCount(phaseUsage.totalTokens())).append(" | ")
-                .append(TokenUtils.formatCostUsd(phaseUsage.estimatedCostUsd())).append(" |").append((char) 10);
+                .append(TokenUtils.formatCostUsd(phaseUsage.estimatedCostUsd())).append(" |\n");
     }
 
     private static String formatFrontmatterCost(double costUsd) {
@@ -551,8 +536,11 @@ public record ImplementationPlan(String title, String goal, List<String> require
         frontmatter.put("codeCostUsd", formatFrontmatterCost(usageSummary.codePhaseUsage().estimatedCostUsd()));
         frontmatter.put("reviewCostUsd", formatFrontmatterCost(usageSummary.reviewPhaseUsage().estimatedCostUsd()));
         frontmatter.put("estimatedCostUsd", formatFrontmatterCost(usageSummary.estimatedCostUsd()));
-        StringBuilder sb = new StringBuilder(FrontmatterUtils.formatFrontmatter(frontmatter));
-        sb.append(toMarkdown(true));
+        return FrontmatterUtils.formatFrontmatter(frontmatter) + toFullMarkdown();
+    }
+
+    public String toFullMarkdown() {
+        StringBuilder sb = new StringBuilder(toMarkdown(true));
         appendChangesMarkdown(sb);
         return sb.toString();
     }
@@ -565,7 +553,7 @@ public record ImplementationPlan(String title, String goal, List<String> require
         for (int i = 0; i < fileChanges.size(); i++) {
             FileChange change = fileChanges.get(i);
             if (i > 0) {
-                sb.append((char) 10);
+                sb.append('\n');
             }
             sb.append(change.changeType().getLabel()).append(' ').append(change.path());
         }
@@ -574,12 +562,11 @@ public record ImplementationPlan(String title, String goal, List<String> require
 
     public void appendChangesMarkdown(StringBuilder sb) {
         String changes = formatChangesText();
-        sb.append((char) 10).append("## Changes").append((char) 10);
+        sb.append("\n## Changes\n");
         if (NO_FILES_CHANGED.equals(changes)) {
-            sb.append(NO_FILES_CHANGED).append((char) 10);
+            sb.append(NO_FILES_CHANGED).append('\n');
         } else {
-            sb.append(CODE_FENCE).append("text").append((char) 10).append(changes).append((char) 10).append(CODE_FENCE)
-                    .append((char) 10);
+            sb.append(CODE_FENCE).append("text\n").append(changes).append('\n').append(CODE_FENCE).append('\n');
         }
     }
 
@@ -588,9 +575,9 @@ public record ImplementationPlan(String title, String goal, List<String> require
         for (int i = 0; i < technicalSteps.size(); i++) {
             TechStep step = technicalSteps.get(i);
             if (step.completed()) {
-                sb.append("- [x] ").append(i).append(". ~~").append(step.description()).append("~~").append((char) 10);
+                sb.append("- [x] ").append(i).append(". ~~").append(step.description()).append("~~\n");
             } else {
-                sb.append("- [ ] ").append(i).append(". ").append(step.description()).append((char) 10);
+                sb.append("- [ ] ").append(i).append(". ").append(step.description()).append('\n');
             }
         }
         return sb.toString();
@@ -599,48 +586,48 @@ public record ImplementationPlan(String title, String goal, List<String> require
     public String formatPromptContextMarkdown() {
         StringBuilder sb = new StringBuilder();
         if (StringUtils.isNotBlank(title)) {
-            sb.append("**Title:** ").append(title).append((char) 10);
+            sb.append("**Title:** ").append(title).append('\n');
         }
         if (StringUtils.isNotBlank(goal)) {
-            sb.append("**Goal:** ").append(goal).append((char) 10);
+            sb.append("**Goal:** ").append(goal).append('\n');
         }
         if (!requirements.isEmpty()) {
             if (!sb.isEmpty()) {
-                sb.append((char) 10);
+                sb.append('\n');
             }
-            sb.append("### Requirements").append((char) 10);
+            sb.append("### Requirements\n");
             for (String req : requirements) {
-                sb.append("- ").append(req).append((char) 10);
+                sb.append("- ").append(req).append('\n');
             }
         }
         if (!technicalSteps.isEmpty()) {
             if (!sb.isEmpty()) {
-                sb.append((char) 10);
+                sb.append('\n');
             }
-            sb.append("### Technical Steps").append((char) 10).append(formatStepsMarkdown());
+            sb.append("### Technical Steps\n").append(formatStepsMarkdown());
         }
         if (!fileChanges.isEmpty()) {
             if (!sb.isEmpty()) {
-                sb.append((char) 10);
+                sb.append('\n');
             }
-            sb.append("### Changes").append((char) 10).append(formatChangesText()).append((char) 10);
+            sb.append("### Changes\n").append(formatChangesText()).append('\n');
         }
         if (!handoffLog.isEmpty()) {
             if (!sb.isEmpty()) {
-                sb.append((char) 10);
+                sb.append('\n');
             }
-            sb.append("### Handoff Log").append((char) 10);
+            sb.append("### Handoff Log\n");
             for (LogEntry entry : handoffLog) {
                 sb.append("- [").append(entry.formattedTimestamp()).append("] ")
                         .append(StringUtils.defaultString(entry.user())).append(": ")
-                        .append(StringUtils.defaultString(entry.message())).append((char) 10);
+                        .append(StringUtils.defaultString(entry.message())).append('\n');
             }
         }
         return sb.toString();
     }
 
     private static String escapeMarkdownTableCell(String value) {
-        return StringUtils.defaultString(value).replace("|", (char) 92 + "|").replace((char) 13 + "" + (char) 10, " ")
-                .replace((char) 10, ' ').replace((char) 13, ' ');
+        return StringUtils.defaultString(value).replace("|", "\\|").replace("\r\n", " ").replace('\n', ' ')
+                .replace('\r', ' ');
     }
 }

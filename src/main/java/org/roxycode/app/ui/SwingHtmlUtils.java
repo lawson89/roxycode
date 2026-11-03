@@ -577,6 +577,10 @@ public final class SwingHtmlUtils {
         return getUiColor(new Color(0x00, 0x7a, 0xcc), "Component.accentColor", "Actions.Blue");
     }
 
+    public static Color getWarningColor() {
+        return getUiColor(new Color(0xd9, 0x77, 0x06), "Component.warning.borderColor", "Actions.Yellow");
+    }
+
     public static Color getMutedForegroundColor() {
         return getUiColor(Color.GRAY, "Label.disabledForeground", "Component.infoForeground");
     }

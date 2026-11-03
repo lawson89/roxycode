@@ -1,24 +1,19 @@
 package org.roxycode.app.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
 import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.service.EnvironmentService;
-import org.roxycode.app.service.ProjectService;
-import org.roxycode.app.service.SettingsService;
 
 class StatusPanelTest {
 
     @Test
     void testStatusPanelDisplaysSessionTokenCostAndMemory() {
         EnvironmentService envService = new EnvironmentService();
-        SettingsService settingsService = mock(SettingsService.class);
-        ProjectService projectService = mock(ProjectService.class);
 
-        StatusPanel panel = new StatusPanel(envService, settingsService, projectService);
+        StatusPanel panel = new StatusPanel(envService);
         assertEquals("Session: 0 tok ($0.00)", panel.tokenCostLabel.getText());
         assertTrue(panel.memLabel.getText().startsWith("JVM Mem: "));
         assertContainsAll(panel.memLabel.getToolTipText(), "% JVM heap used");

@@ -194,12 +194,7 @@ public final class CodebaseCachePanel extends JPanel {
     }
 
     private void configureViewer(RSyntaxTextArea area, String syntaxStyle) {
-        area.setEditable(false);
-        area.setSyntaxEditingStyle(syntaxStyle);
-        area.setCodeFoldingEnabled(true);
-        area.setAntiAliasingEnabled(true);
-        area.setLineWrap(true);
-        area.setWrapStyleWord(true);
+        UiComponents.configureSyntaxTextArea(area, syntaxStyle, false, true);
     }
 
     void updateTheme() {

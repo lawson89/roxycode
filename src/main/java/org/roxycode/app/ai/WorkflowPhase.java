@@ -42,4 +42,18 @@ public enum WorkflowPhase {
         }
         return false;
     }
+
+    public static WorkflowPhase fromObject(Object raw, WorkflowPhase fallback) {
+        if (raw instanceof WorkflowPhase wp) {
+            return wp;
+        }
+        if (raw instanceof String s) {
+            try {
+                return WorkflowPhase.valueOf(s);
+            } catch (IllegalArgumentException ignored) {
+                // fall through to fallback
+            }
+        }
+        return fallback;
+    }
 }

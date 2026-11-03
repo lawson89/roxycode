@@ -372,14 +372,7 @@ public final class ArchiveBrowserPanel extends JPanel {
     }
 
     static String formatTimestampDisplay(String rawTimestamp) {
-        if (rawTimestamp == null || rawTimestamp.isBlank()) {
-            return "";
-        }
-        String trimmed = rawTimestamp.trim();
-        if (trimmed.length() >= TIMESTAMP_PREFIX_LEN) {
-            return PathUtils.formatTimestampDisplay(trimmed, TIMESTAMP_PREFIX_LEN, "");
-        }
-        return trimmed;
+        return PathUtils.formatTimestampDisplay(rawTimestamp, TIMESTAMP_PREFIX_LEN, "");
     }
 
     @Override

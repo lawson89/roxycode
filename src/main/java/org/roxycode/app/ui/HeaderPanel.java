@@ -114,10 +114,7 @@ public final class HeaderPanel extends JPanel {
     }
 
     private String resolveEffectiveModel() {
-        if (projectService != null) {
-            return projectService.getEffectiveGeminiModel();
-        }
-        return SettingsService.resolveGlobalGeminiModel(settingsService);
+        return ProjectService.resolveEffectiveGeminiModel(projectService, settingsService);
     }
 
     private ThinkingLevel resolveEffectiveThinkingLevel(AppSettings eventSettings) {
@@ -130,13 +127,7 @@ public final class HeaderPanel extends JPanel {
         if (eventSettings != null && eventSettings.getThinkingLevel() != null) {
             return ThinkingLevel.fromString(eventSettings.getThinkingLevel());
         }
-        if (projectService != null) {
-            ThinkingLevel effective = projectService.getEffectiveThinkingLevel();
-            if (effective != null) {
-                return effective;
-            }
-        }
-        return SettingsService.resolveGlobalThinkingLevel(settingsService);
+        return ProjectService.resolveEffectiveThinkingLevel(projectService, settingsService);
     }
 
     private void updateProjectTooltip(Path root) {
@@ -194,8 +185,7 @@ public final class HeaderPanel extends JPanel {
                         + accentHex + ", 20%); pressedBackground: fade(" + accentHex + ", 28%); borderColor: fade("
                         + accentHex + ", 35%)");
 
-        Color warnColor = SwingHtmlUtils.getUiColor(new Color(0xd9, 0x77, 0x06), "Component.warning.borderColor",
-                "Actions.Yellow");
+        Color warnColor = SwingHtmlUtils.getWarningColor();
         String warnBgHex = SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(warnColor, 0.14));
         noProjectNoticeLabel.setForeground(warnColor);
         noProjectNoticeLabel.setIcon(FontIcon.of(Codicons.WARNING, 14, warnColor));

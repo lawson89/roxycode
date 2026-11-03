@@ -14,10 +14,13 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.Collection;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.lang3.math.NumberUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.AiConfig;
@@ -57,13 +60,11 @@ public class SymbolService {
     private static final int NOT_FOUND_INDEX = -1;
     private static final char DOT_CHAR = '.';
     private static final char COLON_CHAR = ':';
-    private static final char BACKSLASH_CHAR = 92;
     private static final char SLASH_CHAR = '/';
-    private static final String WORD_BOUNDARY = String.valueOf(BACKSLASH_CHAR) + 'b';
-    private static final String IMPORT_TAB_PREFIX = "import" + (char) 9;
-    private static final String PACKAGE_TAB_PREFIX = "package" + (char) 9;
-    private static final String DOUBLE_NEWLINE = String.valueOf((char) 10) + (char) 10;
-
+    private static final String WORD_BOUNDARY = "\\b";
+    private static final String IMPORT_TAB_PREFIX = "import\t";
+    private static final String PACKAGE_TAB_PREFIX = "package\t";
+    private static final String DOUBLE_NEWLINE = "\n\n";
     private static final Pattern SIMPLE_IDENTIFIER_PATTERN = Pattern.compile("^[A-Za-z0-9_$]+$");
     private static final Pattern VIMGREP_LINE_PATTERN = Pattern.compile("^(.+?):([0-9]+):([0-9]+):(.*)$");
     private record LineRange(int startLine, int endLine) {
@@ -165,40 +166,22 @@ public class SymbolService {
             return List.of();
         }
 
-        List<Path> candidatePaths = new ArrayList<>();
-        Map<Path, String> relPathByAbsPath = new LinkedHashMap<>();
-        for (String relPath : candidateRelPaths) {
-            if (relPath == null || relPath.isBlank()) {
-                continue;
-            }
-            try {
-                Path resolved = projectService.resolvePath(relPath).toAbsolutePath().normalize();
-                if (Files.isRegularFile(resolved) && !relPathByAbsPath.containsKey(resolved)) {
-                    String normalizedRel = normalizeRelativePath(resolved, relPath);
-                    relPathByAbsPath.put(resolved, normalizedRel);
-                    candidatePaths.add(resolved);
-                    if (candidatePaths.size() >= MAX_FIND_SYMBOL_FILES) {
-                        break;
-                    }
-                }
-            } catch (Exception e) {
-                ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
-                log.debug("Skipping candidate file {}: {}", relPath, e.getMessage());
-            }
-        }
-        if (candidatePaths.isEmpty()) {
+        Map<Path, String> relPathByAbsPath = resolveCandidateFiles(candidateRelPaths, true);
+        if (relPathByAbsPath.isEmpty()) {
             return List.of();
         }
 
+        List<Path> candidatePaths = new ArrayList<>(relPathByAbsPath.keySet());
         Map<Path, List<CtagsEntry>> entriesByPath = ctagsRunner.runAndParse(candidatePaths, CTAGS_OUTLINE_FLAGS,
                 objectMapper, CANCELLED_MSG);
         List<SymbolInfo> matches = new ArrayList<>();
-        for (Path filePath : candidatePaths) {
+        for (Map.Entry<Path, String> fileEntry : relPathByAbsPath.entrySet()) {
+            Path filePath = fileEntry.getKey();
             List<CtagsEntry> entriesForFile = entriesByPath.get(filePath);
             if (entriesForFile == null || entriesForFile.isEmpty()) {
                 continue;
             }
-            String relPath = relPathByAbsPath.getOrDefault(filePath, normalizeRelativePath(filePath, null));
+            String relPath = fileEntry.getValue();
             for (SymbolInfo symbol : finalizeSymbolsForFile(entriesForFile, relPath, filePath, -1)) {
                 if (matchesSymbol(symbol, trimmedQuery)) {
                     matches.add(symbol);
@@ -362,8 +345,8 @@ public class SymbolService {
                 continue;
             }
             String path = PathUtils.normalizeRelativePath(matcher.group(1).trim());
-            int line = parsePositiveInt(matcher.group(2));
-            int column = parsePositiveInt(matcher.group(3));
+            int line = NumberUtils.toInt(matcher.group(2), NOT_FOUND_INDEX);
+            int column = NumberUtils.toInt(matcher.group(3), NOT_FOUND_INDEX);
             String snippet = matcher.group(4).trim();
             if (line < MIN_LINE_NUMBER || isNonUsageSnippet(snippet)) {
                 continue;
@@ -378,38 +361,54 @@ public class SymbolService {
     }
 
     private Map<String, List<SymbolInfo>> resolveOutlinesForUsageHits(List<RawUsageHit> hits) {
-        List<Path> candidatePaths = new ArrayList<>();
-        Map<Path, String> relPathByAbsPath = new LinkedHashMap<>();
+        List<String> hitPaths = new ArrayList<>(hits.size());
         for (RawUsageHit hit : hits) {
+            hitPaths.add(hit.path());
+        }
+        Map<Path, String> relPathByAbsPath = resolveCandidateFiles(hitPaths, false);
+        if (relPathByAbsPath.isEmpty()) {
+            return Map.of();
+        }
+        List<Path> candidatePaths = new ArrayList<>(relPathByAbsPath.keySet());
+        Map<Path, List<CtagsEntry>> entriesByPath = ctagsRunner.runAndParse(candidatePaths, CTAGS_OUTLINE_FLAGS,
+                objectMapper, CANCELLED_MSG);
+        Map<String, List<SymbolInfo>> outlines = new LinkedHashMap<>();
+        for (Map.Entry<Path, String> fileEntry : relPathByAbsPath.entrySet()) {
+            Path filePath = fileEntry.getKey();
+            List<CtagsEntry> entries = entriesByPath.get(filePath);
+            if (entries == null || entries.isEmpty()) {
+                continue;
+            }
+            String relPath = fileEntry.getValue();
+            outlines.put(relPath, finalizeSymbolsForFile(entries, relPath, filePath, -1));
+        }
+        return outlines;
+    }
+
+    private Map<Path, String> resolveCandidateFiles(Collection<String> rawRelPaths, boolean normalizeRelPath) {
+        Map<Path, String> relPathByAbsPath = new LinkedHashMap<>();
+        for (String relPath : rawRelPaths) {
+            if (StringUtils.isBlank(relPath)) {
+                continue;
+            }
             try {
-                Path resolved = projectService.resolvePath(hit.path()).toAbsolutePath().normalize();
+                Path resolved = projectService.resolvePath(relPath).toAbsolutePath().normalize();
                 if (Files.isRegularFile(resolved) && !relPathByAbsPath.containsKey(resolved)) {
-                    relPathByAbsPath.put(resolved, hit.path());
-                    candidatePaths.add(resolved);
-                    if (candidatePaths.size() >= MAX_FIND_SYMBOL_FILES) {
+                    String mappedRel = relPath;
+                    if (normalizeRelPath) {
+                        mappedRel = normalizeRelativePath(resolved, relPath);
+                    }
+                    relPathByAbsPath.put(resolved, mappedRel);
+                    if (relPathByAbsPath.size() >= MAX_FIND_SYMBOL_FILES) {
                         break;
                     }
                 }
             } catch (Exception e) {
                 ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
-                log.debug("Skipping usage outline resolution for {}: {}", hit.path(), e.getMessage());
+                log.debug("Skipping candidate file {}: {}", relPath, e.getMessage());
             }
         }
-        if (candidatePaths.isEmpty()) {
-            return Map.of();
-        }
-        Map<Path, List<CtagsEntry>> entriesByPath = ctagsRunner.runAndParse(candidatePaths, CTAGS_OUTLINE_FLAGS,
-                objectMapper, CANCELLED_MSG);
-        Map<String, List<SymbolInfo>> outlines = new LinkedHashMap<>();
-        for (Path filePath : candidatePaths) {
-            List<CtagsEntry> entries = entriesByPath.get(filePath);
-            if (entries == null || entries.isEmpty()) {
-                continue;
-            }
-            String relPath = relPathByAbsPath.get(filePath);
-            outlines.put(relPath, finalizeSymbolsForFile(entries, relPath, filePath, -1));
-        }
-        return outlines;
+        return relPathByAbsPath;
     }
 
     static boolean isDeclarationInOutline(int line, List<SymbolInfo> outline, String trimmedQuery,
@@ -510,11 +509,10 @@ public class SymbolService {
     }
 
     private static String stripExtension(String fileName) {
-        int lastDot = fileName.lastIndexOf(DOT_CHAR);
-        if (lastDot > 0) {
-            return fileName.substring(0, lastDot);
+        if (StringUtils.isEmpty(fileName) || fileName.lastIndexOf(DOT_CHAR) <= 0) {
+            return StringUtils.defaultString(fileName);
         }
-        return fileName;
+        return FilenameUtils.removeExtension(fileName);
     }
 
     private static String extractNormalizedSubpath(String normalizedPath, List<String> prefixes) {
@@ -537,14 +535,6 @@ public class SymbolService {
 
     private static String formatLocationKey(String path, int line) {
         return path + COLON_CHAR + line;
-    }
-
-    private static int parsePositiveInt(String value) {
-        try {
-            return Integer.parseInt(value);
-        } catch (NumberFormatException e) {
-            return NOT_FOUND_INDEX;
-        }
     }
 
     private List<SymbolInfo> getFileOutlineWithLines(Path filePath, String relativePath, int totalLines) {
@@ -730,13 +720,13 @@ public class SymbolService {
             Path normalizedRoot = root.toAbsolutePath().normalize();
             Path normalizedTarget = resolvedPath.toAbsolutePath().normalize();
             if (normalizedTarget.startsWith(normalizedRoot)) {
-                String rel = normalizedRoot.relativize(normalizedTarget).toString().replace(BACKSLASH_CHAR, SLASH_CHAR);
+                String rel = PathUtils.normalizeRelativePath(normalizedRoot.relativize(normalizedTarget).toString());
                 if (!rel.isEmpty()) {
                     return rel;
                 }
             }
         }
-        return StringUtils.trimToEmpty(fallbackRelativePath).replace(BACKSLASH_CHAR, SLASH_CHAR);
+        return PathUtils.normalizeRelativePath(StringUtils.trimToEmpty(fallbackRelativePath));
     }
 
     private static int countLinesSafely(Path filePath) {

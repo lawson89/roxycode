@@ -17,7 +17,6 @@ import javax.swing.JButton;
 import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JList;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
@@ -54,11 +53,7 @@ public final class ContextManagerPanel extends JPanel {
     private transient Consumer<String> errorDialogPresenter;
 
     public ContextManagerPanel(PromptService promptService) {
-        this.errorDialogPresenter = msg -> {
-            if (!GraphicsEnvironment.isHeadless()) {
-                JOptionPane.showMessageDialog(ContextManagerPanel.this, msg, "Error", JOptionPane.ERROR_MESSAGE);
-            }
-        };
+        this.errorDialogPresenter = msg -> UiComponents.showErrorDialog(ContextManagerPanel.this, msg);
         setLayout(new BorderLayout(0, 12));
         setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 

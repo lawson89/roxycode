@@ -4,10 +4,12 @@ import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.FlatLaf;
 import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.GraphicsEnvironment;
 import java.awt.Image;
 import java.awt.LayoutManager;
 import java.awt.Rectangle;
@@ -26,7 +28,9 @@ import javax.swing.JComponent;
 import javax.swing.JEditorPane;
 import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
@@ -401,6 +405,37 @@ final class UiComponents {
                 FlatClientProperties.TABBED_PANE_TAB_TYPE_UNDERLINED);
         tabs.putClientProperty(FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT, trailingComponent);
         return tabs;
+    }
+
+    static void configureSyntaxTextArea(RSyntaxTextArea area, String syntaxStyle, boolean editable, boolean lineWrap) {
+        area.setEditable(editable);
+        area.setSyntaxEditingStyle(syntaxStyle);
+        area.setCodeFoldingEnabled(true);
+        area.setAntiAliasingEnabled(true);
+        area.setLineWrap(lineWrap);
+        area.setWrapStyleWord(lineWrap);
+    }
+
+    static void showErrorDialog(Component parent, String message) {
+        if (!GraphicsEnvironment.isHeadless()) {
+            JOptionPane.showMessageDialog(parent, message, "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    static void updateWarningBannerState(JPanel bannerPanel, JLabel iconLabel, JLabel messageLabel, String messageText,
+            boolean visible) {
+        if (bannerPanel == null) {
+            return;
+        }
+        if (visible) {
+            Color warnColor = SwingHtmlUtils.getWarningColor();
+            iconLabel.setIcon(FontIcon.of(Codicons.WARNING, 18, warnColor));
+            messageLabel.setText(messageText);
+            SwingHtmlUtils.applyTintedBannerStyle(bannerPanel, warnColor, 10, 14, 14);
+        }
+        bannerPanel.setVisible(visible);
+        bannerPanel.revalidate();
+        bannerPanel.repaint();
     }
 
     record ListCellColors(Color background, Color foreground, Color muted, Color iconColor) {

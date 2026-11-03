@@ -372,18 +372,8 @@ public final class SettingsPanel extends JPanel {
 
     void updateOnboardingBannerState() {
         boolean showOnboarding = !isApiKeyConfigured();
-        if (onboardingBannerPanel != null) {
-            if (showOnboarding) {
-                Color warnColor = SwingHtmlUtils.getUiColor(new Color(0xd9, 0x77, 0x06),
-                        "Component.warning.borderColor", "Actions.Yellow");
-                onboardingBannerIconLabel.setIcon(FontIcon.of(Codicons.WARNING, 18, warnColor));
-                onboardingBannerMessageLabel.setText(ONBOARDING_API_KEY_NOTICE_TEXT);
-                SwingHtmlUtils.applyTintedBannerStyle(onboardingBannerPanel, warnColor, 10, 14, 14);
-            }
-            onboardingBannerPanel.setVisible(showOnboarding);
-            onboardingBannerPanel.revalidate();
-            onboardingBannerPanel.repaint();
-        }
+        UiComponents.updateWarningBannerState(onboardingBannerPanel, onboardingBannerIconLabel,
+                onboardingBannerMessageLabel, ONBOARDING_API_KEY_NOTICE_TEXT, showOnboarding);
     }
 
     @EventListener

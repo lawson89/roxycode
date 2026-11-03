@@ -2,12 +2,8 @@ package org.roxycode.app.service;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
 import java.util.Objects;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AiConfig;
@@ -39,10 +35,6 @@ public class ProjectService {
         public ProjectConfig {
             geminiModel = StringUtils.trimToEmpty(geminiModel);
             thinkingLevel = normalizeProjectThinkingLevel(thinkingLevel);
-        }
-
-        public ProjectConfig(String geminiModel, boolean buildConfirmed) {
-            this(geminiModel, "", buildConfirmed);
         }
     }
 
@@ -178,6 +170,24 @@ public class ProjectService {
         return SettingsService.resolveGlobalThinkingLevel(settingsService);
     }
 
+    public static String resolveEffectiveGeminiModel(ProjectService projectService, SettingsService settingsService) {
+        if (projectService != null) {
+            return projectService.getEffectiveGeminiModel();
+        }
+        return SettingsService.resolveGlobalGeminiModel(settingsService);
+    }
+
+    public static ThinkingLevel resolveEffectiveThinkingLevel(ProjectService projectService,
+            SettingsService settingsService) {
+        if (projectService != null) {
+            ThinkingLevel projectLevel = projectService.getEffectiveThinkingLevel();
+            if (projectLevel != null) {
+                return projectLevel;
+            }
+        }
+        return SettingsService.resolveGlobalThinkingLevel(settingsService);
+    }
+
     public static String resolveNormalizedProjectPath(ProjectService projectService) {
         if (projectService == null || projectService.getCurrentProjectRoot() == null) {
             return "";
@@ -253,12 +263,6 @@ public class ProjectService {
     }
 
     static String computeProjectHash(Path normalizedRoot) {
-        try {
-            byte[] hashBytes = MessageDigest.getInstance("SHA-256")
-                    .digest(normalizedRoot.toString().getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(hashBytes, 0, 4);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 algorithm not available", e);
-        }
+        return PathUtils.computeSha256Hex(normalizedRoot.toString(), 4);
     }
 }

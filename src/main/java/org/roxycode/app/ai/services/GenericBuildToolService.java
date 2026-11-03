@@ -62,12 +62,11 @@ public class GenericBuildToolService {
     private static final String TAG_ERROR = "error";
     public static final List<String> DEFAULT_JUNIT_XML_PATHS = List.of("target/surefire-reports",
             "target/failsafe-reports", "build/test-results");
-    static final String LOG_TRUNCATED_PREFIX = "... [Log truncated. Full log saved to .roxycode/tmp/build.log]"
-            + (char) 10;
+    static final String LOG_TRUNCATED_PREFIX = "... [Log truncated. Full log saved to .roxycode/tmp/build.log]\n";
     private static final Duration BUILD_TIMEOUT = Duration.ofMinutes(10);
-    private static final char ESC_CHAR = (char) 27;
+    private static final char ESC_CHAR = '\u001b';
     private static final java.util.regex.Pattern ANSI_ESCAPE_PATTERN = java.util.regex.Pattern
-            .compile(ESC_CHAR + "" + (char) 92 + "[[;" + (char) 92 + "d]*[ -/]*[@-~]");
+            .compile(ESC_CHAR + "\\[[;\\d]*[ -/]*[@-~]");
     private static final String DEFAULT_FALLBACK_TOML = """
             [commands]
             install = ""
@@ -386,8 +385,8 @@ public class GenericBuildToolService {
             if (mode == SandboxMode.DOCKER) {
                 if (!buildContainerService.isDockerAvailable()) {
                     stopActiveContainer();
-                    String msg = "Error executing " + commandLabel + ": Docker is not available, but [sandbox] mode = "
-                            + (char) 34 + "docker" + (char) 34 + " is configured in build.toml.";
+                    String msg = "Error executing " + commandLabel
+                            + ": Docker is not available, but [sandbox] mode = \"docker\" is configured in build.toml.";
                     return new BuildResult(false, -1, msg, List.of(msg), List.of());
                 }
                 return executeInContainer(command, sandboxConfig, env, logFile, parseSection);
@@ -396,8 +395,7 @@ public class GenericBuildToolService {
                 stopActiveContainer();
                 if (!buildContainerService.isNativeSandboxAvailable()) {
                     String msg = "Error executing " + commandLabel
-                            + ": Native OS sandbox is not available on this system, but [sandbox] mode = " + (char) 34
-                            + "native" + (char) 34 + " is configured in build.toml.";
+                            + ": Native OS sandbox is not available on this system, but [sandbox] mode = \"native\" is configured in build.toml.";
                     return new BuildResult(false, -1, msg, List.of(msg), List.of());
                 }
                 List<String> sandboxCmd = buildContainerService
@@ -487,89 +485,112 @@ public class GenericBuildToolService {
         return tomlMapper.readValue(sanitizeTomlEscapes(content), BuildConfig.class);
     }
 
+    private static final char COMMENT_CHAR = '#';
+    private static final char DOUBLE_QUOTE_CHAR = '"';
+    private static final char SINGLE_QUOTE_CHAR = '\'';
+    private static final char BACKSLASH_CHAR = '\\';
+    private static final char UNICODE_ESCAPE_LOWER = 'u';
+    private static final char UNICODE_ESCAPE_UPPER = 'U';
+    private static final String TRIPLE_DOUBLE_QUOTE = "\"\"\"";
+    private static final String DOUBLE_BACKSLASH = "\\\\";
+    private static final String VALID_SIMPLE_TOML_ESCAPES = "btnfr\"\\";
+
+    private enum TomlLexerState {
+        NORMAL, COMMENT, BASIC_STRING, MULTILINE_BASIC_STRING, LITERAL_STRING, MULTILINE_LITERAL_STRING
+    }
+
     static String sanitizeTomlEscapes(String toml) {
-        if (toml == null || toml.indexOf((char) 92) < 0) {
+        if (toml == null || toml.indexOf(BACKSLASH_CHAR) < 0) {
             return StringUtils.defaultString(toml);
         }
         StringBuilder sb = new StringBuilder(toml.length() + 16);
         int len = toml.length();
-        boolean inBasic = false;
-        boolean inMultilineBasic = false;
-        boolean inLiteral = false;
-        boolean inMultilineLiteral = false;
-        boolean inComment = false;
+        TomlLexerState state = TomlLexerState.NORMAL;
         int i = 0;
         while (i < len) {
             char c = toml.charAt(i);
-            if (inComment) {
-                sb.append(c);
-                if (c == (char) 10 || c == (char) 13) {
-                    inComment = false;
-                }
-                i++;
-            } else if (inLiteral) {
-                sb.append(c);
-                if (c == (char) 39 || c == (char) 10 || c == (char) 13) {
-                    inLiteral = false;
-                }
-                i++;
-            } else if (inMultilineLiteral) {
-                if (startsWithTripleQuote(toml, i, (char) 39)) {
-                    sb.append("'''");
-                    inMultilineLiteral = false;
-                    i += 3;
-                } else {
+            switch (state) {
+                case COMMENT :
                     sb.append(c);
+                    if (isLineBreak(c)) {
+                        state = TomlLexerState.NORMAL;
+                    }
                     i++;
-                }
-            } else if (inBasic || inMultilineBasic) {
-                if (inMultilineBasic && startsWithTripleQuote(toml, i, (char) 34)) {
-                    sb.append((char) 34).append((char) 34).append((char) 34);
-                    inMultilineBasic = false;
-                    i += 3;
-                } else if (inBasic && (c == (char) 34 || c == (char) 10 || c == (char) 13)) {
+                    break;
+                case LITERAL_STRING :
                     sb.append(c);
-                    inBasic = false;
+                    if (c == SINGLE_QUOTE_CHAR || isLineBreak(c)) {
+                        state = TomlLexerState.NORMAL;
+                    }
                     i++;
-                } else if (c == (char) 92 && i + 1 < len) {
-                    char next = toml.charAt(i + 1);
-                    if (isValidTomlEscape(toml, i + 1, inMultilineBasic)) {
-                        sb.append((char) 92).append(next);
-                        i += 2;
+                    break;
+                case MULTILINE_LITERAL_STRING :
+                    if (startsWithTripleQuote(toml, i, SINGLE_QUOTE_CHAR)) {
+                        sb.append("'''");
+                        state = TomlLexerState.NORMAL;
+                        i += 3;
                     } else {
-                        sb.append((char) 92).append((char) 92);
+                        sb.append(c);
                         i++;
                     }
-                } else {
-                    sb.append(c);
-                    i++;
-                }
-            } else if (c == (char) 35) {
-                inComment = true;
-                sb.append(c);
-                i++;
-            } else if (startsWithTripleQuote(toml, i, (char) 34)) {
-                inMultilineBasic = true;
-                sb.append((char) 34).append((char) 34).append((char) 34);
-                i += 3;
-            } else if (startsWithTripleQuote(toml, i, (char) 39)) {
-                inMultilineLiteral = true;
-                sb.append("'''");
-                i += 3;
-            } else if (c == (char) 34) {
-                inBasic = true;
-                sb.append(c);
-                i++;
-            } else if (c == (char) 39) {
-                inLiteral = true;
-                sb.append(c);
-                i++;
-            } else {
-                sb.append(c);
-                i++;
+                    break;
+                case BASIC_STRING :
+                case MULTILINE_BASIC_STRING :
+                    boolean multiline = state == TomlLexerState.MULTILINE_BASIC_STRING;
+                    if (multiline && startsWithTripleQuote(toml, i, DOUBLE_QUOTE_CHAR)) {
+                        sb.append(TRIPLE_DOUBLE_QUOTE);
+                        state = TomlLexerState.NORMAL;
+                        i += 3;
+                    } else if (!multiline && (c == DOUBLE_QUOTE_CHAR || isLineBreak(c))) {
+                        sb.append(c);
+                        state = TomlLexerState.NORMAL;
+                        i++;
+                    } else if (c == BACKSLASH_CHAR && i + 1 < len) {
+                        if (isValidTomlEscape(toml, i + 1, multiline)) {
+                            sb.append(BACKSLASH_CHAR).append(toml.charAt(i + 1));
+                            i += 2;
+                        } else {
+                            sb.append(DOUBLE_BACKSLASH);
+                            i++;
+                        }
+                    } else {
+                        sb.append(c);
+                        i++;
+                    }
+                    break;
+                default :
+                    if (c == COMMENT_CHAR) {
+                        state = TomlLexerState.COMMENT;
+                        sb.append(c);
+                        i++;
+                    } else if (startsWithTripleQuote(toml, i, DOUBLE_QUOTE_CHAR)) {
+                        state = TomlLexerState.MULTILINE_BASIC_STRING;
+                        sb.append(TRIPLE_DOUBLE_QUOTE);
+                        i += 3;
+                    } else if (startsWithTripleQuote(toml, i, SINGLE_QUOTE_CHAR)) {
+                        state = TomlLexerState.MULTILINE_LITERAL_STRING;
+                        sb.append("'''");
+                        i += 3;
+                    } else if (c == DOUBLE_QUOTE_CHAR) {
+                        state = TomlLexerState.BASIC_STRING;
+                        sb.append(c);
+                        i++;
+                    } else if (c == SINGLE_QUOTE_CHAR) {
+                        state = TomlLexerState.LITERAL_STRING;
+                        sb.append(c);
+                        i++;
+                    } else {
+                        sb.append(c);
+                        i++;
+                    }
+                    break;
             }
         }
         return sb.toString();
+    }
+
+    private static boolean isLineBreak(char c) {
+        return c == '\n' || c == '\r';
     }
 
     private static boolean startsWithTripleQuote(String text, int index, char quoteChar) {
@@ -579,20 +600,16 @@ public class GenericBuildToolService {
 
     private static boolean isValidTomlEscape(String text, int escapeCharIndex, boolean multilineBasic) {
         char next = text.charAt(escapeCharIndex);
-        if (next == 'b' || next == 't' || next == 'n' || next == 'f' || next == 'r' || next == (char) 34
-                || next == (char) 92) {
+        if (VALID_SIMPLE_TOML_ESCAPES.indexOf(next) >= 0) {
             return true;
         }
-        if (next == (char) 117) {
+        if (next == UNICODE_ESCAPE_LOWER) {
             return hasHexDigits(text, escapeCharIndex + 1, 4);
         }
-        if (next == (char) 85) {
+        if (next == UNICODE_ESCAPE_UPPER) {
             return hasHexDigits(text, escapeCharIndex + 1, 8);
         }
-        if (multilineBasic && (next == ' ' || next == (char) 9 || next == (char) 10 || next == (char) 13)) {
-            return true;
-        }
-        return false;
+        return multilineBasic && (Character.isWhitespace(next) || isLineBreak(next));
     }
 
     private static boolean hasHexDigits(String text, int start, int count) {
@@ -726,10 +743,6 @@ public class GenericBuildToolService {
         return LOG_TRUNCATED_PREFIX + sanitized.substring(sanitized.length() - MAX_LOG_TAIL_BYTES);
     }
 
-    List<String> extractWithRipGrep(String regex, Path logFile) {
-        return extractWithRipGrep(regex, logFile, DEFAULT_CONTEXT_LINES);
-    }
-
     List<String> extractWithRipGrep(String regex, Path logFile, int contextLines) {
         if (regex == null || regex.isBlank() || logFile == null || !Files.exists(logFile)) {
             return List.of();
@@ -805,7 +818,7 @@ public class GenericBuildToolService {
         StringBuilder sb = new StringBuilder();
         for (int i = start; i < end; i++) {
             if (i > start) {
-                sb.append((char) 10);
+                sb.append('\n');
             }
             sb.append(StringUtils.stripEnd(rawBlockLines.get(i), null));
         }
@@ -967,8 +980,7 @@ public class GenericBuildToolService {
 
     private static String formatJunitFailureElement(String testId, String tag, org.w3c.dom.Element element) {
         String type = stripAnsiCodes(element.getAttribute("type")).trim();
-        String message = stripAnsiCodes(element.getAttribute("message"))
-                .replace("" + (char) 13 + (char) 10, String.valueOf((char) 10)).trim();
+        String message = stripAnsiCodes(element.getAttribute("message")).replace("\r\n", "\n").trim();
         String body = stripAnsiCodes(element.getTextContent());
 
         StringBuilder sb = new StringBuilder();
@@ -988,7 +1000,7 @@ public class GenericBuildToolService {
                 if (appendedLines == 0 && (trimmedLine.equals(headerDetail) || trimmedLine.equals(message))) {
                     continue;
                 }
-                sb.append((char) 10).append("  ").append(trimmedLine);
+                sb.append('\n').append("  ").append(trimmedLine);
                 appendedLines++;
                 if (appendedLines >= MAX_JUNIT_FAILURE_LINES) {
                     break;

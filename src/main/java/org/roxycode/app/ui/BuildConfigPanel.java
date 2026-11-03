@@ -1,6 +1,5 @@
 package org.roxycode.app.ui;
 
-import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.*;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -158,8 +157,7 @@ public final class BuildConfigPanel extends JPanel {
 
         loadTemplateOptions();
 
-        unconfirmedBannerPanel = new JPanel(new MigLayout("fillx, insets 10 14 10 14", "[][grow]", "[]"));
-        unconfirmedBannerPanel.setOpaque(false);
+        unconfirmedBannerPanel = new JPanel(new MigLayout("fillx, insets 0", "[][grow]", "[]"));
         unconfirmedBannerIconLabel = new JLabel();
         unconfirmedBannerMessageLabel = new JLabel(UNCONFIRMED_BUILD_NOTICE_TEXT);
         unconfirmedBannerPanel.add(unconfirmedBannerIconLabel, "gapright 8");
@@ -168,9 +166,7 @@ public final class BuildConfigPanel extends JPanel {
         add(unconfirmedBannerPanel, "growx, wrap, gapbottom 8, hidemode 3");
 
         textArea = new RSyntaxTextArea();
-        textArea.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_INI);
-        textArea.setCodeFoldingEnabled(true);
-        textArea.setAntiAliasingEnabled(true);
+        UiComponents.configureSyntaxTextArea(textArea, SyntaxConstants.SYNTAX_STYLE_INI, true, false);
         SwingHtmlUtils.addChangeListener(textArea, this::onTomlTextEdited);
         updateTextAreaTheme();
 
@@ -370,21 +366,8 @@ public final class BuildConfigPanel extends JPanel {
     void updateBannerState() {
         boolean showUnconfirmedNotice = projectService != null && projectService.hasActiveProject()
                 && !projectService.isBuildConfirmed();
-        if (unconfirmedBannerPanel != null) {
-            if (showUnconfirmedNotice) {
-                Color warnColor = SwingHtmlUtils.getUiColor(new Color(0xd9, 0x77, 0x06),
-                        "Component.warning.borderColor", "Actions.Yellow");
-                String warnHex = SwingHtmlUtils.toHex(warnColor);
-                String warnBgHex = SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(warnColor, 0.15));
-                unconfirmedBannerIconLabel.setIcon(FontIcon.of(Codicons.WARNING, 18, warnColor));
-                unconfirmedBannerMessageLabel.setText(UNCONFIRMED_BUILD_NOTICE_TEXT);
-                unconfirmedBannerPanel.putClientProperty(FlatClientProperties.STYLE,
-                        "arc: 12; border: 1,1,1,1," + warnHex + ",1,12; background: " + warnBgHex);
-            }
-            unconfirmedBannerPanel.setVisible(showUnconfirmedNotice);
-            unconfirmedBannerPanel.revalidate();
-            unconfirmedBannerPanel.repaint();
-        }
+        UiComponents.updateWarningBannerState(unconfirmedBannerPanel, unconfirmedBannerIconLabel,
+                unconfirmedBannerMessageLabel, UNCONFIRMED_BUILD_NOTICE_TEXT, showUnconfirmedNotice);
     }
 
     @SuppressWarnings("PMD.UnusedAssignment")
@@ -477,8 +460,8 @@ public final class BuildConfigPanel extends JPanel {
         String fullMsg = "Error saving config: " + message;
         if (errorDialogPresenter != null) {
             errorDialogPresenter.accept(fullMsg);
-        } else if (!GraphicsEnvironment.isHeadless()) {
-            JOptionPane.showMessageDialog(this, fullMsg, "Error", JOptionPane.ERROR_MESSAGE);
+        } else {
+            UiComponents.showErrorDialog(this, fullMsg);
         }
     }
 

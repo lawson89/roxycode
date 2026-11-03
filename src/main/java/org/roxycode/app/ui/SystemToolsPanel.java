@@ -395,8 +395,7 @@ public final class SystemToolsPanel extends JPanel {
                 statusColor = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
                 statusIcon = Codicons.CHECK;
             } else if (SystemToolService.STATUS_ERROR.equals(status)) {
-                statusColor = SwingHtmlUtils.getUiColor(new Color(0xd9, 0x77, 0x06), "Component.warning.borderColor",
-                        "Actions.Yellow");
+                statusColor = SwingHtmlUtils.getWarningColor();
                 statusIcon = Codicons.WARNING;
             } else {
                 statusColor = SwingHtmlUtils.getUiColor(new Color(0xdc, 0x35, 0x45), "Actions.Red");

@@ -113,7 +113,7 @@ class SettingsServiceTest {
         assertEquals(ThinkingLevel.DEFAULT, ThinkingLevel.fromString("unknown-level"));
         assertEquals(ThinkingLevel.MINIMAL, ThinkingLevel.fromString("NONE"));
         assertEquals(ThinkingLevel.MINIMAL, ThinkingLevel.fromString("minimal"));
-        assertEquals(ThinkingLevel.LOW, ThinkingLevel.fromId("low"));
+        assertEquals(ThinkingLevel.LOW, ThinkingLevel.fromString("low"));
         assertEquals(ThinkingLevel.MEDIUM, ThinkingLevel.fromString("Medium"));
         assertEquals(ThinkingLevel.HIGH, ThinkingLevel.fromString("HIGH"));
 

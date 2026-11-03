@@ -81,10 +81,6 @@ public final class AgentMemoryPanel extends JPanel {
     private transient Predicate<String> deleteConfirmPresenter;
     private boolean suppressMemoryEventRefresh;
 
-    public AgentMemoryPanel(MemoryService memoryService, ProjectService projectService) {
-        this(memoryService, projectService, null);
-    }
-
     @Autowired
     public AgentMemoryPanel(MemoryService memoryService, @Nullable ProjectService projectService,
             @Nullable SettingsService settingsService) {
@@ -177,9 +173,7 @@ public final class AgentMemoryPanel extends JPanel {
     }
 
     private void presentDefaultErrorDialog(String message) {
-        if (!GraphicsEnvironment.isHeadless()) {
-            JOptionPane.showMessageDialog(this, message, "Error", JOptionPane.ERROR_MESSAGE);
-        }
+        UiComponents.showErrorDialog(this, message);
     }
 
     private boolean presentDefaultDeleteConfirmDialog(String slug) {
@@ -367,11 +361,7 @@ public final class AgentMemoryPanel extends JPanel {
         }
 
         private void configureMarkdownEditor(RSyntaxTextArea editor) {
-            editor.setSyntaxEditingStyle(SyntaxConstants.SYNTAX_STYLE_MARKDOWN);
-            editor.setCodeFoldingEnabled(true);
-            editor.setAntiAliasingEnabled(true);
-            editor.setLineWrap(true);
-            editor.setWrapStyleWord(true);
+            UiComponents.configureSyntaxTextArea(editor, SyntaxConstants.SYNTAX_STYLE_MARKDOWN, true, true);
         }
 
         private void setupListeners() {
@@ -762,8 +752,7 @@ public final class AgentMemoryPanel extends JPanel {
             if (emptyProjectPanel != null) {
                 UiComponents.styleCardPanel(emptyProjectPanel);
             }
-            Color warnColor = SwingHtmlUtils.getUiColor(new Color(0xd9, 0x77, 0x06), "Component.warning.borderColor",
-                    "Actions.Yellow");
+            Color warnColor = SwingHtmlUtils.getWarningColor();
             memoryWarningLabel.setForeground(warnColor);
             memoryWarningLabel.setIcon(FontIcon.of(Codicons.WARNING, 14, warnColor));
             memoryCounterLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());

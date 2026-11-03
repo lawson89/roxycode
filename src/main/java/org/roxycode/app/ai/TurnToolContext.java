@@ -38,16 +38,7 @@ public record TurnToolContext(String conversationId, WorkflowPhase phase, Atomic
         if (contextMap.get(CONVERSATION_ID_KEY) instanceof String s && StringUtils.isNotBlank(s)) {
             convId = s;
         }
-        WorkflowPhase resolvedPhase = WorkflowPhase.EXPLORE;
-        Object phaseObj = contextMap.get(PHASE_KEY);
-        if (phaseObj instanceof WorkflowPhase wp) {
-            resolvedPhase = wp;
-        } else if (phaseObj instanceof String s) {
-            try {
-                resolvedPhase = WorkflowPhase.valueOf(s);
-            } catch (IllegalArgumentException ignored) {
-            }
-        }
+        WorkflowPhase resolvedPhase = WorkflowPhase.fromObject(contextMap.get(PHASE_KEY), WorkflowPhase.EXPLORE);
         AtomicInteger counter = null;
         if (contextMap.get(TURN_COUNTER_KEY) instanceof AtomicInteger ai) {
             counter = ai;

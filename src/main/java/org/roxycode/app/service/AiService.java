@@ -217,20 +217,11 @@ public class AiService implements AutoCloseable {
     }
 
     String resolveEffectiveGeminiModel() {
-        if (projectService != null) {
-            return projectService.getEffectiveGeminiModel();
-        }
-        return SettingsService.resolveGlobalGeminiModel(settingsService);
+        return ProjectService.resolveEffectiveGeminiModel(projectService, settingsService);
     }
 
     ThinkingLevel resolveEffectiveThinkingLevel() {
-        if (projectService != null) {
-            ThinkingLevel projectLevel = projectService.getEffectiveThinkingLevel();
-            if (projectLevel != null) {
-                return projectLevel;
-            }
-        }
-        return SettingsService.resolveGlobalThinkingLevel(settingsService);
+        return ProjectService.resolveEffectiveThinkingLevel(projectService, settingsService);
     }
 
     void setRetryTemplate(RetryTemplate retryTemplate) {
@@ -333,16 +324,9 @@ public class AiService implements AutoCloseable {
     @Nullable
     private WorkflowPhase resolveWorkflowPhase(ChatClientRequest request) {
         if (request != null && request.context() != null) {
-            Object phaseObj = request.context().get(TurnToolContext.PHASE_KEY);
-            if (phaseObj instanceof WorkflowPhase wp) {
-                return wp;
-            }
-            if (phaseObj instanceof String s) {
-                try {
-                    return WorkflowPhase.valueOf(s);
-                } catch (IllegalArgumentException ignored) {
-                    // fall through to planService
-                }
+            WorkflowPhase resolved = WorkflowPhase.fromObject(request.context().get(TurnToolContext.PHASE_KEY), null);
+            if (resolved != null) {
+                return resolved;
             }
         }
         if (planService != null) {
@@ -361,8 +345,8 @@ public class AiService implements AutoCloseable {
         return resolveEffectiveGeminiModel();
     }
 
-    void publishTokenUsageIfPresent(String conversationId, String modelName, @Nullable ChatResponse chatResponse) {
-        publishTokenUsageIfPresent(conversationId, modelName, null, chatResponse);
+    private record ExtractedTokenCounts(int promptTokens, int cachedInputTokens, int uncachedInputTokens,
+            int candidatesTokens, int thoughtsTokens, int totalTokens) {
     }
 
     void publishTokenUsageIfPresent(String conversationId, String modelName, @Nullable WorkflowPhase phase,
@@ -370,9 +354,39 @@ public class AiService implements AutoCloseable {
         if (eventPublisher == null || chatResponse == null || chatResponse.getMetadata() == null) {
             return;
         }
-        Usage usage = chatResponse.getMetadata().getUsage();
-        if (usage == null) {
+        ExtractedTokenCounts counts = extractTokenCounts(chatResponse.getMetadata().getUsage());
+        if (counts == null) {
             return;
+        }
+
+        String resolvedModel = StringUtils.defaultIfBlank(modelName, resolveEffectiveGeminiModel()).trim();
+        GeminiModelConfig modelConfig = resolveModelConfigForUsage(resolvedModel);
+
+        double uncachedInputCostUsd = modelConfig.calculateUncachedInputCostUsd(counts.uncachedInputTokens());
+        double cachedInputCostUsd = modelConfig.calculateCachedInputCostUsd(counts.cachedInputTokens());
+        double outputCostUsd = modelConfig.calculateOutputCostUsd(counts.candidatesTokens());
+        double thoughtsCostUsd = modelConfig.calculateOutputCostUsd(counts.thoughtsTokens());
+        double costUsd = uncachedInputCostUsd + cachedInputCostUsd + outputCostUsd + thoughtsCostUsd;
+        eventPublisher.publishEvent(new TokenUsageEvent(StringUtils.defaultString(conversationId), resolvedModel,
+                modelConfig.contextWindowTokens(), counts.promptTokens(), counts.cachedInputTokens(),
+                counts.uncachedInputTokens(), counts.candidatesTokens(), counts.thoughtsTokens(), counts.totalTokens(),
+                phase, uncachedInputCostUsd, cachedInputCostUsd, outputCostUsd, thoughtsCostUsd, costUsd));
+    }
+
+    private GeminiModelConfig resolveModelConfigForUsage(String resolvedModel) {
+        if (settingsService != null) {
+            GeminiModelConfig cfg = settingsService.resolveModelConfig(resolvedModel);
+            if (cfg != null) {
+                return cfg;
+            }
+        }
+        return GeminiModelConfig.defaultForApiName(resolvedModel);
+    }
+
+    @Nullable
+    private static ExtractedTokenCounts extractTokenCounts(@Nullable Usage usage) {
+        if (usage == null) {
+            return null;
         }
         int promptTokens = safeNonNegativeInt(usage.getPromptTokens());
         int candidatesTokens = safeNonNegativeInt(usage.getCompletionTokens());
@@ -380,8 +394,7 @@ public class AiService implements AutoCloseable {
         int cachedTokens = 0;
         int thoughtsTokens = 0;
 
-        Object nativeUsage = usage.getNativeUsage();
-        if (nativeUsage instanceof GenerateContentResponseUsageMetadata genAiUsage) {
+        if (usage.getNativeUsage() instanceof GenerateContentResponseUsageMetadata genAiUsage) {
             cachedTokens = safeNonNegativeInt(genAiUsage.cachedContentTokenCount().orElse(0));
             thoughtsTokens = safeNonNegativeInt(genAiUsage.thoughtsTokenCount().orElse(0));
             if (promptTokens == 0) {
@@ -401,27 +414,10 @@ public class AiService implements AutoCloseable {
             totalTokens = promptTokens + candidatesTokens + thoughtsTokens;
         }
         if (promptTokens <= 0 && candidatesTokens <= 0 && thoughtsTokens <= 0 && totalTokens <= 0) {
-            return;
+            return null;
         }
-
-        String resolvedModel = StringUtils.defaultIfBlank(modelName, resolveEffectiveGeminiModel()).trim();
-        GeminiModelConfig modelConfig = null;
-        if (settingsService != null) {
-            modelConfig = settingsService.resolveModelConfig(resolvedModel);
-        }
-        if (modelConfig == null) {
-            modelConfig = GeminiModelConfig.defaultForApiName(resolvedModel);
-        }
-
-        double uncachedInputCostUsd = modelConfig.calculateUncachedInputCostUsd(uncachedInputTokens);
-        double cachedInputCostUsd = modelConfig.calculateCachedInputCostUsd(cachedInputTokens);
-        double outputCostUsd = modelConfig.calculateOutputCostUsd(candidatesTokens);
-        double thoughtsCostUsd = modelConfig.calculateOutputCostUsd(thoughtsTokens);
-        double costUsd = uncachedInputCostUsd + cachedInputCostUsd + outputCostUsd + thoughtsCostUsd;
-        eventPublisher.publishEvent(new TokenUsageEvent(StringUtils.defaultString(conversationId), resolvedModel,
-                modelConfig.contextWindowTokens(), promptTokens, cachedInputTokens, uncachedInputTokens,
-                candidatesTokens, thoughtsTokens, totalTokens, phase, uncachedInputCostUsd, cachedInputCostUsd,
-                outputCostUsd, thoughtsCostUsd, costUsd));
+        return new ExtractedTokenCounts(promptTokens, cachedInputTokens, uncachedInputTokens, candidatesTokens,
+                thoughtsTokens, totalTokens);
     }
 
     private static int safeNonNegativeInt(@Nullable Integer value) {

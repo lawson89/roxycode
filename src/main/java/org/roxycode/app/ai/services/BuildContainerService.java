@@ -37,9 +37,9 @@ public class BuildContainerService {
     static final String LABEL_APP = "app";
     static final String LABEL_APP_VALUE = "roxycode";
     static final String LABEL_PROJECT = "roxycode.project";
-    private static final String NL = String.valueOf((char) 10);
-    private static final String BS = String.valueOf((char) 92);
-    private static final String DQ = String.valueOf((char) 34);
+    private static final String NL = "\n";
+    private static final String BS = "\\";
+    private static final String DQ = "\"";
     private static final String TILDE = "~";
     private static final String TILDE_SLASH = "~/";
     private static final String TILDE_BACKSLASH = "~" + BS;
@@ -90,8 +90,8 @@ public class BuildContainerService {
                 sb.append(stdout);
             }
             if (StringUtils.isNotEmpty(stderr)) {
-                if (!sb.isEmpty() && sb.charAt(sb.length() - 1) != (char) 10) {
-                    sb.append((char) 10);
+                if (!sb.isEmpty() && sb.charAt(sb.length() - 1) != '\n') {
+                    sb.append('\n');
                 }
                 sb.append(stderr);
             }

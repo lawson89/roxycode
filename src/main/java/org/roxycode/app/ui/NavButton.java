@@ -195,69 +195,71 @@ public final class NavButton extends JButton {
             amberTint = AMBER_TINT_LIGHT;
         }
 
-        if (isSelected() && g instanceof Graphics2D) {
+        paintSelectionOrAttentionHighlight(g, dark, highlightWaiting, amberAccent, amberTint);
+        super.paintComponent(g);
+        paintStatusBadge(g, highlightWaiting, amberAccent);
+    }
+
+    private void paintSelectionOrAttentionHighlight(Graphics g, boolean dark, boolean highlightWaiting,
+            Color amberAccent, Color amberTint) {
+        if (!(g instanceof Graphics2D)) {
+            return;
+        }
+        if (isSelected()) {
             Color accentColor = SwingHtmlUtils.getAccentColor();
-            double tintRatio;
+            double tintRatio = 0.12;
             if (dark) {
                 tintRatio = 0.18;
-            } else {
-                tintRatio = 0.12;
             }
-            Color selectedTint = SwingHtmlUtils.getTintedBackground(accentColor, tintRatio);
-            Graphics2D g2 = (Graphics2D) g.create();
-            try {
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(selectedTint);
-                g2.fillRoundRect(0, 0, getWidth(), getHeight(), ROW_ARC, ROW_ARC);
-                g2.setColor(accentColor);
-                g2.fillRoundRect(0, 2, ACCENT_PILL_WIDTH, Math.max(0, getHeight() - 4), ACCENT_PILL_WIDTH,
-                        ACCENT_PILL_WIDTH);
-            } finally {
-                g2.dispose();
-            }
-        } else if (highlightWaiting && g instanceof Graphics2D) {
-            Graphics2D g2 = (Graphics2D) g.create();
-            try {
-                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g2.setColor(amberTint);
-                g2.fillRoundRect(0, 0, getWidth(), getHeight(), ROW_ARC, ROW_ARC);
-                g2.setColor(amberAccent);
-                g2.fillRoundRect(0, 2, ACCENT_PILL_WIDTH, Math.max(0, getHeight() - 4), ACCENT_PILL_WIDTH,
-                        ACCENT_PILL_WIDTH);
-            } finally {
-                g2.dispose();
-            }
+            paintRowHighlightAndPill(g, SwingHtmlUtils.getTintedBackground(accentColor, tintRatio), accentColor);
+        } else if (highlightWaiting) {
+            paintRowHighlightAndPill(g, amberTint, amberAccent);
         }
+    }
 
-        super.paintComponent(g);
+    private void paintRowHighlightAndPill(Graphics g, Color fillTint, Color pillColor) {
+        Graphics2D g2 = (Graphics2D) g.create();
+        try {
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            g2.setColor(fillTint);
+            g2.fillRoundRect(0, 0, getWidth(), getHeight(), ROW_ARC, ROW_ARC);
+            g2.setColor(pillColor);
+            g2.fillRoundRect(0, 2, ACCENT_PILL_WIDTH, Math.max(0, getHeight() - 4), ACCENT_PILL_WIDTH,
+                    ACCENT_PILL_WIDTH);
+        } finally {
+            g2.dispose();
+        }
+    }
 
-        if (statusIcon != null) {
-            int x = getWidth() - statusIcon.getIconWidth() - HORIZONTAL_PADDING;
-            int y = (getHeight() - statusIcon.getIconHeight()) / 2;
+    private void paintStatusBadge(Graphics g, boolean highlightWaiting, Color amberAccent) {
+        if (statusIcon == null) {
+            return;
+        }
+        int x = getWidth() - statusIcon.getIconWidth() - HORIZONTAL_PADDING;
+        int y = (getHeight() - statusIcon.getIconHeight()) / 2;
 
-            if (isSelected()) {
-                statusIcon.setIconColor(SwingHtmlUtils.getAccentColor());
-            } else if (highlightWaiting) {
-                if (g instanceof Graphics2D) {
-                    Graphics2D g2 = (Graphics2D) g.create();
-                    try {
-                        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                        g2.setColor(amberAccent);
-                        g2.fillOval(x - (BADGE_SIZE - statusIcon.getIconWidth()) / 2, (getHeight() - BADGE_SIZE) / 2,
-                                BADGE_SIZE, BADGE_SIZE);
-                    } finally {
-                        g2.dispose();
-                    }
-                }
-                statusIcon.setIconColor(Color.WHITE);
-            } else {
-                Color color = SwingHtmlUtils.getUiColor(getForeground(), "Label.disabledForeground",
-                        "Component.accentColor");
-                if (color != null) {
-                    statusIcon.setIconColor(color);
+        if (isSelected()) {
+            statusIcon.setIconColor(SwingHtmlUtils.getAccentColor());
+        } else if (highlightWaiting) {
+            if (g instanceof Graphics2D) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                try {
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    g2.setColor(amberAccent);
+                    g2.fillOval(x - (BADGE_SIZE - statusIcon.getIconWidth()) / 2, (getHeight() - BADGE_SIZE) / 2,
+                            BADGE_SIZE, BADGE_SIZE);
+                } finally {
+                    g2.dispose();
                 }
             }
-            statusIcon.paintIcon(this, g, x, y);
+            statusIcon.setIconColor(Color.WHITE);
+        } else {
+            Color color = SwingHtmlUtils.getUiColor(getForeground(), "Label.disabledForeground",
+                    "Component.accentColor");
+            if (color != null) {
+                statusIcon.setIconColor(color);
+            }
         }
+        statusIcon.paintIcon(this, g, x, y);
     }
 }
