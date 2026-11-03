@@ -176,13 +176,22 @@ public class PromptService {
 
     public String getSessionContext(WorkflowPhase phase) {
         WorkflowPhase currentPhase = Objects.requireNonNullElseGet(phase, planService::getCurrentPhase);
+        return getStaticPhaseContext(currentPhase) + getVolatileSessionContext();
+    }
+
+    public String getStaticPhaseContext(WorkflowPhase phase) {
+        WorkflowPhase currentPhase = Objects.requireNonNullElseGet(phase, planService::getCurrentPhase);
         StringBuilder sb = new StringBuilder(HEADER_SESSION_CONTEXT);
         sb.append("DOMINANT LANGUAGE: ").append(projectAnalysisService.getDominantLanguage())
                 .append("\nCURRENT PHASE: ").append(currentPhase.name()).append("\nYou are the ")
                 .append(currentPhase.getPersonaTitle()).append(". ").append(currentPhase.getDescription())
                 .append(NEWLINE_DOUBLE).append("You have access to the following JEXL tools:\n")
                 .append(jexlServiceRegistry.getDocumentation(currentPhase));
+        return sb.toString();
+    }
 
+    public String getVolatileSessionContext() {
+        StringBuilder sb = new StringBuilder();
         if (gitService != null && (jexlServiceRegistry == null || jexlServiceRegistry.isGitAvailable())) {
             String gitStatus = gitService.getStatus();
             if (StringUtils.isNotBlank(gitStatus) && !gitStatus.startsWith("Error")
@@ -206,7 +215,7 @@ public class PromptService {
             systemPrompt.append(HEADER_REPO_MAP).append(repoMap.content()).append((char) 10);
         }
         systemPrompt.append(NEWLINE_DOUBLE).append(loadPhasePrompt(currentPhase))
-                .append(getSessionContext(currentPhase));
+                .append(getStaticPhaseContext(currentPhase)).append(getVolatileSessionContext());
         return systemPrompt.toString();
     }
 

@@ -163,6 +163,32 @@ class PromptServiceTest {
                 true, null, null, null, null, List.of(new ImplementationPlan.LogEntry("2026-04-06T12:05:30Z",
                         "Reviewer", "REVIEW -> CODE: Fix edge case")));
         when(planService.getCurrentPlan()).thenReturn(plan);
+        String staticPhaseContext = promptService.getStaticPhaseContext(WorkflowPhase.CODE);
+        SwingTestUtils.assertContainsAll(staticPhaseContext, "DOMINANT LANGUAGE: Java", "CURRENT PHASE: CODE",
+                "JEXL DOCS");
+        SwingTestUtils.assertContainsNone(staticPhaseContext, "## GIT STATUS", "## CURRENT PLAN PROGRESS");
+
+        String volatileContext = promptService.getVolatileSessionContext();
+        SwingTestUtils.assertContainsAll(volatileContext, "## GIT STATUS", "M file.java", "## CURRENT PLAN PROGRESS",
+                "**Title:** Test Plan");
+
+        String promptTurn1 = promptService.buildSystemPrompt(WorkflowPhase.CODE);
+        when(gitService.getStatus()).thenReturn("M file.java\nM other.java");
+        ImplementationPlan updatedPlan = new ImplementationPlan("Test Plan", "Goal", List.of("Req 1"),
+                List.of(new ImplementationPlan.TechStep("Update prompts", true),
+                        new ImplementationPlan.TechStep("Update PlanService", true)),
+                true, null, null, null, null, List.of(new ImplementationPlan.LogEntry("2026-04-06T12:05:30Z",
+                        "Reviewer", "REVIEW -> CODE: Fix edge case")));
+        when(planService.getCurrentPlan()).thenReturn(updatedPlan);
+        String promptTurn2 = promptService.buildSystemPrompt(WorkflowPhase.CODE);
+
+        int gitStatusIdx1 = promptTurn1.indexOf("## GIT STATUS");
+        int gitStatusIdx2 = promptTurn2.indexOf("## GIT STATUS");
+        assertTrue(gitStatusIdx1 > 0);
+        assertEquals(gitStatusIdx1, gitStatusIdx2);
+        assertEquals(promptTurn1.substring(0, gitStatusIdx1), promptTurn2.substring(0, gitStatusIdx2));
+
+        when(planService.getCurrentPlan()).thenReturn(plan);
         SwingTestUtils.assertContainsAll(promptService.getSessionContext(WorkflowPhase.CODE),
                 "## CURRENT PLAN PROGRESS", "**Title:** Test Plan", "**Goal:** Goal", "### Requirements", "- Req 1",
                 "### Technical Steps", "- [x] 0. ~~Update prompts~~", "- [ ] 1. Update PlanService", "### Handoff Log",

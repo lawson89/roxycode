@@ -15,11 +15,13 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.CtagsRunner;
 import org.roxycode.app.ai.services.CtagsRunner.CtagsEntry;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.FileChangedEvent;
+import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.util.ExceptionUtils;
@@ -57,6 +59,7 @@ public class RepoMapPackerService {
     private final List<String> excludePatterns = List.of("src/main/resources/prompts", "src/main/resources/docs");
     private final AtomicLong generation = new AtomicLong(1);
     private volatile RepoMapSnapshot currentSnapshot;
+    private boolean dirty;
 
     static final int MAX_SKELETON_CACHE_SIZE = 10_000;
     private final Cache<Path, CachedSkeleton> skeletonCache = Caffeine.newBuilder().maximumSize(MAX_SKELETON_CACHE_SIZE)
@@ -93,7 +96,25 @@ public class RepoMapPackerService {
             path = event.path();
         }
         invalidateForFileChange(path);
-        log.debug("Repo map invalidated due to file change: {}", StringUtils.defaultString(path));
+        log.debug("Repo map skeleton invalidated and marked dirty due to file change: {}",
+                StringUtils.defaultString(path));
+    }
+
+    @EventListener
+    public void handlePhaseChanged(PhaseChangedEvent event) {
+        if (event != null && event.phase() == WorkflowPhase.PLAN) {
+            invalidateDirtySnapshot();
+        }
+    }
+
+    @SuppressWarnings("PMD.NullAssignment")
+    synchronized void invalidateDirtySnapshot() {
+        if (dirty) {
+            generation.incrementAndGet();
+            currentSnapshot = null;
+            dirty = false;
+            log.debug("Dirty repo map snapshot invalidated on transition to PLAN phase.");
+        }
     }
 
     @SuppressWarnings("PMD.NullAssignment")
@@ -101,6 +122,7 @@ public class RepoMapPackerService {
         synchronized (this) {
             generation.incrementAndGet();
             currentSnapshot = null;
+            dirty = false;
             skeletonCache.invalidateAll();
         }
     }
@@ -110,10 +132,9 @@ public class RepoMapPackerService {
         return generateRepoMap();
     }
 
-    @SuppressWarnings("PMD.NullAssignment")
     private synchronized void invalidateForFileChange(String changedRelativePath) {
         generation.incrementAndGet();
-        currentSnapshot = null;
+        dirty = true;
         if (changedRelativePath != null && !changedRelativePath.isBlank()) {
             Path root = projectService.getCurrentProjectRoot();
             if (root != null) {
@@ -174,6 +195,7 @@ public class RepoMapPackerService {
             if (generation.get() == startGeneration && root.equals(projectService.getCurrentProjectRoot())) {
                 currentSnapshot = new RepoMapSnapshot(projectService.getProjectName(), generatedMap,
                         LocalDateTime.now(), TokenUtils.estimateTokens(generatedMap));
+                dirty = false;
             }
         }
         return new EditorResult(true, generatedMap, null);

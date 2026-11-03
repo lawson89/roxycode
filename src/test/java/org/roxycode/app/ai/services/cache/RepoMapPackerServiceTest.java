@@ -12,10 +12,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService.RepoMapSnapshot;
 import org.roxycode.app.events.FileChangedEvent;
+import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
@@ -174,12 +176,30 @@ class RepoMapPackerServiceTest {
         assertTrue(service.generateRepoMap().content().contains("public class Fresh {}"));
         verify(grepService, times(1)).listFiles(null);
 
+        // FileChangedEvent keeps currentSnapshot pinned during active coding/review turns
         service.handleFileChanged(new FileChangedEvent("Fresh.java"));
+        assertTrue(service.getCachedSnapshot().isPresent());
+        EditorResult pinnedResult = service.generateRepoMap();
+        assertEquals(firstResult.content(), pinnedResult.content());
+        verify(grepService, times(1)).listFiles(null);
+
+        // Non-PLAN phase transitions keep the snapshot pinned
+        service.handlePhaseChanged(new PhaseChangedEvent(WorkflowPhase.REVIEW));
+        assertTrue(service.getCachedSnapshot().isPresent());
+        assertEquals(firstResult.content(), service.generateRepoMap().content());
+        verify(grepService, times(1)).listFiles(null);
+
+        // Transitioning back to PLAN invalidates the dirty snapshot so the next turn refreshes it
+        service.handlePhaseChanged(new PhaseChangedEvent(WorkflowPhase.PLAN));
         assertTrue(service.getCachedSnapshot().isEmpty());
         EditorResult secondResult = service.generateRepoMap();
         assertTrue(secondResult.success());
         assertTrue(secondResult.content().contains("Fresh.java\n  1: public class FreshUpdated {}"));
         verify(grepService, times(2)).listFiles(null);
+
+        // Transitioning to PLAN when not dirty keeps the clean snapshot cached
+        service.handlePhaseChanged(new PhaseChangedEvent(WorkflowPhase.PLAN));
+        assertTrue(service.getCachedSnapshot().isPresent());
 
         Files.writeString(testFile, "public class FreshAfterProjectChange {}\n");
         service.handleProjectChanged(new ProjectChangedEvent(tempDir));
@@ -224,6 +244,7 @@ class RepoMapPackerServiceTest {
 
         Files.writeString(largeA, "public class LargeAUpdated {" + nl + padding + "}" + nl);
         service.handleFileChanged(new FileChangedEvent("LargeA.java"));
+        service.handlePhaseChanged(new PhaseChangedEvent(WorkflowPhase.PLAN));
 
         EditorResult second = service.generateRepoMap();
         assertTrue(second.success());
