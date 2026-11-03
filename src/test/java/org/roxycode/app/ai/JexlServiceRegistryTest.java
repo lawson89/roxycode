@@ -12,8 +12,12 @@ import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.SymbolService;
 import org.roxycode.app.ai.services.UserInputService;
+import org.roxycode.app.ai.services.WebSearchService;
+import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
+import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.SystemTool;
+import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.SystemToolService;
 
 class JexlServiceRegistryTest {
@@ -152,5 +156,45 @@ class JexlServiceRegistryTest {
         assertFalse(registry.isGitAvailable());
         assertFalse(registry.getServices(WorkflowPhase.CODE).containsKey("gitService"));
         assertFalse(registry.getDocumentation(WorkflowPhase.CODE).contains("gitService"));
+    }
+
+    @Test
+    void testWebSearchServiceExcludedWhenGroundingDisabledAndIncludedWhenEnabled() {
+        SettingsService settingsService = mock(SettingsService.class);
+        AppSettings settings = new AppSettings();
+        settings.setGoogleGroundingEnabled(false);
+        when(settingsService.getSettings()).thenReturn(settings);
+
+        JexlServiceRegistry registry = new JexlServiceRegistry(null, settingsService);
+        WebSearchService webSearchService = new WebSearchService(null, settingsService);
+        MemoryService memoryService = mock(MemoryService.class);
+        registry.register(webSearchService);
+        registry.register(memoryService);
+
+        assertFalse(registry.isWebSearchAvailable());
+        for (WorkflowPhase phase : WorkflowPhase.values()) {
+            assertFalse(registry.getServices(phase).containsKey("webSearchService"));
+            assertTrue(registry.getServices(phase).containsKey("memoryService"));
+            String doc = registry.getDocumentation(phase);
+            assertFalse(doc.contains("webSearchService"));
+            assertFalse(doc.contains("interface WebSearchService"));
+        }
+
+        settings.setGoogleGroundingEnabled(true);
+        registry.onSettingsChanged(new SettingsChangedEvent(settings));
+
+        assertTrue(registry.isWebSearchAvailable());
+        for (WorkflowPhase phase : WorkflowPhase.values()) {
+            assertSame(webSearchService, registry.getServices(phase).get("webSearchService"));
+            String doc = registry.getDocumentation(phase);
+            assertTrue(doc.contains("// Global variable exposed in JEXL: webSearchService"));
+            assertTrue(doc.contains("interface WebSearchService"));
+        }
+
+        settings.setGoogleGroundingEnabled(false);
+        registry.onSettingsChanged(new SettingsChangedEvent(settings));
+        assertFalse(registry.isWebSearchAvailable());
+        assertFalse(registry.getServices(WorkflowPhase.CODE).containsKey("webSearchService"));
+        assertFalse(registry.getDocumentation(WorkflowPhase.CODE).contains("webSearchService"));
     }
 }

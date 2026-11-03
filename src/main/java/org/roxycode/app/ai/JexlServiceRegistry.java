@@ -6,7 +6,10 @@ import java.util.*;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.UserInputService;
+import org.roxycode.app.ai.services.WebSearchService;
+import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
+import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.SystemToolService;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.context.event.EventListener;
@@ -15,19 +18,28 @@ import org.springframework.lang.Nullable;
 
 public class JexlServiceRegistry {
     static final String GIT_SERVICE_NAME = "gitService";
+    static final String WEB_SEARCH_SERVICE_NAME = "webSearchService";
 
     private final Map<String, Object> services = Collections.synchronizedMap(new LinkedHashMap<>());
     private final LLMDocGenerator docGenerator = new LLMDocGenerator();
     private final Cache<String, String> docCache = Caffeine.newBuilder().maximumSize(16).build();
     private final SystemToolService systemToolService;
+    private final SettingsService settingsService;
     private Boolean gitAvailable;
+    private Boolean webSearchAvailable;
 
     public JexlServiceRegistry() {
-        this(null);
+        this(null, null);
     }
 
     public JexlServiceRegistry(@Nullable SystemToolService systemToolService) {
+        this(systemToolService, null);
+    }
+
+    public JexlServiceRegistry(@Nullable SystemToolService systemToolService,
+            @Nullable SettingsService settingsService) {
         this.systemToolService = systemToolService;
+        this.settingsService = settingsService;
     }
 
     public synchronized void register(Object service) {
@@ -53,6 +65,18 @@ public class JexlServiceRegistry {
         }
     }
 
+    @EventListener
+    public synchronized void onSettingsChanged(SettingsChangedEvent event) {
+        if (event == null || event.settings() == null) {
+            return;
+        }
+        boolean available = event.settings().isGoogleGroundingEnabled();
+        if (!Objects.equals(webSearchAvailable, available)) {
+            webSearchAvailable = available;
+            docCache.invalidateAll();
+        }
+    }
+
     public synchronized boolean isGitAvailable() {
         if (gitAvailable != null) {
             return gitAvailable;
@@ -66,9 +90,27 @@ public class JexlServiceRegistry {
         return resolved;
     }
 
+    public synchronized boolean isWebSearchAvailable() {
+        if (settingsService != null && settingsService.getSettings() != null) {
+            boolean resolved = settingsService.getSettings().isGoogleGroundingEnabled();
+            if (!Objects.equals(webSearchAvailable, resolved)) {
+                webSearchAvailable = resolved;
+                docCache.invalidateAll();
+            }
+            return resolved;
+        }
+        if (webSearchAvailable != null) {
+            return webSearchAvailable;
+        }
+        return true;
+    }
+
     private boolean isServiceAvailable(String serviceName, Object service) {
         if (GIT_SERVICE_NAME.equals(serviceName) || service instanceof GitService) {
             return isGitAvailable();
+        }
+        if (WEB_SEARCH_SERVICE_NAME.equals(serviceName) || service instanceof WebSearchService) {
+            return isWebSearchAvailable();
         }
         return true;
     }
@@ -99,6 +141,7 @@ public class JexlServiceRegistry {
 
     public String getDocumentation(WorkflowPhase currentPhase) {
         isGitAvailable();
+        isWebSearchAvailable();
         String cacheKey = "NULL_PHASE";
         if (currentPhase != null) {
             cacheKey = currentPhase.name();

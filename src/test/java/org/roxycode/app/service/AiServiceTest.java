@@ -302,17 +302,36 @@ class AiServiceTest {
     }
 
     @Test
-    void testGoogleSearchGroundingOptionIsApplied() {
+    void testMainChatDoesNotEnableGoogleSearchGroundingAndGroundedSearchExecutesStatelessToolFreeQuery() {
         settings.setGoogleGroundingEnabled(true);
         stubChatResponse(WorkflowPhase.CODE, "CODE PROMPT", "AI Response", "STOP", null);
 
         aiService.chat("default", null, "Hello", null);
 
-        ArgumentCaptor<GoogleGenAiChatOptions.Builder> optionsCaptor = ArgumentCaptor
+        ArgumentCaptor<GoogleGenAiChatOptions.Builder> chatOptionsCaptor = ArgumentCaptor
                 .forClass(GoogleGenAiChatOptions.Builder.class);
-        verify(requestSpec).options(optionsCaptor.capture());
-        GoogleGenAiChatOptions builtOptions = optionsCaptor.getValue().build();
-        assertTrue(builtOptions.getGoogleSearchRetrieval());
+        verify(requestSpec).options(chatOptionsCaptor.capture());
+        GoogleGenAiChatOptions chatOptions = chatOptionsCaptor.getValue().build();
+        assertNotEquals(Boolean.TRUE, chatOptions.getGoogleSearchRetrieval());
+        verify(requestSpec).tools(jexlTool);
+
+        clearInvocations(requestSpec);
+        lenient().when(requestSpec.user(anyString())).thenReturn(requestSpec);
+        when(responseSpec.chatResponse())
+                .thenReturn(buildChatResponse("  Grounded answer with citations  ", "STOP", null));
+
+        assertThrows(IllegalArgumentException.class, () -> aiService.groundedSearch("   "));
+        String groundedResult = aiService.groundedSearch("  Spring AI 2.0 release notes  ");
+        assertEquals("Grounded answer with citations", groundedResult);
+
+        ArgumentCaptor<GoogleGenAiChatOptions.Builder> searchOptionsCaptor = ArgumentCaptor
+                .forClass(GoogleGenAiChatOptions.Builder.class);
+        verify(requestSpec).system(AiService.GROUNDED_SEARCH_SYSTEM_PROMPT);
+        verify(requestSpec).user("Spring AI 2.0 release notes");
+        verify(requestSpec).options(searchOptionsCaptor.capture());
+        verify(requestSpec, never()).tools(any(Object[].class));
+        GoogleGenAiChatOptions searchOptions = searchOptionsCaptor.getValue().build();
+        assertTrue(searchOptions.getGoogleSearchRetrieval());
     }
 
     static Stream<Arguments> finishReasonFormattingCases() {

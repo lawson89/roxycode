@@ -60,6 +60,7 @@ public class AiService implements AutoCloseable {
     public static final int MAX_AUTO_NUDGES = 2;
     public static final int TEST_CONNECTION_TIMEOUT_MS = 15_000;
     public static final String AUTO_NUDGE_PROMPT = "You completed the turn without returning any text response. Please summarize what you just did or provide your final response to the user.";
+    static final String GROUNDED_SEARCH_SYSTEM_PROMPT = "You are a technical research assistant. Use Google Search to provide accurate, up-to-date facts, synthesis, and source URLs or citations when available.";
 
     @FunctionalInterface
     public interface ConnectionTester {
@@ -106,9 +107,7 @@ public class AiService implements AutoCloseable {
     }
 
     private ChatClient buildChatClient(ChatClient.Builder builder) {
-        return builder.defaultAdvisors(MessageChatMemoryAdvisor.builder(chatMemory).build(),
-                ToolCallingAdvisor.builder().toolCallingManager(toolCallingManager).build(),
-                new ModelCallRetryAdvisor()).build();
+        return builder.defaultAdvisors(new ModelCallRetryAdvisor()).build();
     }
 
     private String resolveConfiguredApiKey() {
@@ -258,6 +257,30 @@ public class AiService implements AutoCloseable {
                 throw re;
             }
             throw new RuntimeException("Unexpected error during chat turn", e);
+        }
+    }
+
+    @SuppressWarnings("PMD.PreserveStackTrace")
+    public String groundedSearch(String query) {
+        String trimmedQuery = StringUtils.trimToEmpty(query);
+        if (trimmedQuery.isEmpty()) {
+            throw new IllegalArgumentException("Search query must not be blank.");
+        }
+        ExceptionUtils.checkInterrupted("Web search interrupted before start");
+        GoogleGenAiChatOptions.Builder optionsBuilder = GoogleGenAiChatOptions.builder()
+                .model(resolveEffectiveGeminiModel()).googleSearchRetrieval(true);
+        resolveEffectiveThinkingLevel().applyTo(optionsBuilder);
+        try {
+            ChatResponse chatResponse = chatClient.prompt().system(GROUNDED_SEARCH_SYSTEM_PROMPT).user(trimmedQuery)
+                    .options(optionsBuilder).call().chatResponse();
+            ExceptionUtils.checkInterrupted("Web search interrupted after model call");
+            return StringUtils.trimToEmpty(extractResponseText(chatResponse));
+        } catch (Exception e) {
+            ExceptionUtils.rethrowIfCancelled(e, "Web search cancelled");
+            if (e instanceof RuntimeException re) {
+                throw re;
+            }
+            throw new RuntimeException("Unexpected error during grounded web search", e);
         }
     }
 
@@ -530,9 +553,6 @@ public class AiService implements AutoCloseable {
         GoogleGenAiChatOptions.Builder optionsBuilder = GoogleGenAiChatOptions.builder()
                 .model(resolveEffectiveGeminiModel());
         resolveEffectiveThinkingLevel().applyTo(optionsBuilder);
-        if (settingsService.getSettings().isGoogleGroundingEnabled()) {
-            optionsBuilder.googleSearchRetrieval(true);
-        }
         ChatClient.ChatClientRequestSpec promptSpec = chatClient.prompt()
                 .system(promptService.buildSystemPrompt(currentPhase)).user(u -> {
                     u.text(message);
@@ -543,7 +563,9 @@ public class AiService implements AutoCloseable {
                     }
                 }).options(optionsBuilder);
         promptSpec.tools(jexlTool);
-        promptSpec.advisors(new AutoNudgeAdvisor(turnContext, chatMemory));
+        promptSpec.advisors(MessageChatMemoryAdvisor.builder(chatMemory).build(),
+                ToolCallingAdvisor.builder().toolCallingManager(toolCallingManager).build(),
+                new AutoNudgeAdvisor(turnContext, chatMemory));
         return promptSpec.toolContext(turnContext.toMap());
     }
 

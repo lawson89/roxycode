@@ -3,6 +3,7 @@ package org.roxycode.app.ui;
 import java.awt.*;
 import javax.swing.*;
 import org.roxycode.app.ai.JexlServiceRegistry;
+import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.util.Edt;
 import org.springframework.context.annotation.Lazy;
@@ -41,6 +42,11 @@ public final class JexlApiPanel extends JPanel {
 
     @EventListener
     public void onSystemToolsUpdated(SystemToolsUpdatedEvent event) {
+        Edt.run(this::refresh);
+    }
+
+    @EventListener
+    public void onSettingsChanged(SettingsChangedEvent event) {
         Edt.run(this::refresh);
     }
 
