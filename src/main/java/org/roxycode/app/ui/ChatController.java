@@ -450,11 +450,32 @@ public final class ChatController implements AutoCloseable {
             if (event.to() == WorkflowPhase.PLAN) {
                 view.appendMessage(ROLE_SYSTEM, "Task complete. What is the next feature you would like to work on?");
             } else {
-                triggerTurn("Phase changed to " + event.to() + ". Please proceed with the tasks in the new phase.");
+                triggerTurn(buildAutonomousTransitionPrompt(event));
             }
         } else {
             view.showTransitionBanner(PlanService.formatApprovalLabel(event.from(), event.to()));
         }
+    }
+
+    static String buildAutonomousTransitionPrompt(WorkflowTransitionEvent event) {
+        if (event == null || event.to() == null) {
+            return "Please proceed with the tasks in the current phase.";
+        }
+        if (event.to() == WorkflowPhase.REVIEW) {
+            return "Phase changed to REVIEW. Perform an independent pull-request audit of the changes: "
+                    + "inspect gitService.getDiff() and the changed files in ## CURRENT PLAN PROGRESS first, "
+                    + "verify all requirements, edge cases, project coding guidelines, and unit test quality, "
+                    + "and either record remediation steps (planService.addTechnicalStep / planService.markStepIncomplete) "
+                    + "and call planService.requestFixes(reason), or mark 'Automated code review passes' completed "
+                    + "and call planService.requestCompletion(reason).";
+        }
+        if (event.from() == WorkflowPhase.REVIEW && event.to() == WorkflowPhase.CODE) {
+            String reason = StringUtils.defaultIfBlank(event.reason(), "Review findings require remediation.");
+            return "Phase changed from REVIEW to CODE. Review findings to address: " + reason
+                    + ". Complete all open remediation step(s) in the plan, re-verify with buildToolService.buildAndTest(), "
+                    + "and call planService.requestReview(reason) when ready.";
+        }
+        return "Phase changed to " + event.to() + ". Please proceed with the tasks in the new phase.";
     }
 
     private boolean isMatchingActiveTurnEvent(String conversationId) {

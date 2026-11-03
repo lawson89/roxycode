@@ -198,7 +198,7 @@ public class PlanService {
     }
 
     @AgentDoc(value = "Adds a new technical implementation step to the current plan (inserted before trailing verification gates) without losing progress on completed steps.", phases = {
-            "PLAN", "CODE"}, examples = {"planService.addTechnicalStep('Add unit tests for edge cases')"})
+            "PLAN", "CODE", "REVIEW"}, examples = {"planService.addTechnicalStep('Add unit tests for edge cases')"})
     public synchronized String addTechnicalStep(
             @AgentDoc("Description of the new technical implementation step") String description) {
         requirePhase("addTechnicalStep");
@@ -217,7 +217,7 @@ public class PlanService {
     }
 
     @AgentDoc(value = "Updates the description of an existing technical step at the given 0-based index while preserving its completion status.", phases = {
-            "PLAN", "CODE"}, examples = {"planService.updateTechnicalStep(0, 'Updated step description')"})
+            "PLAN", "CODE", "REVIEW"}, examples = {"planService.updateTechnicalStep(0, 'Updated step description')"})
     public synchronized String updateTechnicalStep(@AgentDoc("The 0-based index of the step to update") int index,
             @AgentDoc("The updated description for the technical step") String description) {
         requirePhase("updateTechnicalStep");
@@ -405,6 +405,9 @@ public class PlanService {
         }
 
         verifyStepCompletionGates(currentPhase, nextPhase);
+        if (currentPhase == WorkflowPhase.REVIEW && nextPhase == WorkflowPhase.CODE) {
+            prepareFixesOnCurrentPlan(reason);
+        }
 
         if (rule.autonomous()) {
             WorkflowPhase oldPhase = currentPhase;
@@ -433,6 +436,18 @@ public class PlanService {
             return String.format("%s%n%n%s", summary, message);
         }
         return message;
+    }
+
+    private void prepareFixesOnCurrentPlan(String reason) {
+        if (currentPlan == null) {
+            return;
+        }
+        ImplementationPlan updated = currentPlan.withVerificationStepCompleted(ImplementationPlan.STEP_CODE_REVIEW,
+                false);
+        setCurrentPlan(updated);
+        if (currentPlan.collectIncompleteSteps(true).isEmpty()) {
+            addTechnicalStep("Address review findings: " + reason.trim());
+        }
     }
 
     private void verifyStepCompletionGates(WorkflowPhase from, WorkflowPhase to) {

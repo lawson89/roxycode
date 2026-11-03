@@ -51,7 +51,15 @@ class ImplementationPlanTest {
                 "### Requirements" + LF + "- Req A",
                 "### Technical Steps" + LF + "- [x] 0. ~~Step 0~~" + LF + "- [ ] 1. Step 1",
                 "### Handoff Log" + LF + "- [2026-04-06 12:05:30] Architect: Created plan | verified" + LF + "details");
-        SwingTestUtils.assertContainsNone(promptContext, "## Approvals", "## Token Usage & Cost");
+        SwingTestUtils.assertContainsNone(promptContext, "### Changes", "## Approvals", "## Token Usage & Cost");
+
+        ImplementationPlan planWithChanges = plan
+                .withRecordedFileChange("src/Feature.java", FileChangedEvent.ChangeType.CREATED)
+                .withRecordedFileChange("src/App.java", FileChangedEvent.ChangeType.MODIFIED);
+        String promptWithChanges = planWithChanges.formatPromptContextMarkdown();
+        SwingTestUtils.assertContainsAll(promptWithChanges,
+                "### Changes" + LF + "CREATED src/Feature.java" + LF + "MODIFIED src/App.java");
+        assertTrue(promptWithChanges.indexOf("### Changes") < promptWithChanges.indexOf("### Handoff Log"));
     }
 
     @Test

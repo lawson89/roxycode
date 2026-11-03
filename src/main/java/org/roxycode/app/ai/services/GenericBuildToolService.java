@@ -219,14 +219,30 @@ public class GenericBuildToolService {
 
     @AgentDoc(value = "Runs all tests using the configured test_all command", examples = "buildToolService.runTests()")
     public BuildResult runTests() {
-        BuildResult result = runCommand("commands.test_all", config -> config.commands().testAll());
-        if (planService != null) {
-            planService.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, result.success());
-            if (result.success()) {
-                planService.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true);
+        BuildResult testResult = runCommand("commands.test_all", config -> config.commands().testAll());
+        if (!testResult.success()) {
+            if (planService != null) {
+                planService.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, false);
             }
+            return testResult;
         }
-        return result;
+        if (planService != null) {
+            planService.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true);
+        }
+        BuildResult lintResult = lint();
+        if (!lintResult.success()) {
+            return new BuildResult(false, lintResult.exitCode(), """
+                    TEST OUTPUT:
+                    %s
+
+                    LINT OUTPUT:
+                    %s""".formatted(testResult.output(), lintResult.output()), lintResult.errors(),
+                    lintResult.failedTests());
+        }
+        if (planService != null) {
+            planService.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, true);
+        }
+        return testResult;
     }
 
     @AgentDoc(value = "Runs a single test using the configured test_single command. {testName} is replaced with the argument.", examples = "buildToolService.runSingleTest('com.example.TestClass')")
@@ -238,7 +254,11 @@ public class GenericBuildToolService {
 
     @AgentDoc(value = "Runs the project linter or static analysis checks using the configured lint command.", examples = "buildToolService.lint()")
     public BuildResult lint() {
-        return runCommand("commands.lint", config -> config.commands().lint());
+        BuildResult result = runCommand("commands.lint", config -> config.commands().lint());
+        if (!result.success() && planService != null) {
+            planService.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, false);
+        }
+        return result;
     }
 
     @AgentDoc(value = "Formats the project source code using the configured format command.", phases = {
@@ -265,8 +285,11 @@ public class GenericBuildToolService {
         if (!compileResult.success()) {
             return compileResult;
         }
-        BuildResult testResult = runTests();
+        BuildResult testResult = runCommand("commands.test_all", config -> config.commands().testAll());
         if (!testResult.success()) {
+            if (planService != null) {
+                planService.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, false);
+            }
             return new BuildResult(false, testResult.exitCode(), """
                     COMPILE OUTPUT:
                     %s
@@ -276,6 +299,9 @@ public class GenericBuildToolService {
                     testResult.failedTests());
         }
         BuildResult lintResult = lint();
+        if (planService != null) {
+            planService.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, lintResult.success());
+        }
         return new BuildResult(lintResult.success(), lintResult.exitCode(), """
                 COMPILE OUTPUT:
                 %s

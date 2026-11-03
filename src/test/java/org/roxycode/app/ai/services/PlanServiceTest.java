@@ -169,12 +169,38 @@ class PlanServiceTest {
         assertTrue(archivingService.requestReview("Ready for review").contains("Autonomous transition"));
         assertEquals(WorkflowPhase.REVIEW, archivingService.getCurrentPhase());
 
+        // Case 1: requestFixes when all non-review steps are completed resets STEP_CODE_REVIEW and auto-adds a
+        // remediation step
+        archivingService.markStepCompleted(3);
+        assertTrue(archivingService.getCurrentPlan().technicalSteps().get(3).completed());
         assertTrue(archivingService.requestFixes("Needs fix").contains("Autonomous transition"));
         assertEquals(WorkflowPhase.CODE, archivingService.getCurrentPhase());
-        archivingService.requestReview("Fixed");
-        assertIllegalState(() -> archivingService.requestCompletion("All verified"), "3: Automated code review passes");
+        assertEquals(5, archivingService.getCurrentPlan().technicalSteps().size());
+        assertEquals("Address review findings: Needs fix",
+                archivingService.getCurrentPlan().technicalSteps().get(1).description());
+        assertFalse(archivingService.getCurrentPlan().technicalSteps().get(1).completed());
+        assertFalse(archivingService.getCurrentPlan().technicalSteps().get(4).completed());
+        assertIllegalState(() -> archivingService.requestReview("Try without fixing"),
+                "1: Address review findings: Needs fix");
 
-        archivingService.markStepCompleted(3);
+        archivingService.markStepCompleted(1);
+        archivingService.requestReview("Fixed auto-added step");
+        assertEquals(WorkflowPhase.REVIEW, archivingService.getCurrentPhase());
+
+        // Case 2: addTechnicalStep and updateTechnicalStep in REVIEW phase before requestFixes does not duplicate step
+        assertTrue(archivingService.addTechnicalStep("Add edge-case test").contains("Added technical step at index 2"));
+        assertTrue(archivingService.updateTechnicalStep(2, "Add null-input test").contains("Add null-input test"));
+        assertEquals(6, archivingService.getCurrentPlan().technicalSteps().size());
+        assertTrue(archivingService.requestFixes("Missing null-input test").contains("Autonomous transition"));
+        assertEquals(WorkflowPhase.CODE, archivingService.getCurrentPhase());
+        assertEquals(6, archivingService.getCurrentPlan().technicalSteps().size());
+        assertFalse(archivingService.getCurrentPlan().technicalSteps().get(2).completed());
+
+        archivingService.markStepCompleted(2);
+        archivingService.requestReview("Fixed null-input test");
+        assertIllegalState(() -> archivingService.requestCompletion("All verified"), "5: Automated code review passes");
+
+        archivingService.markStepCompleted(5);
         assertTrue(archivingService.requestCompletion("All checks passed")
                 .contains("Approve Feature Request as complete"));
 

@@ -317,6 +317,39 @@ class GenericBuildToolServiceTest {
         assertFalse(realPlanService.getCurrentPlan().technicalSteps().get(1).completed());
         assertFalse(realPlanService.getCurrentPlan().technicalSteps().get(2).completed());
 
+        // Lint failure during runTests() or buildAndTest() or standalone lint() marks STEP_UNIT_TESTS false and blocks
+        // review
+        writeBuildToml("""
+                [commands]
+                compile = 'echo ok'
+                test_all = 'echo tests-passed'
+                lint = 'echo pmd-violation && exit 1'
+                """);
+        BuildResult runTestsLintFail = integratedBuildService.runTests();
+        assertFalse(runTestsLintFail.isSuccess());
+        assertContainsAll(runTestsLintFail.getOutput(), "TEST OUTPUT:", "tests-passed", "LINT OUTPUT:",
+                "pmd-violation");
+        assertTrue(realPlanService.getCurrentPlan().technicalSteps().get(1).completed());
+        assertFalse(realPlanService.getCurrentPlan().technicalSteps().get(2).completed());
+        assertThrows(IllegalStateException.class, () -> realPlanService.requestReview("Should be blocked by lint"));
+
+        realPlanService.updateVerificationStep("Unit tests pass", true);
+        assertFalse(integratedBuildService.lint().isSuccess());
+        assertFalse(realPlanService.getCurrentPlan().technicalSteps().get(2).completed());
+
+        realPlanService.updateVerificationStep("Unit tests pass", true);
+        BuildResult buildAndTestLintFail = integratedBuildService.buildAndTest();
+        assertFalse(buildAndTestLintFail.isSuccess());
+        assertContainsAll(buildAndTestLintFail.getOutput(), "COMPILE OUTPUT:", "TEST OUTPUT:", "LINT OUTPUT:",
+                "pmd-violation");
+        assertFalse(realPlanService.getCurrentPlan().technicalSteps().get(2).completed());
+
+        writeBuildToml("""
+                [commands]
+                compile = 'echo ok'
+                test_all = 'echo ok'
+                lint = 'echo ok'
+                """);
         assertTrue(integratedBuildService.buildAndTest().isSuccess());
         assertTrue(realPlanService.requestReview("All steps verified").contains("Autonomous transition"));
         assertEquals(WorkflowPhase.REVIEW, realPlanService.getCurrentPhase());

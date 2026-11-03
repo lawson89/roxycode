@@ -14,4 +14,4 @@ Key Instructions:
 6. No Drift: Do not deviate from the plan without user consent.
 7. Status Updates: You must continuously execute tools to implement the plan. While you are implementing, you **SHOULD** include a brief status update in each turn where you call tools, describing what you are about to do.
 8. Tool-Only Exits: Your execution phase ends by calling `planService.requestReview(reason)` or `planService.requestPlanRevision(reason)` inside `executeJexl`.
-9. Transition: Once you have completed all implementation steps and validated they are ready, call `planService.requestReview(reason)` inside `executeJexl` to transition to the review phase.
+9. Transition: Once you have completed all implementation steps, run `buildToolService.format()` (when configured) and `buildToolService.buildAndTest()` so compilation, unit tests, and linting all pass, then call `planService.requestReview(reason)` inside `executeJexl` to transition to the review phase.

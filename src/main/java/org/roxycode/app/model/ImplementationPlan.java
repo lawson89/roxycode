@@ -619,6 +619,12 @@ public record ImplementationPlan(String title, String goal, List<String> require
             }
             sb.append("### Technical Steps").append((char) 10).append(formatStepsMarkdown());
         }
+        if (!fileChanges.isEmpty()) {
+            if (!sb.isEmpty()) {
+                sb.append((char) 10);
+            }
+            sb.append("### Changes").append((char) 10).append(formatChangesText()).append((char) 10);
+        }
         if (!handoffLog.isEmpty()) {
             if (!sb.isEmpty()) {
                 sb.append((char) 10);

@@ -221,10 +221,27 @@ class ChatControllerTest extends ChatTestFixture {
         flushEdt();
         verify(aiService, never()).chat(anyString(), any(), anyString(), any());
 
+        String reviewPrompt = ChatController.buildAutonomousTransitionPrompt(
+                transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Ready for audit", true));
+        assertContainsAll(reviewPrompt, "Phase changed to REVIEW", "independent pull-request audit",
+                "gitService.getDiff()", "## CURRENT PLAN PROGRESS", "planService.requestFixes",
+                "planService.requestCompletion");
+
+        String fixesPrompt = ChatController.buildAutonomousTransitionPrompt(
+                transitionEvent(WorkflowPhase.REVIEW, WorkflowPhase.CODE, "Fix ternary in UserInputService", true));
+        assertContainsAll(fixesPrompt, "Phase changed from REVIEW to CODE", "Fix ternary in UserInputService",
+                "buildToolService.buildAndTest()", "planService.requestReview");
+
+        assertEquals("Phase changed to EXPLORE. Please proceed with the tasks in the new phase.",
+                ChatController.buildAutonomousTransitionPrompt(
+                        transitionEvent(WorkflowPhase.PLAN, WorkflowPhase.EXPLORE, "Explore", true)));
+        assertEquals("Please proceed with the tasks in the current phase.",
+                ChatController.buildAutonomousTransitionPrompt(null));
+
         when(aiService.chat(anyString(), any(), anyString(), any())).thenReturn("Reviewing now");
         chatPanel.onWorkflowTransition(transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Test reason", true));
         flushEdt();
-        verify(aiService, times(1)).chat(anyString(), any(), anyString(), any());
+        verify(aiService, times(1)).chat(eq("task:default"), any(), contains("independent pull-request audit"), any());
 
         clearInvocations(aiService);
         when(aiService.chat(anyString(), any(), anyString(), any())).thenAnswer(inv -> {
