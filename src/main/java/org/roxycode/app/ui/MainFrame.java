@@ -21,8 +21,10 @@ import org.roxycode.app.util.Edt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -39,6 +41,7 @@ public final class MainFrame extends JPanel {
     static final String SETTINGS_VIEW = "SETTINGS";
     static final String BUILD_CONFIG_VIEW = "BUILD_CONFIG";
     static final String CONTEXT_MGR_VIEW = "CONTEXT_MGR";
+    static final String MEMORY_VIEW = "MEMORY";
     static final String FIRST_TIME_SETUP_TITLE = "First-Time Setup Required";
 
     private final transient SettingsService settingsService;
@@ -52,6 +55,7 @@ public final class MainFrame extends JPanel {
     private final QaWorkspacePanel qaWorkspacePanel;
     private final TaskWorkspacePanel taskWorkspacePanel;
     private final CodebaseCachePanel codebaseCachePanel;
+    private final AgentMemoryPanel agentMemoryPanel;
     SidebarPanel sidebar;
     String currentCard = QA_VIEW;
     private boolean initialToolsCheckComplete;
@@ -65,6 +69,17 @@ public final class MainFrame extends JPanel {
             TaskWorkspacePanel taskWorkspacePanel, CodebaseCachePanel codebaseCachePanel, JexlApiPanel jexlApiPanel,
             SystemToolsPanel systemToolsPanel, SettingsPanel settingsPanel, BuildConfigPanel buildConfigPanel,
             ContextManagerPanel contextManagerPanel) {
+        this(settingsService, projectService, chatMemory, header, statusBar, qaWorkspacePanel, taskWorkspacePanel,
+                codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel,
+                contextManagerPanel, null);
+    }
+
+    @Autowired
+    public MainFrame(SettingsService settingsService, ProjectService projectService, ChatMemory chatMemory,
+            HeaderPanel header, StatusPanel statusBar, QaWorkspacePanel qaWorkspacePanel,
+            TaskWorkspacePanel taskWorkspacePanel, CodebaseCachePanel codebaseCachePanel, JexlApiPanel jexlApiPanel,
+            SystemToolsPanel systemToolsPanel, SettingsPanel settingsPanel, BuildConfigPanel buildConfigPanel,
+            ContextManagerPanel contextManagerPanel, @Nullable AgentMemoryPanel agentMemoryPanel) {
         this.settingsService = settingsService;
         this.projectService = projectService;
         this.chatMemory = chatMemory;
@@ -72,6 +87,7 @@ public final class MainFrame extends JPanel {
         this.qaWorkspacePanel = qaWorkspacePanel;
         this.taskWorkspacePanel = taskWorkspacePanel;
         this.codebaseCachePanel = codebaseCachePanel;
+        this.agentMemoryPanel = agentMemoryPanel;
         if (GraphicsEnvironment.isHeadless()) {
             this.hostFrame = null;
         } else {
@@ -81,7 +97,7 @@ public final class MainFrame extends JPanel {
         setupLaf();
         setupWindow();
         initComponents(statusBar, codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel,
-                contextManagerPanel);
+                contextManagerPanel, agentMemoryPanel);
         if (settingsPanel != null) {
             settingsPanel.setOnInitialApiKeyConfiguredCallback(() -> {
                 updateOnboardingAndNavigationState();
@@ -142,7 +158,7 @@ public final class MainFrame extends JPanel {
         }
     }
 
-    private static boolean isProjectDependentCard(String cardName) {
+    static boolean isProjectDependentCard(String cardName) {
         return QA_VIEW.equals(cardName) || TASK_VIEW.equals(cardName) || CACHE_VIEW.equals(cardName)
                 || BUILD_CONFIG_VIEW.equals(cardName);
     }
@@ -224,7 +240,7 @@ public final class MainFrame extends JPanel {
 
     private void initComponents(StatusPanel statusBar, CodebaseCachePanel codebaseCachePanel, JexlApiPanel jexlApiPanel,
             SystemToolsPanel systemToolsPanel, SettingsPanel settingsPanel, BuildConfigPanel buildConfigPanel,
-            ContextManagerPanel contextManagerPanel) {
+            ContextManagerPanel contextManagerPanel, @Nullable AgentMemoryPanel memoryPanel) {
         setLayout(new MigLayout("fill, insets 0", "[210!, fill]0[fill, grow]", "[fill, grow]"));
 
         sidebar = new SidebarPanel(this::showCard);
@@ -247,6 +263,9 @@ public final class MainFrame extends JPanel {
         contentArea.add(settingsPanel, SETTINGS_VIEW);
         contentArea.add(buildConfigPanel, BUILD_CONFIG_VIEW);
         contentArea.add(contextManagerPanel, CONTEXT_MGR_VIEW);
+        if (memoryPanel != null) {
+            contentArea.add(memoryPanel, MEMORY_VIEW);
+        }
 
         workspace.add(header, "h 36!, wrap");
         workspace.add(contentArea, "grow, wrap");
@@ -366,6 +385,8 @@ public final class MainFrame extends JPanel {
             taskWorkspacePanel.onViewShown();
         } else if (CACHE_VIEW.equals(cardName) && codebaseCachePanel != null) {
             codebaseCachePanel.refreshStatus();
+        } else if (MEMORY_VIEW.equals(cardName) && agentMemoryPanel != null) {
+            agentMemoryPanel.refresh();
         }
     }
 

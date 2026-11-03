@@ -26,6 +26,7 @@ public final class SidebarPanel extends JPanel {
     private NavButton qaBtn;
     private NavButton taskBtn;
     private NavButton contextMgrBtn;
+    private NavButton memoryBtn;
     private NavButton cacheBtn;
     private NavButton apiBtn;
     private NavButton toolsBtn;
@@ -39,7 +40,7 @@ public final class SidebarPanel extends JPanel {
 
     private void initComponents() {
         setLayout(new MigLayout("wrap, fillx, insets 15 12 15 12", "[fill, grow]",
-                "[]20[]5[]2[]15[]5[]2[]2[]15[]5[]2[]2[]push"));
+                "[]20[]5[]2[]15[]5[]2[]2[]2[]15[]5[]2[]2[]push"));
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
         updateBorder();
         add(createBrandingHeader());
@@ -53,6 +54,8 @@ public final class SidebarPanel extends JPanel {
         add(createSectionHeader("CONTEXT"), "gaptop 15");
         contextMgrBtn = createNavButton("Context", MainFrame.CONTEXT_MGR_VIEW, Codicons.FILE);
         add(contextMgrBtn);
+        memoryBtn = createNavButton("Agent Memory", MainFrame.MEMORY_VIEW, Codicons.BOOK);
+        add(memoryBtn);
         cacheBtn = createNavButton("Repo Map & Prompt", MainFrame.CACHE_VIEW, Codicons.DATABASE);
         add(cacheBtn);
         apiBtn = createNavButton("Agent Tools API", MainFrame.API_VIEW, Codicons.CODE);
@@ -136,12 +139,14 @@ public final class SidebarPanel extends JPanel {
             applyButtonAccess(cacheBtn, false, MISSING_API_KEY_TOOLTIP);
             applyButtonAccess(apiBtn, false, MISSING_API_KEY_TOOLTIP);
             applyButtonAccess(contextMgrBtn, false, MISSING_API_KEY_TOOLTIP);
+            applyButtonAccess(memoryBtn, false, MISSING_API_KEY_TOOLTIP);
             applyButtonAccess(buildConfigBtn, false, MISSING_API_KEY_TOOLTIP);
             return;
         }
 
         applyButtonAccess(apiBtn, true, null);
         applyButtonAccess(contextMgrBtn, true, null);
+        applyButtonAccess(memoryBtn, true, null);
 
         if (!hasProject) {
             applyButtonAccess(qaBtn, false, MISSING_PROJECT_TOOLTIP);

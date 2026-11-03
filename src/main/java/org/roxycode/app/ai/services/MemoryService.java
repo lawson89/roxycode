@@ -15,6 +15,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
+import org.roxycode.app.events.MemoryChangedEvent;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.ui.MarkdownPane.ChatTranscriptEntry;
@@ -22,6 +23,9 @@ import org.roxycode.app.util.FrontmatterUtils;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.lang.Nullable;
 
 @AgentService(value = "memoryService", phases = {"*"})
 @AgentDoc("Provides two-tier Global and Project Agent Memory (MEMORY.md cheat-sheets, frontmatter topic notes, archived plans, archived Q&A topics, and unified RipGrep search) across all workflow phases.")
@@ -36,8 +40,8 @@ public class MemoryService {
     public static final String DEFAULT_TOPIC_TITLE = "Codebase Q&A Topic";
     public static final int MAX_TOPIC_TITLE_LENGTH = 80;
     static final int MAX_SLUG_LENGTH = 50;
-    static final int MAX_PINNED_MEMORY_LINES = 200;
-    static final int MAX_PINNED_MEMORY_CHARS = 8192;
+    public static final int MAX_PINNED_MEMORY_LINES = 200;
+    public static final int MAX_PINNED_MEMORY_CHARS = 8192;
     private static final int SEARCH_CONTEXT_LINES = 2;
     private static final String STRIP_TITLE_CHARS_REGEX = "[#*_~`\"']";
     private static final char LF = 10;
@@ -46,17 +50,30 @@ public class MemoryService {
     private static final String SCOPE_PROJECT = "project";
     private static final String TYPE_TOPIC = "topic";
     private static final String KEY_TITLE = "title";
+    private static final String KEY_TAGS = "tags";
+    private static final String KEY_UPDATED_AT = "updatedAt";
     private static final String ROLE_USER = "user";
     private static final String NO_ACTIVE_PROJECT = "No active project";
     private static final String GLOBAL_DIR_UNAVAILABLE = "Global memory directory is unavailable";
     private static final String MD_EXTENSION = ".md";
 
+    public record NoteDetail(String slug, String title, String tags, String updated, String body, String rawMarkdown) {
+    }
+
     private final SettingsService settingsService;
     private final ProjectService projectService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public MemoryService(SettingsService settingsService, ProjectService projectService) {
+        this(settingsService, projectService, null);
+    }
+
+    @Autowired
+    public MemoryService(SettingsService settingsService, ProjectService projectService,
+            @Nullable ApplicationEventPublisher eventPublisher) {
         this.settingsService = settingsService;
         this.projectService = projectService;
+        this.eventPublisher = eventPublisher;
     }
 
     @AgentDoc(value = "Reads the pinned global memory cheat-sheet (~/.roxycode/memory/MEMORY.md). Returns empty string if not present.", examples = "memoryService.readGlobalMemory()")
@@ -66,8 +83,12 @@ public class MemoryService {
 
     @AgentDoc(value = "Writes or overwrites the pinned global memory cheat-sheet (~/.roxycode/memory/MEMORY.md).", examples = "memoryService.updateGlobalMemory('# Global Preferences')")
     public EditorResult updateGlobalMemory(@AgentDoc("The Markdown content for global MEMORY.md") String content) {
-        return updateMemory(getGlobalMemoryDir(), GLOBAL_DIR_UNAVAILABLE, "Global MEMORY.md updated successfully",
-                content);
+        EditorResult result = updateMemory(getGlobalMemoryDir(), GLOBAL_DIR_UNAVAILABLE,
+                "Global MEMORY.md updated successfully", content);
+        if (result.success()) {
+            publishMemoryChanged(true);
+        }
+        return result;
     }
 
     @AgentDoc(value = "Reads the pinned project memory cheat-sheet (<projectDataDir>/memory/MEMORY.md). Returns empty string if not present or no active project.", examples = "memoryService.readProjectMemory()")
@@ -77,22 +98,36 @@ public class MemoryService {
 
     @AgentDoc(value = "Writes or overwrites the pinned project memory cheat-sheet (<projectDataDir>/memory/MEMORY.md).", examples = "memoryService.updateProjectMemory('# Project Architecture')")
     public EditorResult updateProjectMemory(@AgentDoc("The Markdown content for project MEMORY.md") String content) {
-        return updateMemory(resolveProjectSubdir(MEMORY_DIR), NO_ACTIVE_PROJECT,
+        EditorResult result = updateMemory(resolveProjectSubdir(MEMORY_DIR), NO_ACTIVE_PROJECT,
                 "Project MEMORY.md updated successfully", content);
+        if (result.success()) {
+            publishMemoryChanged(false);
+        }
+        return result;
     }
 
     @AgentDoc(value = "Saves or overwrites a global topic note with structured frontmatter in ~/.roxycode/memory/notes/<slug>.md.", examples = "memoryService.saveGlobalNote('coding-style', 'Coding Style Preferences', 'style, java', 'Use final fields where possible.')")
     public EditorResult saveGlobalNote(@AgentDoc("The note slug (lowercase alphanumeric and hyphens)") String slug,
             @AgentDoc("The note title") String title, @AgentDoc("Comma-separated tags") String tags,
             @AgentDoc("The Markdown note body content") String content) {
-        return saveNote(getGlobalMemoryDir(), GLOBAL_DIR_UNAVAILABLE, SCOPE_GLOBAL, slug, title, tags, content);
+        EditorResult result = saveNote(getGlobalMemoryDir(), GLOBAL_DIR_UNAVAILABLE, SCOPE_GLOBAL, slug, title, tags,
+                content);
+        if (result.success()) {
+            publishMemoryChanged(true);
+        }
+        return result;
     }
 
     @AgentDoc(value = "Saves or overwrites a project topic note with structured frontmatter in <projectDataDir>/memory/notes/<slug>.md.", examples = "memoryService.saveProjectNote('swing-html-tables', 'Swing HTML 3.2 Table Layout Rules', 'ui, swing, html', 'Use HTML tables for layout.')")
     public EditorResult saveProjectNote(@AgentDoc("The note slug (lowercase alphanumeric and hyphens)") String slug,
             @AgentDoc("The note title") String title, @AgentDoc("Comma-separated tags") String tags,
             @AgentDoc("The Markdown note body content") String content) {
-        return saveNote(resolveProjectSubdir(MEMORY_DIR), NO_ACTIVE_PROJECT, SCOPE_PROJECT, slug, title, tags, content);
+        EditorResult result = saveNote(resolveProjectSubdir(MEMORY_DIR), NO_ACTIVE_PROJECT, SCOPE_PROJECT, slug, title,
+                tags, content);
+        if (result.success()) {
+            publishMemoryChanged(false);
+        }
+        return result;
     }
 
     @AgentDoc(value = "Reads a global topic note from ~/.roxycode/memory/notes/<slug>.md.", examples = "memoryService.readGlobalNote('coding-style')")
@@ -107,12 +142,20 @@ public class MemoryService {
 
     @AgentDoc(value = "Deletes an obsolete global topic note from ~/.roxycode/memory/notes/<slug>.md.", examples = "memoryService.deleteGlobalNote('old-note')")
     public EditorResult deleteGlobalNote(@AgentDoc("The note slug to delete") String slug) {
-        return deleteNote(getGlobalMemoryDir(), GLOBAL_DIR_UNAVAILABLE, slug);
+        EditorResult result = deleteNote(getGlobalMemoryDir(), GLOBAL_DIR_UNAVAILABLE, slug);
+        if (result.success()) {
+            publishMemoryChanged(true);
+        }
+        return result;
     }
 
     @AgentDoc(value = "Deletes an obsolete project topic note from <projectDataDir>/memory/notes/<slug>.md.", examples = "memoryService.deleteProjectNote('old-note')")
     public EditorResult deleteProjectNote(@AgentDoc("The note slug to delete") String slug) {
-        return deleteNote(resolveProjectSubdir(MEMORY_DIR), NO_ACTIVE_PROJECT, slug);
+        EditorResult result = deleteNote(resolveProjectSubdir(MEMORY_DIR), NO_ACTIVE_PROJECT, slug);
+        if (result.success()) {
+            publishMemoryChanged(false);
+        }
+        return result;
     }
 
     @AgentDoc(value = "Returns a list of formatted summary lines for each global note in ~/.roxycode/memory/notes/*.md.", examples = "memoryService.listGlobalNotes()")
@@ -123,6 +166,22 @@ public class MemoryService {
     @AgentDoc(value = "Returns a list of formatted summary lines for each project note in <projectDataDir>/memory/notes/*.md.", examples = "memoryService.listProjectNotes()")
     public List<String> listProjectNotes() {
         return listNotes(resolveProjectSubdir(MEMORY_DIR));
+    }
+
+    public List<NoteDetail> listGlobalNoteDetails() {
+        return listNoteDetails(getGlobalMemoryDir());
+    }
+
+    public List<NoteDetail> listProjectNoteDetails() {
+        return listNoteDetails(resolveProjectSubdir(MEMORY_DIR));
+    }
+
+    public NoteDetail readGlobalNoteDetail(String slug) {
+        return readNoteDetail(getGlobalMemoryDir(), slug);
+    }
+
+    public NoteDetail readProjectNoteDetail(String slug) {
+        return readNoteDetail(resolveProjectSubdir(MEMORY_DIR), slug);
     }
 
     @AgentDoc(value = "Lists archived completed implementation plans from <projectDataDir>/archive/plans/*.md (most recent first).", examples = "memoryService.listArchivedPlans()")
@@ -143,6 +202,12 @@ public class MemoryService {
     @AgentDoc(value = "Reads an archived Q&A topic conversation from <projectDataDir>/archive/topics/<filename>.", examples = "memoryService.readArchivedTopic('20250514-153000-memory-architecture.md')")
     public String readArchivedTopic(@AgentDoc("The archived topic filename (with or without .md)") String filename) {
         return readArchivedFile(resolveProjectSubdir(ARCHIVE_TOPICS_SUBDIR), filename, TYPE_TOPIC);
+    }
+
+    private void publishMemoryChanged(boolean globalScope) {
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new MemoryChangedEvent(globalScope));
+        }
     }
 
     private static String readMemory(Path dir) {
@@ -169,6 +234,48 @@ public class MemoryService {
             return "";
         }
         return readFileIfExists(resolveNotePath(dir, sanitized));
+    }
+
+    private static NoteDetail readNoteDetail(Path dir, String slug) {
+        String sanitized = sanitizeSlug(slug);
+        if (dir == null) {
+            return null;
+        }
+        Path notePath = resolveNotePath(dir, sanitized);
+        if (!Files.isRegularFile(notePath)) {
+            return null;
+        }
+        return buildNoteDetail(notePath);
+    }
+
+    private static NoteDetail buildNoteDetail(Path file) {
+        String filename = file.getFileName().toString();
+        String slug = StringUtils.removeEndIgnoreCase(filename, MD_EXTENSION);
+        String rawMarkdown = readFileIfExists(file);
+        Map<String, String> fm = FrontmatterUtils.parseFrontmatter(rawMarkdown);
+        String title = StringUtils.defaultIfBlank(fm.get(KEY_TITLE), slug).trim();
+        String tags = StringUtils.defaultString(fm.get(KEY_TAGS)).trim();
+        String updated = StringUtils.defaultString(fm.get(KEY_UPDATED_AT)).trim();
+        String body = extractNoteBody(rawMarkdown, title);
+        return new NoteDetail(slug, title, tags, updated, body, rawMarkdown);
+    }
+
+    static String extractNoteBody(String rawMarkdown, String title) {
+        String stripped = FrontmatterUtils.stripFrontmatter(rawMarkdown).stripLeading();
+        if (StringUtils.isNotBlank(title)) {
+            String expectedHeader = "# " + title.trim();
+            if (stripped.startsWith(expectedHeader)) {
+                int afterHeader = expectedHeader.length();
+                if (afterHeader == stripped.length()) {
+                    return "";
+                }
+                char nextChar = stripped.charAt(afterHeader);
+                if (nextChar == LF || nextChar == 13) {
+                    stripped = stripped.substring(afterHeader).stripLeading();
+                }
+            }
+        }
+        return stripped.stripTrailing();
     }
 
     private String readArchivedFile(Path archiveDir, String filename, String label) {
@@ -296,6 +403,7 @@ public class MemoryService {
                     totalTokens, cachedTokens, cacheHitPercent, estimatedCostUsd);
         }
     }
+
     public List<ArchiveEntrySummary> listArchivedTopicSummaries() {
         return listArchivedEntrySummaries(resolveProjectSubdir(ARCHIVE_TOPICS_SUBDIR), TYPE_TOPIC);
     }
@@ -489,8 +597,8 @@ public class MemoryService {
         frontmatter.put("id", sanitizedSlug);
         frontmatter.put("scope", scope);
         frontmatter.put(KEY_TITLE, resolvedTitle);
-        frontmatter.put("tags", resolvedTags);
-        frontmatter.put("updatedAt", Instant.now().toString());
+        frontmatter.put(KEY_TAGS, resolvedTags);
+        frontmatter.put(KEY_UPDATED_AT, Instant.now().toString());
 
         StringBuilder md = new StringBuilder(FrontmatterUtils.formatFrontmatter(frontmatter));
 
@@ -524,7 +632,7 @@ public class MemoryService {
         }
     }
 
-    private List<String> listNotes(Path memoryRoot) {
+    private List<NoteDetail> listNoteDetails(Path memoryRoot) {
         if (memoryRoot == null) {
             return List.of();
         }
@@ -535,22 +643,29 @@ public class MemoryService {
         try (Stream<Path> stream = Files.list(notesDir)) {
             return stream.filter(Files::isRegularFile).filter(p -> p.getFileName().toString().endsWith(MD_EXTENSION))
                     .sorted(Comparator.comparing(p -> p.getFileName().toString(), String.CASE_INSENSITIVE_ORDER))
-                    .map(file -> {
-                        String filename = file.getFileName().toString();
-                        Map<String, String> fm = FrontmatterUtils.parseFrontmatter(file);
-                        String title = fm.getOrDefault(KEY_TITLE, StringUtils.removeEnd(filename, MD_EXTENSION));
-                        String tags = fm.getOrDefault("tags", "");
-                        String updatedAt = fm.getOrDefault("updatedAt", "");
-                        String updatedAtSuffix = "";
-                        if (!updatedAt.isEmpty()) {
-                            updatedAtSuffix = " (" + updatedAt + ")";
-                        }
-                        return filename + " - " + '"' + title + '"' + " [" + tags + "]" + updatedAtSuffix;
-                    }).toList();
+                    .map(MemoryService::buildNoteDetail).toList();
         } catch (IOException e) {
-            log.warn("Failed to list notes in {}: {}", notesDir, e.getMessage());
+            log.warn("Failed to list note details in {}: {}", notesDir, e.getMessage());
             return List.of();
         }
+    }
+
+    private List<String> listNotes(Path memoryRoot) {
+        List<NoteDetail> details = listNoteDetails(memoryRoot);
+        List<String> summaries = new ArrayList<>(details.size());
+        for (NoteDetail detail : details) {
+            summaries.add(formatNoteSummaryLine(detail));
+        }
+        return summaries;
+    }
+
+    private static String formatNoteSummaryLine(NoteDetail detail) {
+        String filename = detail.slug() + MD_EXTENSION;
+        String updatedAtSuffix = "";
+        if (!detail.updated().isEmpty()) {
+            updatedAtSuffix = " (" + detail.updated() + ")";
+        }
+        return filename + " - " + '"' + detail.title() + '"' + " [" + detail.tags() + "]" + updatedAtSuffix;
     }
 
     private static EditorResult writeMarkdownFile(Path path, String content, String successMessage) {

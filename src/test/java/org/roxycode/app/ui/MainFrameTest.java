@@ -15,6 +15,7 @@ import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.events.PhaseChangedEvent;
@@ -87,10 +88,12 @@ class MainFrameTest {
         when(buildToolService.getConfigContent()).thenReturn("");
         buildConfigPanel = new BuildConfigPanel(buildToolService, settingsService, projectService);
         ContextManagerPanel contextManagerPanel = new ContextManagerPanel(mock(PromptService.class));
+        AgentMemoryPanel agentMemoryPanel = new AgentMemoryPanel(mock(MemoryService.class), projectService,
+                settingsService);
 
         return new MainFrame(settingsService, projectService, chatMemory, headerPanel, statusPanel, qaWorkspacePanel,
                 taskWorkspacePanel, codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel,
-                contextManagerPanel);
+                contextManagerPanel, agentMemoryPanel);
     }
 
     @Test
@@ -114,10 +117,12 @@ class MainFrameTest {
 
             NavButton settingsBtn = frame.sidebar.getCardButton(MainFrame.SETTINGS_VIEW);
             NavButton qaBtn = frame.sidebar.getCardButton(MainFrame.QA_VIEW);
+            NavButton memoryBtn = frame.sidebar.getCardButton(MainFrame.MEMORY_VIEW);
             NavButton buildConfigBtn = frame.sidebar.getCardButton(MainFrame.BUILD_CONFIG_VIEW);
             assertTrue(settingsBtn.isEnabled());
             assertNull(settingsBtn.statusIcon);
             assertFalse(qaBtn.isEnabled());
+            assertFalse(memoryBtn.isEnabled());
             assertFalse(buildConfigBtn.isEnabled());
             assertEquals(SidebarPanel.MISSING_API_KEY_TOOLTIP, qaBtn.getToolTipText());
 
@@ -130,6 +135,7 @@ class MainFrameTest {
             assertFalse(settingsPanel.onboardingBannerPanel.isVisible());
             assertEquals(MainFrame.BUILD_CONFIG_VIEW, frame.currentCard);
             assertTrue(buildConfigBtn.isEnabled());
+            assertTrue(memoryBtn.isEnabled());
             assertFalse(qaBtn.isEnabled());
             assertEquals(SidebarPanel.UNCONFIRMED_BUILD_TOOLTIP, qaBtn.getToolTipText());
 
@@ -157,6 +163,13 @@ class MainFrameTest {
                     "Subsequent saves when API key was already configured should stay on Global Settings");
 
             when(projectService.hasActiveProject()).thenReturn(false);
+            frame.showCard(MainFrame.MEMORY_VIEW);
+            frame.onProjectChanged(new ProjectChangedEvent(null));
+            SwingTestUtils.flushEdt();
+            assertEquals(MainFrame.MEMORY_VIEW, frame.currentCard,
+                    "Agent Memory view should remain accessible even without an active project");
+            assertTrue(memoryBtn.isEnabled());
+
             frame.showCard(MainFrame.QA_VIEW);
             frame.onProjectChanged(new ProjectChangedEvent(null));
             SwingTestUtils.flushEdt();

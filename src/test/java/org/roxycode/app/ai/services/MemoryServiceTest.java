@@ -11,11 +11,14 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.MockedStatic;
+import org.roxycode.app.ai.services.MemoryService.NoteDetail;
+import org.roxycode.app.events.MemoryChangedEvent;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
@@ -33,6 +36,7 @@ class MemoryServiceTest {
     private MemoryService memoryService;
     private Path roxyHomeDir;
     private Path projectDataDir;
+    private List<MemoryChangedEvent> publishedEvents;
 
     @BeforeEach
     void setUp() throws IOException {
@@ -40,19 +44,29 @@ class MemoryServiceTest {
         projectDataDir = Files.createDirectories(tempDir.resolve("project-data"));
         settingsService = mock(SettingsService.class);
         projectService = mock(ProjectService.class);
+        publishedEvents = new ArrayList<>();
         when(settingsService.getRoxyHomeDir()).thenReturn(roxyHomeDir);
         when(projectService.hasActiveProject()).thenReturn(true);
         when(projectService.resolveProjectDataPath(anyString()))
                 .thenAnswer(inv -> projectDataDir.resolve(inv.getArgument(0, String.class)));
-        memoryService = new MemoryService(settingsService, projectService);
+        memoryService = new MemoryService(settingsService, projectService, event -> {
+            if (event instanceof MemoryChangedEvent memEvent) {
+                publishedEvents.add(memEvent);
+            }
+        });
     }
 
     @Test
-    void testMemoryIndexNotesCrudAndSlugSanitization() {
+    void testMemoryIndexNotesCrudStructuredDetailsAndEvents() {
         assertTrue(memoryService.updateGlobalMemory("# Global Prefs").success());
         assertEquals("# Global Prefs", memoryService.readGlobalMemory());
+        assertEquals(1, publishedEvents.size());
+        assertTrue(publishedEvents.get(0).globalScope());
+
         assertTrue(memoryService.updateProjectMemory("# Project Rules").success());
         assertEquals("# Project Rules", memoryService.readProjectMemory());
+        assertEquals(2, publishedEvents.size());
+        assertFalse(publishedEvents.get(1).globalScope());
 
         assertTrue(memoryService
                 .saveGlobalNote("Java Style.md", "Java Style Guide", "java, style", "Use immutable records.")
@@ -60,14 +74,33 @@ class MemoryServiceTest {
         assertContainsAll(memoryService.readGlobalNote("java-style"), "id: ", "java-style", "Java Style Guide");
         assertEquals(1, memoryService.listGlobalNotes().size());
 
+        List<NoteDetail> globalDetails = memoryService.listGlobalNoteDetails();
+        assertEquals(1, globalDetails.size());
+        NoteDetail globalDetail = globalDetails.get(0);
+        assertEquals("java-style", globalDetail.slug());
+        assertEquals("Java Style Guide", globalDetail.title());
+        assertEquals("java, style", globalDetail.tags());
+        assertEquals("Use immutable records.", globalDetail.body());
+        assertFalse(globalDetail.updated().isEmpty());
+        assertNotNull(memoryService.readGlobalNoteDetail("java-style"));
+        assertNull(memoryService.readGlobalNoteDetail("non-existent"));
+
         assertTrue(memoryService.saveProjectNote("swing-tables", "Swing Tables", "ui, swing", "Use HTML tables.")
                 .success());
         assertContainsAll(memoryService.readProjectNote("swing-tables.md"), "swing-tables", "Swing Tables");
         assertEquals(1, memoryService.listProjectNotes().size());
 
+        NoteDetail projectDetail = memoryService.readProjectNoteDetail("swing-tables");
+        assertNotNull(projectDetail);
+        assertEquals("Swing Tables", projectDetail.title());
+        assertEquals("ui, swing", projectDetail.tags());
+        assertEquals("Use HTML tables.", projectDetail.body());
+        assertEquals(1, memoryService.listProjectNoteDetails().size());
+
         assertTrue(memoryService.deleteGlobalNote("java-style").success());
         assertEquals("", memoryService.readGlobalNote("java-style"));
         assertTrue(memoryService.deleteProjectNote("swing-tables").success());
+        assertEquals(6, publishedEvents.size());
 
         for (String invalid : new String[]{null, "", "   ", "../secret", "notes/sub", "---"}) {
             assertThrows(IllegalArgumentException.class, () -> MemoryService.sanitizeSlug(invalid));
@@ -139,7 +172,6 @@ class MemoryServiceTest {
         assertTrue(MemoryService.capPinnedMemoryForPrompt("line\n".repeat(250))
                 .contains("truncated at 200 lines / 8 KB limit"));
         assertTrue(FrontmatterUtils.stripFrontmatter("---\nid: '1'\n---\n\n# Body").startsWith("# Body"));
-
         List<ChatTranscriptEntry> entries = List
                 .of(new ChatTranscriptEntry("user", "  # How does repo map packing work?  ", "10:00:00"));
         assertEquals("How does repo map packing work", MemoryService.deriveDefaultTopicTitle(entries));
