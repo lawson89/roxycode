@@ -86,7 +86,7 @@ public class JexlTool {
         }
 
         try {
-            JexlContext context = new MapContext(registry.getServices(phase));
+            JexlContext context = new MapContext(registry.getServices(phase, conversationId));
             Object result = jexlScript.execute(context);
             ExceptionUtils.checkInterrupted("JEXL execution cancelled");
             publishToolEvent(conversationId, script, result, true, null);

@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
 import org.apache.commons.lang3.StringUtils;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -13,6 +14,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
+import org.roxycode.app.ai.services.UserInputService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.ArchiveUpdatedEvent;
@@ -20,6 +22,7 @@ import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
+import org.roxycode.app.events.UserInputRequestEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
@@ -52,12 +55,14 @@ public final class ChatController implements AutoCloseable {
     private final PlanService planService;
     private MemoryService memoryService;
     private EnvironmentService environmentService;
+    private UserInputService userInputService;
     final boolean turnExecutorOwned;
     volatile Executor turnExecutor;
     private final AtomicLong turnSequence = new AtomicLong();
 
     volatile long activeTurnId = 0;
     private volatile Future<?> activeTurnFuture;
+    private volatile CompletableFuture<Object> pendingUserInputFuture;
     private volatile WorkflowTransitionEvent deferredTransitionEvent;
 
     public ChatController(ChatModel model, ChatPanel view, AiService aiService, PlanService planService,
@@ -77,6 +82,10 @@ public final class ChatController implements AutoCloseable {
     void setTopicArchiveServices(MemoryService memoryService, EnvironmentService environmentService) {
         this.memoryService = memoryService;
         this.environmentService = environmentService;
+    }
+
+    void setUserInputService(UserInputService userInputService) {
+        this.userInputService = userInputService;
     }
 
     synchronized void ensureOwnedExecutorActive() {
@@ -148,7 +157,25 @@ public final class ChatController implements AutoCloseable {
             activeTurnFuture = null;
             futureToCancel.cancel(true);
         }
-        return futureToCancel != null;
+        boolean promptCancelled = cancelPendingUserInput();
+        return futureToCancel != null || promptCancelled;
+    }
+
+    private boolean cancelPendingUserInput() {
+        boolean cancelled = false;
+        CompletableFuture<Object> future = pendingUserInputFuture;
+        if (future != null) {
+            pendingUserInputFuture = null;
+            if (!future.isDone()) {
+                future.cancel(true);
+                cancelled = true;
+            }
+        }
+        if (userInputService != null && userInputService.cancelPendingRequest(model.getConversationId())) {
+            cancelled = true;
+        }
+        Edt.run(view::hideUserInputPrompt);
+        return cancelled;
     }
 
     public void stopTurn() {
@@ -277,6 +304,7 @@ public final class ChatController implements AutoCloseable {
         }
         Edt.run(() -> {
             view.clearAttachments();
+            view.hideUserInputPrompt();
             view.hideTransitionBanner();
             view.setLoading(false);
             view.updateTurnLabel();
@@ -333,6 +361,7 @@ public final class ChatController implements AutoCloseable {
         }
         activeTurnId = 0;
         activeTurnFuture = null;
+        cancelPendingUserInput();
         WorkflowTransitionEvent transition = deferredTransitionEvent;
         deferredTransitionEvent = null;
 
@@ -352,9 +381,41 @@ public final class ChatController implements AutoCloseable {
         activeTurnId = 0;
         activeTurnFuture = null;
         model.setTurnCancelled(true);
+        cancelPendingUserInput();
         deferredTransitionEvent = null;
         view.appendMessage(ROLE_SYSTEM, "_Request cancelled by user._");
         view.setLoading(false);
+    }
+
+    void onUserInputRequest(UserInputRequestEvent event) {
+        if (event == null || !model.getConversationId().equals(event.conversationId())) {
+            return;
+        }
+        CompletableFuture<Object> responseFuture = event.responseFuture();
+        if (responseFuture == null || responseFuture.isDone()) {
+            return;
+        }
+        CompletableFuture<Object> previous = pendingUserInputFuture;
+        if (previous != null && !Objects.equals(previous, responseFuture) && !previous.isDone()) {
+            previous.cancel(true);
+        }
+        pendingUserInputFuture = responseFuture;
+        Edt.run(() -> {
+            if (!Objects.equals(pendingUserInputFuture, responseFuture) || responseFuture.isDone()) {
+                return;
+            }
+            view.showUserInputPrompt(event, response -> completeUserInput(responseFuture, response));
+        });
+    }
+
+    private void completeUserInput(CompletableFuture<Object> responseFuture, Object response) {
+        if (Objects.equals(pendingUserInputFuture, responseFuture)) {
+            pendingUserInputFuture = null;
+        }
+        view.hideUserInputPrompt();
+        if (responseFuture != null && !responseFuture.isDone()) {
+            responseFuture.complete(response);
+        }
     }
 
     void onWorkflowTransition(WorkflowTransitionEvent event) {

@@ -22,12 +22,14 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 import javax.swing.text.DefaultEditorKit;
 import javax.swing.undo.UndoManager;
 import net.miginfocom.swing.MigLayout;
+import org.apache.commons.lang3.StringUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
+import org.roxycode.app.ai.services.UserInputService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.FileChangedEvent;
@@ -36,6 +38,8 @@ import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
+import org.roxycode.app.events.UserInputRequestEvent;
+import org.roxycode.app.events.UserInputRequestEvent.PromptType;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.EnvironmentService;
@@ -67,6 +71,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     static final String DEFAULT_PLACEHOLDER_TEXT = "Type a message... (Enter to send, Shift+Enter for newline, @ to mention files, Ctrl+V to paste image)";
     static final String NO_PROJECT_PLACEHOLDER_TEXT = "Select a project folder in the top bar (Change Project...) to start chatting...";
     private static final String TOOLBAR_BUTTON_STYLE = "arc: 8; font: -1; foreground: $Label.disabledForeground";
+    private static final String GROW_FILL_COL = "[grow, fill]";
     static final int THUMBNAIL_SIZE = 64;
 
     public record NewTopicChoice(boolean proceed, boolean saveTopic, String topicName) {
@@ -85,6 +90,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     JButton rejectButton;
     JButton resetSessionButton;
     final JPanel inlineActionPanel;
+    final JPanel userInputPromptPanel;
     JLabel transitionLabel;
     JLabel turnLabel;
     private JScrollPane outputScrollPane;
@@ -147,6 +153,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         setLayout(new BorderLayout());
 
         this.inlineActionPanel = createInlineActionPanel();
+        this.userInputPromptPanel = createUserInputPromptPanel();
         Component topComponent = createOutputSection(isTaskMode);
         JPanel inputSection = createInputSection(isTaskMode);
 
@@ -216,13 +223,24 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
             }
         });
 
-        if (!isTaskMode) {
-            return outputScrollPane;
+        JPanel southPanel = new JPanel(new BorderLayout());
+        southPanel.setOpaque(false);
+        southPanel.add(userInputPromptPanel, BorderLayout.NORTH);
+        if (isTaskMode) {
+            southPanel.add(inlineActionPanel, BorderLayout.SOUTH);
         }
-        JPanel taskOutputPanel = new JPanel(new BorderLayout());
-        taskOutputPanel.add(outputScrollPane, BorderLayout.CENTER);
-        taskOutputPanel.add(inlineActionPanel, BorderLayout.SOUTH);
-        return taskOutputPanel;
+        JPanel outputPanel = new JPanel(new BorderLayout());
+        outputPanel.add(outputScrollPane, BorderLayout.CENTER);
+        outputPanel.add(southPanel, BorderLayout.SOUTH);
+        return outputPanel;
+    }
+
+    private JPanel createUserInputPromptPanel() {
+        JPanel panel = new JPanel(new MigLayout("insets 10 20 10 20, fillx, wrap 1, gapy 8", GROW_FILL_COL));
+        panel.putClientProperty(FlatClientProperties.STYLE,
+                "background: darken($TextPane.background, 3%); border: 1,0,0,0,$Component.borderColor");
+        panel.setVisible(false);
+        return panel;
     }
 
     private JPanel createInputSection(boolean isTaskMode) {
@@ -230,7 +248,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         attachmentPanel.setOpaque(false);
         attachmentPanel.setVisible(false);
 
-        JPanel inputSection = new JPanel(new MigLayout("fill, insets 8 12 10 12", "[grow, fill]", "[grow, fill]"));
+        JPanel inputSection = new JPanel(new MigLayout("fill, insets 8 12 10 12", GROW_FILL_COL, GROW_FILL_COL));
         inputSection.setMinimumSize(new Dimension(0, 95));
 
         JPanel composerCard = new JPanel(new BorderLayout());
@@ -383,6 +401,11 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     @Autowired(required = false)
+    public void setUserInputService(UserInputService userInputService) {
+        controller.setUserInputService(userInputService);
+    }
+
+    @Autowired(required = false)
     public void setProjectService(ProjectService projectService) {
         this.projectService = projectService;
         updateProjectComposerState();
@@ -445,6 +468,11 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     @EventListener
     public void onToolExecution(ToolExecutionEvent event) {
         controller.onToolExecution(event);
+    }
+
+    @EventListener
+    public void onUserInputRequest(UserInputRequestEvent event) {
+        controller.onUserInputRequest(event);
     }
 
     @EventListener
@@ -527,6 +555,94 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         approveButton.setEnabled(false);
         rejectButton.setEnabled(false);
         inlineActionPanel.setVisible(false);
+    }
+
+    void showUserInputPrompt(UserInputRequestEvent event, Consumer<Object> onResponse) {
+        userInputPromptPanel.removeAll();
+
+        Color accentColor = SwingHtmlUtils.getUiColor(Color.GRAY, "Component.accentColor", "Label.foreground");
+        JLabel questionLabel = new JLabel(event.question(), FontIcon.of(Codicons.QUESTION, 16, accentColor),
+                SwingConstants.LEFT);
+        questionLabel.setFont(questionLabel.getFont().deriveFont(Font.BOLD));
+        userInputPromptPanel.add(questionLabel);
+
+        if (StringUtils.isNotBlank(event.details())) {
+            JLabel detailsLabel = new JLabel(event.details());
+            detailsLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Label.disabledForeground");
+            userInputPromptPanel.add(detailsLabel);
+        }
+
+        PromptType promptType = event.promptType();
+        if (promptType == PromptType.CONFIRM) {
+            JPanel actionsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+            actionsPanel.setOpaque(false);
+            JButton yesButton = createActionButton("Yes", Codicons.CHECK, null, false,
+                    "background: $Actions.Green; focusedBackground: $Actions.Green; hoverBackground: darken($Actions.Green, 8%); pressedBackground: darken($Actions.Green, 14%); foreground: #ffffff",
+                    e -> onResponse.accept(Boolean.TRUE));
+            JButton noButton = createActionButton("No", Codicons.CLOSE, null, false,
+                    "background: $Actions.Red; focusedBackground: $Actions.Red; hoverBackground: darken($Actions.Red, 8%); pressedBackground: darken($Actions.Red, 14%); foreground: #ffffff",
+                    e -> onResponse.accept(Boolean.FALSE));
+            actionsPanel.add(yesButton);
+            actionsPanel.add(noButton);
+            userInputPromptPanel.add(actionsPanel);
+        } else if (promptType == PromptType.SINGLE_SELECT) {
+            JPanel optionsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
+            optionsPanel.setOpaque(false);
+            for (String option : event.options()) {
+                JButton optionButton = new JButton(option);
+                optionButton.putClientProperty(FlatClientProperties.STYLE, "arc: 8");
+                optionButton.addActionListener(e -> onResponse.accept(option));
+                optionsPanel.add(optionButton);
+            }
+            userInputPromptPanel.add(optionsPanel);
+        } else if (promptType == PromptType.MULTI_SELECT) {
+            JPanel checksPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 4));
+            checksPanel.setOpaque(false);
+            List<JCheckBox> checkBoxes = new ArrayList<>(event.options().size());
+            for (String option : event.options()) {
+                JCheckBox checkBox = new JCheckBox(option);
+                checkBox.setOpaque(false);
+                checkBoxes.add(checkBox);
+                checksPanel.add(checkBox);
+            }
+            JButton submitButton = createActionButton("Submit", Codicons.CHECK, null, false,
+                    "background: $Component.accentColor; focusedBackground: $Component.accentColor; hoverBackground: darken($Component.accentColor, 8%); pressedBackground: darken($Component.accentColor, 14%); foreground: #ffffff",
+                    e -> {
+                        List<String> selected = new ArrayList<>();
+                        for (JCheckBox cb : checkBoxes) {
+                            if (cb.isSelected()) {
+                                selected.add(cb.getText());
+                            }
+                        }
+                        onResponse.accept(List.copyOf(selected));
+                    });
+            checksPanel.add(submitButton);
+            userInputPromptPanel.add(checksPanel);
+        } else if (promptType == PromptType.TEXT) {
+            JPanel textPanel = new JPanel(new MigLayout("insets 0, fillx, gap 8", "[grow, fill][]"));
+            textPanel.setOpaque(false);
+            JTextField textField = new JTextField(StringUtils.defaultString(event.defaultValue()));
+            ActionListener submitAction = e -> onResponse.accept(textField.getText());
+            textField.addActionListener(submitAction);
+            JButton submitButton = createActionButton("Submit", Codicons.CHECK, null, false,
+                    "background: $Component.accentColor; focusedBackground: $Component.accentColor; hoverBackground: darken($Component.accentColor, 8%); pressedBackground: darken($Component.accentColor, 14%); foreground: #ffffff",
+                    submitAction);
+            textPanel.add(textField, "growx");
+            textPanel.add(submitButton);
+            userInputPromptPanel.add(textPanel);
+            SwingUtilities.invokeLater(textField::requestFocusInWindow);
+        }
+
+        userInputPromptPanel.setVisible(true);
+        userInputPromptPanel.revalidate();
+        userInputPromptPanel.repaint();
+    }
+
+    void hideUserInputPrompt() {
+        userInputPromptPanel.removeAll();
+        userInputPromptPanel.setVisible(false);
+        userInputPromptPanel.revalidate();
+        userInputPromptPanel.repaint();
     }
 
     boolean confirmResetSession() {

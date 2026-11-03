@@ -18,8 +18,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.imageio.ImageIO;
+import java.util.concurrent.CompletableFuture;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JTextArea;
+import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -349,5 +352,103 @@ class ChatControllerTest extends ChatTestFixture {
         chatPanel.onProjectChanged(new ProjectChangedEvent(Path.of(".")));
         flushEdt();
         assertTrue(chatPanel.inputArea.isEnabled());
+    }
+
+    @Test
+    void testUserInputPromptCardsConversationFilteringAndLifecycleCleanup() throws Exception {
+        ChatPanel qaPanel = createExploreChatPanel(directExecutor);
+        ChatPanel taskPanel = createFeatureChatPanel(directExecutor);
+
+        // 1. Conversation filtering: qa:default event ignored by taskPanel
+        CompletableFuture<Object> confirmFuture = new CompletableFuture<>();
+        UserInputRequestEvent confirmEvent = new UserInputRequestEvent("qa:default",
+                UserInputRequestEvent.PromptType.CONFIRM, "Proceed with refactor?", "Affects 4 files", null, List.of(),
+                confirmFuture);
+        taskPanel.onUserInputRequest(confirmEvent);
+        qaPanel.onUserInputRequest(confirmEvent);
+        flushEdt();
+
+        assertFalse(taskPanel.userInputPromptPanel.isVisible());
+        assertTrue(qaPanel.userInputPromptPanel.isVisible());
+
+        JButton yesButton = SwingTestUtils.findButton(qaPanel.userInputPromptPanel, "Yes");
+        assertNotNull(yesButton);
+        SwingTestUtils.clickOnEdt(yesButton);
+        assertEquals(Boolean.TRUE, confirmFuture.get(5, TimeUnit.SECONDS));
+        assertFalse(qaPanel.userInputPromptPanel.isVisible());
+
+        // 2. SINGLE_SELECT prompt on taskPanel
+        CompletableFuture<Object> singleFuture = new CompletableFuture<>();
+        taskPanel.onUserInputRequest(
+                new UserInputRequestEvent("task:default", UserInputRequestEvent.PromptType.SINGLE_SELECT,
+                        "Select build tool:", null, null, List.of("Maven", "Gradle"), singleFuture));
+        flushEdt();
+        assertTrue(taskPanel.userInputPromptPanel.isVisible());
+
+        JButton gradleBtn = SwingTestUtils.findButton(taskPanel.userInputPromptPanel, "Gradle");
+        assertNotNull(gradleBtn);
+        SwingTestUtils.clickOnEdt(gradleBtn);
+        assertEquals("Gradle", singleFuture.get(5, TimeUnit.SECONDS));
+        assertFalse(taskPanel.userInputPromptPanel.isVisible());
+
+        // 3. MULTI_SELECT prompt on taskPanel
+        CompletableFuture<Object> multiFuture = new CompletableFuture<>();
+        taskPanel.onUserInputRequest(
+                new UserInputRequestEvent("task:default", UserInputRequestEvent.PromptType.MULTI_SELECT,
+                        "Select modules:", null, null, List.of("core", "ui", "api"), multiFuture));
+        flushEdt();
+        assertTrue(taskPanel.userInputPromptPanel.isVisible());
+
+        JCheckBox coreBox = SwingTestUtils.findComponent(taskPanel.userInputPromptPanel, JCheckBox.class,
+                cb -> "core".equals(cb.getText()));
+        JCheckBox apiBox = SwingTestUtils.findComponent(taskPanel.userInputPromptPanel, JCheckBox.class,
+                cb -> "api".equals(cb.getText()));
+        assertNotNull(coreBox);
+        assertNotNull(apiBox);
+        SwingTestUtils.clickOnEdt(coreBox);
+        SwingTestUtils.clickOnEdt(apiBox);
+        JButton multiSubmit = SwingTestUtils.findButton(taskPanel.userInputPromptPanel, "Submit");
+        SwingTestUtils.clickOnEdt(multiSubmit);
+        assertEquals(List.of("core", "api"), multiFuture.get(5, TimeUnit.SECONDS));
+        assertFalse(taskPanel.userInputPromptPanel.isVisible());
+
+        // 4. TEXT prompt on qaPanel
+        CompletableFuture<Object> textFuture = new CompletableFuture<>();
+        qaPanel.onUserInputRequest(new UserInputRequestEvent("qa:default", UserInputRequestEvent.PromptType.TEXT,
+                "Target branch?", null, "main", List.of(), textFuture));
+        flushEdt();
+        assertTrue(qaPanel.userInputPromptPanel.isVisible());
+
+        JTextField textField = SwingTestUtils.findComponent(qaPanel.userInputPromptPanel, JTextField.class);
+        assertNotNull(textField);
+        assertEquals("main", textField.getText());
+        SwingTestUtils.runOnEdt(() -> textField.setText("feature/user-input"));
+        JButton textSubmit = SwingTestUtils.findButton(qaPanel.userInputPromptPanel, "Submit");
+        SwingTestUtils.clickOnEdt(textSubmit);
+        assertEquals("feature/user-input", textFuture.get(5, TimeUnit.SECONDS));
+        assertFalse(qaPanel.userInputPromptPanel.isVisible());
+
+        // 5. Cancellation on stopTurn() and session reset
+        CompletableFuture<Object> stopFuture = new CompletableFuture<>();
+        taskPanel.onUserInputRequest(new UserInputRequestEvent("task:default", UserInputRequestEvent.PromptType.CONFIRM,
+                "Confirm before stop?", null, null, List.of(), stopFuture));
+        flushEdt();
+        assertTrue(taskPanel.userInputPromptPanel.isVisible());
+
+        taskPanel.controller.stopTurn();
+        flushEdt();
+        assertTrue(stopFuture.isCancelled());
+        assertFalse(taskPanel.userInputPromptPanel.isVisible());
+
+        CompletableFuture<Object> resetFuture = new CompletableFuture<>();
+        taskPanel.onUserInputRequest(new UserInputRequestEvent("task:default", UserInputRequestEvent.PromptType.CONFIRM,
+                "Confirm before reset?", null, null, List.of(), resetFuture));
+        flushEdt();
+        assertTrue(taskPanel.userInputPromptPanel.isVisible());
+
+        taskPanel.controller.performResetSession();
+        flushEdt();
+        assertTrue(resetFuture.isCancelled());
+        assertFalse(taskPanel.userInputPromptPanel.isVisible());
     }
 }

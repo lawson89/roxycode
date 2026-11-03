@@ -3,7 +3,9 @@ package org.roxycode.app.ai;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.*;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.ai.services.UserInputService;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.service.SystemToolService;
 import org.springframework.aop.support.AopUtils;
@@ -72,6 +74,11 @@ public class JexlServiceRegistry {
     }
 
     public synchronized Map<String, Object> getServices(WorkflowPhase phase) {
+        return getServices(phase, TurnToolContext.DEFAULT_CONVERSATION_ID);
+    }
+
+    public synchronized Map<String, Object> getServices(WorkflowPhase phase, String conversationId) {
+        String resolvedConvId = StringUtils.defaultIfBlank(conversationId, TurnToolContext.DEFAULT_CONVERSATION_ID);
         Map<String, Object> filtered = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : services.entrySet()) {
             Object service = entry.getValue();
@@ -80,7 +87,11 @@ public class JexlServiceRegistry {
             }
             AgentService ann = AnnotationUtils.findAnnotation(AopUtils.getTargetClass(service), AgentService.class);
             if (ann != null && WorkflowPhase.isAllowed(ann.phases(), phase)) {
-                filtered.put(entry.getKey(), service);
+                Object boundService = service;
+                if (service instanceof UserInputService userInputService) {
+                    boundService = userInputService.forConversation(resolvedConvId);
+                }
+                filtered.put(entry.getKey(), boundService);
             }
         }
         return filtered;

@@ -6,6 +6,7 @@ import org.roxycode.app.service.SettingsService;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -28,99 +29,70 @@ public class AiMemoryConfig {
         return new ChatMemory() {
             @Override
             public void add(String conversationId, List<Message> messages) {
-                Assert.hasText(conversationId, "conversationId cannot be null or empty");
-                Assert.notNull(messages, "messages cannot be null");
-                Assert.noNullElements(messages, "messages cannot contain null elements");
-                List<Message> existing = repository.findByConversationId(conversationId);
-                List<Message> combined = combineMessages(existing, messages);
-                List<Message> windowed = applyWindow(combined, resolveMaxMessages(settingsService));
-                repository.saveAll(conversationId, windowed);
+                createDelegate(repository, settingsService).add(conversationId, messages);
+                alignStoredMessages(repository, conversationId);
             }
 
             @Override
             public List<Message> get(String conversationId) {
                 Assert.hasText(conversationId, "conversationId cannot be null or empty");
+                int maxMessages = resolveMaxMessages(settingsService);
                 List<Message> existing = repository.findByConversationId(conversationId);
-                List<Message> windowed = applyWindow(existing, resolveMaxMessages(settingsService));
-                if (windowed.size() != existing.size()) {
-                    repository.saveAll(conversationId, windowed);
+                if (existing.size() > maxMessages) {
+                    MessageWindowChatMemory.builder().chatMemoryRepository(repository).maxMessages(maxMessages).build()
+                            .add(conversationId, List.of());
                 }
-                return windowed;
+                return alignStoredMessages(repository, conversationId);
             }
 
             @Override
             public void clear(String conversationId) {
-                Assert.hasText(conversationId, "conversationId cannot be null or empty");
-                repository.deleteByConversationId(conversationId);
+                createDelegate(repository, settingsService).clear(conversationId);
             }
         };
     }
 
-    static List<Message> combineMessages(List<Message> existing, List<Message> newMessages) {
-        boolean hasNewSystemMessage = false;
-        for (Message message : newMessages) {
-            if (message instanceof SystemMessage) {
-                hasNewSystemMessage = true;
-                break;
-            }
-        }
-        List<Message> combined = new ArrayList<>(existing.size() + newMessages.size());
-        for (Message message : existing) {
-            if (hasNewSystemMessage && message instanceof SystemMessage && !newMessages.contains(message)) {
-                continue;
-            }
-            combined.add(message);
-        }
-        combined.addAll(newMessages);
-        return combined;
+    private static MessageWindowChatMemory createDelegate(ChatMemoryRepository repository,
+            SettingsService settingsService) {
+        return MessageWindowChatMemory.builder().chatMemoryRepository(repository)
+                .maxMessages(resolveMaxMessages(settingsService)).build();
     }
 
-    static List<Message> applyWindow(List<Message> messages, int maxMessages) {
+    private static List<Message> alignStoredMessages(ChatMemoryRepository repository, String conversationId) {
+        List<Message> stored = repository.findByConversationId(conversationId);
+        List<Message> aligned = alignToFirstUserMessage(stored);
+        if (aligned.size() != stored.size()) {
+            repository.saveAll(conversationId, aligned);
+        }
+        return aligned;
+    }
+
+    static List<Message> alignToFirstUserMessage(List<Message> messages) {
         if (messages == null || messages.isEmpty()) {
             return List.of();
         }
-        int systemCount = 0;
-        int nonSystemCount = 0;
-        for (Message message : messages) {
-            if (message instanceof SystemMessage) {
-                systemCount++;
-            } else {
-                nonSystemCount++;
-            }
+        if (!containsUserMessage(messages)) {
+            return List.copyOf(messages);
         }
-        int nonSystemAllowance = Math.max(0, maxMessages - systemCount);
-        int toEvict = Math.max(0, nonSystemCount - nonSystemAllowance);
-        boolean hasUserMessageInWindow = hasRemainingUserMessage(messages, toEvict);
         boolean seenUserMessage = false;
-        int evicted = 0;
-        List<Message> result = new ArrayList<>(Math.min(messages.size(), Math.max(maxMessages, systemCount)));
+        List<Message> aligned = new ArrayList<>(messages.size());
         for (Message message : messages) {
             if (message instanceof SystemMessage) {
-                result.add(message);
-            } else if (evicted < toEvict) {
-                evicted++;
-            } else if (hasUserMessageInWindow && !seenUserMessage) {
+                aligned.add(message);
+            } else if (!seenUserMessage) {
                 if (message instanceof UserMessage) {
                     seenUserMessage = true;
-                    result.add(message);
+                    aligned.add(message);
                 }
             } else {
-                result.add(message);
+                aligned.add(message);
             }
         }
-        return List.copyOf(result);
+        return List.copyOf(aligned);
     }
 
-    private static boolean hasRemainingUserMessage(List<Message> messages, int toEvict) {
-        int skipped = 0;
+    private static boolean containsUserMessage(List<Message> messages) {
         for (Message message : messages) {
-            if (message instanceof SystemMessage) {
-                continue;
-            }
-            if (skipped < toEvict) {
-                skipped++;
-                continue;
-            }
             if (message instanceof UserMessage) {
                 return true;
             }

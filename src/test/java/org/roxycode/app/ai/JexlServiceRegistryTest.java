@@ -11,6 +11,7 @@ import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.SymbolService;
+import org.roxycode.app.ai.services.UserInputService;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.SystemToolService;
@@ -42,12 +43,14 @@ class JexlServiceRegistryTest {
         MemoryService memoryService = mock(MemoryService.class);
         SymbolService symbolService = mock(SymbolService.class);
         PlanService planService = new PlanService(null, null, null);
+        UserInputService userInputService = new UserInputService(null);
 
         registry.register(editor);
         registry.register(buildTool);
         registry.register(memoryService);
         registry.register(symbolService);
         registry.register(planService);
+        registry.register(userInputService);
 
         assertTrue(registry.getServices(WorkflowPhase.CODE).containsValue(editor));
         assertFalse(registry.getServices(WorkflowPhase.PLAN).containsValue(editor));
@@ -59,8 +62,18 @@ class JexlServiceRegistryTest {
             assertTrue(registry.getServices(phase).containsValue(buildTool));
             assertTrue(registry.getServices(phase).containsValue(memoryService));
             assertTrue(registry.getServices(phase).containsValue(symbolService));
+            UserInputService defaultScoped = assertInstanceOf(UserInputService.class,
+                    registry.getServices(phase).get("userInputService"));
+            assertEquals(TurnToolContext.DEFAULT_CONVERSATION_ID, defaultScoped.getConversationId());
+
+            UserInputService customScoped = assertInstanceOf(UserInputService.class,
+                    registry.getServices(phase, "qa:default").get("userInputService"));
+            assertEquals("qa:default", customScoped.getConversationId());
+            assertNotSame(userInputService, customScoped);
+
             assertTrue(registry.getDocumentation(phase).contains("memoryService"));
             assertTrue(registry.getDocumentation(phase).contains("symbolService"));
+            assertTrue(registry.getDocumentation(phase).contains("userInputService"));
             assertTrue(registry.getDocumentation(phase).contains("interface SymbolInfo {"));
         }
     }

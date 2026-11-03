@@ -26,8 +26,10 @@ import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.services.BuildResult;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.FileReadService;
+import org.roxycode.app.ai.services.UserInputService;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
+import org.roxycode.app.events.UserInputRequestEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
@@ -286,5 +288,46 @@ public class JexlToolTest {
         JsonNode numberedNode = evalJson(tool, "fileReadService.readFilesNumbered(['a.txt', 'b.txt'])");
         assertEquals("1: alpha", numberedNode.get("a.txt").asText());
         assertEquals("1: beta", numberedNode.get("b.txt").asText());
+    }
+
+    @Test
+    public void testExecuteJexlBindsUserInputServiceToTurnToolContextConversationId() throws Exception {
+        List<UserInputRequestEvent> capturedPrompts = new ArrayList<>();
+        UserInputService userInputService = new UserInputService(event -> {
+            if (event instanceof UserInputRequestEvent uire) {
+                capturedPrompts.add(uire);
+                switch (uire.promptType()) {
+                    case CONFIRM -> uire.responseFuture().complete(Boolean.TRUE);
+                    case TEXT -> uire.responseFuture().complete(uire.defaultValue() + "-ok");
+                    case SINGLE_SELECT -> uire.responseFuture().complete(uire.options().get(0));
+                    case MULTI_SELECT -> uire.responseFuture().complete(uire.options());
+                }
+            }
+        });
+
+        JexlTool tool = createTool(userInputService);
+        ToolContext qaContext = new ToolContext(new TurnToolContext("qa:default", WorkflowPhase.EXPLORE, null).toMap());
+        String json = tool.executeJexl("""
+                {
+                  "confirmed": userInputService.confirm('Continue?', 'Details here'),
+                  "text": userInputService.askText('Branch?', 'dev'),
+                  "single": userInputService.selectOption('Tool?', ['Maven', 'Gradle']),
+                  "multi": userInputService.selectMultiple('Modules?', ['core', 'ui'])
+                }
+                """, qaContext);
+
+        JsonNode node = AiConfig.SHARED_OBJECT_MAPPER.readTree(json);
+        assertTrue(node.get("confirmed").asBoolean());
+        assertEquals("dev-ok", node.get("text").asText());
+        assertEquals("Maven", node.get("single").asText());
+        assertEquals(2, node.get("multi").size());
+        assertEquals(4, capturedPrompts.size());
+        for (UserInputRequestEvent prompt : capturedPrompts) {
+            assertEquals("qa:default", prompt.conversationId());
+        }
+
+        // Non-@AgentDoc lifecycle methods must be blocked by JEXL permissions
+        assertTrue(evalJson(tool, "userInputService.forConversation('other')").has("error"));
+        assertTrue(evalJson(tool, "userInputService.cancelPendingRequest('qa:default')").has("error"));
     }
 }
