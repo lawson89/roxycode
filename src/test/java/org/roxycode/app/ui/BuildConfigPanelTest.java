@@ -86,9 +86,14 @@ class BuildConfigPanelTest {
         BuildConfigPanel panel = createPanelOnEdt();
         assertFalse(loadCalledOnEdt.get());
         assertEquals(BuildConfigPanel.TITLE_TEXT, panel.titleLabel.getText());
+        assertTrue(panel.subtitleLabel.getText().contains("Ask Roxy in Codebase Q&A!"));
+        assertNotNull(panel.buildConfigInfoIcon);
+        SwingTestUtils.assertContainsAll(panel.buildConfigInfoIcon.getToolTipText(), "[commands]", "[env]", "[parse]",
+                "[sandbox]", "Codebase Q&amp;A");
         assertTrue(panel.textArea.getText().contains("./mvnw test-compile"));
         assertTrue(panel.unconfirmedBannerPanel.isVisible());
         assertEquals(BuildConfigPanel.UNCONFIRMED_BUILD_NOTICE_TEXT, panel.unconfirmedBannerMessageLabel.getText());
+        assertTrue(panel.unconfirmedBannerMessageLabel.getText().contains("Ask Roxy in Codebase Q&A!"));
 
         JComboBox<GeminiModelConfig> modelCombo = panel.modelCombo;
         assertEquals(3, modelCombo.getItemCount());

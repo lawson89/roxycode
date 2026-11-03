@@ -133,8 +133,9 @@ class PromptServiceTest {
         when(repoMapPackerService.generateRepoMap()).thenReturn(new EditorResult(true, "REPO MAP CONTENT", null));
 
         String stable = promptService.getStableContext();
-        SwingTestUtils.assertContainsAll(stable, "## JEXL CONTEXT", "## Global Context: global.md\nGLOBAL RULES",
-                "## Project Context: rules.md\nCUSTOM RULES");
+        SwingTestUtils.assertContainsAll(stable, "## JEXL CONTEXT", "## ROXYCODE USER GUIDE",
+                "# RoxyCode Built-In User Guide & Reference", "[commands]", "[sandbox]",
+                "## Global Context: global.md\nGLOBAL RULES", "## Project Context: rules.md\nCUSTOM RULES");
 
         String session = promptService.getSessionContext();
         SwingTestUtils.assertContainsAll(session, "DOMINANT LANGUAGE: Java", "CURRENT PHASE: CODE", "JEXL DOCS",

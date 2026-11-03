@@ -22,6 +22,9 @@ public final class WorkflowPhaseIndicator extends JPanel {
         setLayout(new MigLayout("insets 0", "[center]", "center"));
         textLabel = new JLabel(phase.getDisplayName());
         textLabel.setIconTextGap(4);
+        String tooltip = phase.getTooltipHtml();
+        setToolTipText(tooltip);
+        textLabel.setToolTipText(tooltip);
         add(textLabel);
         updateStyle();
     }

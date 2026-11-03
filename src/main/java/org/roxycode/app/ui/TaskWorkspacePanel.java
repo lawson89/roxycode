@@ -39,6 +39,15 @@ public final class TaskWorkspacePanel extends JPanel {
     static final String PHASE_HEADER_TEXT = "FEATURE MODE  • ";
     static final String PAST_PLANS_TAB_TITLE = "Past Plans";
     static final int MAX_PLAN_TITLE_LENGTH = 40;
+    static final String WORKFLOW_LIFECYCLE_TOOLTIP_HTML = """
+            <html><div style='width: 340px;'>
+            <b>Feature Development Lifecycle</b><br>
+            <code>Plan &rarr; (Approve) &rarr; Code &#8644; Review &rarr; (Approve)</code><br><br>
+            &bull; <b>1. Plan (Lead Architect):</b> Drafts the implementation blueprint. Requires your <b>Approve</b> click before any files are modified.<br>
+            &bull; <b>2. Code (Senior Developer):</b> Applies edits and runs <code>build.toml</code> compile &amp; test gates, then autonomously enters Review.<br>
+            &bull; <b>3. Review (Code Reviewer):</b> Audits the <code>git diff</code> and tests. Routes back to Code if fixes are needed, or asks for your final <b>Approve</b> sign-off.<br><br>
+            <i>Tip: Hover over each phase pill for details, or ask Roxy in <b>Codebase Q&amp;A</b> if you have questions about the workflow!</i>
+            </div></html>""";
 
     private final transient PlanService planService;
     final PlanPanel planPanel;
@@ -47,6 +56,7 @@ public final class TaskWorkspacePanel extends JPanel {
     final JTabbedPane taskTabs;
     final JPanel topBar;
     final JLabel phaseHeaderLabel = new JLabel(PHASE_HEADER_TEXT);
+    final JLabel workflowInfoIcon = UiComponents.createInfoIcon(WORKFLOW_LIFECYCLE_TOOLTIP_HTML);
     final JLabel planLabel = new JLabel();
     final JPanel progressTracker;
     private final List<WorkflowPhaseIndicator> indicators = new ArrayList<>();
@@ -136,6 +146,7 @@ public final class TaskWorkspacePanel extends JPanel {
         phaseHeaderLabel.setIcon(FontIcon.of(Codicons.GIT_PULL_REQUEST, 14, accent));
         phaseHeaderLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -2");
         phaseHeaderLabel.setForeground(accent);
+        UiComponents.updateInfoIconTheme(workflowInfoIcon);
     }
 
     void applyPlanBadgeStyling() {
@@ -227,6 +238,7 @@ public final class TaskWorkspacePanel extends JPanel {
             }
             progressTracker.add(indicator);
         }
+        progressTracker.add(workflowInfoIcon, "gapleft 6, center");
         progressTracker.revalidate();
         progressTracker.repaint();
         if (topBar != null) {

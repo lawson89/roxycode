@@ -38,6 +38,7 @@ public class PromptService {
     private static final Logger log = LoggerFactory.getLogger(PromptService.class);
     private static final String CLASSPATH_PROMPT = "prompts/core_workflow.md";
     private static final String JEXL_DOC_PATH = "docs/jexl.md";
+    private static final String USER_GUIDE_DOC_PATH = "docs/roxycode_user_guide.md";
     private static final String EXPLORE_PROMPT_PATH = "prompts/explore_phase.md";
     private static final String REVIEW_PROMPT_PATH = "prompts/review_phase.md";
     private static final String PLAN_PROMPT_PATH = "prompts/plan_phase.md";
@@ -47,6 +48,7 @@ public class PromptService {
 
     private static final String NEWLINE_DOUBLE = "\n\n";
     private static final String HEADER_JEXL_CONTEXT = "\n\n## JEXL CONTEXT\n";
+    private static final String HEADER_USER_GUIDE_CONTEXT = "\n\n## ROXYCODE USER GUIDE\n";
     private static final String HEADER_GLOBAL_AGENT_MEMORY = "\n\n## GLOBAL AGENT MEMORY\n";
     private static final String HEADER_PROJECT_AGENT_MEMORY = "\n\n## PROJECT AGENT MEMORY & ARCHIVE\n";
     private static final String HEADER_REPO_MAP = "\n\n## REPOSITORY MAP\n";
@@ -95,8 +97,9 @@ public class PromptService {
     }
 
     public String getStableContext() {
-        return readClasspathResource(CLASSPATH_PROMPT) + HEADER_JEXL_CONTEXT + loadJexlContext() + NEWLINE_DOUBLE
-                + loadGlobalContext() + loadProjectContext() + loadAgentMemoryContext();
+        return readClasspathResource(CLASSPATH_PROMPT) + HEADER_JEXL_CONTEXT + loadJexlContext()
+                + HEADER_USER_GUIDE_CONTEXT + loadUserGuideContext() + NEWLINE_DOUBLE + loadGlobalContext()
+                + loadProjectContext() + loadAgentMemoryContext();
     }
 
     public String loadAgentMemoryContext() {
@@ -236,6 +239,10 @@ public class PromptService {
 
     public String loadJexlContext() {
         return readClasspathResource(JEXL_DOC_PATH);
+    }
+
+    public String loadUserGuideContext() {
+        return readClasspathResource(USER_GUIDE_DOC_PATH);
     }
 
     public List<String> getGlobalContextFolders() {

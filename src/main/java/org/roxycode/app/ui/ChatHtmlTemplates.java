@@ -123,6 +123,9 @@ public class ChatHtmlTemplates {
                                     <tr>
                                         <td class="welcome-hint">3. <b>Review</b>: Roxy audits the git diff and test results before requesting final sign-off.</td>
                                     </tr>
+                                    <tr>
+                                        <td class="welcome-hint">&bull; <b>Tip</b>: Hover over the <b>Plan &rarr; Code &rarr; Review</b> phase pills above for lifecycle details, or ask Roxy in <b>Codebase Q&amp;A</b> whenever you need help using RoxyCode!</td>
+                                    </tr>
                                 </table>
                             </td>
                         </tr>
@@ -137,14 +140,14 @@ public class ChatHtmlTemplates {
                         <td width="100%%" style="padding: 10px 14px;">
                             <div class="welcome-title">ROXY %s &mdash; Technical Mentor (Read-Only Explore Mode)</div>
                             <div class="welcome-hint" style="margin-top: 6px;">
-                                Explore your codebase, ask architecture questions, and debug issues safely without modifying any files.
+                                Explore your codebase, ask architecture questions, and debug issues safely without modifying any files &mdash; or ask Roxy how to use and configure <b>RoxyCode</b> itself:
                             </div>
                             <table width="100%%" cellpadding="2" cellspacing="0" border="0" style="margin-top: 8px;">
                                 <tr>
-                                    <td class="welcome-hint">&bull; <i>"How does the workflow transition lifecycle work?"</i></td>
+                                    <td class="welcome-hint">&bull; <b>Ask about your codebase</b>: <i>"Explain how @PromptService.java assembles the system prompt."</i></td>
                                 </tr>
                                 <tr>
-                                    <td class="welcome-hint">&bull; <i>"Explain how @PromptService.java assembles the system prompt."</i></td>
+                                    <td class="welcome-hint">&bull; <b>Ask about RoxyCode</b>: <i>"How do I configure build.toml for Gradle or Docker sandboxing?"</i> &bull; <i>"How do Context folders and Agent Memory work?"</i></td>
                                 </tr>
                                 <tr>
                                     <td class="welcome-hint">&bull; Type <b>@</b> or click <b>@ Mention</b> to reference files &bull; <b>Enter</b> to send, <b>Shift+Enter</b> for newline &bull; <b>Ctrl+V</b> to paste images</td>

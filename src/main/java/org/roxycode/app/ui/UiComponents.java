@@ -5,6 +5,7 @@ import com.formdev.flatlaf.FlatLaf;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.Graphics;
@@ -37,6 +38,7 @@ import javax.swing.JTextArea;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.Scrollable;
 import javax.swing.Timer;
+import javax.swing.ToolTipManager;
 import javax.swing.UIManager;
 import net.miginfocom.swing.MigLayout;
 import org.apache.commons.lang3.StringUtils;
@@ -55,6 +57,7 @@ final class UiComponents {
     private static final Logger log = LoggerFactory.getLogger(UiComponents.class);
     private static final String GROWX_WMIN_0 = "growx, wmin 0";
     private static final String ROW_CENTER = "[center]";
+    static final int INFO_TOOLTIP_DISMISS_DELAY_MS = 20_000;
 
     private UiComponents() {
     }
@@ -244,6 +247,24 @@ final class UiComponents {
         label.setIconTextGap(8);
         label.setIcon(FontIcon.of(icon, 18, SwingHtmlUtils.getAccentColor()));
         return label;
+    }
+
+    static JLabel createInfoIcon(String htmlTooltip) {
+        ToolTipManager toolTipManager = ToolTipManager.sharedInstance();
+        if (toolTipManager.getDismissDelay() < INFO_TOOLTIP_DISMISS_DELAY_MS) {
+            toolTipManager.setDismissDelay(INFO_TOOLTIP_DISMISS_DELAY_MS);
+        }
+        JLabel label = new JLabel();
+        label.setToolTipText(htmlTooltip);
+        label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        updateInfoIconTheme(label);
+        return label;
+    }
+
+    static void updateInfoIconTheme(JLabel iconLabel) {
+        if (iconLabel != null) {
+            iconLabel.setIcon(FontIcon.of(Codicons.INFO, 14, SwingHtmlUtils.getAccentColor()));
+        }
     }
 
     static JPanel createModelControlBox(JLabel badgeLabel, JComboBox<GeminiModelConfig> comboBox,
