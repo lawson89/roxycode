@@ -17,6 +17,7 @@ import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.model.GeminiModels;
+import org.roxycode.app.model.ThinkingLevel;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -111,6 +112,13 @@ public class SettingsService {
                     .trim();
         }
         return AppSettings.DEFAULT_GEMINI_MODEL;
+    }
+
+    public static ThinkingLevel resolveGlobalThinkingLevel(SettingsService settingsService) {
+        if (settingsService != null && settingsService.getSettings() != null) {
+            return ThinkingLevel.fromString(settingsService.getSettings().getThinkingLevel());
+        }
+        return ThinkingLevel.DEFAULT;
     }
 
     public synchronized boolean hasSettingsFile() {

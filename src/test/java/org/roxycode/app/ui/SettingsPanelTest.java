@@ -15,6 +15,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
+import org.roxycode.app.model.ThinkingLevel;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SettingsService;
 
@@ -64,6 +65,8 @@ class SettingsPanelTest {
         JSpinner.DefaultEditor turnsEditor = (JSpinner.DefaultEditor) settingsPanel.maxAgentToolTurnsSpinner
                 .getEditor();
 
+        assertEquals(ThinkingLevel.DEFAULT, settingsPanel.thinkingLevelCombo.getSelectedItem());
+        settingsPanel.thinkingLevelCombo.setSelectedItem(ThinkingLevel.HIGH);
         turnsEditor.getTextField().setText("85");
         settingsPanel.logToolCallsCheckBox.setSelected(true);
         settingsPanel.geminiApiKeyField.setText("new-secret-key");
@@ -71,6 +74,7 @@ class SettingsPanelTest {
 
         verify(settingsService, times(1)).saveSettings();
         assertEquals("new-secret-key", settings.getGeminiApiKey());
+        assertEquals("HIGH", settings.getThinkingLevel());
         assertEquals(85, settings.getMaxAgentToolTurns());
         assertTrue(settings.isLogToolCalls());
         assertFalse(settingsPanel.onboardingBannerPanel.isVisible());
@@ -91,6 +95,7 @@ class SettingsPanelTest {
 
         settings.setGeminiApiKey("synced-from-event-key");
         settings.setGeminiModel(modelCombo.getItemAt(1).apiName());
+        settings.setThinkingLevel("LOW");
         settings.setMaxAgentToolTurns(100);
         settings.setMaxChatMemoryMessages(250);
         settings.setLogToolCalls(false);
@@ -98,6 +103,7 @@ class SettingsPanelTest {
         SwingTestUtils.flushEdt();
         assertEquals("synced-from-event-key", new String(settingsPanel.geminiApiKeyField.getPassword()));
         assertEquals(modelCombo.getItemAt(1).apiName(), ((GeminiModelConfig) modelCombo.getSelectedItem()).apiName());
+        assertEquals(ThinkingLevel.LOW, settingsPanel.thinkingLevelCombo.getSelectedItem());
         assertEquals(100, settingsPanel.maxAgentToolTurnsSpinner.getValue());
         assertEquals(250, settingsPanel.maxMessagesSpinner.getValue());
         assertFalse(settingsPanel.logToolCallsCheckBox.isSelected());

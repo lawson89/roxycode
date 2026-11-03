@@ -40,6 +40,8 @@ import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
+import org.roxycode.app.model.ThinkingLevel;
+import org.springframework.ai.google.genai.common.GoogleGenAiThinkingLevel;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -230,11 +232,29 @@ class AiServiceTest {
         verify(requestSpec).system("FULL CODE SYSTEM PROMPT");
         verify(requestSpec).tools(jexlTool);
 
+        ArgumentCaptor<GoogleGenAiChatOptions.Builder> optionsCaptor = ArgumentCaptor
+                .forClass(GoogleGenAiChatOptions.Builder.class);
+        verify(requestSpec).options(optionsCaptor.capture());
+        GoogleGenAiChatOptions builtDefaultOptions = optionsCaptor.getValue().build();
+        assertEquals("test-model-123", builtDefaultOptions.getModel());
+        assertNull(builtDefaultOptions.getThinkingLevel());
+
         ProjectService mockProjectService = mock(ProjectService.class);
         when(mockProjectService.getEffectiveGeminiModel()).thenReturn("gemini-project-override");
+        when(mockProjectService.getEffectiveThinkingLevel()).thenReturn(ThinkingLevel.HIGH);
         AiService aiServiceWithProject = new AiService(chatClientBuilder, settingsService, mockProjectService,
                 promptService, jexlTool, planService, chatMemory, toolCallingManager, eventPublisher);
         assertEquals("gemini-project-override", aiServiceWithProject.resolveEffectiveGeminiModel());
+        assertEquals(ThinkingLevel.HIGH, aiServiceWithProject.resolveEffectiveThinkingLevel());
+
+        clearInvocations(requestSpec);
+        assertEquals("AI Response", aiServiceWithProject.chat("default", null, "Hello with thinking", null));
+        ArgumentCaptor<GoogleGenAiChatOptions.Builder> projectOptionsCaptor = ArgumentCaptor
+                .forClass(GoogleGenAiChatOptions.Builder.class);
+        verify(requestSpec).options(projectOptionsCaptor.capture());
+        GoogleGenAiChatOptions builtProjectOptions = projectOptionsCaptor.getValue().build();
+        assertEquals("gemini-project-override", builtProjectOptions.getModel());
+        assertEquals(GoogleGenAiThinkingLevel.HIGH, builtProjectOptions.getThinkingLevel());
 
         clearInvocations(eventPublisher);
         String msg = "Autonomous execution stopped: Maximum tool turns (2) exceeded.";

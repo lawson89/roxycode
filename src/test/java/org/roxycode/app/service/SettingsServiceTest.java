@@ -15,6 +15,9 @@ import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
+import org.roxycode.app.model.ThinkingLevel;
+import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
+import org.springframework.ai.google.genai.common.GoogleGenAiThinkingLevel;
 
 class SettingsServiceTest {
 
@@ -48,6 +51,7 @@ class SettingsServiceTest {
         AppSettings settings = service.getSettings();
         settings.setTheme("Darcula");
         settings.setGeminiApiKey("test-api-key");
+        settings.setThinkingLevel("high");
         settings.setLogToolCalls(true);
         settings.setGlobalContextFolders(List.of("/tmp/global-a", "/tmp/global-b"));
         service.saveSettings();
@@ -55,11 +59,14 @@ class SettingsServiceTest {
         assertTrue(listenerCalled.get(), "SettingsChangedEvent should be published when settings are saved");
         assertTrue(service.hasSettingsFile());
         assertTrue(service.hasConfiguredApiKey());
+        assertEquals(ThinkingLevel.HIGH, SettingsService.resolveGlobalThinkingLevel(service));
 
         SettingsService service2 = new SettingsService(null, null);
         service2.setSettingsPathOverride(settingsFile);
         assertEquals("Darcula", service2.getSettings().getTheme());
         assertEquals("test-api-key", service2.getSettings().getGeminiApiKey());
+        assertEquals("HIGH", service2.getSettings().getThinkingLevel());
+        assertEquals(ThinkingLevel.HIGH, SettingsService.resolveGlobalThinkingLevel(service2));
         assertTrue(service2.getSettings().isLogToolCalls());
         assertEquals(List.of("/tmp/global-a", "/tmp/global-b"), service2.getSettings().getGlobalContextFolders());
         assertTrue(Files.exists(settingsFile));
@@ -82,6 +89,32 @@ class SettingsServiceTest {
         Path corruptFile = Files.writeString(tempDir.resolve("corrupt.toml"), "invalid = [toml");
         AppSettings fromCorrupt = SettingsService.loadFromDisk(corruptFile, null);
         assertEquals("FlatLaf Light", fromCorrupt.getTheme());
+        assertEquals("DEFAULT", fromCorrupt.getThinkingLevel());
+        assertEquals(ThinkingLevel.DEFAULT, SettingsService.resolveGlobalThinkingLevel(null));
+
+        Path legacyToml = Files.writeString(tempDir.resolve("legacy.toml"), """
+                theme = "FlatLaf Dark"
+                geminiModel = "gemini-3.5-flash"
+                """);
+        AppSettings fromLegacy = SettingsService.loadFromDisk(legacyToml, AiConfig.SHARED_TOML_MAPPER);
+        assertEquals("DEFAULT", fromLegacy.getThinkingLevel());
+
+        assertEquals(ThinkingLevel.DEFAULT, ThinkingLevel.fromString(null));
+        assertEquals(ThinkingLevel.DEFAULT, ThinkingLevel.fromString("  "));
+        assertEquals(ThinkingLevel.DEFAULT, ThinkingLevel.fromString("unknown-level"));
+        assertEquals(ThinkingLevel.MINIMAL, ThinkingLevel.fromString("NONE"));
+        assertEquals(ThinkingLevel.MINIMAL, ThinkingLevel.fromString("minimal"));
+        assertEquals(ThinkingLevel.LOW, ThinkingLevel.fromId("low"));
+        assertEquals(ThinkingLevel.MEDIUM, ThinkingLevel.fromString("Medium"));
+        assertEquals(ThinkingLevel.HIGH, ThinkingLevel.fromString("HIGH"));
+
+        GoogleGenAiChatOptions.Builder defaultBuilder = GoogleGenAiChatOptions.builder().model("gemini-3.5-flash");
+        ThinkingLevel.DEFAULT.applyTo(defaultBuilder);
+        assertNull(defaultBuilder.build().getThinkingLevel());
+
+        GoogleGenAiChatOptions.Builder highBuilder = GoogleGenAiChatOptions.builder().model("gemini-3.5-flash");
+        ThinkingLevel.HIGH.applyTo(highBuilder);
+        assertEquals(GoogleGenAiThinkingLevel.HIGH, highBuilder.build().getThinkingLevel());
     }
 
     @Test

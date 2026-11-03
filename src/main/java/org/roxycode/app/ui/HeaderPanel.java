@@ -14,6 +14,7 @@ import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
+import org.roxycode.app.model.ThinkingLevel;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.util.Edt;
@@ -80,7 +81,7 @@ public final class HeaderPanel extends JPanel {
 
         modelLabel = new JLabel();
         modelLabel.setToolTipText("Active Gemini model");
-        updateModelDisplay(resolveEffectiveModel());
+        updateModelDisplay(resolveEffectiveModel(), resolveEffectiveThinkingLevel(null));
         themeToggleButton = createIconButton(Codicons.COLOR_MODE, "Toggle Light/Dark Theme", e -> toggleTheme());
 
         rightPanel.add(modelLabel);
@@ -109,6 +110,25 @@ public final class HeaderPanel extends JPanel {
             return projectService.getEffectiveGeminiModel();
         }
         return SettingsService.resolveGlobalGeminiModel(settingsService);
+    }
+
+    private ThinkingLevel resolveEffectiveThinkingLevel(AppSettings eventSettings) {
+        if (projectService != null && projectService.hasActiveProject()) {
+            String projectThinking = projectService.getProjectThinkingLevel();
+            if (projectThinking != null && !projectThinking.isEmpty()) {
+                return ThinkingLevel.fromString(projectThinking);
+            }
+        }
+        if (eventSettings != null && eventSettings.getThinkingLevel() != null) {
+            return ThinkingLevel.fromString(eventSettings.getThinkingLevel());
+        }
+        if (projectService != null) {
+            ThinkingLevel effective = projectService.getEffectiveThinkingLevel();
+            if (effective != null) {
+                return effective;
+            }
+        }
+        return SettingsService.resolveGlobalThinkingLevel(settingsService);
     }
 
     private void updateProjectTooltip(Path root) {
@@ -194,7 +214,7 @@ public final class HeaderPanel extends JPanel {
             projectLabel.setText(projectService.getProjectName());
             updateProjectStateDisplay();
             updateProjectTooltip(event.projectRoot());
-            updateModelDisplay(resolveEffectiveModel());
+            updateModelDisplay(resolveEffectiveModel(), resolveEffectiveThinkingLevel(null));
             updateBranchLabel();
         });
     }
@@ -202,17 +222,22 @@ public final class HeaderPanel extends JPanel {
     @EventListener
     public void onSettingsChanged(SettingsChangedEvent event) {
         Edt.run(() -> {
+            AppSettings eventSettings = null;
+            if (event != null) {
+                eventSettings = event.settings();
+            }
+            ThinkingLevel effectiveThinking = resolveEffectiveThinkingLevel(eventSettings);
             if (projectService != null && projectService.hasActiveProject()) {
                 String projectModel = projectService.getProjectGeminiModel();
                 if (!projectModel.isEmpty()) {
-                    updateModelDisplay(projectModel);
+                    updateModelDisplay(projectModel, effectiveThinking);
                     return;
                 }
             }
-            if (event != null && event.settings() != null && event.settings().getGeminiModel() != null) {
-                updateModelDisplay(event.settings().getGeminiModel());
+            if (eventSettings != null && eventSettings.getGeminiModel() != null) {
+                updateModelDisplay(eventSettings.getGeminiModel(), effectiveThinking);
             } else {
-                updateModelDisplay(resolveEffectiveModel());
+                updateModelDisplay(resolveEffectiveModel(), effectiveThinking);
             }
         });
     }
@@ -277,9 +302,17 @@ public final class HeaderPanel extends JPanel {
         });
     }
 
-    private void updateModelDisplay(String modelName) {
+    private void updateModelDisplay(String modelName, ThinkingLevel thinkingLevel) {
         modelLabel.setIcon(FontIcon.of(Codicons.HUBOT, 14, resolveModelAccentColor()));
-        modelLabel.setText(java.util.Objects.requireNonNullElse(modelName, "No model selected"));
+        String baseModelText = java.util.Objects.requireNonNullElse(modelName, "No model selected");
+        ThinkingLevel resolvedLevel = java.util.Objects.requireNonNullElse(thinkingLevel, ThinkingLevel.DEFAULT);
+        if (resolvedLevel != ThinkingLevel.DEFAULT) {
+            modelLabel.setText(baseModelText + " • " + resolvedLevel.getDisplayName());
+        } else {
+            modelLabel.setText(baseModelText);
+        }
+        modelLabel.setToolTipText(
+                "Active Gemini model: " + baseModelText + " (Thinking: " + resolvedLevel.getDisplayName() + ")");
     }
 
     private void chooseProject() {

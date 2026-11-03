@@ -6,7 +6,9 @@ import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import java.nio.file.Files;
 import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.model.ThinkingLevel;
 
 class ProjectServiceTest {
 
@@ -126,5 +128,30 @@ class ProjectServiceTest {
         projectService.setProjectGeminiModel("gemini-3.5-pro");
         assertTrue(projectService.isBuildConfirmed());
         assertEquals("gemini-3.5-pro", projectService.getProjectGeminiModel());
+
+        settingsService.getSettings().setThinkingLevel("MEDIUM");
+        assertEquals("", projectService.getProjectThinkingLevel());
+        assertEquals(ThinkingLevel.MEDIUM, projectService.getEffectiveThinkingLevel());
+
+        publishedEvent.set(null);
+        projectService.setProjectThinkingLevel("  high  ");
+        assertEquals("HIGH", projectService.getProjectThinkingLevel());
+        assertEquals(ThinkingLevel.HIGH, projectService.getEffectiveThinkingLevel());
+        assertEquals("gemini-3.5-pro", projectService.getProjectGeminiModel());
+        assertTrue(projectService.isBuildConfirmed());
+        assertInstanceOf(org.roxycode.app.events.SettingsChangedEvent.class, publishedEvent.get());
+
+        projectService.setProjectThinkingLevel("   ");
+        assertEquals("", projectService.getProjectThinkingLevel());
+        assertEquals(ThinkingLevel.MEDIUM, projectService.getEffectiveThinkingLevel());
+
+        Path legacyProjectConfig = projectService.resolveProjectDataPath(ProjectService.PROJECT_CONFIG_FILE);
+        assertDoesNotThrow(() -> Files.writeString(legacyProjectConfig, """
+                geminiModel = "gemini-legacy"
+                buildConfirmed = true
+                """));
+        assertEquals("gemini-legacy", projectService.getProjectGeminiModel());
+        assertEquals("", projectService.getProjectThinkingLevel());
+        assertTrue(projectService.isBuildConfirmed());
     }
 }

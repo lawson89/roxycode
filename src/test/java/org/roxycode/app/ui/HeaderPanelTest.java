@@ -52,10 +52,20 @@ class HeaderPanelTest {
         assertFalse(header.noProjectNoticeLabel.isVisible());
         assertEquals(HeaderPanel.CHANGE_PROJECT_TEXT, header.changeProjectButton.getText());
         assertEquals("gemini-4-argon", header.modelLabel.getText());
+        assertEquals("Active Gemini model: gemini-4-argon (Thinking: Model Default)",
+                header.modelLabel.getToolTipText());
+
+        updatedSettings.setThinkingLevel("MEDIUM");
+        SwingTestUtils.runOnEdt(() -> header.onSettingsChanged(new SettingsChangedEvent(updatedSettings)));
+        assertEquals("gemini-4-argon • Medium", header.modelLabel.getText());
+        assertEquals("Active Gemini model: gemini-4-argon (Thinking: Medium)", header.modelLabel.getToolTipText());
 
         ps.setProjectGeminiModel("gemini-project-override");
+        ps.setProjectThinkingLevel("HIGH");
         SwingTestUtils.runOnEdt(() -> header.onSettingsChanged(new SettingsChangedEvent(updatedSettings)));
-        assertEquals("gemini-project-override", header.modelLabel.getText());
+        assertEquals("gemini-project-override • High", header.modelLabel.getText());
+        assertEquals("Active Gemini model: gemini-project-override (Thinking: High)",
+                header.modelLabel.getToolTipText());
 
         try {
             header.themeToggleButton.doClick();

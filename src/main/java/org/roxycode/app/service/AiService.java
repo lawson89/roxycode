@@ -16,6 +16,7 @@ import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.model.GeminiModelConfig;
+import org.roxycode.app.model.ThinkingLevel;
 import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -221,6 +222,16 @@ public class AiService implements AutoCloseable {
             return projectService.getEffectiveGeminiModel();
         }
         return SettingsService.resolveGlobalGeminiModel(settingsService);
+    }
+
+    ThinkingLevel resolveEffectiveThinkingLevel() {
+        if (projectService != null) {
+            ThinkingLevel projectLevel = projectService.getEffectiveThinkingLevel();
+            if (projectLevel != null) {
+                return projectLevel;
+            }
+        }
+        return SettingsService.resolveGlobalThinkingLevel(settingsService);
     }
 
     void setRetryTemplate(RetryTemplate retryTemplate) {
@@ -516,6 +527,9 @@ public class AiService implements AutoCloseable {
     private ChatClient.ChatClientRequestSpec buildPrompt(TurnToolContext turnContext, String message,
             List<byte[]> images) {
         WorkflowPhase currentPhase = turnContext.phase();
+        GoogleGenAiChatOptions.Builder optionsBuilder = GoogleGenAiChatOptions.builder()
+                .model(resolveEffectiveGeminiModel());
+        resolveEffectiveThinkingLevel().applyTo(optionsBuilder);
         ChatClient.ChatClientRequestSpec promptSpec = chatClient.prompt()
                 .system(promptService.buildSystemPrompt(currentPhase)).user(u -> {
                     u.text(message);
@@ -524,7 +538,7 @@ public class AiService implements AutoCloseable {
                             u.media(MimeTypeUtils.IMAGE_PNG, new ByteArrayResource(img));
                         }
                     }
-                }).options(GoogleGenAiChatOptions.builder().model(resolveEffectiveGeminiModel()));
+                }).options(optionsBuilder);
         promptSpec.tools(jexlTool);
         promptSpec.advisors(new AutoNudgeAdvisor(turnContext, chatMemory));
         return promptSpec.toolContext(turnContext.toMap());

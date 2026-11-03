@@ -1,20 +1,24 @@
 package org.roxycode.app.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import org.apache.commons.lang3.StringUtils;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class AppSettings {
 
     public static final String DEFAULT_THEME = "FlatLaf Light";
     public static final String DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
+    public static final String DEFAULT_THINKING_LEVEL = ThinkingLevel.DEFAULT.getId();
     public static final int DEFAULT_MAX_AGENT_TOOL_TURNS = 50;
 
     private String theme = DEFAULT_THEME;
     private String geminiApiKey = "";
     private String currentProjectPath = "";
     private String geminiModel = DEFAULT_GEMINI_MODEL;
+    private String thinkingLevel = DEFAULT_THINKING_LEVEL;
     private int maxAgentToolTurns = DEFAULT_MAX_AGENT_TOOL_TURNS;
     private int maxChatMemoryMessages = 50;
     private boolean logToolCalls = false;
@@ -29,6 +33,7 @@ public class AppSettings {
             this.geminiApiKey = other.geminiApiKey;
             this.currentProjectPath = other.currentProjectPath;
             this.geminiModel = other.geminiModel;
+            this.thinkingLevel = other.thinkingLevel;
             this.maxAgentToolTurns = other.maxAgentToolTurns;
             this.maxChatMemoryMessages = other.maxChatMemoryMessages;
             this.logToolCalls = other.logToolCalls;
@@ -71,6 +76,14 @@ public class AppSettings {
 
     public void setGeminiModel(String geminiModel) {
         this.geminiModel = geminiModel;
+    }
+
+    public String getThinkingLevel() {
+        return ThinkingLevel.fromString(thinkingLevel).getId();
+    }
+
+    public void setThinkingLevel(String thinkingLevel) {
+        this.thinkingLevel = ThinkingLevel.fromString(thinkingLevel).getId();
     }
 
     public int getMaxAgentToolTurns() {

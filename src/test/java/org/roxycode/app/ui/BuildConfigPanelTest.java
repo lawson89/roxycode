@@ -15,6 +15,8 @@ import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
+import org.roxycode.app.model.ThinkingLevel;
+import org.roxycode.app.model.ThinkingLevelOption;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 
@@ -36,6 +38,7 @@ class BuildConfigPanelTest {
                         new GeminiModelConfig("gemini-3.5-pro", "Gemini 3.5 Pro", "Advanced reasoning model")));
         when(projectService.hasActiveProject()).thenReturn(true);
         when(projectService.getProjectGeminiModel()).thenReturn("");
+        when(projectService.getProjectThinkingLevel()).thenReturn("");
         when(buildToolService.getConfigContent()).thenReturn("""
                 [commands]
                 compile = './mvnw test-compile'
@@ -92,6 +95,11 @@ class BuildConfigPanelTest {
         assertEquals("", modelCombo.getItemAt(0).apiName());
         assertEquals("gemini-3.5-flash", panel.modelApiBadgeLabel.getText());
 
+        JComboBox<ThinkingLevelOption> thinkingCombo = panel.thinkingLevelCombo;
+        assertEquals(1 + ThinkingLevel.values().length, thinkingCombo.getItemCount());
+        assertEquals("", thinkingCombo.getItemAt(0).id());
+        assertEquals("Use Global Default (Model Default)", thinkingCombo.getItemAt(0).displayName());
+
         java.util.concurrent.atomic.AtomicInteger confirmCallbackCount = new java.util.concurrent.atomic.AtomicInteger();
         panel.setOnConfirmSavedCallback(confirmCallbackCount::incrementAndGet);
 
@@ -101,6 +109,7 @@ class BuildConfigPanelTest {
                 """;
         SwingTestUtils.runOnEdt(() -> {
             modelCombo.setSelectedIndex(2);
+            UiComponents.selectThinkingLevelOptionById(thinkingCombo, "HIGH");
             assertEquals("gemini-3.5-pro", panel.modelApiBadgeLabel.getText());
             assertEquals("Advanced reasoning model", panel.modelDescriptionArea.getText());
             panel.textArea.setText(updatedToml);
@@ -115,6 +124,7 @@ class BuildConfigPanelTest {
         assertEquals("Configuration saved successfully!", panel.statusLabel.getText());
         assertEquals(1, confirmCallbackCount.get());
         verify(projectService).setProjectGeminiModel("gemini-3.5-pro");
+        verify(projectService).setProjectThinkingLevel("HIGH");
         verify(projectService).setBuildConfirmed(true);
         verify(buildToolService).saveConfigContent(updatedToml);
 
@@ -123,9 +133,11 @@ class BuildConfigPanelTest {
         assertEquals(1, confirmCallbackCount.get(), "Confirm callback should only fire on first-time confirmation");
 
         when(projectService.getProjectGeminiModel()).thenReturn("gemini-3.5-pro");
+        when(projectService.getProjectThinkingLevel()).thenReturn("MEDIUM");
         SwingTestUtils.runOnEdt(() -> panel.onProjectChanged(new ProjectChangedEvent(null)));
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
         assertEquals("gemini-3.5-pro", ((GeminiModelConfig) modelCombo.getSelectedItem()).apiName());
+        assertEquals("MEDIUM", ((ThinkingLevelOption) thinkingCombo.getSelectedItem()).id());
 
         clearInvocations(projectService);
         when(projectService.isBuildConfirmed()).thenReturn(false);

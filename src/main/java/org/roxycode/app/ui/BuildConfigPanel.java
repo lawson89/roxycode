@@ -19,6 +19,8 @@ import org.roxycode.app.ai.services.GenericBuildToolService.BuildTemplateInfo;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.GeminiModelConfig;
+import org.roxycode.app.model.ThinkingLevel;
+import org.roxycode.app.model.ThinkingLevelOption;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.util.Edt;
@@ -54,6 +56,7 @@ public final class BuildConfigPanel extends JPanel {
     final JPanel modelCardPanel;
     final JLabel modelSectionHeaderLabel;
     final JComboBox<GeminiModelConfig> modelCombo;
+    final JComboBox<ThinkingLevelOption> thinkingLevelCombo;
     final JLabel modelApiBadgeLabel;
     final JTextArea modelDescriptionArea;
     final JLabel buildSectionHeaderLabel;
@@ -108,9 +111,19 @@ public final class BuildConfigPanel extends JPanel {
                 modelControlBox, ""), "growx, wmin 0");
 
         modelCardPanel.add(modelDescriptionArea, "growx, wmin 0, gaptop 2, hidemode 3");
+
+        thinkingLevelCombo = new JComboBox<>();
+        JSeparator modelCardSeparator = new JSeparator(SwingConstants.HORIZONTAL);
+        modelCardSeparator.setOpaque(false);
+        modelCardPanel.add(modelCardSeparator, "growx, gaptop 2, gapbottom 2");
+        modelCardPanel.add(UiComponents.createFieldRow(UiComponents.createFieldTextBlock("Project Thinking Level",
+                "Override the default Global Settings thinking level specifically for the active project.", null),
+                thinkingLevelCombo, "w 240:280:340"), "growx, wmin 0");
+
         add(modelCardPanel, "growx, wrap, gapbottom 14");
 
         loadModelOptions();
+        loadThinkingLevelOptions();
         modelCombo.addActionListener(e -> updateSelectedModelDetails());
         updateSelectedModelDetails();
 
@@ -278,6 +291,26 @@ public final class BuildConfigPanel extends JPanel {
         UiComponents.selectModelByApiName(modelCombo, projectModel);
     }
 
+    private ThinkingLevel resolveGlobalDefaultThinkingLevel() {
+        return SettingsService.resolveGlobalThinkingLevel(settingsService);
+    }
+
+    void loadThinkingLevelOptions() {
+        ThinkingLevel globalLevel = resolveGlobalDefaultThinkingLevel();
+        DefaultComboBoxModel<ThinkingLevelOption> comboModel = new DefaultComboBoxModel<>();
+        comboModel.addElement(ThinkingLevelOption.useGlobalDefault(globalLevel));
+        for (ThinkingLevel level : ThinkingLevel.values()) {
+            comboModel.addElement(ThinkingLevelOption.fromThinkingLevel(level));
+        }
+        thinkingLevelCombo.setModel(comboModel);
+
+        String projectThinking = "";
+        if (projectService != null && projectService.hasActiveProject()) {
+            projectThinking = projectService.getProjectThinkingLevel();
+        }
+        UiComponents.selectThinkingLevelOptionById(thinkingLevelCombo, projectThinking);
+    }
+
     void updateSelectedModelDetails() {
         UiComponents.updateModelSelectionDetails(modelCombo, modelApiBadgeLabel, modelDescriptionArea,
                 resolveGlobalDefaultModel());
@@ -298,6 +331,7 @@ public final class BuildConfigPanel extends JPanel {
             updateTextAreaTheme();
             applySectionStyling();
             loadModelOptions();
+            loadThinkingLevelOptions();
             updateSelectedModelDetails();
             updateBannerState();
         });
@@ -307,6 +341,7 @@ public final class BuildConfigPanel extends JPanel {
     public void onProjectChanged(ProjectChangedEvent event) {
         Edt.run(() -> {
             loadModelOptions();
+            loadThinkingLevelOptions();
             updateSelectedModelDetails();
             loadTemplateOptions();
             loadConfig();
@@ -394,6 +429,12 @@ public final class BuildConfigPanel extends JPanel {
             selectedModelApiName = selectedModel.apiName();
         }
         final String modelOverrideToSave = selectedModelApiName;
+        ThinkingLevelOption selectedThinking = (ThinkingLevelOption) thinkingLevelCombo.getSelectedItem();
+        String selectedThinkingId = "";
+        if (selectedThinking != null && selectedThinking.id() != null) {
+            selectedThinkingId = selectedThinking.id();
+        }
+        final String thinkingOverrideToSave = selectedThinkingId;
         final boolean wasBuildConfirmed = projectService != null && projectService.isBuildConfirmed();
         saveButton.setEnabled(false);
         CompletableFuture<Void> future = Edt.runAsync(() -> {
@@ -403,6 +444,7 @@ public final class BuildConfigPanel extends JPanel {
                 }
                 if (projectService != null && projectService.hasActiveProject()) {
                     projectService.setProjectGeminiModel(modelOverrideToSave);
+                    projectService.setProjectThinkingLevel(thinkingOverrideToSave);
                     projectService.setBuildConfirmed(true);
                 }
             } catch (IOException e) {

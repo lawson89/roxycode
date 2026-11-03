@@ -21,6 +21,7 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
+import org.roxycode.app.model.ThinkingLevel;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.util.Edt;
@@ -69,6 +70,7 @@ public final class SettingsPanel extends JPanel {
     private final JLabel subtitleLabel;
     final JComboBox<String> themeCombo;
     final JComboBox<GeminiModelConfig> modelCombo;
+    final JComboBox<ThinkingLevel> thinkingLevelCombo;
     final JLabel modelApiBadgeLabel;
     final JTextArea modelDescriptionArea;
     final JSpinner maxMessagesSpinner;
@@ -137,6 +139,9 @@ public final class SettingsPanel extends JPanel {
         loadModels();
         modelCombo.addActionListener(e -> updateSelectedModelDetails());
         updateSelectedModelDetails();
+
+        thinkingLevelCombo = new JComboBox<>(ThinkingLevel.values());
+        thinkingLevelCombo.setSelectedItem(SettingsService.resolveGlobalThinkingLevel(settingsService));
 
         geminiApiKeyField = new JPasswordField(24);
         geminiApiKeyField.setText(settingsService.getSettings().getGeminiApiKey());
@@ -220,6 +225,13 @@ public final class SettingsPanel extends JPanel {
                 modelControlBox, ""), GROWX_WMIN_0);
 
         card.add(modelDescriptionArea, "growx, wmin 0, gaptop 2, hidemode 3");
+        card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
+
+        card.add(UiComponents.createFieldRow(
+                UiComponents.createFieldTextBlock("Thinking Level",
+                        "Default reasoning effort used by Gemini models when generating responses.", null),
+                thinkingLevelCombo, CONTROL_WIDTH_CONSTRAINTS), GROWX_WMIN_0);
+
         card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
 
         JPanel apiKeyRow = new JPanel(new MigLayout("fillx, insets 0, wrap 1, gapy 8", GROW_FILL, ""));
@@ -390,6 +402,10 @@ public final class SettingsPanel extends JPanel {
                     UiComponents.selectModelByApiName(modelCombo, modelId);
                 }
             }
+            ThinkingLevel targetThinking = ThinkingLevel.fromString(event.settings().getThinkingLevel());
+            if (targetThinking != thinkingLevelCombo.getSelectedItem()) {
+                thinkingLevelCombo.setSelectedItem(targetThinking);
+            }
             int clampedToolTurns = Math.clamp(event.settings().getMaxAgentToolTurns(), MIN_AGENT_TOOL_TURNS,
                     MAX_AGENT_TOOL_TURNS);
             if (!Integer.valueOf(clampedToolTurns).equals(maxAgentToolTurnsSpinner.getValue())) {
@@ -487,6 +503,10 @@ public final class SettingsPanel extends JPanel {
         GeminiModelConfig selectedModel = (GeminiModelConfig) modelCombo.getSelectedItem();
         if (selectedModel != null) {
             settings.setGeminiModel(selectedModel.apiName());
+        }
+        ThinkingLevel selectedThinkingLevel = (ThinkingLevel) thinkingLevelCombo.getSelectedItem();
+        if (selectedThinkingLevel != null) {
+            settings.setThinkingLevel(selectedThinkingLevel.getId());
         }
         settings.setMaxAgentToolTurns((Integer) maxAgentToolTurnsSpinner.getValue());
         settings.setMaxChatMemoryMessages(newMaxMessages);

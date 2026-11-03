@@ -39,6 +39,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.model.GeminiModelConfig;
+import org.roxycode.app.model.ThinkingLevelOption;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
@@ -343,6 +344,20 @@ final class UiComponents {
         for (int i = 0; i < combo.getItemCount(); i++) {
             GeminiModelConfig item = combo.getItemAt(i);
             if (item != null && target.equals(item.apiName())) {
+                combo.setSelectedIndex(i);
+                return;
+            }
+        }
+        if (combo.getItemCount() > 0) {
+            combo.setSelectedIndex(0);
+        }
+    }
+
+    static void selectThinkingLevelOptionById(JComboBox<ThinkingLevelOption> combo, String id) {
+        String target = StringUtils.defaultString(id).trim();
+        for (int i = 0; i < combo.getItemCount(); i++) {
+            ThinkingLevelOption item = combo.getItemAt(i);
+            if (item != null && target.equalsIgnoreCase(item.id())) {
                 combo.setSelectedIndex(i);
                 return;
             }

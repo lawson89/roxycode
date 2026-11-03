@@ -14,6 +14,7 @@ import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
+import org.roxycode.app.model.ThinkingLevel;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,12 +33,24 @@ public class ProjectService {
     private static final String NO_PROJECT_ROOT_MSG = "Project root is not set.";
 
     @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
-    public record ProjectConfig(String geminiModel, boolean buildConfirmed) {
-        public static final ProjectConfig DEFAULT = new ProjectConfig("", false);
+    public record ProjectConfig(String geminiModel, String thinkingLevel, boolean buildConfirmed) {
+        public static final ProjectConfig DEFAULT = new ProjectConfig("", "", false);
 
         public ProjectConfig {
             geminiModel = StringUtils.trimToEmpty(geminiModel);
+            thinkingLevel = normalizeProjectThinkingLevel(thinkingLevel);
         }
+
+        public ProjectConfig(String geminiModel, boolean buildConfirmed) {
+            this(geminiModel, "", buildConfirmed);
+        }
+    }
+
+    private static String normalizeProjectThinkingLevel(String rawThinkingLevel) {
+        if (StringUtils.isBlank(rawThinkingLevel)) {
+            return "";
+        }
+        return ThinkingLevel.fromString(rawThinkingLevel).getId();
     }
 
     private final SettingsService settingsService;
@@ -110,7 +123,26 @@ public class ProjectService {
             throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
         ProjectConfig existing = readProjectConfig();
-        writeProjectConfig(new ProjectConfig(StringUtils.trimToEmpty(geminiModel), existing.buildConfirmed()));
+        writeProjectConfig(new ProjectConfig(StringUtils.trimToEmpty(geminiModel), existing.thinkingLevel(),
+                existing.buildConfirmed()));
+        publishSettingsChangedSnapshot();
+    }
+
+    public String getProjectThinkingLevel() {
+        return readProjectConfig().thinkingLevel();
+    }
+
+    public void setProjectThinkingLevel(String thinkingLevel) {
+        if (!hasActiveProject()) {
+            throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
+        }
+        ProjectConfig existing = readProjectConfig();
+        writeProjectConfig(new ProjectConfig(existing.geminiModel(), normalizeProjectThinkingLevel(thinkingLevel),
+                existing.buildConfirmed()));
+        publishSettingsChangedSnapshot();
+    }
+
+    private void publishSettingsChangedSnapshot() {
         AppSettings currentSettings = null;
         if (settingsService != null && settingsService.getSettings() != null) {
             currentSettings = settingsService.getSettings().copy();
@@ -127,7 +159,7 @@ public class ProjectService {
             throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
         ProjectConfig existing = readProjectConfig();
-        writeProjectConfig(new ProjectConfig(existing.geminiModel(), confirmed));
+        writeProjectConfig(new ProjectConfig(existing.geminiModel(), existing.thinkingLevel(), confirmed));
     }
 
     public String getEffectiveGeminiModel() {
@@ -136,6 +168,14 @@ public class ProjectService {
             return projectModel;
         }
         return SettingsService.resolveGlobalGeminiModel(settingsService);
+    }
+
+    public ThinkingLevel getEffectiveThinkingLevel() {
+        String projectThinking = getProjectThinkingLevel();
+        if (!projectThinking.isEmpty()) {
+            return ThinkingLevel.fromString(projectThinking);
+        }
+        return SettingsService.resolveGlobalThinkingLevel(settingsService);
     }
 
     public static String resolveNormalizedProjectPath(ProjectService projectService) {
