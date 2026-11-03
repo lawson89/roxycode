@@ -18,12 +18,14 @@ import org.apache.commons.lang3.StringUtils;
 public final class MarkdownPane extends JTextPane {
     private static final long serialVersionUID = 1L;
     private static final String COPY_PREFIX = "copy:";
+    private static final String FEATURE_PREFIX = "feature:";
     private static final int COPY_FEEDBACK_DELAY_MS = 1500;
     private static final int INITIAL_MESSAGE_COUNT = 1;
     private static final String ERROR_RENDERING_HTML = "<div>Error rendering message</div>";
 
     private final List<Message> messages = new ArrayList<>();
     private final boolean taskMode;
+    private java.util.function.Consumer<String> onMoveToFeatureListener;
     int copiedMessageIndex = -1;
     Timer copyFeedbackTimer;
     String lastCopiedMarkdown;
@@ -55,12 +57,22 @@ public final class MarkdownPane extends JTextPane {
     }
 
     private void handleHyperlinkActivated(String desc) {
-        if (desc == null || !desc.startsWith(COPY_PREFIX)) {
+        if (desc == null) {
             return;
         }
-        try {
-            copyMessageMarkdown(Integer.parseInt(desc.substring(COPY_PREFIX.length())));
-        } catch (NumberFormatException ignored) {
+        if (desc.startsWith(COPY_PREFIX)) {
+            try {
+                copyMessageMarkdown(Integer.parseInt(desc.substring(COPY_PREFIX.length())));
+            } catch (NumberFormatException ignored) {
+            }
+        } else if (desc.startsWith(FEATURE_PREFIX)) {
+            try {
+                int index = Integer.parseInt(desc.substring(FEATURE_PREFIX.length()));
+                if (index >= 0 && index < messages.size() && onMoveToFeatureListener != null) {
+                    onMoveToFeatureListener.accept(messages.get(index).content());
+                }
+            } catch (NumberFormatException ignored) {
+            }
         }
     }
 
@@ -80,6 +92,10 @@ public final class MarkdownPane extends JTextPane {
     public void updateTheme() {
         SwingHtmlUtils.applyTheme(this, 10);
         renderAll(false);
+    }
+
+    public void setOnMoveToFeatureListener(java.util.function.Consumer<String> listener) {
+        this.onMoveToFeatureListener = listener;
     }
 
     public void appendMessage(String role, String content) {
@@ -224,7 +240,7 @@ public final class MarkdownPane extends JTextPane {
                 safeRole = msg.role().toLowerCase(Locale.ROOT);
             }
             return ChatHtmlTemplates.renderChatEntry(safeRole, msg.renderedHtml(), msg.timestamp(), index,
-                    index == copiedMessageIndex);
+                    index == copiedMessageIndex, !taskMode);
         } catch (Exception e) {
             return ERROR_RENDERING_HTML;
         }

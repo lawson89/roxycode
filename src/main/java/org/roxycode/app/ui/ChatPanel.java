@@ -497,6 +497,19 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         }
     }
 
+    public void setOnMoveToFeatureListener(Consumer<String> listener) {
+        if (outputArea != null) {
+            outputArea.setOnMoveToFeatureListener(listener);
+        }
+    }
+
+    public void setInputText(String text) {
+        if (inputArea != null) {
+            inputArea.setText(text);
+            inputArea.requestFocusInWindow();
+        }
+    }
+
     void triggerMentionPopup() {
         if (!inputArea.isEnabled()) {
             return;

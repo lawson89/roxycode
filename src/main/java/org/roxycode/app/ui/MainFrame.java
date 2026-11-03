@@ -229,6 +229,12 @@ public final class MainFrame extends JPanel {
 
         sidebar = new SidebarPanel(this::showCard);
         qaWorkspacePanel.bindSidebar(sidebar);
+        qaWorkspacePanel.setOnMoveToFeatureListener(content -> {
+            showCard(TASK_VIEW);
+            if (taskWorkspacePanel != null && taskWorkspacePanel.taskChatPanel != null) {
+                taskWorkspacePanel.taskChatPanel.setInputText(content);
+            }
+        });
         taskWorkspacePanel.bindSidebar(sidebar);
 
         JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));

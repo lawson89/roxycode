@@ -7,9 +7,29 @@ import java.awt.event.ActionListener;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.Document;
 import javax.swing.text.html.HTMLDocument;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class MarkdownPaneTest {
+
+    @Test
+    void testMoveToFeatureLink() {
+        MarkdownPane pane = new MarkdownPane(false);
+        String[] movedContent = new String[1];
+        pane.setOnMoveToFeatureListener(content -> movedContent[0] = content);
+
+        pane.appendMessage("ai", "Feature suggestion");
+        String text = pane.getText();
+        assertTrue(text.contains("feature:0"));
+        assertTrue(text.contains("[Move to Feature") && text.contains("Request]"));
+
+        pane.fireHyperlinkUpdate(new HyperlinkEvent(pane, HyperlinkEvent.EventType.ACTIVATED, null, "feature:0"));
+        assertEquals("Feature suggestion", movedContent[0]);
+
+        MarkdownPane taskPane = new MarkdownPane(true);
+        taskPane.appendMessage("ai", "Task response");
+        assertFalse(taskPane.getText().contains("feature:0"));
+    }
 
     @Test
     void testIncrementalAppendInPlaceCopyFeedbackToolLogsAndTranscript() {
@@ -32,7 +52,7 @@ class MarkdownPaneTest {
                 "copy-cell-5");
         assertFalse(html.contains("<eof>"));
 
-        var transcript = pane.getConversationMessages();
+        List<MarkdownPane.ChatTranscriptEntry> transcript = pane.getConversationMessages();
         assertEquals(4, transcript.size());
         assertEquals("user", transcript.get(0).role());
         assertEquals("ai", transcript.get(1).role());
