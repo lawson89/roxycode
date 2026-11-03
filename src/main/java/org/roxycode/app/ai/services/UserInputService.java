@@ -18,9 +18,7 @@ import org.roxycode.app.util.ExceptionUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.lang.Nullable;
-import org.springframework.stereotype.Service;
 
-@Service
 @AgentService(value = "userInputService", phases = {"*"})
 @AgentDoc("Provides interactive user prompts (confirmation, text input, single-select, and multi-select) rendered inline in the chat panel.")
 public class UserInputService {

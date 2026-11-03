@@ -6,6 +6,8 @@ import javax.swing.BorderFactory;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import net.miginfocom.swing.MigLayout;
+import org.kordamp.ikonli.codicons.Codicons;
+import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
 
 public final class WorkflowPhaseIndicator extends JPanel {
@@ -19,6 +21,7 @@ public final class WorkflowPhaseIndicator extends JPanel {
         this.phase = phase;
         setLayout(new MigLayout("insets 0", "[center]", "center"));
         textLabel = new JLabel(phase.getDisplayName());
+        textLabel.setIconTextGap(4);
         add(textLabel);
         updateStyle();
     }
@@ -42,17 +45,18 @@ public final class WorkflowPhaseIndicator extends JPanel {
         Color greenColor = SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green");
         Color disabledFg = SwingHtmlUtils.getMutedForegroundColor();
 
-        setBorder(BorderFactory.createEmptyBorder(2, 8, 2, 8));
+        setBorder(BorderFactory.createEmptyBorder(2, 10, 2, 10));
         textLabel.setIcon(null);
-        setOpaque(active);
+        setOpaque(false);
         if (active) {
             setBackground(accentColor);
-            putClientProperty(FlatClientProperties.STYLE, "background: " + SwingHtmlUtils.toHex(accentColor));
+            putClientProperty(FlatClientProperties.STYLE, "arc: 8; background: " + SwingHtmlUtils.toHex(accentColor));
             textLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
             textLabel.setForeground(Color.WHITE);
         } else {
             putClientProperty(FlatClientProperties.STYLE, null);
             if (completed) {
+                textLabel.setIcon(FontIcon.of(Codicons.CHECK, 12, greenColor));
                 textLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
                 textLabel.setForeground(greenColor);
             } else {

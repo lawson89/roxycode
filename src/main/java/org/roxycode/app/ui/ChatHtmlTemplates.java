@@ -38,7 +38,7 @@ public class ChatHtmlTemplates {
                 <table class="%s-entry" width="100%%" cellpadding="0" cellspacing="0" border="0">
                     <tr>
                         <td class="%s-accent" width="4" nowrap="nowrap">&nbsp;</td>
-                        <td class="message-body" width="100%%" style="padding: 8px 12px;">
+                        <td class="message-body" width="100%%" style="padding: 10px 14px;">
                             <table width="100%%" cellpadding="0" cellspacing="0" border="0">
                                 <tr>
                                     <td align="left" valign="middle">%s&nbsp;&nbsp;<span class="timestamp">%s</span></td>
@@ -100,7 +100,7 @@ public class ChatHtmlTemplates {
                     <table class="welcome-card" width="100%%" cellpadding="0" cellspacing="0" border="0">
                         <tr>
                             <td class="ai-accent" width="4" nowrap="nowrap">&nbsp;</td>
-                            <td width="100%%" style="padding: 12px 16px;">
+                            <td width="100%%" style="padding: 10px 14px;">
                                 <div class="welcome-title">ROXY %s &mdash; Autonomous Feature Development (Plan &rarr; Code &rarr; Review)</div>
                                 <div class="welcome-hint" style="margin-top: 6px;">
                                     Build features, refactor modules, and fix bugs through a structured 3-phase lifecycle with human-in-the-loop approval and automated verification:
@@ -126,7 +126,7 @@ public class ChatHtmlTemplates {
                 <table class="welcome-card" width="100%%" cellpadding="0" cellspacing="0" border="0">
                     <tr>
                         <td class="ai-accent" width="4" nowrap="nowrap">&nbsp;</td>
-                        <td width="100%%" style="padding: 12px 16px;">
+                        <td width="100%%" style="padding: 10px 14px;">
                             <div class="welcome-title">ROXY %s &mdash; Technical Mentor (Read-Only Explore Mode)</div>
                             <div class="welcome-hint" style="margin-top: 6px;">
                                 Explore your codebase, ask architecture questions, and debug issues safely without modifying any files.

@@ -6,6 +6,8 @@ import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
+import java.awt.event.FocusAdapter;
+import java.awt.event.FocusEvent;
 import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -73,6 +75,8 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     static final String NO_PROJECT_PLACEHOLDER_TEXT = "Select a project folder in the top bar (Change Project...) to start chatting...";
     private static final String TOOLBAR_BUTTON_STYLE = "arc: 8; font: -1; foreground: $Label.disabledForeground";
     private static final String GROW_FILL_COL = "[grow, fill]";
+    private static final int CTX_USAGE_CRITICAL_PCT = 90;
+    private static final int CTX_USAGE_WARNING_PCT = 75;
     static final int THUMBNAIL_SIZE = 64;
 
     public record NewTopicChoice(boolean proceed, boolean saveTopic, String topicName) {
@@ -165,6 +169,8 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topComponent, inputSection);
         splitPane.setResizeWeight(1.0);
+        splitPane.setDividerSize(5);
+        splitPane.putClientProperty(FlatClientProperties.STYLE, "style: plain");
         splitPane.setBorder(BorderFactory.createEmptyBorder());
         add(splitPane, BorderLayout.CENTER);
         add(telemetrySection, BorderLayout.SOUTH);
@@ -255,12 +261,11 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         attachmentPanel.setOpaque(false);
         attachmentPanel.setVisible(false);
 
-        JPanel inputSection = new JPanel(new MigLayout("fill, insets 8 12 10 12", GROW_FILL_COL, GROW_FILL_COL));
+        JPanel inputSection = new JPanel(new MigLayout("fill, insets 6 12 4 12", GROW_FILL_COL, GROW_FILL_COL));
         inputSection.setMinimumSize(new Dimension(0, 95));
 
         JPanel composerCard = new JPanel(new BorderLayout());
-        composerCard.putClientProperty(FlatClientProperties.STYLE,
-                "arc: 12; background: $TextArea.background; border: 1,1,1,1,$Component.borderColor");
+        updateComposerCardBorder(composerCard, false);
 
         inputArea = new JTextArea(3, 0);
         inputArea.setLineWrap(true);
@@ -268,6 +273,17 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         inputArea.setMargin(new Insets(8, 12, 4, 12));
         inputArea.setBorder(BorderFactory.createEmptyBorder(8, 12, 4, 12));
         inputArea.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, DEFAULT_PLACEHOLDER_TEXT);
+        inputArea.addFocusListener(new FocusAdapter() {
+            @Override
+            public void focusGained(FocusEvent e) {
+                updateComposerCardBorder(composerCard, true);
+            }
+
+            @Override
+            public void focusLost(FocusEvent e) {
+                updateComposerCardBorder(composerCard, false);
+            }
+        });
         JScrollPane inputScrollPane = new JScrollPane(inputArea);
         inputScrollPane.setBorder(BorderFactory.createEmptyBorder());
         inputScrollPane.setOpaque(false);
@@ -329,22 +345,35 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         return inputSection;
     }
 
+    static void updateComposerCardBorder(JPanel composerCard, boolean focused) {
+        String borderColorToken;
+        if (focused) {
+            borderColorToken = "$Component.focusColor";
+        } else {
+            borderColorToken = "$Component.borderColor";
+        }
+        composerCard.putClientProperty(FlatClientProperties.STYLE,
+                "arc: 12; background: $TextArea.background; border: 1,1,1,1," + borderColorToken);
+    }
+
     private JPanel createTelemetrySection() {
-        JPanel telemetryBar = new JPanel(new MigLayout("insets 0 12 8 12", "[] 6 [] 12 [] 6 []", "center"));
+        JPanel telemetryBar = new JPanel(new MigLayout("insets 0 16 6 16", "[] 6 [] 12 [] 6 []", "center"));
         telemetryBar.setOpaque(false);
 
         Font statusFont = getFont().deriveFont(11f);
         ctxLabel = new JLabel();
         ctxLabel.setFont(statusFont);
+        ctxLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Label.disabledForeground");
         ctxProgressBar = new JProgressBar(0, 100);
         ctxProgressBar.setStringPainted(false);
-        ctxProgressBar.putClientProperty(FlatClientProperties.STYLE, "arc: 6");
+        ctxProgressBar.putClientProperty(FlatClientProperties.STYLE, "arc: 6; foreground: $Component.accentColor");
 
         cacheLabel = new JLabel();
         cacheLabel.setFont(statusFont);
+        cacheLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Label.disabledForeground");
         cacheProgressBar = new JProgressBar(0, 100);
         cacheProgressBar.setStringPainted(false);
-        cacheProgressBar.putClientProperty(FlatClientProperties.STYLE, "arc: 6");
+        cacheProgressBar.putClientProperty(FlatClientProperties.STYLE, "arc: 6; foreground: $Actions.Green");
 
         telemetryBar.add(ctxLabel);
         telemetryBar.add(ctxProgressBar, "w 60!, h 8!");
@@ -580,6 +609,15 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
                     org.roxycode.app.util.TokenUtils.formatTokenCount(contextWindow)));
             cacheLabel.setText("Cache Hit: 0 / 0 (0%)");
         }
+        String ctxBarStyle;
+        if (ctxPct >= CTX_USAGE_CRITICAL_PCT) {
+            ctxBarStyle = "arc: 6; foreground: $Actions.Red";
+        } else if (ctxPct >= CTX_USAGE_WARNING_PCT) {
+            ctxBarStyle = "arc: 6; foreground: $Actions.Yellow";
+        } else {
+            ctxBarStyle = "arc: 6; foreground: $Component.accentColor";
+        }
+        ctxProgressBar.putClientProperty(FlatClientProperties.STYLE, ctxBarStyle);
         ctxProgressBar.setValue(ctxPct);
         String ctxTooltip = String.format(java.util.Locale.US, "Context window usage: %,d / %,d tokens (%d%%)",
                 lastPromptTokens, contextWindow, ctxPct);

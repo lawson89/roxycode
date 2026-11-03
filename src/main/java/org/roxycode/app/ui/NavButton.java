@@ -141,17 +141,11 @@ public final class NavButton extends JButton {
     @Override
     public void setSelected(boolean b) {
         super.setSelected(b);
+        setContentAreaFilled(false);
         if (b) {
-            if (FlatLaf.isLafDark()) {
-                putClientProperty(FlatClientProperties.STYLE,
-                        "background: $Component.accentColor; foreground: $Component.accentForeground");
-            } else {
-                putClientProperty(FlatClientProperties.STYLE, "background: #0d6efd; foreground: #ffffff");
-            }
-            setContentAreaFilled(true);
+            putClientProperty(FlatClientProperties.STYLE, "font: bold; foreground: $Component.accentColor");
         } else {
-            putClientProperty(FlatClientProperties.STYLE, "");
-            setContentAreaFilled(false);
+            putClientProperty(FlatClientProperties.STYLE, "font: plain; foreground: $Button.foreground");
         }
         updateIconColor();
     }
@@ -171,6 +165,8 @@ public final class NavButton extends JButton {
             Color color = getForeground();
             if (!isEnabled()) {
                 color = SwingHtmlUtils.getUiColor(color, "Label.disabledForeground");
+            } else if (isSelected()) {
+                color = SwingHtmlUtils.getAccentColor();
             }
             if (color != null) {
                 fontIcon.setIconColor(color);
@@ -199,7 +195,27 @@ public final class NavButton extends JButton {
             amberTint = AMBER_TINT_LIGHT;
         }
 
-        if (highlightWaiting && g instanceof Graphics2D) {
+        if (isSelected() && g instanceof Graphics2D) {
+            Color accentColor = SwingHtmlUtils.getAccentColor();
+            double tintRatio;
+            if (dark) {
+                tintRatio = 0.18;
+            } else {
+                tintRatio = 0.12;
+            }
+            Color selectedTint = SwingHtmlUtils.getTintedBackground(accentColor, tintRatio);
+            Graphics2D g2 = (Graphics2D) g.create();
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setColor(selectedTint);
+                g2.fillRoundRect(0, 0, getWidth(), getHeight(), ROW_ARC, ROW_ARC);
+                g2.setColor(accentColor);
+                g2.fillRoundRect(0, 2, ACCENT_PILL_WIDTH, Math.max(0, getHeight() - 4), ACCENT_PILL_WIDTH,
+                        ACCENT_PILL_WIDTH);
+            } finally {
+                g2.dispose();
+            }
+        } else if (highlightWaiting && g instanceof Graphics2D) {
             Graphics2D g2 = (Graphics2D) g.create();
             try {
                 g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -220,9 +236,7 @@ public final class NavButton extends JButton {
             int y = (getHeight() - statusIcon.getIconHeight()) / 2;
 
             if (isSelected()) {
-                if (getForeground() != null) {
-                    statusIcon.setIconColor(getForeground());
-                }
+                statusIcon.setIconColor(SwingHtmlUtils.getAccentColor());
             } else if (highlightWaiting) {
                 if (g instanceof Graphics2D) {
                     Graphics2D g2 = (Graphics2D) g.create();
