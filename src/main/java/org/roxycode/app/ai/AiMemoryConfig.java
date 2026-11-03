@@ -8,6 +8,7 @@ import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.Assert;
@@ -78,9 +79,6 @@ public class AiMemoryConfig {
         if (messages == null || messages.isEmpty()) {
             return List.of();
         }
-        if (messages.size() <= maxMessages) {
-            return List.copyOf(messages);
-        }
         int systemCount = 0;
         int nonSystemCount = 0;
         for (Message message : messages) {
@@ -92,17 +90,42 @@ public class AiMemoryConfig {
         }
         int nonSystemAllowance = Math.max(0, maxMessages - systemCount);
         int toEvict = Math.max(0, nonSystemCount - nonSystemAllowance);
+        boolean hasUserMessageInWindow = hasRemainingUserMessage(messages, toEvict);
+        boolean seenUserMessage = false;
+        int evicted = 0;
         List<Message> result = new ArrayList<>(Math.min(messages.size(), Math.max(maxMessages, systemCount)));
         for (Message message : messages) {
             if (message instanceof SystemMessage) {
                 result.add(message);
-            } else if (toEvict > 0) {
-                toEvict--;
+            } else if (evicted < toEvict) {
+                evicted++;
+            } else if (hasUserMessageInWindow && !seenUserMessage) {
+                if (message instanceof UserMessage) {
+                    seenUserMessage = true;
+                    result.add(message);
+                }
             } else {
                 result.add(message);
             }
         }
         return List.copyOf(result);
+    }
+
+    private static boolean hasRemainingUserMessage(List<Message> messages, int toEvict) {
+        int skipped = 0;
+        for (Message message : messages) {
+            if (message instanceof SystemMessage) {
+                continue;
+            }
+            if (skipped < toEvict) {
+                skipped++;
+                continue;
+            }
+            if (message instanceof UserMessage) {
+                return true;
+            }
+        }
+        return false;
     }
 
     static int resolveMaxMessages(SettingsService settingsService) {

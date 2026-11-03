@@ -39,9 +39,10 @@ public final class StatusPanel extends JPanel {
 
     final JLabel ctxLabel = new JLabel();
     final JProgressBar ctxProgressBar = new JProgressBar(0, 100);
+    final JLabel cacheLabel = new JLabel();
+    final JProgressBar cacheProgressBar = new JProgressBar(0, 100);
     final JLabel tokenCostLabel = new JLabel();
     final JLabel memLabel = new JLabel();
-    final JProgressBar memProgressBar = new JProgressBar(0, 100);
     private final Timer statsTimer;
 
     private transient ImplementationPlan.UsageSummary sessionUsage = ImplementationPlan.UsageSummary.EMPTY;
@@ -61,7 +62,7 @@ public final class StatusPanel extends JPanel {
         this.projectService = projectService;
         this.lastContextWindowTokens = resolveConfiguredContextWindowTokens();
 
-        setLayout(new MigLayout("insets 2 15 2 15", "[] 20 [] push [] 6 [] 16 [] 16 [] 6 []", "center"));
+        setLayout(new MigLayout("insets 2 15 2 15", "[] 20 [] push [] 6 [] 16 [] 6 [] 16 [] 16 []", "center"));
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
         updateBorder();
 
@@ -78,11 +79,13 @@ public final class StatusPanel extends JPanel {
         ctxProgressBar.setStringPainted(false);
         ctxProgressBar.putClientProperty(FlatClientProperties.STYLE, BAR_ARC_STYLE);
 
+        cacheLabel.setFont(statusFont);
+        cacheProgressBar.setStringPainted(false);
+        cacheProgressBar.putClientProperty(FlatClientProperties.STYLE, BAR_ARC_STYLE);
+
         tokenCostLabel.setFont(statusFont);
 
         memLabel.setFont(statusFont);
-        memProgressBar.setStringPainted(false);
-        memProgressBar.putClientProperty(FlatClientProperties.STYLE, BAR_ARC_STYLE);
 
         updateTokenDisplay();
         updateStats();
@@ -91,10 +94,10 @@ public final class StatusPanel extends JPanel {
         add(javaLabel);
         add(ctxLabel);
         add(ctxProgressBar, BAR_SIZE_CONSTRAINTS);
+        add(cacheLabel);
+        add(cacheProgressBar, BAR_SIZE_CONSTRAINTS);
         add(tokenCostLabel);
         add(memLabel);
-        add(memProgressBar, BAR_SIZE_CONSTRAINTS);
-
         statsTimer = new Timer(5000, e -> updateStats());
         statsTimer.start();
     }
@@ -152,18 +155,27 @@ public final class StatusPanel extends JPanel {
         int lastCacheHitPct = TokenUtils.computeCacheHitPercent(lastCachedInputTokens, lastPromptTokens);
 
         if (lastPromptTokens > 0) {
-            ctxLabel.setText(String.format(Locale.US, "Ctx: %s / %s (%d%%) | Cache: %d%%",
-                    TokenUtils.formatTokenCount(lastPromptTokens), TokenUtils.formatTokenCount(contextWindow), ctxPct,
+            ctxLabel.setText(String.format(Locale.US, "Context Usage: %s / %s (%d%%)",
+                    TokenUtils.formatTokenCount(lastPromptTokens), TokenUtils.formatTokenCount(contextWindow), ctxPct));
+            cacheLabel.setText(String.format(Locale.US, "Cache Hit: %s / %s (%d%%)",
+                    TokenUtils.formatTokenCount(lastCachedInputTokens), TokenUtils.formatTokenCount(lastPromptTokens),
                     lastCacheHitPct));
         } else {
-            ctxLabel.setText(String.format(Locale.US, "Ctx: 0 / %s (0%%)", TokenUtils.formatTokenCount(contextWindow)));
+            ctxLabel.setText(String.format(Locale.US, "Context Usage: 0 / %s (0%%)",
+                    TokenUtils.formatTokenCount(contextWindow)));
+            cacheLabel.setText("Cache Hit: 0 / 0 (0%)");
         }
         ctxProgressBar.setValue(ctxPct);
-        String ctxTooltip = String.format(Locale.US,
-                "Context window: %,d / %,d tokens (%d%%) | Cached input: %,d tokens (%d%%)", lastPromptTokens,
-                contextWindow, ctxPct, lastCachedInputTokens, lastCacheHitPct);
+        String ctxTooltip = String.format(Locale.US, "Context window usage: %,d / %,d tokens (%d%%)", lastPromptTokens,
+                contextWindow, ctxPct);
         ctxLabel.setToolTipText(ctxTooltip);
         ctxProgressBar.setToolTipText(ctxTooltip);
+
+        cacheProgressBar.setValue(lastCacheHitPct);
+        String cacheTooltip = String.format(Locale.US, "Implicit cache hit: %,d / %,d input tokens (%d%%)",
+                lastCachedInputTokens, lastPromptTokens, lastCacheHitPct);
+        cacheLabel.setToolTipText(cacheTooltip);
+        cacheProgressBar.setToolTipText(cacheTooltip);
 
         tokenCostLabel.setText(String.format(Locale.US, "Session: %s tok (%s)",
                 TokenUtils.formatTokenCount(sessionUsage.totalTokens()),
@@ -207,12 +219,11 @@ public final class StatusPanel extends JPanel {
     void updateStats() {
         long usedMb = envService.getMemoryUsageMb();
         long totalMb = envService.getTotalMemoryMb();
-        memLabel.setText("Mem: " + usedMb + "/" + totalMb + "MB");
+        memLabel.setText("JVM Mem: " + usedMb + "/" + totalMb + "MB");
         int pct = 0;
         if (totalMb > 0) {
             pct = (int) Math.min(100L, Math.max(0L, (usedMb * 100L) / totalMb));
         }
-        memProgressBar.setValue(pct);
-        memProgressBar.setToolTipText(pct + "% JVM heap used (" + usedMb + " / " + totalMb + " MB)");
+        memLabel.setToolTipText(pct + "% JVM heap used (" + usedMb + " / " + totalMb + " MB)");
     }
 }

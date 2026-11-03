@@ -45,6 +45,13 @@ class ImplementationPlanTest {
         String withLog = plan.toMarkdown(true);
         SwingTestUtils.assertContainsAll(withLog, "## Handoff Log", "| 2026-04-06 12:05:30 | Architect | Created plan ",
                 "| verified details |");
+
+        String promptContext = plan.formatPromptContextMarkdown();
+        SwingTestUtils.assertContainsAll(promptContext, "**Title:** Feature Plan", "**Goal:** Deliver feature",
+                "### Requirements" + LF + "- Req A",
+                "### Technical Steps" + LF + "- [x] 0. ~~Step 0~~" + LF + "- [ ] 1. Step 1",
+                "### Handoff Log" + LF + "- [2026-04-06 12:05:30] Architect: Created plan | verified" + LF + "details");
+        SwingTestUtils.assertContainsNone(promptContext, "## Approvals", "## Token Usage & Cost");
     }
 
     @Test

@@ -26,8 +26,11 @@ public class FileReadService {
     private static final String DOC_FILE_PATHS = "Array of file paths relative to the project root";
     private static final String ERROR_PREFIX = "Error: ";
     static final int BINARY_SNIFF_BYTES = 8000;
+    static final int MAX_SINGLE_FILE_CHARS = 100_000;
+    static final String SINGLE_FILE_TRUNCATED_SUFFIX = (char) 10 + "... [Truncated at " + MAX_SINGLE_FILE_CHARS
+            + " chars. Use symbolService.readSymbol(path, symbolName), fileReadService.readLines(path, startLine, endLine), or grepService to inspect specific sections.]";
     static final int MAX_BATCH_FILES = 25;
-    static final int MAX_BATCH_CHARS = 250_000;
+    static final int MAX_BATCH_CHARS = 120_000;
     static final String TRUNCATED_KEY = "_truncated";
 
     private final ProjectService projectService;
@@ -60,11 +63,25 @@ public class FileReadService {
 
     @AgentDoc(value = "Reads the content of a file at the given path relative to the project root.", examples = "fileReadService.readFile('pom.xml')")
     public String readFile(@AgentDoc(DOC_FILE_PATH) String relativePath) throws IOException {
+        return truncateSingleFileContent(readRawTextFile(relativePath));
+    }
+
+    private String readRawTextFile(String relativePath) throws IOException {
         Path path = projectService.resolvePath(relativePath);
         if (!Files.isRegularFile(path)) {
             throw new IllegalArgumentException("Error: Path is not a regular file or does not exist: " + relativePath);
         }
+        if (isBinaryFile(path)) {
+            throw new IllegalArgumentException("Error: Binary file cannot be read as text: " + relativePath);
+        }
         return Files.readString(path);
+    }
+
+    private static String truncateSingleFileContent(String content) {
+        if (content == null || content.length() <= MAX_SINGLE_FILE_CHARS) {
+            return content;
+        }
+        return content.substring(0, MAX_SINGLE_FILE_CHARS) + SINGLE_FILE_TRUNCATED_SUFFIX;
     }
 
     @AgentDoc(value = "Reads multiple files in a single batch call, returning a map of relativePath to file content (or an 'Error: ...' message for missing, binary, or invalid files).", examples = "fileReadService.readFiles(['pom.xml', 'src/main/java/Main.java'])")
@@ -169,18 +186,18 @@ public class FileReadService {
     public String readLines(@AgentDoc(DOC_FILE_PATH) String relativePath,
             @AgentDoc("The 1-based start line number (inclusive)") int startLine,
             @AgentDoc("The 1-based end line number (inclusive)") int endLine) throws IOException {
-        String content = readFile(relativePath);
+        String content = readRawTextFile(relativePath);
         return formatNumberedLines(content.lines().toList(), startLine, endLine);
     }
 
     @AgentDoc(value = "Reads the entire file with every line prefixed by its 1-based line number ('<line>: <content>').", examples = "fileReadService.readFileNumbered('src/main/java/Main.java')")
     public String readFileNumbered(@AgentDoc(DOC_FILE_PATH) String relativePath) throws IOException {
-        return readLines(relativePath, 1, Integer.MAX_VALUE);
+        return truncateSingleFileContent(readLines(relativePath, 1, Integer.MAX_VALUE));
     }
 
     @AgentDoc(value = "Returns the total number of lines in a file.", examples = "fileReadService.getLineCount('src/main/java/Main.java')")
     public int getLineCount(@AgentDoc(DOC_FILE_PATH) String relativePath) throws IOException {
-        return (int) readFile(relativePath).lines().count();
+        return (int) readRawTextFile(relativePath).lines().count();
     }
 
     @AgentDoc(value = "Lists the contents of the project root directory (subdirectories end with '/').", examples = "fileReadService.listDirectory()")

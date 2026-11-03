@@ -596,6 +596,43 @@ public record ImplementationPlan(String title, String goal, List<String> require
         return sb.toString();
     }
 
+    public String formatPromptContextMarkdown() {
+        StringBuilder sb = new StringBuilder();
+        if (StringUtils.isNotBlank(title)) {
+            sb.append("**Title:** ").append(title).append((char) 10);
+        }
+        if (StringUtils.isNotBlank(goal)) {
+            sb.append("**Goal:** ").append(goal).append((char) 10);
+        }
+        if (!requirements.isEmpty()) {
+            if (!sb.isEmpty()) {
+                sb.append((char) 10);
+            }
+            sb.append("### Requirements").append((char) 10);
+            for (String req : requirements) {
+                sb.append("- ").append(req).append((char) 10);
+            }
+        }
+        if (!technicalSteps.isEmpty()) {
+            if (!sb.isEmpty()) {
+                sb.append((char) 10);
+            }
+            sb.append("### Technical Steps").append((char) 10).append(formatStepsMarkdown());
+        }
+        if (!handoffLog.isEmpty()) {
+            if (!sb.isEmpty()) {
+                sb.append((char) 10);
+            }
+            sb.append("### Handoff Log").append((char) 10);
+            for (LogEntry entry : handoffLog) {
+                sb.append("- [").append(entry.formattedTimestamp()).append("] ")
+                        .append(StringUtils.defaultString(entry.user())).append(": ")
+                        .append(StringUtils.defaultString(entry.message())).append((char) 10);
+            }
+        }
+        return sb.toString();
+    }
+
     private static String escapeMarkdownTableCell(String value) {
         return StringUtils.defaultString(value).replace("|", (char) 92 + "|").replace((char) 13 + "" + (char) 10, " ")
                 .replace((char) 10, ' ').replace((char) 13, ' ');

@@ -292,10 +292,9 @@ class AiServiceTest {
 
         dynamicMemory.add("conv-1", List.of(new UserMessage("u3")));
         List<Message> shrunkOnAdd = dynamicMemory.get("conv-1");
-        assertEquals(3, shrunkOnAdd.size());
+        assertEquals(2, shrunkOnAdd.size());
         assertTrue(shrunkOnAdd.get(0) instanceof SystemMessage);
-        assertEquals("a2", shrunkOnAdd.get(1).getText());
-        assertEquals("u3", shrunkOnAdd.get(2).getText());
+        assertEquals("u3", shrunkOnAdd.get(1).getText());
 
         assertThrows(IllegalArgumentException.class, () -> aiService.testConnection("   ", "gemini-3.5-flash"));
         aiService.setConnectionTester((key, model) -> key + ":" + model);

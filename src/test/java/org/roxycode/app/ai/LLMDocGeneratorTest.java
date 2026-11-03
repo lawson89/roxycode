@@ -123,8 +123,11 @@ class LLMDocGeneratorTest {
         PhaseFilteredService svc = new PhaseFilteredService();
 
         String planDoc = generator.generateDoc(List.of(svc), WorkflowPhase.PLAN);
-        SwingTestUtils.assertContainsAll(planDoc, "wildcardMethod(): string;", "planOnlyMethod(): ParentRecord;",
+        SwingTestUtils.assertContainsAll(planDoc,
+                "// Plan only" + (char) 10 + "    planOnlyMethod(): ParentRecord;" + (char) 10
+                        + "    // Wildcard method" + (char) 10 + "    wildcardMethod(): string;",
                 "interface ParentRecord {", "child: ChildRecord;", "enum Status {");
+        assertFalse(planDoc.contains("@param"));
         assertFalse(planDoc.contains("codeReviewMethod"));
         assertFalse(planDoc.contains("emptyPhasesMethod"));
 

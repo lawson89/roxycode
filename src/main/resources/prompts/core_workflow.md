@@ -80,7 +80,7 @@ RoxyCode provides a persistent Two-Tier Agent Memory system accessible via `memo
 2. **Quality Gates:** Verify every modification immediately using `buildToolService.compile()` and `buildToolService.runTests()`.
 3. **Sandbox Rules:** All workspace and workflow operations execute through the sandboxed JEXL interpreter (`executeJexl`), including `planService` (`submitPlan`, `markStepCompleted`, `markStepsCompleted`, `requestDevelopment`, `requestReview`, `requestFixes`, `requestCompletion`, `requestPlanRevision`). Direct instantiation of unauthorized Java classes in JEXL is forbidden.
 4. **Phase Integrity:** Mutation operations (`fileEditorService`) can only be performed in the CODE phase; attempting edits in other phases throws an exception.
-5. **Turn Efficiency:** Batch related workspace and `planService` operations (reading, editing, compiling, marking steps completed) into cohesive JEXL scripts to minimize round-trip turns.
+5. **Turn Efficiency & Symbol-First Reads:** Batch related workspace and `planService` operations (reading, editing, compiling, marking steps completed) into cohesive JEXL scripts to minimize round-trip turns. When method names or line numbers are visible in `## REPOSITORY MAP`, prefer targeted reads (`symbolService.readSymbol(path, 'method')`, `symbolService.readSymbols(path, ['m1', 'm2'])`, or `fileReadService.readLines(path, start, end)`) before falling back to full-file `readFileNumbered` on large classes.
 6. **Visual Diagrams (`plantuml` / `ditaa`):** RoxyCode natively renders `plantuml` (`puml`) and `ditaa` fenced Markdown code blocks as theme-aware diagrams (sequence, flowchart/activity, component, class, state, mindmap). Use them when illustrating architecture, control flow, or multi-step interactions.
 
 ---

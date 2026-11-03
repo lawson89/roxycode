@@ -90,19 +90,14 @@ public class LLMDocGenerator {
                 continue;
             }
 
-            sb.append("    /**\n     * ").append(doc.value()).append("\n");
-            Parameter[] params = m.getParameters();
-            for (Parameter p : params) {
-                AgentDoc paramDoc = AnnotationUtils.findAnnotation(p, AgentDoc.class);
-                if (paramDoc != null && !paramDoc.value().isBlank()) {
-                    sb.append("     * @param ").append(p.getName()).append(" ").append(paramDoc.value()).append("\n");
-                }
+            sb.append("    // ").append(doc.value());
+            String[] examples = doc.examples();
+            if (examples.length > 0) {
+                sb.append(" (e.g., ").append(String.join("; ", examples)).append(")");
             }
-            for (String example : doc.examples()) {
-                sb.append("     * Example: ").append(example).append("\n");
-            }
-            sb.append("     */\n    ").append(m.getName()).append("(");
+            sb.append((char) 10).append("    ").append(m.getName()).append("(");
 
+            Parameter[] params = m.getParameters();
             for (int i = 0; i < params.length; i++) {
                 if (i > 0) {
                     sb.append(", ");
@@ -111,9 +106,9 @@ public class LLMDocGenerator {
                         .append(getMethodTypeName(params[i].getType(), params[i].getParameterizedType(), extraTypes));
             }
             sb.append("): ").append(getMethodTypeName(m.getReturnType(), m.getGenericReturnType(), extraTypes))
-                    .append(";\n\n");
+                    .append(";").append((char) 10);
         }
-        sb.append("}\n");
+        sb.append("}").append((char) 10);
     }
 
     private String getMethodTypeName(Class<?> rawType, Type genericType, Set<Class<?>> extraTypes) {

@@ -101,19 +101,19 @@ When accumulating results dynamically, prefer inline array/map initialization or
 
 ### JEXL Batching & Literal Syntax Rules
 
-1. **Prefer Built-in Batch Helpers for Multi-File Reads and Search-and-Read**:
-   Instead of writing manual loops or multi-key maps to read several files, use the one-liner batch helpers on `fileReadService` and `grepService`:
+1. **Prefer Symbol-First Targeted Reads & Built-in Batch Helpers**:
+   When method names or line numbers are visible in `## REPOSITORY MAP`, prefer targeted reads (`symbolService.readSymbol`, `symbolService.readSymbols`, or `fileReadService.readLines`) before falling back to full-file `readFileNumbered` on large classes. When inspecting multiple files or searching, use the one-liner batch helpers:
    ```javascript
-   // Read multiple files in one call (returns Map<String, String>, resilient to missing/binary files)
-   fileReadService.readFiles(['pom.xml', 'src/main/java/org/roxycode/app/RoxyCode.java']);
+   // Read specific methods or line ranges using Repo Map line numbers (saves context tokens)
+   symbolService.readSymbols('src/main/java/App.java', ['main', 'helper']);
+   fileReadService.readLines('src/main/java/App.java', 40, 95);
 
-   // Read multiple files with 1-based line numbers in one call
+   // Read multiple smaller files in one call (returns Map<String, String>, resilient to missing/binary files)
+   fileReadService.readFiles(['pom.xml', 'src/main/java/org/roxycode/app/RoxyCode.java']);
    fileReadService.readFilesNumbered(['src/main/java/App.java', 'src/main/java/Config.java']);
 
    // Find matching file paths and immediately read their contents in one call
    grepService.readMatchingFiles('class AuthService', 'src', '*.java');
-
-   // Or get a deduplicated List<String> of matching file paths via RipGrep (-l)
    grepService.findMatchingFiles('@AgentService', 'src', '*.java');
    ```
 

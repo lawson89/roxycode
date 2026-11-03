@@ -130,7 +130,7 @@ public class FileReadServiceTest {
 
     @Test
     void testReadFilesEnforcesMaxBatchCharsCap() throws IOException {
-        String chunk = "x".repeat(150_000);
+        String chunk = "x".repeat(80_000);
         Files.writeString(tempDir.resolve("large1.txt"), chunk);
         Files.writeString(tempDir.resolve("large2.txt"), chunk);
         Files.writeString(tempDir.resolve("large3.txt"), "extra");
@@ -163,5 +163,43 @@ public class FileReadServiceTest {
 
         Path binFile = Files.write(tempDir.resolve("binary.dat"), new byte[]{0x48, 0x65, 0x00, 0x6c});
         assertTrue(FileReadService.isBinaryFile(binFile));
+
+        IllegalArgumentException binReadEx = assertThrows(IllegalArgumentException.class,
+                () -> fileReadService.readFile("binary.dat"));
+        assertTrue(binReadEx.getMessage().contains("Error: Binary file cannot be read as text: binary.dat"));
+        assertThrows(IllegalArgumentException.class, () -> fileReadService.readFileNumbered("binary.dat"));
+        assertThrows(IllegalArgumentException.class, () -> fileReadService.readLines("binary.dat", 1, 5));
+        assertThrows(IllegalArgumentException.class, () -> fileReadService.getLineCount("binary.dat"));
+    }
+
+    @Test
+    void testReadFileAndReadFileNumberedTruncateAtMaxSingleFileCharsWhileReadLinesReadsFullFile() throws IOException {
+        String nl = String.valueOf((char) 10);
+        String linePayload = "x".repeat(95);
+        StringBuilder sb = new StringBuilder();
+        int totalLines = 1200;
+        for (int i = 1; i <= totalLines; i++) {
+            sb.append("L").append(i).append(':').append(linePayload).append(nl);
+        }
+        String fullContent = sb.toString();
+        assertTrue(fullContent.length() > FileReadService.MAX_SINGLE_FILE_CHARS);
+        Files.writeString(tempDir.resolve("huge.txt"), fullContent);
+
+        String truncatedRaw = fileReadService.readFile("huge.txt");
+        assertEquals(FileReadService.MAX_SINGLE_FILE_CHARS + FileReadService.SINGLE_FILE_TRUNCATED_SUFFIX.length(),
+                truncatedRaw.length());
+        assertTrue(truncatedRaw.endsWith(FileReadService.SINGLE_FILE_TRUNCATED_SUFFIX));
+        assertEquals(fullContent.substring(0, FileReadService.MAX_SINGLE_FILE_CHARS),
+                truncatedRaw.substring(0, FileReadService.MAX_SINGLE_FILE_CHARS));
+
+        String truncatedNumbered = fileReadService.readFileNumbered("huge.txt");
+        assertEquals(FileReadService.MAX_SINGLE_FILE_CHARS + FileReadService.SINGLE_FILE_TRUNCATED_SUFFIX.length(),
+                truncatedNumbered.length());
+        assertTrue(truncatedNumbered.startsWith("1: L1:"));
+        assertTrue(truncatedNumbered.endsWith(FileReadService.SINGLE_FILE_TRUNCATED_SUFFIX));
+
+        assertEquals(totalLines, fileReadService.getLineCount("huge.txt"));
+        String tailLines = fileReadService.readLines("huge.txt", 1199, 1200);
+        assertEquals("1199: L1199:" + linePayload + nl + "1200: L1200:" + linePayload, tailLines);
     }
 }

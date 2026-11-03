@@ -82,6 +82,13 @@ class RepoMapPackerServiceTest {
                             + ctagsLine("List", smallJava.toString(), 2, "import")
                             + ctagsLine("ns", smallJava.toString(), 1, "namespace")
                             + ctagsLine("SmallService", smallJava.toString(), 3, "class")
+                            + ctagsLine("secretBodyLine", smallJava.toString(), 4, "field")
+                            + ctagsLine("CONST_VAL", smallJava.toString(), 4, "constant")
+                            + ctagsLine("ENUM_VAL", smallJava.toString(), 4, "enumConstant")
+                            + ctagsLine("propVal", smallJava.toString(), 4, "property")
+                            + ctagsLine("localVar", smallJava.toString(), 4, "variable")
+                            + ctagsLine("memberVal", smallJava.toString(), 4, "member")
+                            + ctagsLine("enumeratorVal", smallJava.toString(), 4, "enumerator")
                             + ctagsLine("execute", smallJava.toString(), 5, "method")
                             + ctagsLine("submitPlan", smallJava.toString(), 6, "method"),
                     "", false);
@@ -108,6 +115,26 @@ class RepoMapPackerServiceTest {
         assertEquals("test-project", snapshot.get().projectName());
         assertEquals(content, snapshot.get().content());
         assertTrue(snapshot.get().estimatedTokens() > 0);
+
+        Path typesFile = Files.writeString(srcDir.resolve("Types.java"), String.join(nl, "public interface Types {",
+                "    record Rec(int x) {}", "    enum Mode { FAST }", "    int CONST = 1;", "    void run();", "}"));
+        String skeleton = RepoMapPackerService.formatSkeletonLines(typesFile,
+                new ArrayList<>(List.of(
+                        new org.roxycode.app.ai.services.CtagsRunner.CtagsEntry("tag", "Types", typesFile.toString(),
+                                "interface", 1, 6, null, null),
+                        new org.roxycode.app.ai.services.CtagsRunner.CtagsEntry("tag", "Rec", typesFile.toString(),
+                                "record", 2, 2, null, null),
+                        new org.roxycode.app.ai.services.CtagsRunner.CtagsEntry("tag", "Mode", typesFile.toString(),
+                                "enum", 3, 3, null, null),
+                        new org.roxycode.app.ai.services.CtagsRunner.CtagsEntry("tag", "FAST", typesFile.toString(),
+                                "enumConstant", 3, 3, null, null),
+                        new org.roxycode.app.ai.services.CtagsRunner.CtagsEntry("tag", "CONST", typesFile.toString(),
+                                "constant", 4, 4, null, null),
+                        new org.roxycode.app.ai.services.CtagsRunner.CtagsEntry("tag", "run", typesFile.toString(),
+                                "method", 5, 5, null, null))));
+        SwingTestUtils.assertContainsAll(skeleton, "1: public interface Types {", "2: record Rec(int x) {}",
+                "3: enum Mode { FAST }", "5: void run();");
+        SwingTestUtils.assertContainsNone(skeleton, "4: int CONST = 1;");
     }
 
     @Test

@@ -146,16 +146,27 @@ class PromptServiceTest {
         assertFalse(promptService.loadPhasePrompt(WorkflowPhase.PLAN).contains("${maxTurns}"));
         assertFalse(promptService.loadPhasePrompt(WorkflowPhase.CODE).contains("${maxTurns}"));
         assertFalse(promptService.loadPhasePrompt(WorkflowPhase.REVIEW).contains("${maxTurns}"));
-        SwingTestUtils.assertContainsAll(promptService.buildSystemPrompt(WorkflowPhase.CODE), stable,
-                "REPO MAP CONTENT", session);
+        String fullSystemPrompt = promptService.buildSystemPrompt(WorkflowPhase.CODE);
+        String codePhasePrompt = promptService.loadPhasePrompt(WorkflowPhase.CODE);
+        SwingTestUtils.assertContainsAll(fullSystemPrompt, stable, "REPO MAP CONTENT", codePhasePrompt, session);
+        int stableIdx = fullSystemPrompt.indexOf(stable);
+        int repoMapIdx = fullSystemPrompt.indexOf("## REPOSITORY MAP");
+        int phasePromptIdx = fullSystemPrompt.indexOf(codePhasePrompt);
+        int sessionIdx = fullSystemPrompt.indexOf("## SESSION CONTEXT");
+        assertTrue(stableIdx >= 0 && stableIdx < repoMapIdx);
+        assertTrue(repoMapIdx < phasePromptIdx);
+        assertTrue(phasePromptIdx < sessionIdx);
 
         ImplementationPlan plan = new ImplementationPlan("Test Plan", "Goal", List.of("Req 1"),
                 List.of(new ImplementationPlan.TechStep("Update prompts", true),
                         new ImplementationPlan.TechStep("Update PlanService", false)),
-                true, null, null, null, null, null);
+                true, null, null, null, null, List.of(new ImplementationPlan.LogEntry("2026-04-06T12:05:30Z",
+                        "Reviewer", "REVIEW -> CODE: Fix edge case")));
         when(planService.getCurrentPlan()).thenReturn(plan);
         SwingTestUtils.assertContainsAll(promptService.getSessionContext(WorkflowPhase.CODE),
-                "## CURRENT PLAN PROGRESS", "- [x] 0. ~~Update prompts~~", "- [ ] 1. Update PlanService");
+                "## CURRENT PLAN PROGRESS", "**Title:** Test Plan", "**Goal:** Goal", "### Requirements", "- Req 1",
+                "### Technical Steps", "- [x] 0. ~~Update prompts~~", "- [ ] 1. Update PlanService", "### Handoff Log",
+                "- [2026-04-06 12:05:30] Reviewer: REVIEW -> CODE: Fix edge case");
 
         clearInvocations(gitService);
         when(jexlServiceRegistry.isGitAvailable()).thenReturn(false);

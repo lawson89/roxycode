@@ -192,21 +192,21 @@ public class PromptService {
         }
         ImplementationPlan currentPlan = planService.getCurrentPlan();
         if (currentPlan != null) {
-            sb.append(HEADER_CURRENT_PLAN_PROGRESS).append(currentPlan.formatStepsMarkdown()).append("\n");
+            sb.append(HEADER_CURRENT_PLAN_PROGRESS).append(currentPlan.formatPromptContextMarkdown()).append("\n");
         }
         return sb.toString();
     }
 
     public String buildSystemPrompt(WorkflowPhase phase) {
         WorkflowPhase currentPhase = Objects.requireNonNullElseGet(phase, planService::getCurrentPhase);
-        StringBuilder systemPrompt = new StringBuilder(getStableContext()).append(NEWLINE_DOUBLE)
-                .append(loadPhasePrompt(currentPhase));
+        StringBuilder systemPrompt = new StringBuilder(getStableContext());
 
         EditorResult repoMap = repoMapPackerService.generateRepoMap();
         if (repoMap != null && repoMap.success()) {
-            systemPrompt.append(HEADER_REPO_MAP).append(repoMap.content()).append("\n");
+            systemPrompt.append(HEADER_REPO_MAP).append(repoMap.content()).append((char) 10);
         }
-        systemPrompt.append(getSessionContext(currentPhase));
+        systemPrompt.append(NEWLINE_DOUBLE).append(loadPhasePrompt(currentPhase))
+                .append(getSessionContext(currentPhase));
         return systemPrompt.toString();
     }
 

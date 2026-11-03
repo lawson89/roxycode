@@ -39,6 +39,8 @@ public class RepoMapPackerService {
     private static final char LF = 10;
     static final int MAX_SIGNATURE_CHARS = 240;
 
+    static final Set<String> EXCLUDED_SKELETON_KINDS = Set.of("field", "constant", "enumconstant", "property",
+            "variable", "member", "enumerator");
     static final Set<String> SOURCE_EXTENSIONS = Set
             .of("java,py,ts,tsx,js,jsx,go,rs,c,cpp,cc,cxx,h,hpp,cs,rb,php,kt,kts,swift,scala".split(","));
     private static final List<String> TEST_DIR_MARKERS = List.of("src/test/", "test/", "tests/", "__tests__/");
@@ -290,6 +292,9 @@ public class RepoMapPackerService {
             StringBuilder skeleton = new StringBuilder();
             int lastLine = 0;
             for (CtagsEntry tag : tags) {
+                if (tag.kind() != null && EXCLUDED_SKELETON_KINDS.contains(StringUtils.lowerCase(tag.kind()))) {
+                    continue;
+                }
                 int tagLine = tag.line();
                 if (tagLine <= lastLine) {
                     continue;
