@@ -23,10 +23,19 @@ class ContextManagerPanelTest {
         Path projPath = Path.of("/tmp/docs/old.md");
         ContextFileItem projItem = new ContextFileItem("/tmp/docs", "old.md", projPath);
 
+        org.roxycode.app.service.ProjectService.ReferenceFolderMount globalMount = new org.roxycode.app.service.ProjectService.ReferenceFolderMount(
+                "shared-lib", "/global/shared-lib", Path.of("/global/shared-lib"), true);
+        org.roxycode.app.service.ProjectService.ReferenceFolderMount projMount = new org.roxycode.app.service.ProjectService.ReferenceFolderMount(
+                "billing-service", "/tmp/billing-service", Path.of("/tmp/billing-service"), false);
+
         when(promptService.getGlobalContextFolders()).thenReturn(List.of("/global"));
         when(promptService.listGlobalContextFiles()).thenReturn(List.of(globalItem));
+        when(promptService.getGlobalReferenceFolders()).thenReturn(List.of("/global/shared-lib"));
+        when(promptService.listGlobalReferenceFolderMounts()).thenReturn(List.of(globalMount));
         when(promptService.getProjectContextFolders()).thenReturn(List.of("/tmp/docs"));
         when(promptService.listProjectContextFiles()).thenReturn(List.of(projItem));
+        when(promptService.getProjectReferenceFolders()).thenReturn(List.of("/tmp/billing-service"));
+        when(promptService.listProjectReferenceFolderMounts()).thenReturn(List.of(projMount));
 
         ContextManagerPanel panel = new ContextManagerPanel(promptService);
         ContextManagerPanel.ContextScopeColumn globalCol = panel.globalColumn;
@@ -36,8 +45,22 @@ class ContextManagerPanelTest {
 
         assertEquals("/global", globalCol.folderListModel.getElementAt(0));
         assertEquals("rules.yaml", globalCol.fileListModel.getElementAt(0).fileName());
+        assertEquals(globalMount, globalCol.referenceFolderListModel.getElementAt(0));
         assertEquals("/tmp/docs", projCol.folderListModel.getElementAt(0));
         assertEquals("old.md", projCol.fileListModel.getElementAt(0).fileName());
+        assertEquals(projMount, projCol.referenceFolderListModel.getElementAt(0));
+
+        JLabel refCellLabel = assertInstanceOf(JLabel.class,
+                SwingTestUtils.renderListCell(projCol.referenceFolderList, 0, false));
+        assertEquals("@billing-service (/tmp/billing-service)", refCellLabel.getText());
+
+        assertFalse(projCol.btnRemoveReferenceFolder.isEnabled());
+        SwingTestUtils.runOnEdt(() -> projCol.referenceFolderList.setSelectedIndex(0));
+        assertTrue(projCol.btnRemoveReferenceFolder.isEnabled());
+        SwingTestUtils.awaitFuture(projCol.addReferenceFolderAsync("/tmp/auth-service"));
+        verify(promptService).setProjectReferenceFolders(List.of("/tmp/billing-service", "/tmp/auth-service"));
+        SwingTestUtils.awaitFuture(projCol.removeReferenceFolderAsync("/tmp/billing-service"));
+        verify(promptService).setProjectReferenceFolders(List.of());
 
         assertFalse(globalCol.btnRemoveFolder.isEnabled());
         SwingTestUtils.runOnEdt(() -> globalCol.folderList.setSelectedIndex(0));

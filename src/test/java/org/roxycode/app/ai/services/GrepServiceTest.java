@@ -38,7 +38,10 @@ class GrepServiceTest {
         when(projectService.hasActiveProject()).thenReturn(true);
         when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
         lenient().when(projectService.resolvePath(any())).thenCallRealMethod();
+        lenient().when(projectService.resolveReadPath(any())).thenCallRealMethod();
         lenient().when(projectService.resolveRelativePath(any())).thenCallRealMethod();
+        lenient().when(projectService.resolveSearchTarget(any())).thenCallRealMethod();
+        lenient().when(projectService.findReferenceFolderMount(any())).thenCallRealMethod();
         fileReadService = new FileReadService(projectService);
         grepService = new GrepService(projectService, fileReadService);
     }
@@ -207,6 +210,47 @@ class GrepServiceTest {
             runner.verify(() -> ProcessRunner.run(
                     eq(List.of("rg", "--vimgrep", "--no-heading", "--color=never", "-F", "--", "operator+", ".")),
                     eq(tempDir), eq(false)));
+        }
+    }
+
+    @Test
+    void testReferenceFolderGrepListFilesFindMatchingAndReadMatchingPrefixOutputsWithAlias() throws IOException {
+        Path refRoot = Files.createDirectories(tempDir.resolve("ext-billing"));
+        Path refSrc = Files.createDirectories(refRoot.resolve("src"));
+        Files.writeString(refSrc.resolve("Invoice.java"), "public class Invoice {}");
+        ProjectService.ReferenceFolderMount mount = new ProjectService.ReferenceFolderMount("billing-service",
+                refRoot.toString(), refRoot, false);
+        when(projectService.getReferenceFolderMounts()).thenReturn(List.of(mount));
+
+        try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
+            runner.when(() -> ProcessRunner.run(eq(List.of("rg", "--files", "--color=never")), eq(refRoot), eq(false)))
+                    .thenReturn(new ProcessResult(0, "./src/Invoice.java" + NL, "", false));
+            assertEquals(List.of("@billing-service/src/Invoice.java"), grepService.listFiles("@billing-service"));
+
+            runner.when(() -> ProcessRunner.run(
+                    eq(List.of("rg", "-l", "--color=never", "-g", "*.java", "--", "Invoice", "src")), eq(refRoot),
+                    eq(true))).thenReturn(new ProcessResult(0, "src/Invoice.java" + NL, "", false));
+
+            List<String> matched = grepService.findMatchingFiles("Invoice", "@billing-service/src", "*.java");
+            assertEquals(List.of("@billing-service/src/Invoice.java"), matched);
+
+            Map<String, String> readMatched = grepService.readMatchingFiles("Invoice", "@billing-service/src",
+                    "*.java");
+            assertEquals(Map.of("@billing-service/src/Invoice.java", "public class Invoice {}"), readMatched);
+
+            runner.when(() -> ProcessRunner.run(eq(List.of("rg", "--vimgrep", "--no-heading", "--color=never", "-g",
+                    "*.java", "--", "Invoice", "src")), eq(refRoot), eq(true)))
+                    .thenReturn(new ProcessResult(0, "src/Invoice.java:1:14:public class Invoice {}" + NL, "", false));
+            EditorResult grepRes = grepService.grep("Invoice", "@billing-service/src", "*.java");
+            assertTrue(grepRes.success());
+            assertEquals("@billing-service/src/Invoice.java:1:14:public class Invoice {}", grepRes.content());
+
+            runner.when(() -> ProcessRunner.run(
+                    eq(List.of("rg", "--vimgrep", "--no-heading", "--color=never", "-w", "--", "Invoice", ".")),
+                    eq(refRoot), eq(false))).thenReturn(
+                            new ProcessResult(0, "./src/Invoice.java:1:14:public class Invoice {}" + NL, "", false));
+            assertEquals(List.of("@billing-service/src/Invoice.java:1:14:public class Invoice {}"),
+                    grepService.grepWordMatches("Invoice", "@billing-service", true));
         }
     }
 

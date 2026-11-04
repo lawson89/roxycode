@@ -27,6 +27,8 @@ public class FileReadServiceTest {
         projectService = mock(ProjectService.class);
         when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
         lenient().when(projectService.resolvePath(any())).thenCallRealMethod();
+        lenient().when(projectService.resolveReadPath(any())).thenCallRealMethod();
+        lenient().when(projectService.findReferenceFolderMount(any())).thenCallRealMethod();
         fileReadService = new FileReadService(projectService);
     }
 
@@ -201,5 +203,39 @@ public class FileReadServiceTest {
         assertEquals(totalLines, fileReadService.getLineCount("huge.txt"));
         String tailLines = fileReadService.readLines("huge.txt", 1199, 1200);
         assertEquals("1199: L1199:" + linePayload + nl + "1200: L1200:" + linePayload, tailLines);
+    }
+
+    @Test
+    void testReadAndListFromReferenceFolderAliasAndBlockTraversal() throws IOException {
+        String nl = String.valueOf((char) 10);
+        Path refRoot = Files.createDirectories(tempDir.resolve("external-billing"));
+        Path nestedDir = Files.createDirectories(refRoot.resolve("src/main"));
+        Files.writeString(nestedDir.resolve("Invoice.java"), "package billing;" + nl + "public class Invoice {}" + nl);
+        ProjectService.ReferenceFolderMount mount = new ProjectService.ReferenceFolderMount("billing-service",
+                refRoot.toString(), refRoot, false);
+        when(projectService.getReferenceFolderMounts()).thenReturn(List.of(mount));
+
+        assertTrue(fileReadService.fileExists("@billing-service"));
+        assertTrue(fileReadService.fileExists("@billing-service/src/main/Invoice.java"));
+        assertFalse(fileReadService.fileExists("@billing-service/src/main/Missing.java"));
+
+        assertEquals(List.of("src/"), fileReadService.listDirectory("@billing-service"));
+        assertEquals(List.of("Invoice.java"), fileReadService.listDirectory("@billing-service/src/main"));
+
+        assertEquals("package billing;" + nl + "public class Invoice {}" + nl,
+                fileReadService.readFile("@billing-service/src/main/Invoice.java"));
+        assertEquals("1: package billing;" + nl + "2: public class Invoice {}",
+                fileReadService.readFileNumbered("@billing-service/src/main/Invoice.java"));
+        assertEquals("2: public class Invoice {}",
+                fileReadService.readLines("@billing-service/src/main/Invoice.java", 2, 2));
+        assertEquals(2, fileReadService.getLineCount("@billing-service/src/main/Invoice.java"));
+
+        Map<String, String> batch = fileReadService.readFiles("@billing-service/src/main/Invoice.java",
+                "@billing-service/../../etc/passwd");
+        assertEquals("package billing;" + nl + "public class Invoice {}" + nl,
+                batch.get("@billing-service/src/main/Invoice.java"));
+        assertTrue(batch.get("@billing-service/../../etc/passwd").startsWith("Error: Path traversal attempt detected"));
+
+        assertThrows(SecurityException.class, () -> fileReadService.readFile("@billing-service/../../etc/passwd"));
     }
 }

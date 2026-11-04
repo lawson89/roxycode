@@ -2,15 +2,22 @@ package org.roxycode.app.service;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AiConfig;
+import org.roxycode.app.events.ContextChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ThinkingLevel;
+import org.roxycode.app.service.PromptService.ProjectContextConfig;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,6 +29,8 @@ public class ProjectService {
     private static final Logger log = LoggerFactory.getLogger(ProjectService.class);
     private static final String PROJECTS_SUBDIR = "projects";
     private static final int MAX_PROJECT_NAME_LENGTH = 40;
+    private static final String DEFAULT_REF_ALIAS = "ref";
+    private static final String CONTEXT_SEPARATOR = "--";
     static final String PROJECT_CONFIG_FILE = "project.toml";
     static final String ROXYCODE_TMP_DIR = ".roxycode/tmp";
     private static final String ROXYCODE_TMP_PREFIX = ".roxycode/tmp/";
@@ -36,6 +45,87 @@ public class ProjectService {
             geminiModel = StringUtils.trimToEmpty(geminiModel);
             thinkingLevel = normalizeProjectThinkingLevel(thinkingLevel);
         }
+    }
+
+    public record ReferenceFolderMount(String alias, String configuredPath, Path rootPath, boolean globalScope) {
+        public ReferenceFolderMount(String alias, Path rootPath, boolean globalScope) {
+            this(alias, rootPathToString(rootPath), rootPath, globalScope);
+        }
+
+        public ReferenceFolderMount {
+            alias = StringUtils.removeStart(StringUtils.trimToEmpty(alias), "@");
+            configuredPath = StringUtils.trimToEmpty(configuredPath);
+            if (rootPath != null) {
+                rootPath = rootPath.toAbsolutePath().normalize();
+            }
+        }
+
+        private static String rootPathToString(Path rootPath) {
+            if (rootPath == null) {
+                return "";
+            }
+            return rootPath.toString();
+        }
+
+        public String aliasPrefix() {
+            return "@" + alias;
+        }
+
+        @Override
+        public String toString() {
+            return "@" + alias + " (" + configuredPath + ")";
+        }
+    }
+
+    public record ResolvedSearchTarget(Path workingDir, String relativeTarget, String prefixAlias) {
+        public ResolvedSearchTarget {
+            if (workingDir != null) {
+                workingDir = workingDir.toAbsolutePath().normalize();
+            }
+            relativeTarget = StringUtils.defaultIfBlank(relativeTarget, ".");
+            prefixAlias = StringUtils.trimToEmpty(prefixAlias);
+        }
+
+        public boolean isReferenceMount() {
+            return !prefixAlias.isEmpty();
+        }
+
+        public String formatResultPath(String rawRelativePath) {
+            String norm = stripLeadingDotSlash(
+                    PathUtils.normalizeRelativePath(StringUtils.trimToEmpty(rawRelativePath)));
+            if (prefixAlias.isEmpty()) {
+                return norm;
+            }
+            if (norm.isEmpty() || ".".equals(norm)) {
+                return prefixAlias;
+            }
+            if (norm.equals(prefixAlias) || norm.startsWith(prefixAlias + "/")) {
+                return norm;
+            }
+            return prefixAlias + "/" + norm;
+        }
+
+        public String formatMatchLine(String rawLine) {
+            if (rawLine == null) {
+                return "";
+            }
+            if (CONTEXT_SEPARATOR.equals(rawLine.trim())) {
+                return CONTEXT_SEPARATOR;
+            }
+            String normalized = PathUtils.normalizeRelativePath(rawLine);
+            String stripped = stripLeadingDotSlash(normalized);
+            if (prefixAlias.isEmpty()) {
+                return stripped;
+            }
+            if (stripped.startsWith(prefixAlias + "/") || stripped.startsWith(prefixAlias + ":")
+                    || stripped.startsWith(prefixAlias + "-")) {
+                return stripped;
+            }
+            return prefixAlias + "/" + stripped;
+        }
+    }
+
+    private record ParsedReferencePath(ReferenceFolderMount mount, String subPath) {
     }
 
     private static String normalizeProjectThinkingLevel(String rawThinkingLevel) {
@@ -195,16 +285,206 @@ public class ProjectService {
         return projectService.getCurrentProjectRoot().toAbsolutePath().normalize().toString();
     }
 
+    public List<String> getGlobalReferenceFolders() {
+        if (settingsService == null || settingsService.getSettings() == null) {
+            return List.of();
+        }
+        return PromptService.normalizeFolderList(settingsService.getSettings().getGlobalReferenceFolders());
+    }
+
+    public void setGlobalReferenceFolders(List<String> folders) {
+        if (settingsService == null) {
+            return;
+        }
+        AppSettings settings = settingsService.getSettings();
+        if (settings != null) {
+            settings.setGlobalReferenceFolders(PromptService.normalizeFolderList(folders));
+            settingsService.saveSettings();
+            eventPublisher.publishEvent(new ContextChangedEvent(true));
+        }
+    }
+
+    public List<String> getProjectReferenceFolders() {
+        if (!hasActiveProject()) {
+            return List.of();
+        }
+        ProjectContextConfig config = PathUtils.readTomlOrDefault(
+                resolveProjectDataPath(PromptService.PROJECT_CONTEXT_CONFIG_FILE), ProjectContextConfig.class,
+                ProjectContextConfig.EMPTY, AiConfig.SHARED_TOML_MAPPER);
+        return PromptService.normalizeFolderList(config.referenceFolders());
+    }
+
+    public void setProjectReferenceFolders(List<String> folders) {
+        if (!hasActiveProject()) {
+            throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
+        }
+        Path configFile = resolveProjectDataPath(PromptService.PROJECT_CONTEXT_CONFIG_FILE);
+        ProjectContextConfig existing = PathUtils.readTomlOrDefault(configFile, ProjectContextConfig.class,
+                ProjectContextConfig.EMPTY, AiConfig.SHARED_TOML_MAPPER);
+        try {
+            PathUtils.writeToml(configFile,
+                    new ProjectContextConfig(existing.folders(), PromptService.normalizeFolderList(folders)),
+                    AiConfig.SHARED_TOML_MAPPER);
+            eventPublisher.publishEvent(new ContextChangedEvent(false));
+        } catch (IOException e) {
+            log.error("Failed to save project context config {}: {}", configFile, e.getMessage());
+            throw new UncheckedIOException("Failed to save project context config", e);
+        }
+    }
+
+    public List<ReferenceFolderMount> getReferenceFolderMounts() {
+        return resolveReferenceFolderMounts(getProjectReferenceFolders(), getGlobalReferenceFolders(),
+                getCurrentProjectRoot());
+    }
+
+    public ReferenceFolderMount findReferenceFolderMount(String alias) {
+        String cleanAlias = StringUtils.removeStart(StringUtils.trimToEmpty(alias), "@");
+        if (cleanAlias.isEmpty()) {
+            return null;
+        }
+        for (ReferenceFolderMount mount : getReferenceFolderMounts()) {
+            if (mount.alias().equalsIgnoreCase(cleanAlias)) {
+                return mount;
+            }
+        }
+        return null;
+    }
+
+    public static List<ReferenceFolderMount> resolveReferenceFolderMounts(List<String> projectFolders,
+            List<String> globalFolders, Path projectRoot) {
+        return resolveReferenceFolderMountsInternal(projectFolders, globalFolders, projectRoot, true);
+    }
+
+    static List<ReferenceFolderMount> resolveReferenceFolderMountsInternal(List<String> projectFolders,
+            List<String> globalFolders, Path projectRoot, boolean deduplicateAcrossScopes) {
+        List<ReferenceFolderMount> mounts = new ArrayList<>();
+        Set<String> usedAliases = new HashSet<>();
+        Set<Path> seenRootPaths = new HashSet<>();
+
+        appendScopeMounts(projectFolders, false, projectRoot, mounts, usedAliases, seenRootPaths, true);
+        if (!deduplicateAcrossScopes) {
+            seenRootPaths.clear();
+        }
+        appendScopeMounts(globalFolders, true, projectRoot, mounts, usedAliases, seenRootPaths, true);
+        return List.copyOf(mounts);
+    }
+
+    private static void appendScopeMounts(List<String> rawFolders, boolean globalScope, Path projectRoot,
+            List<ReferenceFolderMount> targetMounts, Set<String> usedAliases, Set<Path> seenRootPaths,
+            boolean deduplicatePaths) {
+        if (rawFolders == null || rawFolders.isEmpty()) {
+            return;
+        }
+        for (String rawFolder : rawFolders) {
+            if (rawFolder == null || rawFolder.isBlank()) {
+                continue;
+            }
+            String configured = rawFolder.trim();
+            Path resolved = resolveMountFolderPath(configured, !globalScope, projectRoot);
+            if (resolved == null) {
+                continue;
+            }
+            if (deduplicatePaths && !seenRootPaths.add(resolved)) {
+                continue;
+            }
+            String baseAlias = deriveBaseAlias(resolved);
+            String uniqueAlias = allocateUniqueAlias(baseAlias, usedAliases);
+            targetMounts.add(new ReferenceFolderMount(uniqueAlias, configured, resolved, globalScope));
+        }
+    }
+
+    static Path resolveMountFolderPath(String folderStr, boolean resolveRelativeToProject, Path projectRoot) {
+        try {
+            Path path = Path.of(folderStr);
+            if (!path.isAbsolute()) {
+                if (!resolveRelativeToProject || projectRoot == null) {
+                    return null;
+                }
+                path = projectRoot.resolve(path);
+            }
+            return path.toAbsolutePath().normalize();
+        } catch (InvalidPathException e) {
+            log.warn("Invalid reference folder path '{}': {}", folderStr, e.getMessage());
+            return null;
+        }
+    }
+
+    static String deriveBaseAlias(Path normalizedPath) {
+        String rawName = "";
+        if (normalizedPath != null && normalizedPath.getFileName() != null) {
+            rawName = normalizedPath.getFileName().toString();
+        }
+        return PathUtils.sanitizeSlug(rawName, MAX_PROJECT_NAME_LENGTH, DEFAULT_REF_ALIAS);
+    }
+
+    private static String allocateUniqueAlias(String baseAlias, Set<String> usedAliases) {
+        if (usedAliases.add(baseAlias)) {
+            return baseAlias;
+        }
+        int suffix = 2;
+        while (true) {
+            String candidate = baseAlias + "-" + suffix;
+            if (usedAliases.add(candidate)) {
+                return candidate;
+            }
+            suffix++;
+        }
+    }
+
+    public static boolean isReferencePath(String relativePath) {
+        if (relativePath == null) {
+            return false;
+        }
+        String normalized = stripLeadingDotSlash(PathUtils.normalizeRelativePath(relativePath.trim()));
+        return normalized.startsWith("@");
+    }
+
+    static String stripLeadingDotSlash(String normalized) {
+        String result = StringUtils.defaultString(normalized);
+        while (result.startsWith("./")) {
+            result = result.substring(2);
+        }
+        return result;
+    }
+
+    private ParsedReferencePath parseReferencePath(String relativePath) {
+        String normalized = stripLeadingDotSlash(
+                PathUtils.normalizeRelativePath(StringUtils.trimToEmpty(relativePath)));
+        if (!normalized.startsWith("@")) {
+            throw new IllegalArgumentException("Not a reference folder path: " + relativePath);
+        }
+        String withoutAt = normalized.substring(1);
+        int slashIdx = withoutAt.indexOf('/');
+        String alias;
+        String subPath;
+        if (slashIdx < 0) {
+            alias = withoutAt;
+            subPath = ".";
+        } else {
+            alias = withoutAt.substring(0, slashIdx);
+            subPath = StringUtils.defaultIfBlank(withoutAt.substring(slashIdx + 1), ".");
+        }
+        if (alias.isBlank()) {
+            throw new IllegalArgumentException("Invalid reference folder path: " + relativePath);
+        }
+        ReferenceFolderMount mount = findReferenceFolderMount(alias);
+        if (mount == null) {
+            throw new IllegalArgumentException(
+                    "Unknown reference folder alias '@" + alias + "' in path: " + relativePath);
+        }
+        return new ParsedReferencePath(mount, subPath);
+    }
+
     public Path resolvePath(String relativePath) {
+        if (isReferencePath(relativePath)) {
+            throw new SecurityException("Reference folder path is strictly read-only: " + relativePath);
+        }
         Path projectRoot = getCurrentProjectRoot();
         if (projectRoot == null) {
             throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
         if (relativePath != null) {
-            String normalized = PathUtils.normalizeRelativePath(relativePath.trim());
-            while (normalized.startsWith("./")) {
-                normalized = normalized.substring(2);
-            }
+            String normalized = stripLeadingDotSlash(PathUtils.normalizeRelativePath(relativePath.trim()));
             if (ROXYCODE_TMP_DIR.equals(normalized) || normalized.startsWith(ROXYCODE_TMP_PREFIX)) {
                 Path tmpRoot = resolveProjectDataPath(DATA_TMP_DIR);
                 String subPath = StringUtils.defaultIfEmpty(StringUtils.removeStart(normalized, ROXYCODE_TMP_PREFIX),
@@ -218,7 +498,65 @@ public class ProjectService {
         return resolveWithinSandbox(projectRoot, relativePath);
     }
 
+    public Path resolveReadPath(String relativePath) {
+        if (isReferencePath(relativePath)) {
+            ParsedReferencePath parsed = parseReferencePath(relativePath);
+            return resolveWithinSandbox(parsed.mount().rootPath(), parsed.subPath());
+        }
+        return resolvePath(relativePath);
+    }
+
+    public ResolvedSearchTarget resolveSearchTarget(String relativePath) {
+        if (isReferencePath(relativePath)) {
+            ParsedReferencePath parsed = parseReferencePath(relativePath);
+            Path root = parsed.mount().rootPath();
+            Path resolved = resolveWithinSandbox(root, parsed.subPath());
+            String relTarget = StringUtils
+                    .defaultIfEmpty(PathUtils.normalizeRelativePath(root.relativize(resolved).toString()), ".");
+            return new ResolvedSearchTarget(root, relTarget, parsed.mount().aliasPrefix());
+        }
+        Path projectRoot = getCurrentProjectRoot();
+        if (projectRoot == null) {
+            throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
+        }
+        Path root = projectRoot.toAbsolutePath().normalize();
+        String relTarget = resolveRelativePath(relativePath);
+        return new ResolvedSearchTarget(root, relTarget, "");
+    }
+
+    public String formatReadDisplayPath(Path resolvedPath, String fallbackRelativePath) {
+        if (resolvedPath != null) {
+            Path normalizedTarget = resolvedPath.toAbsolutePath().normalize();
+            List<ReferenceFolderMount> mounts = Objects.requireNonNullElse(getReferenceFolderMounts(), List.of());
+            for (ReferenceFolderMount mount : mounts) {
+                if (mount != null && mount.rootPath() != null && normalizedTarget.startsWith(mount.rootPath())) {
+                    String rel = PathUtils
+                            .normalizeRelativePath(mount.rootPath().relativize(normalizedTarget).toString());
+                    if (rel.isEmpty()) {
+                        return mount.aliasPrefix();
+                    }
+                    return mount.aliasPrefix() + "/" + rel;
+                }
+            }
+            Path root = getCurrentProjectRoot();
+            if (root != null) {
+                Path normalizedRoot = root.toAbsolutePath().normalize();
+                if (normalizedTarget.startsWith(normalizedRoot)) {
+                    String rel = PathUtils
+                            .normalizeRelativePath(normalizedRoot.relativize(normalizedTarget).toString());
+                    if (!rel.isEmpty()) {
+                        return rel;
+                    }
+                }
+            }
+        }
+        return stripLeadingDotSlash(PathUtils.normalizeRelativePath(StringUtils.trimToEmpty(fallbackRelativePath)));
+    }
+
     public String resolveRelativePath(String relativePath) {
+        if (isReferencePath(relativePath)) {
+            return resolveSearchTarget(relativePath).relativeTarget();
+        }
         Path projectRoot = getCurrentProjectRoot();
         if (projectRoot == null) {
             throw new IllegalStateException(NO_PROJECT_ROOT_MSG);

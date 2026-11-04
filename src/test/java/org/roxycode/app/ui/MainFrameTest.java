@@ -274,7 +274,7 @@ class MainFrameTest {
             assertEquals(AppIconRenderer.AgentStatus.BUSY, frame.resolveCurrentStatus());
             frame.updateWorkspaceState();
             assertEquals(AppIconRenderer.AgentStatus.BUSY, frame.currentStatus);
-            assertEquals("⟳ [Working] test-project — RoxyCode", frame.getTitle());
+            assertEquals("test-project — RoxyCode", frame.getTitle());
 
             // Test BUSY state in Task mode with plan phase
             frame.sidebar.setQaBusy(false);
@@ -283,14 +283,14 @@ class MainFrameTest {
             assertEquals(AppIconRenderer.AgentStatus.BUSY, frame.resolveCurrentStatus());
             frame.updateWorkspaceState();
             assertEquals(AppIconRenderer.AgentStatus.BUSY, frame.currentStatus);
-            assertEquals("⟳ [PLAN] test-project — RoxyCode", frame.getTitle());
+            assertEquals("test-project — RoxyCode", frame.getTitle());
 
             // Test WAITING_FEEDBACK state (takes precedence over BUSY)
             frame.sidebar.setTaskWaitingApproval(true);
             assertEquals(AppIconRenderer.AgentStatus.WAITING_FEEDBACK, frame.resolveCurrentStatus());
             frame.updateWorkspaceState();
             assertEquals(AppIconRenderer.AgentStatus.WAITING_FEEDBACK, frame.currentStatus);
-            assertEquals("● [Action Needed] test-project — RoxyCode", frame.getTitle());
+            assertEquals("test-project — RoxyCode", frame.getTitle());
 
             // Test returning to IDLE
             frame.sidebar.setTaskWaitingApproval(false);

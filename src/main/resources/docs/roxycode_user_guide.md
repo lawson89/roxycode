@@ -30,10 +30,13 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
 
 ## 2. Context, Agent Memory & Repo Map
 
-### Context Folders (Context Sidebar View)
-- Manages external read-only folders whose top-level text/markdown files are automatically injected into Roxy's stable system prompt:
+### Context & Reference Folders (Context Sidebar View)
+- **Context Folders (Auto-Injected Docs)**: Manages external read-only folders whose top-level text/markdown files are automatically injected into Roxy's stable system prompt:
   - **Global Context Folders**: Applied across all projects (~/.roxycode/settings.toml).
   - **Project Context Folders**: Specific to the active repository (<projectDataDir>/context.toml), supporting project-relative or absolute paths.
+- **Reference Folders (Read-Only `@alias` Source Code)**: Mounts external source repositories or directories as read-only `@<alias>` prefixes (e.g., `@billing-service`) without bloating the system prompt with full file contents:
+  - Listed concisely under `## READ-ONLY REFERENCE FOLDERS` in the stable system prompt.
+  - Addressable on demand via `@<alias>` or `@<alias>/subpath` in `fileReadService`, `grepService`, and `symbolService`, while strictly blocked from any writes or deletions in `fileEditorService`.
 
 ### Agent Memory (Agent Memory Sidebar View)
 - Two-tier persistent memory (memoryService) shared across all phases:

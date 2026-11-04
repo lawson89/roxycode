@@ -111,6 +111,25 @@ class FileEditorServiceTest {
         assertTrue(fileEditorService.deleteFile("moved/renamed.txt").success());
         assertEditFails(fileEditorService.deleteFile("nested/dir"), "Cannot delete directory: nested/dir");
         assertThrows(SecurityException.class, () -> fileEditorService.moveFile("../outside.txt", "inside.txt"));
+
+        assertThrows(SecurityException.class, () -> fileEditorService.writeFile("@billing-service/A.java", "x"));
+        assertThrows(SecurityException.class,
+                () -> fileEditorService.replaceBlock("@billing-service/A.java", "a", "b"));
+        assertThrows(SecurityException.class, () -> fileEditorService.replaceBlocks("@billing-service/A.java",
+                List.of(Map.of("target", "a", "replacement", "b"))));
+        assertThrows(SecurityException.class,
+                () -> fileEditorService.replaceLines("@billing-service/A.java", 1, 1, "x"));
+        assertThrows(SecurityException.class, () -> fileEditorService.insertAtLine("@billing-service/A.java", 1, "x"));
+        assertThrows(SecurityException.class, () -> fileEditorService.deleteFile("@billing-service/A.java"));
+        assertThrows(SecurityException.class,
+                () -> fileEditorService.moveFile("@billing-service/A.java", "local.java"));
+        assertThrows(SecurityException.class,
+                () -> fileEditorService.moveFile("copied/copy.txt", "@billing-service/A.java"));
+        assertThrows(SecurityException.class,
+                () -> fileEditorService.copyFile("@billing-service/A.java", "local.java"));
+        assertThrows(SecurityException.class,
+                () -> fileEditorService.copyFile("copied/copy.txt", "@billing-service/A.java"));
+        assertThrows(SecurityException.class, () -> fileEditorService.mkdirs("@billing-service/newdir"));
     }
 
     @Test

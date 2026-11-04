@@ -19,11 +19,11 @@ import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.util.ExceptionUtils;
 
 @AgentService(value = "fileReadService", phases = {"*"})
-@AgentDoc("Provides read-only access to files within the current project.")
+@AgentDoc("Provides read-only access to files within the current project and mounted @<alias> reference folders.")
 public class FileReadService {
 
-    private static final String DOC_FILE_PATH = "The file path relative to the project root";
-    private static final String DOC_FILE_PATHS = "Array of file paths relative to the project root";
+    private static final String DOC_FILE_PATH = "The file path relative to the project root (or '@<alias>/path' for a read-only reference folder)";
+    private static final String DOC_FILE_PATHS = "Array of file paths relative to the project root (or '@<alias>/path' for read-only reference folders)";
     private static final String ERROR_PREFIX = "Error: ";
     static final int BINARY_SNIFF_BYTES = 8000;
     static final int MAX_SINGLE_FILE_CHARS = 100_000;
@@ -55,10 +55,20 @@ public class FileReadService {
         }
     }
 
-    @AgentDoc(value = "Checks if a file or directory exists at the given path relative to the project root.", examples = "fileReadService.fileExists('src/main/java/Main.java')")
+    private Path resolveReadTarget(String relativePath) {
+        Path resolved = projectService.resolveReadPath(relativePath);
+        if (resolved == null && !ProjectService.isReferencePath(relativePath)) {
+            return projectService.resolvePath(relativePath);
+        }
+        return resolved;
+    }
+
+    @AgentDoc(value = "Checks if a file or directory exists at the given path relative to the project root or a mounted @<alias> reference folder.", examples = {
+            "fileReadService.fileExists('src/main/java/Main.java')",
+            "fileReadService.fileExists('@billing-service/src/main/java/Invoice.java')"})
     public boolean fileExists(
-            @AgentDoc("The file or directory path relative to the project root") String relativePath) {
-        return Files.exists(projectService.resolvePath(relativePath));
+            @AgentDoc("The file or directory path relative to the project root (or '@<alias>/path')") String relativePath) {
+        return Files.exists(resolveReadTarget(relativePath));
     }
 
     @AgentDoc(value = "Reads the content of a file at the given path relative to the project root.", examples = "fileReadService.readFile('pom.xml')")
@@ -67,7 +77,7 @@ public class FileReadService {
     }
 
     private String readRawTextFile(String relativePath) throws IOException {
-        Path path = projectService.resolvePath(relativePath);
+        Path path = resolveReadTarget(relativePath);
         if (!Files.isRegularFile(path)) {
             throw new IllegalArgumentException("Error: Path is not a regular file or does not exist: " + relativePath);
         }
@@ -143,7 +153,7 @@ public class FileReadService {
 
     private String readSingleFileForBatch(String relativePath, boolean numbered) {
         try {
-            Path path = projectService.resolvePath(relativePath);
+            Path path = resolveReadTarget(relativePath);
             if (!Files.exists(path)) {
                 return ERROR_PREFIX + "File does not exist: " + relativePath;
             }
@@ -205,10 +215,12 @@ public class FileReadService {
         return listDirectory(".");
     }
 
-    @AgentDoc(value = "Lists the contents of a directory at the given path relative to the project root (subdirectories end with '/').", examples = "fileReadService.listDirectory('src')")
-    public List<String> listDirectory(@AgentDoc("The directory path relative to the project root") String relativePath)
+    @AgentDoc(value = "Lists the contents of a directory at the given path relative to the project root or a mounted @<alias> reference folder (subdirectories end with '/').", examples = {
+            "fileReadService.listDirectory('src')", "fileReadService.listDirectory('@billing-service/src')"})
+    public List<String> listDirectory(
+            @AgentDoc("The directory path relative to the project root (or '@<alias>' / '@<alias>/subpath')") String relativePath)
             throws IOException {
-        Path path = projectService.resolvePath(relativePath);
+        Path path = resolveReadTarget(relativePath);
         if (!Files.isDirectory(path)) {
             throw new IllegalArgumentException("Error: Path is not a directory or does not exist: " + relativePath);
         }

@@ -26,6 +26,7 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
+import org.roxycode.app.service.ProjectService.ReferenceFolderMount;
 import org.roxycode.app.service.PromptService;
 import org.roxycode.app.service.PromptService.ContextFileItem;
 import org.roxycode.app.util.Edt;
@@ -42,9 +43,10 @@ public final class ContextManagerPanel extends JPanel {
     private static final long serialVersionUID = 1L;
 
     static final String PAGE_TITLE = "Context Folders";
-    static final String PAGE_SUBTITLE = "Top-level Markdown and text files in these folders are automatically injected into every AI system prompt as coding guidelines and reference docs.";
+    static final String PAGE_SUBTITLE = "Manage auto-injected Context Folders (top-level Markdown/text docs) and read-only Reference Folders (@alias source directories).";
     static final String GLOBAL_SUBTITLE = "Shared across all projects";
     static final String PROJECT_SUBTITLE = "Scoped to active project";
+    static final String REFERENCE_FOLDERS_SECTION_TITLE = "Reference Folders (Read-Only @alias)";
 
     final JLabel titleLabel;
     final JLabel subtitleLabel;
@@ -85,6 +87,7 @@ public final class ContextManagerPanel extends JPanel {
         Edt.run(() -> {
             projectColumn.clearSelection();
             projectColumn.refreshFoldersAndFiles();
+            globalColumn.refreshFoldersAndFiles();
         });
     }
 
@@ -105,6 +108,7 @@ public final class ContextManagerPanel extends JPanel {
         final JLabel subtitleLabel;
         final JLabel foldersSectionLabel;
         final JLabel filesSectionLabel;
+        final JLabel referenceFoldersSectionLabel;
 
         final DefaultListModel<String> folderListModel = new DefaultListModel<>();
         final JList<String> folderList = new JList<>(folderListModel);
@@ -113,10 +117,20 @@ public final class ContextManagerPanel extends JPanel {
 
         final DefaultListModel<ContextFileItem> fileListModel = new DefaultListModel<>();
         final JList<ContextFileItem> fileList = new JList<>(fileListModel);
-        transient CompletableFuture<FolderAndFilesData> lastRefreshFuture = CompletableFuture
-                .completedFuture(new FolderAndFilesData(List.of(), List.of()));
 
-        record FolderAndFilesData(List<String> folders, List<ContextFileItem> files) {
+        final DefaultListModel<ReferenceFolderMount> referenceFolderListModel = new DefaultListModel<>();
+        final JList<ReferenceFolderMount> referenceFolderList = new JList<>(referenceFolderListModel);
+        final JButton btnAddReferenceFolder = new JButton("Add Reference Folder...");
+        final JButton btnRemoveReferenceFolder = new JButton("Remove");
+
+        transient CompletableFuture<FolderAndFilesData> lastRefreshFuture = CompletableFuture
+                .completedFuture(new FolderAndFilesData(List.of(), List.of(), List.of()));
+
+        record FolderAndFilesData(List<String> folders, List<ContextFileItem> files,
+                List<ReferenceFolderMount> referenceFolders) {
+            FolderAndFilesData(List<String> folders, List<ContextFileItem> files) {
+                this(folders, files, List.of());
+            }
         }
 
         ContextScopeColumn(PromptService promptService, String sectionTitle, boolean globalScope,
@@ -176,10 +190,35 @@ public final class ContextManagerPanel extends JPanel {
             filesPanel.add(filesSectionLabel, BorderLayout.NORTH);
             filesPanel.add(new JScrollPane(fileList), BorderLayout.CENTER);
 
-            JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, foldersPanel, filesPanel);
-            splitPane.setDividerLocation(220);
-            splitPane.setResizeWeight(0.45);
-            add(splitPane, BorderLayout.CENTER);
+            referenceFolderList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+            referenceFolderList.setCellRenderer(createCellRenderer(Codicons.REPO));
+
+            btnAddReferenceFolder.setIconTextGap(6);
+            btnRemoveReferenceFolder.setIconTextGap(6);
+            btnRemoveReferenceFolder.setEnabled(false);
+
+            JPanel referenceFolderButtons = new JPanel(new GridLayout(1, 2, 5, 5));
+            referenceFolderButtons.add(btnAddReferenceFolder);
+            referenceFolderButtons.add(btnRemoveReferenceFolder);
+
+            referenceFoldersSectionLabel = new JLabel(REFERENCE_FOLDERS_SECTION_TITLE);
+            referenceFoldersSectionLabel.setIconTextGap(6);
+
+            JPanel referenceFoldersPanel = new JPanel(new BorderLayout(0, 5));
+            referenceFoldersPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+            referenceFoldersPanel.add(referenceFoldersSectionLabel, BorderLayout.NORTH);
+            referenceFoldersPanel.add(new JScrollPane(referenceFolderList), BorderLayout.CENTER);
+            referenceFoldersPanel.add(referenceFolderButtons, BorderLayout.SOUTH);
+
+            JSplitPane contextSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, foldersPanel, filesPanel);
+            contextSplitPane.setDividerLocation(180);
+            contextSplitPane.setResizeWeight(0.5);
+
+            JSplitPane mainSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, contextSplitPane,
+                    referenceFoldersPanel);
+            mainSplitPane.setDividerLocation(360);
+            mainSplitPane.setResizeWeight(0.65);
+            add(mainSplitPane, BorderLayout.CENTER);
 
             applyScopeStyling();
             setupListeners();
@@ -208,6 +247,13 @@ public final class ContextManagerPanel extends JPanel {
                             setToolTipText(item.filePath().toString());
                         } else {
                             setToolTipText(null);
+                        }
+                    } else if (value instanceof ReferenceFolderMount mount) {
+                        setText(mount.toString());
+                        if (mount.rootPath() != null) {
+                            setToolTipText(mount.rootPath().toString());
+                        } else {
+                            setToolTipText(mount.configuredPath());
                         }
                     } else if (value != null) {
                         setToolTipText(value.toString());
@@ -255,18 +301,24 @@ public final class ContextManagerPanel extends JPanel {
 
             foldersSectionLabel.setIcon(FontIcon.of(Codicons.FOLDER, 14, accent));
             filesSectionLabel.setIcon(FontIcon.of(Codicons.FILE, 14, accent));
+            referenceFoldersSectionLabel.setIcon(FontIcon.of(Codicons.REPO, 14, accent));
 
             btnAddFolder.setIcon(FontIcon.of(Codicons.ADD, 14, accent));
             btnRemoveFolder.setIcon(FontIcon.of(Codicons.TRASH, 14, buttonFg));
+            btnAddReferenceFolder.setIcon(FontIcon.of(Codicons.ADD, 14, accent));
+            btnRemoveReferenceFolder.setIcon(FontIcon.of(Codicons.TRASH, 14, buttonFg));
 
             folderList.repaint();
             fileList.repaint();
+            referenceFolderList.repaint();
         }
 
         void clearSelection() {
             folderList.clearSelection();
             fileList.clearSelection();
+            referenceFolderList.clearSelection();
             btnRemoveFolder.setEnabled(false);
+            btnRemoveReferenceFolder.setEnabled(false);
         }
 
         private void setupListeners() {
@@ -282,6 +334,19 @@ public final class ContextManagerPanel extends JPanel {
                     removeFolderAsync(selectedFolder);
                 }
             });
+
+            referenceFolderList.addListSelectionListener(e -> {
+                if (!e.getValueIsAdjusting()) {
+                    btnRemoveReferenceFolder.setEnabled(referenceFolderList.getSelectedValue() != null);
+                }
+            });
+            btnAddReferenceFolder.addActionListener(e -> chooseAndAddReferenceFolder());
+            btnRemoveReferenceFolder.addActionListener(e -> {
+                ReferenceFolderMount selectedMount = referenceFolderList.getSelectedValue();
+                if (selectedMount != null) {
+                    removeReferenceFolderAsync(selectedMount.configuredPath());
+                }
+            });
         }
 
         private void chooseAndAddFolder() {
@@ -294,6 +359,19 @@ public final class ContextManagerPanel extends JPanel {
             File selectedFolder = UiComponents.chooseDirectory(this, dialogTitle, null);
             if (selectedFolder != null) {
                 addFolderAsync(selectedFolder.getAbsolutePath());
+            }
+        }
+
+        private void chooseAndAddReferenceFolder() {
+            String dialogTitle;
+            if (globalScope) {
+                dialogTitle = "Select Global Reference Folder (Read-Only)";
+            } else {
+                dialogTitle = "Select Project Reference Folder (Read-Only)";
+            }
+            File selectedFolder = UiComponents.chooseDirectory(this, dialogTitle, null);
+            if (selectedFolder != null) {
+                addReferenceFolderAsync(selectedFolder.getAbsolutePath());
             }
         }
 
@@ -314,6 +392,23 @@ public final class ContextManagerPanel extends JPanel {
                     folderPath);
         }
 
+        CompletableFuture<FolderAndFilesData> addReferenceFolderAsync(String folderPath) {
+            return mutateReferenceFoldersAsync(updated -> {
+                if (folderPath == null || folderPath.isBlank()) {
+                    throw new IllegalArgumentException("Reference folder path must not be blank");
+                }
+                String trimmed = folderPath.trim();
+                if (!updated.contains(trimmed)) {
+                    updated.add(trimmed);
+                }
+            }, null, "add", "adding", folderPath);
+        }
+
+        CompletableFuture<FolderAndFilesData> removeReferenceFolderAsync(String folderPath) {
+            return mutateReferenceFoldersAsync(updated -> updated.remove(folderPath), this::clearSelection, "remove",
+                    "removing", folderPath);
+        }
+
         private CompletableFuture<FolderAndFilesData> mutateFoldersAsync(Consumer<List<String>> mutator,
                 Runnable onEdtSuccess, String logVerb, String errorGerund, String folderPath) {
             CompletableFuture<FolderAndFilesData> future = Edt.runAsync(() -> {
@@ -331,16 +426,37 @@ public final class ContextManagerPanel extends JPanel {
             return future;
         }
 
+        private CompletableFuture<FolderAndFilesData> mutateReferenceFoldersAsync(Consumer<List<String>> mutator,
+                Runnable onEdtSuccess, String logVerb, String errorGerund, String folderPath) {
+            CompletableFuture<FolderAndFilesData> future = Edt.runAsync(() -> {
+                List<String> updated = new ArrayList<>(loadConfiguredReferenceFolders());
+                mutator.accept(updated);
+                saveConfiguredReferenceFolders(updated);
+            }, onEdtSuccess, ex -> {
+                log.warn("Failed to {} reference folder {}: {}", logVerb, folderPath, ex.getMessage());
+                if (errorReporter != null) {
+                    errorReporter.accept("Error " + errorGerund + " reference folder " + folderPath + ": "
+                            + ExceptionUtils.getRootCauseMessage(ex));
+                }
+            }).thenCompose(v -> refreshFoldersAndFiles());
+            lastRefreshFuture = future;
+            return future;
+        }
+
         CompletableFuture<FolderAndFilesData> refreshFoldersAndFiles() {
             CompletableFuture<FolderAndFilesData> future = Edt.supplyAsync(
                     () -> new FolderAndFilesData(Objects.requireNonNullElse(loadConfiguredFolders(), List.of()),
-                            Objects.requireNonNullElse(loadDiscoveredFiles(), List.of())),
+                            Objects.requireNonNullElse(loadDiscoveredFiles(), List.of()),
+                            Objects.requireNonNullElse(loadReferenceFolderMounts(), List.of())),
                     data -> {
                         folderListModel.clear();
                         data.folders().forEach(folderListModel::addElement);
                         fileListModel.clear();
                         data.files().forEach(fileListModel::addElement);
+                        referenceFolderListModel.clear();
+                        data.referenceFolders().forEach(referenceFolderListModel::addElement);
                         btnRemoveFolder.setEnabled(folderList.getSelectedValue() != null);
+                        btnRemoveReferenceFolder.setEnabled(referenceFolderList.getSelectedValue() != null);
                     }, ex -> {
                         log.warn("Failed to refresh context folders and files: {}", ex.getMessage());
                         if (errorReporter != null) {
@@ -372,6 +488,28 @@ public final class ContextManagerPanel extends JPanel {
                 return promptService.listGlobalContextFiles();
             }
             return promptService.listProjectContextFiles();
+        }
+
+        private List<String> loadConfiguredReferenceFolders() {
+            if (globalScope) {
+                return promptService.getGlobalReferenceFolders();
+            }
+            return promptService.getProjectReferenceFolders();
+        }
+
+        private void saveConfiguredReferenceFolders(List<String> folders) {
+            if (globalScope) {
+                promptService.setGlobalReferenceFolders(folders);
+            } else {
+                promptService.setProjectReferenceFolders(folders);
+            }
+        }
+
+        private List<ReferenceFolderMount> loadReferenceFolderMounts() {
+            if (globalScope) {
+                return promptService.listGlobalReferenceFolderMounts();
+            }
+            return promptService.listProjectReferenceFolderMounts();
         }
     }
 }

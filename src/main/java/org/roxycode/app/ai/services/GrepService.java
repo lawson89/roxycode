@@ -14,12 +14,12 @@ import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
-import org.roxycode.app.util.PathUtils;
+import org.roxycode.app.service.ProjectService.ResolvedSearchTarget;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @AgentService(value = "grepService", phases = {"*"})
-@AgentDoc("Provides powerful text searching capabilities using RipGrep, respecting .gitignore and project boundaries.")
+@AgentDoc("Provides powerful text searching capabilities using RipGrep across the project and mounted @<alias> reference folders, respecting .gitignore and sandbox boundaries.")
 public class GrepService {
     private static final Logger log = LoggerFactory.getLogger(GrepService.class);
     static final int MAX_OUTPUT_LINES = 200;
@@ -27,7 +27,7 @@ public class GrepService {
     static final int MAX_READ_MATCHING_FILES = 10;
     static final int EXIT_CODE_NO_MATCHES = 1;
     private static final String DOC_REGEX_PATTERN = "The regex pattern to search for";
-    private static final String DOC_RELATIVE_PATH = "The directory or file path relative to the project root";
+    private static final String DOC_RELATIVE_PATH = "The directory or file path relative to the project root (or '@<alias>' / '@<alias>/subpath' for a reference folder)";
     private static final String DOC_FILE_PATTERN = "Optional glob pattern for filtering files (e.g., '*.java')";
     private static final String DOC_CONTEXT_LINES = "Number of context lines before and after each match (0-20)";
     private static final String DOC_LITERAL_TEXT = "The literal text to search for";
@@ -44,6 +44,20 @@ public class GrepService {
     public GrepService(ProjectService projectService, FileReadService fileReadService) {
         this.projectService = projectService;
         this.fileReadService = fileReadService;
+    }
+
+    private boolean canExecuteSearch(String relativePath) {
+        return projectService.hasActiveProject() || ProjectService.isReferencePath(relativePath);
+    }
+
+    private ResolvedSearchTarget resolveTarget(String relativePath) {
+        ResolvedSearchTarget target = projectService.resolveSearchTarget(relativePath);
+        if (target != null) {
+            return target;
+        }
+        Path root = projectService.getCurrentProjectRoot().toAbsolutePath().normalize();
+        String relTarget = projectService.resolveRelativePath(relativePath);
+        return new ResolvedSearchTarget(root, relTarget, "");
     }
 
     @AgentDoc(value = "Searches for a regex pattern in the project files using RipGrep.", examples = "grepService.grep('TODO')")
@@ -97,24 +111,25 @@ public class GrepService {
         return findMatchingFiles(pattern, CURRENT_DIR, null);
     }
 
-    @AgentDoc(value = "Finds all files in the specified path and file glob containing matches for the given regex pattern using RipGrep (-l), returning a deduplicated list of relative file paths.", examples = "grepService.findMatchingFiles('@AgentService', 'src', '*.java')")
+    @AgentDoc(value = "Finds all files in the specified path and file glob containing matches for the given regex pattern using RipGrep (-l), returning a deduplicated list of relative file paths (prefixed with '@<alias>/' when searching a reference folder).", examples = {
+            "grepService.findMatchingFiles('@AgentService', 'src', '*.java')",
+            "grepService.findMatchingFiles('class Invoice', '@billing-service', '*.java')"})
     public List<String> findMatchingFiles(@AgentDoc(DOC_REGEX_PATTERN) String pattern,
             @AgentDoc(DOC_RELATIVE_PATH) String relativePath, @AgentDoc(DOC_FILE_PATTERN) String filePattern) {
-        if (!projectService.hasActiveProject() || pattern == null || pattern.isEmpty()) {
+        if (!canExecuteSearch(relativePath) || pattern == null || pattern.isEmpty()) {
             return new ArrayList<>();
         }
-        Path root = projectService.getCurrentProjectRoot().toAbsolutePath().normalize();
-        String targetArg = projectService.resolveRelativePath(relativePath);
+        ResolvedSearchTarget target = resolveTarget(relativePath);
 
         List<String> command = new ArrayList<>(List.of(RG_CMD, "-l", COLOR_NEVER_ARG));
         if (filePattern != null && !filePattern.isBlank()) {
             command.addAll(List.of(GLOB_FLAG, filePattern));
         }
-        command.addAll(List.of(END_OF_OPTIONS, pattern, targetArg));
+        command.addAll(List.of(END_OF_OPTIONS, pattern, target.relativeTarget()));
 
         Set<String> matches = new LinkedHashSet<>();
-        for (String line : runRipGrepLines(command, root, true)) {
-            matches.add(PathUtils.normalizeRelativePath(line.trim()));
+        for (String line : runRipGrepLines(command, target.workingDir(), true)) {
+            matches.add(target.formatResultPath(line));
         }
         return new ArrayList<>(matches);
     }
@@ -143,11 +158,10 @@ public class GrepService {
     }
 
     List<String> grepWordMatches(String wordOrPattern, String relativePath, boolean fixedWord) {
-        if (!projectService.hasActiveProject() || wordOrPattern == null || wordOrPattern.isEmpty()) {
+        if (!canExecuteSearch(relativePath) || wordOrPattern == null || wordOrPattern.isEmpty()) {
             return new ArrayList<>();
         }
-        Path root = projectService.getCurrentProjectRoot().toAbsolutePath().normalize();
-        String targetArg = projectService.resolveRelativePath(relativePath);
+        ResolvedSearchTarget target = resolveTarget(relativePath);
 
         List<String> command = new ArrayList<>(List.of(RG_CMD, "--vimgrep", "--no-heading", COLOR_NEVER_ARG));
         if (fixedWord) {
@@ -155,21 +169,28 @@ public class GrepService {
         } else {
             command.add("-F");
         }
-        command.addAll(List.of(END_OF_OPTIONS, wordOrPattern, targetArg));
-        return runRipGrepLines(command, root, false);
+        command.addAll(List.of(END_OF_OPTIONS, wordOrPattern, target.relativeTarget()));
+        List<String> rawLines = runRipGrepLines(command, target.workingDir(), false);
+        if (!target.isReferenceMount()) {
+            return rawLines;
+        }
+        List<String> prefixed = new ArrayList<>(rawLines.size());
+        for (String line : rawLines) {
+            prefixed.add(target.formatMatchLine(line));
+        }
+        return prefixed;
     }
 
     private EditorResult executeRipGrep(String pattern, String relativePath, String filePattern, int contextLines,
             boolean fixedStrings, boolean ignoreCase) {
-        if (!projectService.hasActiveProject()) {
+        if (!canExecuteSearch(relativePath)) {
             return new EditorResult(false, "", "No active project");
         }
         if (pattern == null || pattern.isEmpty()) {
             return new EditorResult(false, "", "Search pattern must not be empty");
         }
 
-        Path root = projectService.getCurrentProjectRoot().toAbsolutePath().normalize();
-        String targetArg = projectService.resolveRelativePath(relativePath);
+        ResolvedSearchTarget target = resolveTarget(relativePath);
         int clampedContext = Math.max(0, Math.min(contextLines, MAX_CONTEXT_LINES));
 
         List<String> command = new ArrayList<>();
@@ -190,10 +211,10 @@ public class GrepService {
         if (filePattern != null && !filePattern.isBlank()) {
             command.addAll(List.of(GLOB_FLAG, filePattern));
         }
-        command.addAll(List.of(END_OF_OPTIONS, pattern, targetArg));
+        command.addAll(List.of(END_OF_OPTIONS, pattern, target.relativeTarget()));
 
-        return runRipGrepSearch(command, root, rawOutput -> String.join(String.valueOf(LF),
-                rawOutput.lines().map(PathUtils::normalizeRelativePath).toList()));
+        return runRipGrepSearch(command, target.workingDir(),
+                rawOutput -> String.join(String.valueOf(LF), rawOutput.lines().map(target::formatMatchLine).toList()));
     }
 
     static List<String> runRipGrepLines(List<String> command, Path workingDir, boolean redirectErrorStream) {
@@ -250,22 +271,23 @@ public class GrepService {
         return listFiles(CURRENT_DIR);
     }
 
-    @AgentDoc(value = "Lists files in a specific directory using RipGrep, respecting .gitignore.", examples = "grepService.listFiles('src/main')")
-    public List<String> listFiles(@AgentDoc("The directory path relative to the project root") String relativePath) {
-        if (!projectService.hasActiveProject()) {
+    @AgentDoc(value = "Lists files in a specific directory or mounted @<alias> reference folder using RipGrep, respecting .gitignore.", examples = {
+            "grepService.listFiles('src/main')", "grepService.listFiles('@billing-service')"})
+    public List<String> listFiles(
+            @AgentDoc("The directory path relative to the project root (or '@<alias>' / '@<alias>/subpath')") String relativePath) {
+        if (!canExecuteSearch(relativePath)) {
             return new ArrayList<>();
         }
-        Path root = projectService.getCurrentProjectRoot().toAbsolutePath().normalize();
-        String relSearchDir = projectService.resolveRelativePath(relativePath);
+        ResolvedSearchTarget target = resolveTarget(relativePath);
 
         List<String> command = new ArrayList<>(List.of(RG_CMD, "--files", COLOR_NEVER_ARG));
-        if (!CURRENT_DIR.equals(relSearchDir)) {
-            command.add(relSearchDir);
+        if (!CURRENT_DIR.equals(target.relativeTarget())) {
+            command.add(target.relativeTarget());
         }
 
         List<String> files = new ArrayList<>();
-        for (String line : runRipGrepLines(command, root, false)) {
-            files.add(PathUtils.normalizeRelativePath(line));
+        for (String line : runRipGrepLines(command, target.workingDir(), false)) {
+            files.add(target.formatResultPath(line));
         }
         return files;
     }

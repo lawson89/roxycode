@@ -28,6 +28,7 @@ public class AppSettings {
     private boolean logToolCalls = false;
     private boolean googleGroundingEnabled = false;
     private List<String> globalContextFolders = new ArrayList<>();
+    private List<String> globalReferenceFolders = new ArrayList<>();
     private Integer windowX;
     private Integer windowY;
     private int windowWidth = DEFAULT_WINDOW_WIDTH;
@@ -50,6 +51,8 @@ public class AppSettings {
             this.googleGroundingEnabled = other.googleGroundingEnabled;
             this.globalContextFolders = new ArrayList<>(
                     Objects.requireNonNullElse(other.globalContextFolders, List.of()));
+            this.globalReferenceFolders = new ArrayList<>(
+                    Objects.requireNonNullElse(other.globalReferenceFolders, List.of()));
             this.windowX = other.windowX;
             this.windowY = other.windowY;
             this.windowWidth = other.windowWidth;
@@ -140,6 +143,14 @@ public class AppSettings {
 
     public void setGlobalContextFolders(List<String> globalContextFolders) {
         this.globalContextFolders = new ArrayList<>(Objects.requireNonNullElse(globalContextFolders, List.of()));
+    }
+
+    public List<String> getGlobalReferenceFolders() {
+        return List.copyOf(Objects.requireNonNullElse(globalReferenceFolders, List.of()));
+    }
+
+    public void setGlobalReferenceFolders(List<String> globalReferenceFolders) {
+        this.globalReferenceFolders = new ArrayList<>(Objects.requireNonNullElse(globalReferenceFolders, List.of()));
     }
 
     public Integer getWindowX() {

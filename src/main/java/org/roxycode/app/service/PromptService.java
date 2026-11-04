@@ -1,5 +1,6 @@
 package org.roxycode.app.service;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -27,6 +28,7 @@ import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.events.ContextChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
+import org.roxycode.app.service.ProjectService.ReferenceFolderMount;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -49,6 +51,7 @@ public class PromptService {
     private static final String NEWLINE_DOUBLE = "\n\n";
     private static final String HEADER_JEXL_CONTEXT = "\n\n## JEXL CONTEXT\n";
     private static final String HEADER_USER_GUIDE_CONTEXT = "\n\n## ROXYCODE USER GUIDE\n";
+    private static final String HEADER_REFERENCE_FOLDERS = "\n\n## READ-ONLY REFERENCE FOLDERS\n";
     private static final String HEADER_GLOBAL_AGENT_MEMORY = "\n\n## GLOBAL AGENT MEMORY\n";
     private static final String HEADER_PROJECT_AGENT_MEMORY = "\n\n## PROJECT AGENT MEMORY & ARCHIVE\n";
     private static final String HEADER_REPO_MAP = "\n\n## REPOSITORY MAP\n";
@@ -63,11 +66,17 @@ public class PromptService {
         }
     }
 
-    public record ProjectContextConfig(List<String> folders) {
-        public static final ProjectContextConfig EMPTY = new ProjectContextConfig(List.of());
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record ProjectContextConfig(List<String> folders, List<String> referenceFolders) {
+        public static final ProjectContextConfig EMPTY = new ProjectContextConfig(List.of(), List.of());
+
+        public ProjectContextConfig(List<String> folders) {
+            this(folders, List.of());
+        }
 
         public ProjectContextConfig {
             folders = List.copyOf(Objects.requireNonNullElse(folders, List.of()));
+            referenceFolders = List.copyOf(Objects.requireNonNullElse(referenceFolders, List.of()));
         }
     }
 
@@ -99,7 +108,25 @@ public class PromptService {
     public String getStableContext() {
         return readClasspathResource(CLASSPATH_PROMPT) + HEADER_JEXL_CONTEXT + loadJexlContext()
                 + HEADER_USER_GUIDE_CONTEXT + loadUserGuideContext() + NEWLINE_DOUBLE + loadGlobalContext()
-                + loadProjectContext() + loadAgentMemoryContext();
+                + loadProjectContext() + loadReferenceFoldersContext() + loadAgentMemoryContext();
+    }
+
+    public String loadReferenceFoldersContext() {
+        List<ReferenceFolderMount> mounts = getReferenceFolderMounts();
+        if (mounts.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(HEADER_REFERENCE_FOLDERS);
+        sb.append("The following external source folders are mounted read-only. Pass ").append((char) 96)
+                .append("@<alias>").append((char) 96).append(" or ").append((char) 96).append("@<alias>/subpath")
+                .append((char) 96).append(" to ").append((char) 96).append("grepService").append((char) 96).append(", ")
+                .append((char) 96).append("fileReadService").append((char) 96).append(", and ").append((char) 96)
+                .append("symbolService").append((char) 96).append(" to list files, search, or read code on demand:\n");
+        for (ReferenceFolderMount mount : mounts) {
+            sb.append("- ").append((char) 96).append(mount.aliasPrefix()).append((char) 96).append(" (")
+                    .append((char) 96).append(mount.rootPath()).append((char) 96).append(")\n");
+        }
+        return sb.toString();
     }
 
     public String loadAgentMemoryContext() {
@@ -266,24 +293,21 @@ public class PromptService {
         }
     }
 
-    public List<String> getProjectContextFolders() {
+    private ProjectContextConfig readProjectContextConfig() {
         if (!hasActiveProject()) {
-            return List.of();
+            return ProjectContextConfig.EMPTY;
         }
-        ProjectContextConfig config = PathUtils.readTomlOrDefault(
-                projectService.resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE), ProjectContextConfig.class,
-                ProjectContextConfig.EMPTY, AiConfig.SHARED_TOML_MAPPER);
-        return normalizeFolderList(config.folders());
+        return PathUtils.readTomlOrDefault(projectService.resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE),
+                ProjectContextConfig.class, ProjectContextConfig.EMPTY, AiConfig.SHARED_TOML_MAPPER);
     }
 
-    public void setProjectContextFolders(List<String> folders) {
+    private void writeProjectContextConfig(ProjectContextConfig config) {
         if (!hasActiveProject()) {
             throw new IllegalStateException("No active project");
         }
         Path configFile = projectService.resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE);
         try {
-            PathUtils.writeToml(configFile, new ProjectContextConfig(normalizeFolderList(folders)),
-                    AiConfig.SHARED_TOML_MAPPER);
+            PathUtils.writeToml(configFile, config, AiConfig.SHARED_TOML_MAPPER);
             if (eventPublisher != null) {
                 eventPublisher.publishEvent(new ContextChangedEvent(false));
             }
@@ -291,6 +315,72 @@ public class PromptService {
             log.error("Failed to save project context config {}: {}", configFile, e.getMessage());
             throw new UncheckedIOException("Failed to save project context config", e);
         }
+    }
+
+    public List<String> getProjectContextFolders() {
+        return normalizeFolderList(readProjectContextConfig().folders());
+    }
+
+    public void setProjectContextFolders(List<String> folders) {
+        ProjectContextConfig existing = readProjectContextConfig();
+        writeProjectContextConfig(new ProjectContextConfig(normalizeFolderList(folders), existing.referenceFolders()));
+    }
+
+    public List<String> getGlobalReferenceFolders() {
+        if (settingsService == null || settingsService.getSettings() == null) {
+            return List.of();
+        }
+        return normalizeFolderList(settingsService.getSettings().getGlobalReferenceFolders());
+    }
+
+    public void setGlobalReferenceFolders(List<String> folders) {
+        if (settingsService == null) {
+            return;
+        }
+        AppSettings settings = settingsService.getSettings();
+        if (settings != null) {
+            settings.setGlobalReferenceFolders(normalizeFolderList(folders));
+            settingsService.saveSettings();
+            if (eventPublisher != null) {
+                eventPublisher.publishEvent(new ContextChangedEvent(true));
+            }
+        }
+    }
+
+    public List<String> getProjectReferenceFolders() {
+        return normalizeFolderList(readProjectContextConfig().referenceFolders());
+    }
+
+    public void setProjectReferenceFolders(List<String> folders) {
+        ProjectContextConfig existing = readProjectContextConfig();
+        writeProjectContextConfig(new ProjectContextConfig(existing.folders(), normalizeFolderList(folders)));
+    }
+
+    public List<ReferenceFolderMount> getReferenceFolderMounts() {
+        Path projectRoot = null;
+        if (hasActiveProject()) {
+            projectRoot = projectService.getCurrentProjectRoot();
+        }
+        return ProjectService.resolveReferenceFolderMounts(getProjectReferenceFolders(), getGlobalReferenceFolders(),
+                projectRoot);
+    }
+
+    public List<ReferenceFolderMount> listGlobalReferenceFolderMounts() {
+        Path projectRoot = null;
+        if (hasActiveProject()) {
+            projectRoot = projectService.getCurrentProjectRoot();
+        }
+        List<ReferenceFolderMount> allMounts = ProjectService.resolveReferenceFolderMountsInternal(
+                getProjectReferenceFolders(), getGlobalReferenceFolders(), projectRoot, false);
+        return allMounts.stream().filter(ReferenceFolderMount::globalScope).toList();
+    }
+
+    public List<ReferenceFolderMount> listProjectReferenceFolderMounts() {
+        if (!hasActiveProject()) {
+            return List.of();
+        }
+        return ProjectService.resolveReferenceFolderMounts(getProjectReferenceFolders(), List.of(),
+                projectService.getCurrentProjectRoot());
     }
 
     public List<ContextFileItem> listGlobalContextFiles() {
@@ -414,7 +504,7 @@ public class PromptService {
         }
     }
 
-    private static List<String> normalizeFolderList(List<String> folders) {
+    static List<String> normalizeFolderList(List<String> folders) {
         if (folders == null) {
             return List.of();
         }

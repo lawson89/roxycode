@@ -721,17 +721,6 @@ public final class MainFrame extends JPanel {
             return;
         }
 
-        AppIconRenderer.AgentStatus status = currentStatus;
-        if (status == AppIconRenderer.AgentStatus.WAITING_FEEDBACK) {
-            setTitle("● [Action Needed] " + projectName + " — RoxyCode");
-        } else if (status == AppIconRenderer.AgentStatus.BUSY) {
-            String phaseLabel = "Working";
-            if (TASK_VIEW.equals(currentCard) && planService != null && planService.getCurrentPhase() != null) {
-                phaseLabel = planService.getCurrentPhase().name();
-            }
-            setTitle("⟳ [" + phaseLabel + "] " + projectName + " — RoxyCode");
-        } else {
-            setTitle(projectName + " — RoxyCode");
-        }
+        setTitle(projectName + " — RoxyCode");
     }
 }

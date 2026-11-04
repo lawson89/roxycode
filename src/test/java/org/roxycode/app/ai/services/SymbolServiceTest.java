@@ -36,6 +36,9 @@ class SymbolServiceTest {
         lenient().when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
         lenient().when(projectService.hasActiveProject()).thenReturn(true);
         lenient().when(projectService.resolvePath(any())).thenCallRealMethod();
+        lenient().when(projectService.resolveReadPath(any())).thenCallRealMethod();
+        lenient().when(projectService.formatReadDisplayPath(any(), any())).thenCallRealMethod();
+        lenient().when(projectService.findReferenceFolderMount(any())).thenCallRealMethod();
         grepService = mock(GrepService.class);
         symbolService = new SymbolService(projectService, grepService, AiConfig.SHARED_OBJECT_MAPPER);
     }
@@ -367,5 +370,56 @@ class SymbolServiceTest {
 
         assertTrue(symbolService.findRelatedTests(null).isEmpty());
         assertTrue(symbolService.findRelatedTests("   ").isEmpty());
+    }
+
+    @Test
+    void testReferenceFolderOutlineReadSymbolFindSymbolFindUsagesAndRelatedTests() throws IOException {
+        Path refRoot = Files.createDirectories(tempDir.resolve("ext-billing"));
+        Path invoiceFile = Files.createDirectories(refRoot.resolve("src/main/java/billing")).resolve("Invoice.java");
+        Path invoiceTestFile = Files.createDirectories(refRoot.resolve("src/test/java/billing"))
+                .resolve("InvoiceTest.java");
+        Files.writeString(invoiceFile, String.join(NL, "package billing;", "public class Invoice {",
+                "    public int total() {", "        return 42;", "    }", "}"));
+        Files.writeString(invoiceTestFile, String.join(NL, "package billing;", "class InvoiceTest {",
+                "    void testTotal() {", "        new Invoice().total();", "    }", "}"));
+
+        ProjectService.ReferenceFolderMount mount = new ProjectService.ReferenceFolderMount("billing-service",
+                refRoot.toString(), refRoot, false);
+        when(projectService.getReferenceFolderMounts()).thenReturn(List.of(mount));
+
+        String ctagsJson = String.join(NL, tagJson("Invoice", invoiceFile, 2, 6, "class", null, null),
+                tagJson("total", invoiceFile, 3, 5, "method", "Invoice", "()"),
+                tagJson("InvoiceTest", invoiceTestFile, 2, 6, "class", null, null),
+                tagJson("testTotal", invoiceTestFile, 3, 5, "method", "InvoiceTest", "()"));
+        symbolService.setCtagsRunner(cmd -> new ProcessResult(0, ctagsJson, "", false));
+
+        List<SymbolInfo> outline = symbolService.getFileOutline("@billing-service/src/main/java/billing/Invoice.java");
+        assertEquals(2, outline.size());
+        assertEquals("@billing-service/src/main/java/billing/Invoice.java", outline.get(0).path());
+        assertEquals("@billing-service/src/main/java/billing/Invoice.java", outline.get(1).path());
+
+        String body = symbolService.readSymbol("@billing-service/src/main/java/billing/Invoice.java", "total");
+        assertEquals(String.join(NL, "3:     public int total() {", "4:         return 42;", "5:     }"), body);
+
+        when(grepService.findMatchingFiles("total", "@billing-service", null))
+                .thenReturn(List.of("@billing-service/src/main/java/billing/Invoice.java"));
+        List<SymbolInfo> foundSymbols = symbolService.findSymbol("Invoice.total", "@billing-service");
+        assertEquals(1, foundSymbols.size());
+        assertEquals("@billing-service/src/main/java/billing/Invoice.java", foundSymbols.get(0).path());
+
+        when(grepService.grepWordMatches("total", "@billing-service", true))
+                .thenReturn(List.of("@billing-service/src/main/java/billing/Invoice.java:3:16:    public int total() {",
+                        "@billing-service/src/test/java/billing/InvoiceTest.java:4:23:        new Invoice().total();"));
+        List<SymbolUsage> usages = symbolService.findUsages("Invoice.total", "@billing-service");
+        assertEquals(1, usages.size());
+        assertEquals("@billing-service/src/test/java/billing/InvoiceTest.java", usages.get(0).path());
+        assertEquals("InvoiceTest.testTotal", usages.get(0).enclosingSymbol());
+        assertTrue(usages.get(0).testFile());
+
+        when(grepService.listFiles("@billing-service"))
+                .thenReturn(List.of("@billing-service/src/main/java/billing/Invoice.java",
+                        "@billing-service/src/test/java/billing/InvoiceTest.java"));
+        assertEquals(List.of("@billing-service/src/test/java/billing/InvoiceTest.java"),
+                symbolService.findRelatedTests("@billing-service/src/main/java/billing/Invoice.java"));
     }
 }

@@ -27,19 +27,20 @@ import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.services.CtagsRunner.CtagsEntry;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.service.ProjectService.ReferenceFolderMount;
 import org.roxycode.app.util.ExceptionUtils;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 @AgentService(value = "symbolService", phases = {"*"})
-@AgentDoc("Provides structural symbol outlines, symbol search, and symbol body reading using Universal Ctags.")
+@AgentDoc("Provides structural symbol outlines, symbol search, and symbol body reading using Universal Ctags across the project and mounted @<alias> reference folders.")
 public class SymbolService {
 
     private static final Logger log = LoggerFactory.getLogger(SymbolService.class);
 
-    private static final String DOC_FILE_PATH = "The file path relative to the project root";
-    private static final String DOC_SEARCH_PATH = "The directory or file path relative to the project root to scope the search";
+    private static final String DOC_FILE_PATH = "The file path relative to the project root (or '@<alias>/path' for a reference folder)";
+    private static final String DOC_SEARCH_PATH = "The directory or file path relative to the project root (or '@<alias>' / '@<alias>/subpath') to scope the search";
     private static final String DOC_SYMBOL_NAME = "The symbol name (e.g., 'myMethod' or 'MyClass.myMethod')";
     private static final String DOC_SYMBOL_NAMES = "Array of symbol names to read from the file";
     private static final String ERROR_PREFIX = "Error: ";
@@ -145,11 +146,24 @@ public class SymbolService {
         return results;
     }
 
-    @AgentDoc(value = "Finds all symbol definitions matching symbolName across the project by narrowing candidate files with RipGrep and running Universal Ctags.", examples = {
+    @AgentDoc(value = "Finds all symbol definitions matching symbolName across the project and mounted @<alias> reference folders by narrowing candidate files with RipGrep and running Universal Ctags.", examples = {
             "symbolService.findSymbol('executeJexl')", "symbolService.findSymbol('JexlTool.executeJexl')"})
     public List<SymbolInfo> findSymbol(@AgentDoc(DOC_SYMBOL_NAME) String symbolName) {
+        return findSymbol(symbolName, CURRENT_DIR);
+    }
+
+    @AgentDoc(value = "Finds all symbol definitions matching symbolName within the specified relative path or @<alias> reference folder.", examples = {
+            "symbolService.findSymbol('InvoiceProcessor', '@billing-service')",
+            "symbolService.findSymbol('executeJexl', 'src/main')"})
+    public List<SymbolInfo> findSymbol(@AgentDoc(DOC_SYMBOL_NAME) String symbolName,
+            @AgentDoc(DOC_SEARCH_PATH) String relativePath) {
         ExceptionUtils.checkInterrupted(CANCELLED_MSG);
-        if (symbolName == null || symbolName.isBlank() || !projectService.hasActiveProject()) {
+        String effectivePath = CURRENT_DIR;
+        if (relativePath != null && !relativePath.isBlank()) {
+            effectivePath = relativePath.trim();
+        }
+        if (symbolName == null || symbolName.isBlank()
+                || (!projectService.hasActiveProject() && !ProjectService.isReferencePath(effectivePath))) {
             return List.of();
         }
         String trimmedQuery = symbolName.trim();
@@ -161,8 +175,8 @@ public class SymbolService {
         if (SIMPLE_IDENTIFIER_PATTERN.matcher(unqualifiedName).matches()) {
             searchPattern = unqualifiedName;
         }
-        List<String> candidateRelPaths = grepService.findMatchingFiles(searchPattern);
-        if (candidateRelPaths == null || candidateRelPaths.isEmpty()) {
+        List<String> candidateRelPaths = collectCandidatePathsForFindSymbol(searchPattern, effectivePath);
+        if (candidateRelPaths.isEmpty()) {
             return List.of();
         }
 
@@ -203,18 +217,18 @@ public class SymbolService {
     public List<SymbolUsage> findUsages(@AgentDoc(DOC_SYMBOL_NAME) String symbolName,
             @AgentDoc(DOC_SEARCH_PATH) String relativePath) {
         ExceptionUtils.checkInterrupted(CANCELLED_MSG);
-        if (symbolName == null || symbolName.isBlank() || !projectService.hasActiveProject()) {
+        String effectivePath = CURRENT_DIR;
+        if (relativePath != null && !relativePath.isBlank()) {
+            effectivePath = relativePath.trim();
+        }
+        if (symbolName == null || symbolName.isBlank()
+                || (!projectService.hasActiveProject() && !ProjectService.isReferencePath(effectivePath))) {
             return List.of();
         }
         String trimmedQuery = symbolName.trim();
         String unqualifiedName = extractUnqualifiedName(trimmedQuery);
         if (unqualifiedName.isEmpty()) {
             return List.of();
-        }
-
-        String effectivePath = CURRENT_DIR;
-        if (relativePath != null && !relativePath.isBlank()) {
-            effectivePath = relativePath.trim();
         }
         boolean fixedWord = SIMPLE_IDENTIFIER_PATTERN.matcher(unqualifiedName).matches();
         List<String> rawMatches = grepService.grepWordMatches(unqualifiedName, effectivePath, fixedWord);
@@ -249,7 +263,8 @@ public class SymbolService {
     @AgentDoc(value = "Finds test files related to the given source file path using naming conventions, mirrored directory structure, and symbol reference analysis.", examples = "symbolService.findRelatedTests('src/main/java/org/roxycode/app/ai/services/SymbolService.java')")
     public List<String> findRelatedTests(@AgentDoc(DOC_FILE_PATH) String relativePath) {
         ExceptionUtils.checkInterrupted(CANCELLED_MSG);
-        if (relativePath == null || relativePath.isBlank() || !projectService.hasActiveProject()) {
+        if (relativePath == null || relativePath.isBlank()
+                || (!projectService.hasActiveProject() && !ProjectService.isReferencePath(relativePath))) {
             return List.of();
         }
         String normalizedPath = normalizeInputRelativePath(relativePath);
@@ -269,8 +284,14 @@ public class SymbolService {
             return List.of();
         }
 
-        String sourceSubpath = extractNormalizedSubpath(normalizedPath, SOURCE_DIR_PREFIXES);
-        List<String> allFiles = grepService.listFiles();
+        String referencePrefix = extractReferenceAliasPrefix(normalizedPath);
+        String sourceSubpath = extractNormalizedSubpath(stripReferenceAliasPrefix(normalizedPath), SOURCE_DIR_PREFIXES);
+        List<String> allFiles;
+        if (referencePrefix.isEmpty()) {
+            allFiles = grepService.listFiles();
+        } else {
+            allFiles = grepService.listFiles(referencePrefix);
+        }
         List<String> mirroredTier1 = new ArrayList<>();
         List<String> otherTier1 = new ArrayList<>();
         if (allFiles != null) {
@@ -284,7 +305,8 @@ public class SymbolService {
                 }
                 String candidateFileName = PathUtils.getFileName(normCandidate);
                 if (matchesTestNamingConvention(candidateFileName, stem)) {
-                    String testSubpath = extractNormalizedSubpath(normCandidate, TEST_DIR_PREFIXES);
+                    String testSubpath = extractNormalizedSubpath(stripReferenceAliasPrefix(normCandidate),
+                            TEST_DIR_PREFIXES);
                     if (!sourceSubpath.isEmpty() && sourceSubpath.equals(testSubpath)) {
                         mirroredTier1.add(normCandidate);
                     } else {
@@ -304,7 +326,12 @@ public class SymbolService {
         if (SIMPLE_IDENTIFIER_PATTERN.matcher(stem).matches()) {
             referencePattern = WORD_BOUNDARY + stem + WORD_BOUNDARY;
         }
-        List<String> referencingFiles = grepService.findMatchingFiles(referencePattern);
+        List<String> referencingFiles;
+        if (referencePrefix.isEmpty()) {
+            referencingFiles = grepService.findMatchingFiles(referencePattern);
+        } else {
+            referencingFiles = grepService.findMatchingFiles(referencePattern, referencePrefix, null);
+        }
         if (referencingFiles != null) {
             List<String> tier2 = new ArrayList<>();
             for (String refFile : referencingFiles) {
@@ -392,7 +419,7 @@ public class SymbolService {
                 continue;
             }
             try {
-                Path resolved = projectService.resolvePath(relPath).toAbsolutePath().normalize();
+                Path resolved = resolveReadTarget(relPath).toAbsolutePath().normalize();
                 if (Files.isRegularFile(resolved) && !relPathByAbsPath.containsKey(resolved)) {
                     String mappedRel = relPath;
                     if (normalizeRelPath) {
@@ -475,10 +502,65 @@ public class SymbolService {
                 || lowerCandidateStem.equals(lowerStem + ".spec");
     }
 
+    private List<String> collectCandidatePathsForFindSymbol(String searchPattern, String effectivePath) {
+        if (!CURRENT_DIR.equals(effectivePath)) {
+            List<String> scoped = grepService.findMatchingFiles(searchPattern, effectivePath, null);
+            return Objects.requireNonNullElse(scoped, List.of());
+        }
+        List<String> combined = new ArrayList<>();
+        if (projectService.hasActiveProject()) {
+            List<String> projectMatches = grepService.findMatchingFiles(searchPattern);
+            if (projectMatches != null) {
+                combined.addAll(projectMatches);
+            }
+        }
+        List<ReferenceFolderMount> mounts = Objects.requireNonNullElse(projectService.getReferenceFolderMounts(),
+                List.of());
+        for (ReferenceFolderMount mount : mounts) {
+            if (mount != null) {
+                List<String> mountMatches = grepService.findMatchingFiles(searchPattern, mount.aliasPrefix(), null);
+                if (mountMatches != null) {
+                    combined.addAll(mountMatches);
+                }
+            }
+        }
+        return combined;
+    }
+
+    private static String extractReferenceAliasPrefix(String normalizedPath) {
+        if (!ProjectService.isReferencePath(normalizedPath)) {
+            return "";
+        }
+        int slashIdx = normalizedPath.indexOf(SLASH_CHAR);
+        if (slashIdx < 0) {
+            return normalizedPath;
+        }
+        return normalizedPath.substring(0, slashIdx);
+    }
+
+    private static String stripReferenceAliasPrefix(String normalizedPath) {
+        if (!ProjectService.isReferencePath(normalizedPath)) {
+            return normalizedPath;
+        }
+        int slashIdx = normalizedPath.indexOf(SLASH_CHAR);
+        if (slashIdx < 0) {
+            return "";
+        }
+        return normalizedPath.substring(slashIdx + 1);
+    }
+
+    private Path resolveReadTarget(String relativePath) {
+        Path resolved = projectService.resolveReadPath(relativePath);
+        if (resolved == null && !ProjectService.isReferencePath(relativePath)) {
+            return projectService.resolvePath(relativePath);
+        }
+        return resolved;
+    }
+
     private String normalizeInputRelativePath(String relativePath) {
         String fallback = PathUtils.normalizeRelativePath(relativePath.trim());
         try {
-            Path resolved = projectService.resolvePath(relativePath);
+            Path resolved = resolveReadTarget(relativePath);
             if (resolved != null) {
                 return normalizeRelativePath(resolved.toAbsolutePath().normalize(), fallback);
             }
@@ -490,14 +572,20 @@ public class SymbolService {
 
     private boolean isExistingRegularFile(String normalizedPath) {
         try {
-            Path resolved = projectService.resolvePath(normalizedPath);
+            Path resolved = resolveReadTarget(normalizedPath);
             if (resolved != null && Files.isRegularFile(resolved)) {
                 return true;
             }
         } catch (Exception e) {
             ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
         }
-        List<String> allFiles = grepService.listFiles();
+        String refPrefix = extractReferenceAliasPrefix(normalizedPath);
+        List<String> allFiles;
+        if (refPrefix.isEmpty()) {
+            allFiles = grepService.listFiles();
+        } else {
+            allFiles = grepService.listFiles(refPrefix);
+        }
         if (allFiles != null) {
             for (String file : allFiles) {
                 if (normalizedPath.equals(PathUtils.normalizeRelativePath(file))) {
@@ -706,7 +794,7 @@ public class SymbolService {
     }
 
     private Path resolveRegularFile(String relativePath) {
-        Path path = projectService.resolvePath(relativePath);
+        Path path = resolveReadTarget(relativePath);
         if (path == null || !Files.isRegularFile(path)) {
             throw new IllegalArgumentException(
                     ERROR_PREFIX + "Path is not a regular file or does not exist: " + relativePath);
@@ -715,6 +803,10 @@ public class SymbolService {
     }
 
     private String normalizeRelativePath(Path resolvedPath, String fallbackRelativePath) {
+        String formatted = projectService.formatReadDisplayPath(resolvedPath, fallbackRelativePath);
+        if (StringUtils.isNotEmpty(formatted)) {
+            return formatted;
+        }
         Path root = projectService.getCurrentProjectRoot();
         if (root != null && resolvedPath != null) {
             Path normalizedRoot = root.toAbsolutePath().normalize();

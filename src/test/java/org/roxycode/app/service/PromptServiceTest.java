@@ -108,6 +108,32 @@ class PromptServiceTest {
                 "## Project Context: a_architecture.md\nArchitecture guidelines",
                 "## Project Context: z_spec.json\n{spec: true}");
         assertTrue(projectContext.indexOf("a_architecture.md") < projectContext.indexOf("z_spec.json"));
+
+        assertEquals("", promptService.loadReferenceFoldersContext());
+        Path projRef = Files.createDirectories(tempDir.resolve("proj-billing-service"));
+        Path globalRef = Files.createDirectories(tempDir.resolve("global-auth-lib"));
+        clearInvocations(eventPublisher, settingsService);
+
+        promptService.setGlobalReferenceFolders(List.of("  " + globalRef + "  ", globalRef.toString()));
+        verify(settingsService).saveSettings();
+        verify(eventPublisher).publishEvent(new ContextChangedEvent(true));
+        assertEquals(List.of(globalRef.toString()), promptService.getGlobalReferenceFolders());
+
+        promptService.setProjectReferenceFolders(List.of(projRef.toString()));
+        verify(eventPublisher).publishEvent(new ContextChangedEvent(false));
+        assertEquals(List.of(projRef.toString()), promptService.getProjectReferenceFolders());
+        assertEquals(List.of("docs"), promptService.getProjectContextFolders());
+
+        assertEquals(1, promptService.listGlobalReferenceFolderMounts().size());
+        assertEquals("global-auth-lib", promptService.listGlobalReferenceFolderMounts().get(0).alias());
+        assertEquals(1, promptService.listProjectReferenceFolderMounts().size());
+        assertEquals("proj-billing-service", promptService.listProjectReferenceFolderMounts().get(0).alias());
+
+        String refCatalog = promptService.loadReferenceFoldersContext();
+        SwingTestUtils.assertContainsAll(refCatalog, "## READ-ONLY REFERENCE FOLDERS", "@proj-billing-service",
+                projRef.toAbsolutePath().normalize().toString(), "@global-auth-lib",
+                globalRef.toAbsolutePath().normalize().toString());
+        assertTrue(promptService.getStableContext().contains(refCatalog));
     }
 
     @Test

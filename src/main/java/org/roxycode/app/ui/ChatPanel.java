@@ -259,12 +259,12 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         attachmentPanel.setVisible(false);
 
         JPanel inputSection = new JPanel(new MigLayout("fill, insets 6 12 4 12", GROW_FILL_COL, GROW_FILL_COL));
-        inputSection.setMinimumSize(new Dimension(0, 95));
+        inputSection.setMinimumSize(new Dimension(0, 110));
 
         JPanel composerCard = new JPanel(new BorderLayout());
         updateComposerCardBorder(composerCard, false);
 
-        inputArea = new JTextArea(3, 0);
+        inputArea = new JTextArea(4, 0);
         inputArea.setLineWrap(true);
         inputArea.setWrapStyleWord(true);
         inputArea.setMargin(new Insets(8, 12, 4, 12));
