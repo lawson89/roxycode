@@ -1,7 +1,10 @@
 package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
+import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.image.BufferedImage;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -10,11 +13,12 @@ import javax.swing.JPanel;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
+import org.springframework.lang.Nullable;
 
 public final class SidebarPanel extends JPanel {
     private static final long serialVersionUID = 1L;
-    private static final String LOGO_RESOURCE_PATH = "/static/images/roxy.png";
     static final int LOGO_SIZE = 88;
+    static final int AVATAR_SIZE = 72;
     static final String SUBTITLE_BADGE_TEXT = "AI Workspace";
     static final String TOOLS_ATTENTION_TOOLTIP = "Required system tools are missing";
     static final String MISSING_API_KEY_TOOLTIP = "Configure your Gemini API Key in Global Settings first";
@@ -23,6 +27,7 @@ public final class SidebarPanel extends JPanel {
 
     private final Consumer<String> navigationAction;
     private final Map<String, NavButton> cardButtons = new LinkedHashMap<>();
+    final AvatarPanel avatarPanel;
     private NavButton qaBtn;
     private NavButton taskBtn;
     private NavButton contextMgrBtn;
@@ -35,6 +40,7 @@ public final class SidebarPanel extends JPanel {
 
     public SidebarPanel(Consumer<String> navigationAction) {
         this.navigationAction = navigationAction;
+        this.avatarPanel = new AvatarPanel(AVATAR_SIZE);
         initComponents();
     }
 
@@ -91,8 +97,7 @@ public final class SidebarPanel extends JPanel {
         JLabel subtitleBadge = new JLabel(SUBTITLE_BADGE_TEXT);
         subtitleBadge.putClientProperty(FlatClientProperties.STYLE,
                 "font: bold -2; foreground: $Label.disabledForeground; background: darken($Panel.background, 5%); arc: 8; border: 2,8,2,8");
-        brandingPanel.add(UiComponents.createRoundedImagePanel(LOGO_RESOURCE_PATH, LOGO_SIZE, 20),
-                "w " + LOGO_SIZE + "!, h " + LOGO_SIZE + "!");
+        brandingPanel.add(avatarPanel, "w " + AVATAR_SIZE + "!, h " + AVATAR_SIZE + "!");
         brandingPanel.add(titleLabel);
         brandingPanel.add(subtitleBadge);
         return brandingPanel;
@@ -113,12 +118,33 @@ public final class SidebarPanel extends JPanel {
         taskBtn.setBusy(busy);
     }
 
+    public boolean isQaBusy() {
+        if (qaBtn == null) {
+            return false;
+        }
+        return qaBtn.isBusy();
+    }
+
+    public boolean isTaskBusy() {
+        if (taskBtn == null) {
+            return false;
+        }
+        return taskBtn.isBusy();
+    }
+
     public void setTaskWaitingApproval(boolean waitingApproval) {
         taskBtn.setWaitingApproval(waitingApproval);
     }
 
     public boolean isTaskWaitingApproval() {
         return taskBtn.isWaitingApproval();
+    }
+
+    public void updateAgentStatus(@Nullable String projectName, AppIconRenderer.AgentStatus status,
+            boolean blinkHighlight) {
+        if (avatarPanel != null) {
+            avatarPanel.updateState(projectName, status, blinkHighlight);
+        }
     }
 
     public void setToolsAttentionNeeded(boolean attentionNeeded) {
@@ -207,5 +233,41 @@ public final class SidebarPanel extends JPanel {
         });
         cardButtons.put(cardName, btn);
         return btn;
+    }
+
+    static final class AvatarPanel extends JPanel {
+        private static final long serialVersionUID = 1L;
+        private final int size;
+        private String projectName;
+        private AppIconRenderer.AgentStatus status = AppIconRenderer.AgentStatus.IDLE;
+        private boolean blinkHighlight;
+        private transient BufferedImage cachedImage;
+
+        AvatarPanel(int size) {
+            this.size = size;
+            setPreferredSize(new Dimension(size, size));
+            setOpaque(false);
+            refreshImage();
+        }
+
+        void updateState(@Nullable String projectName, AppIconRenderer.AgentStatus status, boolean blinkHighlight) {
+            this.projectName = projectName;
+            this.status = status;
+            this.blinkHighlight = blinkHighlight;
+            refreshImage();
+            repaint();
+        }
+
+        private void refreshImage() {
+            cachedImage = AppIconRenderer.renderAppIcon(size, projectName, status, blinkHighlight);
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            if (cachedImage != null) {
+                g.drawImage(cachedImage, 0, 0, getWidth(), getHeight(), null);
+            }
+        }
     }
 }

@@ -2,15 +2,23 @@ package org.roxycode.app.ui;
 
 import java.awt.CardLayout;
 import java.awt.GraphicsEnvironment;
+import java.awt.Image;
+import java.awt.Taskbar;
+import java.awt.event.WindowEvent;
+import java.awt.event.WindowFocusListener;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import javax.swing.ImageIcon;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
+import javax.swing.Timer;
 import net.miginfocom.swing.MigLayout;
+import org.roxycode.app.ai.services.PlanService;
+import org.roxycode.app.events.PhaseChangedEvent;
+import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
+import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
@@ -53,17 +61,32 @@ public final class MainFrame extends JPanel {
     private final TaskWorkspacePanel taskWorkspacePanel;
     private final CodebaseCachePanel codebaseCachePanel;
     private final AgentMemoryPanel agentMemoryPanel;
+    private final transient PlanService planService;
     SidebarPanel sidebar;
     String currentCard = QA_VIEW;
     private boolean initialToolsCheckComplete;
     private List<SystemTool> lastStartupTools = List.of();
+    private Timer blinkTimer;
+    private boolean blinkHighlight;
+    AppIconRenderer.AgentStatus currentStatus = AppIconRenderer.AgentStatus.IDLE;
+
+    public MainFrame(SettingsService settingsService, ProjectService projectService, ChatMemory chatMemory,
+            HeaderPanel header, StatusPanel statusBar, QaWorkspacePanel qaWorkspacePanel,
+            TaskWorkspacePanel taskWorkspacePanel, CodebaseCachePanel codebaseCachePanel, JexlApiPanel jexlApiPanel,
+            SystemToolsPanel systemToolsPanel, SettingsPanel settingsPanel, BuildConfigPanel buildConfigPanel,
+            ContextManagerPanel contextManagerPanel, @Nullable AgentMemoryPanel agentMemoryPanel) {
+        this(settingsService, projectService, chatMemory, header, statusBar, qaWorkspacePanel, taskWorkspacePanel,
+                codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel,
+                contextManagerPanel, agentMemoryPanel, null);
+    }
 
     @Autowired
     public MainFrame(SettingsService settingsService, ProjectService projectService, ChatMemory chatMemory,
             HeaderPanel header, StatusPanel statusBar, QaWorkspacePanel qaWorkspacePanel,
             TaskWorkspacePanel taskWorkspacePanel, CodebaseCachePanel codebaseCachePanel, JexlApiPanel jexlApiPanel,
             SystemToolsPanel systemToolsPanel, SettingsPanel settingsPanel, BuildConfigPanel buildConfigPanel,
-            ContextManagerPanel contextManagerPanel, @Nullable AgentMemoryPanel agentMemoryPanel) {
+            ContextManagerPanel contextManagerPanel, @Nullable AgentMemoryPanel agentMemoryPanel,
+            @Nullable PlanService planService) {
         this.settingsService = settingsService;
         this.projectService = projectService;
         this.chatMemory = chatMemory;
@@ -72,6 +95,13 @@ public final class MainFrame extends JPanel {
         this.taskWorkspacePanel = taskWorkspacePanel;
         this.codebaseCachePanel = codebaseCachePanel;
         this.agentMemoryPanel = agentMemoryPanel;
+        if (planService != null) {
+            this.planService = planService;
+        } else if (taskWorkspacePanel != null) {
+            this.planService = taskWorkspacePanel.planService;
+        } else {
+            this.planService = null;
+        }
         if (GraphicsEnvironment.isHeadless()) {
             this.hostFrame = null;
         } else {
@@ -106,9 +136,24 @@ public final class MainFrame extends JPanel {
     }
 
     @EventListener
+    public void onWorkflowTransition(WorkflowTransitionEvent event) {
+        Edt.run(this::updateWorkspaceState);
+    }
+
+    @EventListener
+    public void onPhaseChanged(PhaseChangedEvent event) {
+        Edt.run(this::updateWorkspaceState);
+    }
+
+    @EventListener
+    public void onPlanUpdated(PlanUpdatedEvent event) {
+        Edt.run(this::updateWorkspaceState);
+    }
+
+    @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
         Edt.run(() -> {
-            updateTitle();
+            updateWorkspaceState();
             if (qaWorkspacePanel != null && qaWorkspacePanel.qaChatPanel != null) {
                 qaWorkspacePanel.qaChatPanel.controller.resetForProjectChange();
             }
@@ -181,14 +226,25 @@ public final class MainFrame extends JPanel {
             }
         });
 
-        try {
-            java.net.URL iconUrl = getClass().getResource("/static/images/roxy.png");
-            if (iconUrl != null) {
-                hostFrame.setIconImage(new ImageIcon(iconUrl).getImage());
+        hostFrame.addWindowFocusListener(new WindowFocusListener() {
+            @Override
+            public void windowGainedFocus(WindowEvent e) {
+                stopBlinkTimer();
+                applyIconImages(currentStatus, false);
+                if (sidebar != null) {
+                    sidebar.updateAgentStatus(getActiveProjectName(), currentStatus, false);
+                }
             }
-        } catch (Exception e) {
-            log.trace("Failed to load icon: {}", e.getMessage());
-        }
+
+            @Override
+            public void windowLostFocus(WindowEvent e) {
+                if (currentStatus == AppIconRenderer.AgentStatus.WAITING_FEEDBACK) {
+                    startBlinkTimer();
+                }
+            }
+        });
+
+        applyIconImages(currentStatus, false);
     }
 
     void onWindowOpened() {
@@ -206,15 +262,27 @@ public final class MainFrame extends JPanel {
     }
 
     public void dispose() {
+        stopBlinkTimer();
+        clearTaskbarAttention();
         if (hostFrame != null) {
             hostFrame.dispose();
         }
     }
 
+    private String currentTitle;
+
     public void setTitle(String title) {
+        this.currentTitle = title;
         if (hostFrame != null) {
             hostFrame.setTitle(title);
         }
+    }
+
+    public String getTitle() {
+        if (hostFrame != null) {
+            return hostFrame.getTitle();
+        }
+        return currentTitle;
     }
 
     private void initComponents(StatusPanel statusBar, CodebaseCachePanel codebaseCachePanel, JexlApiPanel jexlApiPanel,
@@ -231,6 +299,15 @@ public final class MainFrame extends JPanel {
             }
         });
         taskWorkspacePanel.bindSidebar(sidebar);
+
+        if (qaWorkspacePanel != null && qaWorkspacePanel.qaChatPanel != null) {
+            qaWorkspacePanel.qaChatPanel.addLoadingListener(loading -> Edt.run(this::updateWorkspaceState));
+            qaWorkspacePanel.qaChatPanel.addUserInputListener(waiting -> Edt.run(this::updateWorkspaceState));
+        }
+        if (taskWorkspacePanel != null && taskWorkspacePanel.taskChatPanel != null) {
+            taskWorkspacePanel.taskChatPanel.addLoadingListener(loading -> Edt.run(this::updateWorkspaceState));
+            taskWorkspacePanel.taskChatPanel.addUserInputListener(waiting -> Edt.run(this::updateWorkspaceState));
+        }
 
         JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));
 
@@ -324,6 +401,7 @@ public final class MainFrame extends JPanel {
             sidebar.selectCard(cardName);
         }
         cardLayout.show(contentArea, cardName);
+        updateTitle();
         if (QA_VIEW.equals(cardName) && qaWorkspacePanel != null) {
             qaWorkspacePanel.focusChatInput();
         } else if (TASK_VIEW.equals(cardName) && taskWorkspacePanel != null) {
@@ -335,7 +413,156 @@ public final class MainFrame extends JPanel {
         }
     }
 
-    private void updateTitle() {
-        setTitle("RoxyCode - [" + projectService.getProjectName() + "]");
+    void updateWorkspaceState() {
+        AppIconRenderer.AgentStatus newStatus = resolveCurrentStatus();
+        this.currentStatus = newStatus;
+
+        if (newStatus == AppIconRenderer.AgentStatus.WAITING_FEEDBACK) {
+            requestTaskbarAttention();
+            if (hostFrame != null && !hostFrame.isActive()) {
+                startBlinkTimer();
+            } else {
+                stopBlinkTimer();
+            }
+        } else {
+            stopBlinkTimer();
+            clearTaskbarAttention();
+        }
+
+        updateTitle();
+        applyIconImages(newStatus, blinkHighlight);
+
+        String projName = getActiveProjectName();
+        if (sidebar != null) {
+            sidebar.updateAgentStatus(projName, newStatus, blinkHighlight);
+        }
+    }
+
+    AppIconRenderer.AgentStatus resolveCurrentStatus() {
+        if (planService != null && planService.getPendingPhase() != null) {
+            return AppIconRenderer.AgentStatus.WAITING_FEEDBACK;
+        }
+        if (sidebar != null && sidebar.isTaskWaitingApproval()) {
+            return AppIconRenderer.AgentStatus.WAITING_FEEDBACK;
+        }
+        if (qaWorkspacePanel != null && qaWorkspacePanel.qaChatPanel != null
+                && qaWorkspacePanel.qaChatPanel.isWaitingUserInput()) {
+            return AppIconRenderer.AgentStatus.WAITING_FEEDBACK;
+        }
+        if (taskWorkspacePanel != null && taskWorkspacePanel.taskChatPanel != null
+                && taskWorkspacePanel.taskChatPanel.isWaitingUserInput()) {
+            return AppIconRenderer.AgentStatus.WAITING_FEEDBACK;
+        }
+
+        if (qaWorkspacePanel != null && qaWorkspacePanel.qaChatPanel != null
+                && qaWorkspacePanel.qaChatPanel.isLoading()) {
+            return AppIconRenderer.AgentStatus.BUSY;
+        }
+        if (taskWorkspacePanel != null && taskWorkspacePanel.taskChatPanel != null
+                && taskWorkspacePanel.taskChatPanel.isLoading()) {
+            return AppIconRenderer.AgentStatus.BUSY;
+        }
+        if (sidebar != null && (sidebar.isQaBusy() || sidebar.isTaskBusy())) {
+            return AppIconRenderer.AgentStatus.BUSY;
+        }
+
+        return AppIconRenderer.AgentStatus.IDLE;
+    }
+
+    private void startBlinkTimer() {
+        if (blinkTimer != null && blinkTimer.isRunning()) {
+            return;
+        }
+        blinkHighlight = true;
+        blinkTimer = new Timer(750, e -> {
+            blinkHighlight = !blinkHighlight;
+            applyIconImages(currentStatus, blinkHighlight);
+            if (sidebar != null) {
+                sidebar.updateAgentStatus(getActiveProjectName(), currentStatus, blinkHighlight);
+            }
+        });
+        blinkTimer.setRepeats(true);
+        blinkTimer.start();
+    }
+
+    private void stopBlinkTimer() {
+        if (blinkTimer != null && blinkTimer.isRunning()) {
+            blinkTimer.stop();
+        }
+        blinkHighlight = false;
+    }
+
+    private void requestTaskbarAttention() {
+        if (GraphicsEnvironment.isHeadless()) {
+            return;
+        }
+        try {
+            if (Taskbar.isTaskbarSupported()) {
+                Taskbar taskbar = Taskbar.getTaskbar();
+                if (taskbar.isSupported(Taskbar.Feature.USER_ATTENTION)) {
+                    taskbar.requestUserAttention(true, false);
+                }
+                if (taskbar.isSupported(Taskbar.Feature.ICON_BADGE_TEXT)) {
+                    taskbar.setIconBadge("!");
+                }
+            }
+        } catch (UnsupportedOperationException | SecurityException e) {
+            log.trace("Taskbar attention not supported: {}", e.getMessage());
+        } catch (Exception e) {
+            log.trace("Taskbar attention failed: {}", e.getMessage());
+        }
+    }
+
+    private void clearTaskbarAttention() {
+        if (GraphicsEnvironment.isHeadless()) {
+            return;
+        }
+        try {
+            if (Taskbar.isTaskbarSupported()) {
+                Taskbar taskbar = Taskbar.getTaskbar();
+                if (taskbar.isSupported(Taskbar.Feature.ICON_BADGE_TEXT)) {
+                    taskbar.setIconBadge(null);
+                }
+            }
+        } catch (Exception e) {
+            log.trace("Taskbar badge clear failed: {}", e.getMessage());
+        }
+    }
+
+    private void applyIconImages(AppIconRenderer.AgentStatus status, boolean highlight) {
+        if (hostFrame == null) {
+            return;
+        }
+        String projName = getActiveProjectName();
+        List<Image> icons = AppIconRenderer.renderAppIconImages(projName, status, highlight);
+        hostFrame.setIconImages(icons);
+    }
+
+    String getActiveProjectName() {
+        if (projectService != null && projectService.hasActiveProject()) {
+            return projectService.getProjectName();
+        }
+        return null;
+    }
+
+    void updateTitle() {
+        String projectName = getActiveProjectName();
+        if (projectName == null || projectName.trim().isEmpty() || "No Project".equalsIgnoreCase(projectName.trim())) {
+            setTitle("RoxyCode");
+            return;
+        }
+
+        AppIconRenderer.AgentStatus status = currentStatus;
+        if (status == AppIconRenderer.AgentStatus.WAITING_FEEDBACK) {
+            setTitle("● [Action Needed] " + projectName + " — RoxyCode");
+        } else if (status == AppIconRenderer.AgentStatus.BUSY) {
+            String phaseLabel = "Working";
+            if (TASK_VIEW.equals(currentCard) && planService != null && planService.getCurrentPhase() != null) {
+                phaseLabel = planService.getCurrentPhase().name();
+            }
+            setTitle("⟳ [" + phaseLabel + "] " + projectName + " — RoxyCode");
+        } else {
+            setTitle(projectName + " — RoxyCode");
+        }
     }
 }

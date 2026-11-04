@@ -244,4 +244,65 @@ class MainFrameTest {
             frame.dispose();
         }
     }
+
+    @Test
+    void testDynamicWindowTitlesAndStatusLifecycle() throws Exception {
+        SettingsService settingsService = new SettingsService(null, event -> {
+        });
+        settingsService.setSettingsPathOverride(tempDir.resolve("configured-roxy-status").resolve("settings.toml"));
+        settingsService.getSettings().setGeminiApiKey("valid-gemini-key");
+        settingsService.saveSettings();
+
+        List<SystemTool> allDetectedTools = List.of(SystemTool.ofKnownTool("Ripgrep", "14.1.0", "Detected"),
+                SystemTool.ofKnownTool("Git", "2.43.0", "Detected"),
+                SystemTool.ofKnownTool("Universal Ctags", "6.0.0", "Detected"));
+
+        MainFrame frame = createMainFrame(settingsService, CompletableFuture.completedFuture(allDetectedTools));
+        try {
+            SwingTestUtils.flushEdt();
+
+            // Default IDLE state
+            assertEquals(AppIconRenderer.AgentStatus.IDLE, frame.resolveCurrentStatus());
+            assertEquals("test-project — RoxyCode", frame.getTitle());
+
+            // Test BUSY state in QA mode
+            frame.showCard(MainFrame.QA_VIEW);
+            frame.sidebar.setQaBusy(true);
+            assertEquals(AppIconRenderer.AgentStatus.BUSY, frame.resolveCurrentStatus());
+            frame.updateWorkspaceState();
+            assertEquals(AppIconRenderer.AgentStatus.BUSY, frame.currentStatus);
+            assertEquals("⟳ [Working] test-project — RoxyCode", frame.getTitle());
+
+            // Test BUSY state in Task mode with plan phase
+            frame.sidebar.setQaBusy(false);
+            frame.showCard(MainFrame.TASK_VIEW);
+            frame.sidebar.setTaskBusy(true);
+            assertEquals(AppIconRenderer.AgentStatus.BUSY, frame.resolveCurrentStatus());
+            frame.updateWorkspaceState();
+            assertEquals(AppIconRenderer.AgentStatus.BUSY, frame.currentStatus);
+            assertEquals("⟳ [PLAN] test-project — RoxyCode", frame.getTitle());
+
+            // Test WAITING_FEEDBACK state (takes precedence over BUSY)
+            frame.sidebar.setTaskWaitingApproval(true);
+            assertEquals(AppIconRenderer.AgentStatus.WAITING_FEEDBACK, frame.resolveCurrentStatus());
+            frame.updateWorkspaceState();
+            assertEquals(AppIconRenderer.AgentStatus.WAITING_FEEDBACK, frame.currentStatus);
+            assertEquals("● [Action Needed] test-project — RoxyCode", frame.getTitle());
+
+            // Test returning to IDLE
+            frame.sidebar.setTaskWaitingApproval(false);
+            frame.sidebar.setTaskBusy(false);
+            assertEquals(AppIconRenderer.AgentStatus.IDLE, frame.resolveCurrentStatus());
+            frame.updateWorkspaceState();
+            assertEquals(AppIconRenderer.AgentStatus.IDLE, frame.currentStatus);
+            assertEquals("test-project — RoxyCode", frame.getTitle());
+
+            // Test with no active project
+            when(projectService.hasActiveProject()).thenReturn(false);
+            frame.updateWorkspaceState();
+            assertEquals("RoxyCode", frame.getTitle());
+        } finally {
+            frame.dispose();
+        }
+    }
 }

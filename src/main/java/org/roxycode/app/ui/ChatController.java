@@ -125,6 +125,14 @@ public final class ChatController implements AutoCloseable {
         return (activeTurnId != 0 && activeTurnFuture != null);
     }
 
+    public boolean isWaitingUserInput() {
+        CompletableFuture<Object> future = pendingUserInputFuture;
+        if (future != null && !future.isDone()) {
+            return true;
+        }
+        return false;
+    }
+
     public String formatCurrentTurnStatus() {
         AppSettings settings = null;
         if (settingsService != null) {

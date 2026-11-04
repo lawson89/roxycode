@@ -14,6 +14,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -111,6 +112,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     private transient Runnable onViewPlanAction;
     private boolean loading = false;
     private final List<Consumer<Boolean>> loadingListeners = new ArrayList<>();
+    private final List<Consumer<Boolean>> userInputListeners = new CopyOnWriteArrayList<>();
 
     @Configuration
     static class ChatPanelBeans {
@@ -660,6 +662,9 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         userInputPromptPanel.setVisible(true);
         userInputPromptPanel.revalidate();
         userInputPromptPanel.repaint();
+        for (Consumer<Boolean> listener : userInputListeners) {
+            listener.accept(Boolean.TRUE);
+        }
     }
 
     void showUserInputPrompt(UserInputRequestEvent event, Consumer<Object> onResponse) {
@@ -732,10 +737,16 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     void hideUserInputPrompt() {
+        boolean wasVisible = userInputPromptPanel.isVisible();
         userInputPromptPanel.removeAll();
         userInputPromptPanel.setVisible(false);
         userInputPromptPanel.revalidate();
         userInputPromptPanel.repaint();
+        if (wasVisible) {
+            for (Consumer<Boolean> listener : userInputListeners) {
+                listener.accept(Boolean.FALSE);
+            }
+        }
     }
 
     void showResetSessionPrompt(Runnable onConfirm) {
@@ -915,6 +926,23 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         }
         for (Consumer<Boolean> listener : loadingListeners) {
             listener.accept(loading);
+        }
+    }
+
+    public boolean isLoading() {
+        return loading;
+    }
+
+    public boolean isWaitingUserInput() {
+        if (controller != null && controller.isWaitingUserInput()) {
+            return true;
+        }
+        return userInputPromptPanel.isVisible();
+    }
+
+    public void addUserInputListener(Consumer<Boolean> listener) {
+        if (listener != null) {
+            userInputListeners.add(listener);
         }
     }
 

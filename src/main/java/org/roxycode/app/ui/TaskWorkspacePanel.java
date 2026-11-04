@@ -49,7 +49,7 @@ public final class TaskWorkspacePanel extends JPanel {
             <i>Tip: Hover over each phase pill for details, or ask Roxy in <b>Codebase Q&amp;A</b> if you have questions about the workflow!</i>
             </div></html>""";
 
-    private final transient PlanService planService;
+    final transient PlanService planService;
     final PlanPanel planPanel;
     final ChatPanel taskChatPanel;
     final ArchiveBrowserPanel pastPlansPanel;
