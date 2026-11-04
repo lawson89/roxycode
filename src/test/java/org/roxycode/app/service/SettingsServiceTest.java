@@ -83,6 +83,25 @@ class SettingsServiceTest {
         AppSettings staticLoaded = SettingsService.loadFromDisk(settingsFile, AiConfig.SHARED_TOML_MAPPER);
         assertEquals("Darcula", staticLoaded.getTheme());
         assertEquals("test-api-key", staticLoaded.getGeminiApiKey());
+        assertNull(staticLoaded.getWindowX());
+        assertNull(staticLoaded.getWindowY());
+        assertEquals(AppSettings.DEFAULT_WINDOW_WIDTH, staticLoaded.getWindowWidth());
+        assertEquals(AppSettings.DEFAULT_WINDOW_HEIGHT, staticLoaded.getWindowHeight());
+        assertFalse(staticLoaded.isWindowMaximized());
+
+        settings.setWindowX(120);
+        settings.setWindowY(80);
+        settings.setWindowWidth(1440);
+        settings.setWindowHeight(960);
+        settings.setWindowMaximized(true);
+        service.saveSettingsSync();
+
+        AppSettings syncedLoaded = SettingsService.loadFromDisk(settingsFile, AiConfig.SHARED_TOML_MAPPER);
+        assertEquals(120, syncedLoaded.getWindowX());
+        assertEquals(80, syncedLoaded.getWindowY());
+        assertEquals(1440, syncedLoaded.getWindowWidth());
+        assertEquals(960, syncedLoaded.getWindowHeight());
+        assertTrue(syncedLoaded.isWindowMaximized());
     }
 
     @Test

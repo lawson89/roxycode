@@ -305,4 +305,73 @@ class MainFrameTest {
             frame.dispose();
         }
     }
+
+    @Test
+    void testWindowBoundsClampingMultiMonitorValidationAndPersistenceOnClose() throws Exception {
+        java.awt.Rectangle screenBounds = new java.awt.Rectangle(0, 0, 1920, 1080);
+        java.awt.Rectangle secondMonitor = new java.awt.Rectangle(1920, 0, 2560, 1440);
+        List<java.awt.Rectangle> monitors = List.of(screenBounds, secondMonitor);
+
+        // Size clamping: min 800x600 and max screen bounds
+        assertEquals(new java.awt.Dimension(800, 600), MainFrame.clampWindowSize(400, 300, screenBounds));
+        assertEquals(new java.awt.Dimension(1920, 1080), MainFrame.clampWindowSize(3000, 2000, screenBounds));
+        assertEquals(new java.awt.Dimension(1200, 900), MainFrame.clampWindowSize(0, -1, screenBounds));
+        assertEquals(new java.awt.Dimension(1400, 950), MainFrame.clampWindowSize(1400, 950, null));
+
+        // Multi-monitor visibility validation
+        assertTrue(MainFrame.isWindowBoundsVisibleOnScreens(new java.awt.Rectangle(100, 100, 1200, 900), monitors));
+        assertTrue(MainFrame.isWindowBoundsVisibleOnScreens(new java.awt.Rectangle(2100, 120, 1200, 900), monitors));
+        assertFalse(MainFrame.isWindowBoundsVisibleOnScreens(new java.awt.Rectangle(-2000, 100, 1200, 900), monitors));
+        assertFalse(MainFrame.isWindowBoundsVisibleOnScreens(new java.awt.Rectangle(4450, 100, 1200, 900), monitors),
+                "Window with less than 100px visible on any monitor should be rejected");
+        assertFalse(MainFrame.isWindowBoundsVisibleOnScreens(null, monitors));
+        assertFalse(MainFrame.isWindowBoundsVisibleOnScreens(new java.awt.Rectangle(0, 0, 1200, 900), List.of()));
+
+        // Persistence on windowClosing & preserving un-maximized bounds when closed while maximized
+        Path settingsFile = tempDir.resolve("window-bounds-roxy").resolve("settings.toml");
+        SettingsService settingsService = new SettingsService(null, event -> {
+        });
+        settingsService.setSettingsPathOverride(settingsFile);
+        settingsService.getSettings().setGeminiApiKey("valid-gemini-key");
+        settingsService.getSettings().setWindowX(150);
+        settingsService.getSettings().setWindowY(90);
+        settingsService.getSettings().setWindowWidth(1360);
+        settingsService.getSettings().setWindowHeight(860);
+        settingsService.getSettings().setWindowMaximized(false);
+        settingsService.saveSettingsSync();
+
+        List<SystemTool> allDetectedTools = List.of(SystemTool.ofKnownTool("Ripgrep", "14.1.0", "Detected"),
+                SystemTool.ofKnownTool("Git", "2.43.0", "Detected"),
+                SystemTool.ofKnownTool("Universal Ctags", "6.0.0", "Detected"));
+
+        MainFrame frame = createMainFrame(settingsService, CompletableFuture.completedFuture(allDetectedTools));
+        try {
+            SwingTestUtils.flushEdt();
+            assertEquals(1360, frame.getWidth());
+            assertEquals(860, frame.getHeight());
+            assertNotNull(frame.lastNormalBounds);
+
+            // Simulate user moving/resizing the normal window
+            frame.lastNormalBounds = new java.awt.Rectangle(240, 160, 1420, 880);
+
+            // Simulate user maximizing the window and resizing to full monitor dimensions
+            frame.simulatedExtendedState = java.awt.Frame.MAXIMIZED_BOTH;
+            frame.recordNormalWindowBounds();
+            assertEquals(new java.awt.Rectangle(240, 160, 1420, 880), frame.lastNormalBounds,
+                    "Maximized resize must not overwrite lastNormalBounds");
+
+            // Simulate closing the window while maximized
+            frame.saveWindowStateOnClose();
+
+            org.roxycode.app.model.AppSettings reloaded = SettingsService.loadFromDisk(settingsFile,
+                    org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER);
+            assertEquals(240, reloaded.getWindowX());
+            assertEquals(160, reloaded.getWindowY());
+            assertEquals(1420, reloaded.getWindowWidth());
+            assertEquals(880, reloaded.getWindowHeight());
+            assertTrue(reloaded.isWindowMaximized());
+        } finally {
+            frame.dispose();
+        }
+    }
 }

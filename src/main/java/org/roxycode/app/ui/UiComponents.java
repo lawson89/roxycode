@@ -316,11 +316,10 @@ final class UiComponents {
             return;
         }
         Color infoColor = resolveInfoIconColor();
-        Color pillBg = SwingHtmlUtils.getTintedBackground(infoColor, 0.16);
-        Color borderColor = SwingHtmlUtils.blendColor(infoColor, pillBg, 0.45);
         iconLabel.setIcon(FontIcon.of(Codicons.INFO, 15, infoColor));
-        iconLabel.putClientProperty(FlatClientProperties.STYLE, "background: " + SwingHtmlUtils.toHex(pillBg)
-                + "; arc: 999; border: 2,5,2,5," + SwingHtmlUtils.toHex(borderColor));
+        iconLabel.putClientProperty(FlatClientProperties.STYLE, null);
+        iconLabel.setBorder(null);
+        iconLabel.setOpaque(false);
     }
 
     static JPanel createModelControlBox(JLabel badgeLabel, JComboBox<GeminiModelConfig> comboBox,

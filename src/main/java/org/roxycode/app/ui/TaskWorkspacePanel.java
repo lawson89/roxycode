@@ -81,7 +81,8 @@ public final class TaskWorkspacePanel extends JPanel {
                 indicators.add(new WorkflowPhaseIndicator(phase));
             }
         }
-        topBar.add(progressTracker, "split 2, right, center");
+        topBar.add(progressTracker, "split 3, right, center");
+        topBar.add(workflowInfoIcon, "gapleft 8, center");
 
         planLabel.setIconTextGap(6);
         applyPlanBadgeStyling();
@@ -236,7 +237,6 @@ public final class TaskWorkspacePanel extends JPanel {
             }
             progressTracker.add(indicator);
         }
-        progressTracker.add(workflowInfoIcon, "gapleft 6, center");
         progressTracker.revalidate();
         progressTracker.repaint();
         if (topBar != null) {

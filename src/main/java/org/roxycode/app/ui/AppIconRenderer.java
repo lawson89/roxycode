@@ -15,6 +15,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import javax.imageio.ImageIO;
+import org.kordamp.ikonli.codicons.Codicons;
+import org.kordamp.ikonli.swing.FontIcon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
@@ -27,17 +29,17 @@ public final class AppIconRenderer {
         IDLE, BUSY, WAITING_FEEDBACK
     }
 
-    public static final List<Color> PROJECT_PALETTE = List.of(new Color(0x1d, 0x4e, 0xd8), // Cobalt
-            new Color(0x05, 0x96, 0x69), // Emerald
+    public static final Color DEFAULT_PROJECT_GREEN = new Color(0x05, 0x96, 0x69); // Emerald
+
+    public static final List<Color> PROJECT_PALETTE = List.of(DEFAULT_PROJECT_GREEN, // Emerald
+            new Color(0x1d, 0x4e, 0xd8), // Cobalt
             new Color(0x7e, 0x22, 0xce), // Purple
-            new Color(0xbe, 0x12, 0x3c), // Rose
+            new Color(0x16, 0xa3, 0x4a), // Forest Green
             new Color(0x0f, 0x76, 0x6e), // Teal
             new Color(0x43, 0x38, 0xca), // Indigo
-            new Color(0xc2, 0x41, 0x0c), // Orange
+            new Color(0x02, 0x84, 0xc7), // Sky Blue
             new Color(0x0e, 0x74, 0x90) // Cyan
     );
-
-    public static final Color STATUS_BUSY_COLOR = new Color(0x10, 0xb9, 0x81); // Emerald
     public static final Color STATUS_WAITING_COLOR = new Color(0xf5, 0x9e, 0x0b); // Amber 500
     public static final Color STATUS_WAITING_ALT_COLOR = new Color(0xff, 0xfb, 0xeb); // Warm Ivory
     public static final Color STATUS_WAITING_DARK_TEXT = new Color(0x45, 0x1a, 0x03);
@@ -170,9 +172,7 @@ public final class AppIconRenderer {
                 paintMonogramBadge(g2, size, monogram, projectColor);
             }
 
-            if (status == AgentStatus.BUSY) {
-                paintBusyOverlay(g2, size);
-            } else if (status == AgentStatus.WAITING_FEEDBACK) {
+            if (status == AgentStatus.WAITING_FEEDBACK) {
                 paintWaitingOverlay(g2, size, blinkHighlight);
             }
         } finally {
@@ -228,19 +228,6 @@ public final class AppIconRenderer {
         g2.drawString(monogram, textX, textY);
     }
 
-    private static void paintBusyOverlay(Graphics2D g2, int size) {
-        int dotSize = Math.max(5, Math.round(size * 0.28f));
-        int pad = Math.max(1, Math.round(size * 0.04f));
-        int x = size - dotSize - pad;
-        int y = pad;
-
-        g2.setColor(new Color(0, 0, 0, 200));
-        g2.fillOval(x - 1, y - 1, dotSize + 2, dotSize + 2);
-
-        g2.setColor(STATUS_BUSY_COLOR);
-        g2.fillOval(x, y, dotSize, dotSize);
-    }
-
     private static void paintWaitingOverlay(Graphics2D g2, int size, boolean blinkHighlight) {
         int badgeSize = Math.max(7, Math.round(size * 0.36f));
         int pad = Math.max(1, Math.round(size * 0.03f));
@@ -260,16 +247,10 @@ public final class AppIconRenderer {
         g2.setColor(bg);
         g2.fillOval(x, y, badgeSize, badgeSize);
 
-        int fontSize = Math.max(6, Math.round(badgeSize * 0.82f));
-        Font font = new Font(Font.SANS_SERIF, Font.BOLD, fontSize);
-        g2.setFont(font);
-        FontMetrics fm = g2.getFontMetrics();
-        String text = "!";
-        int textW = fm.stringWidth(text);
-        int textX = x + (badgeSize - textW) / 2;
-        int textY = y + ((badgeSize - fm.getHeight()) / 2) + fm.getAscent();
-
-        g2.setColor(fg);
-        g2.drawString(text, textX, textY);
+        int iconSize = Math.max(5, Math.round(badgeSize * 0.68f));
+        FontIcon bellIcon = FontIcon.of(Codicons.BELL, iconSize, fg);
+        int iconX = x + (badgeSize - bellIcon.getIconWidth()) / 2;
+        int iconY = y + (badgeSize - bellIcon.getIconHeight()) / 2;
+        bellIcon.paintIcon(null, g2, iconX, iconY);
     }
 }

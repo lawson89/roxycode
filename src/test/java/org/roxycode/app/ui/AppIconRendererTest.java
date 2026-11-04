@@ -45,6 +45,14 @@ class AppIconRendererTest {
         assertTrue(AppIconRenderer.PROJECT_PALETTE.contains(emptyColor));
 
         assertEquals(8, AppIconRenderer.PROJECT_PALETTE.size());
+
+        Color roxyColor = AppIconRenderer.resolveProjectColor("roxycode");
+        assertEquals(new Color(0x16, 0xa3, 0x4a), roxyColor);
+        for (Color paletteColor : AppIconRenderer.PROJECT_PALETTE) {
+            assertTrue(
+                    paletteColor.getGreen() >= paletteColor.getRed() || paletteColor.getBlue() > paletteColor.getRed(),
+                    "Palette color should avoid alarming red/orange hues: " + paletteColor);
+        }
     }
 
     @Test
@@ -60,10 +68,13 @@ class AppIconRendererTest {
             assertEquals(BufferedImage.TYPE_INT_ARGB, bimg.getType());
         }
 
+        BufferedImage idleImg = AppIconRenderer.renderAppIcon(64, "myApp", AppIconRenderer.AgentStatus.IDLE, false);
         BufferedImage busyImg = AppIconRenderer.renderAppIcon(64, "myApp", AppIconRenderer.AgentStatus.BUSY, false);
         assertNotNull(busyImg);
         assertEquals(64, busyImg.getWidth());
         assertEquals(64, busyImg.getHeight());
+        // BUSY does not paint a top-right dot; top-right corner matches IDLE
+        assertEquals(idleImg.getRGB(56, 8), busyImg.getRGB(56, 8));
 
         BufferedImage waitingImg = AppIconRenderer.renderAppIcon(64, "myApp",
                 AppIconRenderer.AgentStatus.WAITING_FEEDBACK, true);

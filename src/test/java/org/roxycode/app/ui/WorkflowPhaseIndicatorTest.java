@@ -48,8 +48,17 @@ class WorkflowPhaseIndicatorTest {
         assertNotNull(infoFontIcon);
         assertEquals(15, infoFontIcon.getIconSize());
         assertEquals(UiComponents.resolveInfoIconColor(), infoFontIcon.getIconColor());
-        String pillStyle = (String) qaWorkspace.mentorInfoIcon.getClientProperty(FlatClientProperties.STYLE);
-        SwingTestUtils.assertContainsAll(pillStyle, "arc: 999", "border: 2,5,2,5,");
+        assertNull(qaWorkspace.mentorInfoIcon.getClientProperty(FlatClientProperties.STYLE));
+        assertNull(qaWorkspace.mentorInfoIcon.getBorder());
+        assertFalse(qaWorkspace.mentorInfoIcon.isOpaque());
+        assertEquals(qaWorkspace.qaHeaderBar, qaWorkspace.mentorInfoIcon.getParent());
+        assertNotEquals(qaWorkspace.mentorBanner, qaWorkspace.mentorInfoIcon.getParent());
+
+        assertEquals(taskWorkspace.topBar, taskWorkspace.workflowInfoIcon.getParent());
+        assertNotEquals(taskWorkspace.progressTracker, taskWorkspace.workflowInfoIcon.getParent());
+        assertNull(taskWorkspace.workflowInfoIcon.getClientProperty(FlatClientProperties.STYLE));
+        assertNull(taskWorkspace.workflowInfoIcon.getBorder());
+        assertFalse(taskWorkspace.workflowInfoIcon.isOpaque());
 
         ToolTipManager toolTipManager = ToolTipManager.sharedInstance();
         int customInitialDelay = 4321;

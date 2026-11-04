@@ -51,7 +51,7 @@ public final class QaWorkspacePanel extends JPanel {
         qaHeaderBar = new JPanel(new MigLayout("insets 0 12 0 16, fill", "[right, grow]", LAYOUT_CENTER));
         qaHeaderBar.setOpaque(false);
 
-        mentorBanner = new JPanel(new MigLayout("insets 0, gapx 6", "[][][]", LAYOUT_CENTER));
+        mentorBanner = new JPanel(new MigLayout("insets 0, gapx 6", "[][]", LAYOUT_CENTER));
         mentorModeLabel = new JLabel(MENTOR_MODE_TITLE);
         mentorModeLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
         mentorSubtitleLabel = new JLabel("•  " + MENTOR_MODE_SUBTITLE);
@@ -63,9 +63,9 @@ public final class QaWorkspacePanel extends JPanel {
 
         mentorBanner.add(mentorModeLabel);
         mentorBanner.add(mentorSubtitleLabel);
-        mentorBanner.add(mentorInfoIcon, "gapleft 2");
         applyBannerStyling();
-        qaHeaderBar.add(mentorBanner, "right, center");
+        qaHeaderBar.add(mentorBanner, "split 2, right, center");
+        qaHeaderBar.add(mentorInfoIcon, "gapleft 8, center");
 
         this.qaTabs = UiComponents.createUnderlinedTabbedPane(qaHeaderBar);
         this.qaChatPanel = exploreChatPanel;

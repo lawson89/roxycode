@@ -44,7 +44,6 @@ public final class HeaderPanel extends JPanel {
     private final transient GitService gitService;
     private final transient SettingsService settingsService;
 
-    final JLabel projectBadgeLabel;
     final JLabel projectLabel;
     final JButton changeProjectButton;
     final JLabel noProjectNoticeLabel;
@@ -62,12 +61,8 @@ public final class HeaderPanel extends JPanel {
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
         updateBorder();
 
-        JPanel leftPanel = new JPanel(new MigLayout("insets 0, hidemode 3", "[]8[]8[]8[]12[]", LAYOUT_CENTER));
+        JPanel leftPanel = new JPanel(new MigLayout("insets 0, hidemode 3", "[]8[]8[]12[]", LAYOUT_CENTER));
         leftPanel.setOpaque(false);
-
-        projectBadgeLabel = new JLabel();
-        projectBadgeLabel.setVisible(false);
-        leftPanel.add(projectBadgeLabel);
 
         projectLabel = new JLabel(projectService.getProjectName());
         projectLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +1");
@@ -107,27 +102,6 @@ public final class HeaderPanel extends JPanel {
         updateProjectTooltip(projectService.getCurrentProjectRoot());
     }
 
-    void updateProjectBadge() {
-        boolean hasProject = projectService != null && projectService.hasActiveProject();
-        if (!hasProject) {
-            projectBadgeLabel.setVisible(false);
-            return;
-        }
-        String projectName = projectService.getProjectName();
-        String monogram = AppIconRenderer.extractMonogram(projectName);
-        if (monogram.isEmpty()) {
-            projectBadgeLabel.setVisible(false);
-            return;
-        }
-        Color projectColor = AppIconRenderer.resolveProjectColor(projectName);
-        String hexColor = SwingHtmlUtils.toHex(projectColor);
-        projectBadgeLabel.setText(monogram);
-        projectBadgeLabel.putClientProperty(FlatClientProperties.STYLE,
-                "font: bold -2; foreground: #FFFFFF; background: " + hexColor + "; arc: 8; border: 2,6,2,6");
-        projectBadgeLabel.setToolTipText("Project: " + projectName);
-        projectBadgeLabel.setVisible(true);
-    }
-
     void updateProjectStateDisplay() {
         boolean hasProject = projectService != null && projectService.hasActiveProject();
         if (hasProject) {
@@ -137,7 +111,6 @@ public final class HeaderPanel extends JPanel {
             changeProjectButton.setText(SELECT_PROJECT_TEXT);
             noProjectNoticeLabel.setVisible(true);
         }
-        updateProjectBadge();
     }
 
     private String resolveEffectiveModel() {

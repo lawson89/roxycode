@@ -1,18 +1,22 @@
 package org.roxycode.app.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import org.apache.commons.lang3.StringUtils;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class AppSettings {
 
     public static final String DEFAULT_THEME = "FlatLaf Light";
     public static final String DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
     public static final String DEFAULT_THINKING_LEVEL = ThinkingLevel.DEFAULT.getId();
     public static final int DEFAULT_MAX_AGENT_TOOL_TURNS = 50;
+    public static final int DEFAULT_WINDOW_WIDTH = 1200;
+    public static final int DEFAULT_WINDOW_HEIGHT = 900;
 
     private String theme = DEFAULT_THEME;
     private String geminiApiKey = "";
@@ -24,6 +28,11 @@ public class AppSettings {
     private boolean logToolCalls = false;
     private boolean googleGroundingEnabled = false;
     private List<String> globalContextFolders = new ArrayList<>();
+    private Integer windowX;
+    private Integer windowY;
+    private int windowWidth = DEFAULT_WINDOW_WIDTH;
+    private int windowHeight = DEFAULT_WINDOW_HEIGHT;
+    private boolean windowMaximized = false;
 
     public AppSettings() {
     }
@@ -41,6 +50,11 @@ public class AppSettings {
             this.googleGroundingEnabled = other.googleGroundingEnabled;
             this.globalContextFolders = new ArrayList<>(
                     Objects.requireNonNullElse(other.globalContextFolders, List.of()));
+            this.windowX = other.windowX;
+            this.windowY = other.windowY;
+            this.windowWidth = other.windowWidth;
+            this.windowHeight = other.windowHeight;
+            this.windowMaximized = other.windowMaximized;
         }
     }
 
@@ -126,5 +140,45 @@ public class AppSettings {
 
     public void setGlobalContextFolders(List<String> globalContextFolders) {
         this.globalContextFolders = new ArrayList<>(Objects.requireNonNullElse(globalContextFolders, List.of()));
+    }
+
+    public Integer getWindowX() {
+        return windowX;
+    }
+
+    public void setWindowX(Integer windowX) {
+        this.windowX = windowX;
+    }
+
+    public Integer getWindowY() {
+        return windowY;
+    }
+
+    public void setWindowY(Integer windowY) {
+        this.windowY = windowY;
+    }
+
+    public int getWindowWidth() {
+        return windowWidth;
+    }
+
+    public void setWindowWidth(int windowWidth) {
+        this.windowWidth = windowWidth;
+    }
+
+    public int getWindowHeight() {
+        return windowHeight;
+    }
+
+    public void setWindowHeight(int windowHeight) {
+        this.windowHeight = windowHeight;
+    }
+
+    public boolean isWindowMaximized() {
+        return windowMaximized;
+    }
+
+    public void setWindowMaximized(boolean windowMaximized) {
+        this.windowMaximized = windowMaximized;
     }
 }

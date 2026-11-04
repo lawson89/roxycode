@@ -1,11 +1,19 @@
 package org.roxycode.app.ui;
 
 import java.awt.CardLayout;
+import java.awt.Dimension;
+import java.awt.Frame;
+import java.awt.GraphicsConfiguration;
+import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.Image;
+import java.awt.Rectangle;
 import java.awt.Taskbar;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowFocusListener;
+import org.roxycode.app.model.AppSettings;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.JFrame;
@@ -48,6 +56,8 @@ public final class MainFrame extends JPanel {
     static final String BUILD_CONFIG_VIEW = "BUILD_CONFIG";
     static final String CONTEXT_MGR_VIEW = "CONTEXT_MGR";
     static final String MEMORY_VIEW = "MEMORY";
+    static final int MIN_WINDOW_WIDTH = 800;
+    static final int MIN_WINDOW_HEIGHT = 600;
 
     private final transient SettingsService settingsService;
     private final transient ProjectService projectService;
@@ -69,6 +79,8 @@ public final class MainFrame extends JPanel {
     private Timer blinkTimer;
     private boolean blinkHighlight;
     AppIconRenderer.AgentStatus currentStatus = AppIconRenderer.AgentStatus.IDLE;
+    Rectangle lastNormalBounds;
+    int simulatedExtendedState = Frame.NORMAL;
 
     public MainFrame(SettingsService settingsService, ProjectService projectService, ChatMemory chatMemory,
             HeaderPanel header, StatusPanel statusBar, QaWorkspacePanel qaWorkspacePanel,
@@ -210,19 +222,74 @@ public final class MainFrame extends JPanel {
 
     private void setupWindow() {
         updateTitle();
-        setSize(1200, 900);
+        AppSettings settings;
+        if (settingsService != null) {
+            settings = settingsService.getSettings();
+        } else {
+            settings = new AppSettings();
+        }
+        Dimension initialSize = clampWindowSize(settings.getWindowWidth(), settings.getWindowHeight(),
+                resolveMaximumWindowBounds());
+        setSize(initialSize.width, initialSize.height);
         if (hostFrame == null) {
+            int initX = 0;
+            if (settings.getWindowX() != null) {
+                initX = settings.getWindowX();
+            }
+            int initY = 0;
+            if (settings.getWindowY() != null) {
+                initY = settings.getWindowY();
+            }
+            lastNormalBounds = new Rectangle(initX, initY, initialSize.width, initialSize.height);
+            if (settings.isWindowMaximized()) {
+                simulatedExtendedState = Frame.MAXIMIZED_BOTH;
+            }
             return;
         }
         hostFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        hostFrame.setSize(1200, 900);
-        hostFrame.setLocationRelativeTo(null);
+        hostFrame.setMinimumSize(new Dimension(MIN_WINDOW_WIDTH, MIN_WINDOW_HEIGHT));
+
+        Integer savedX = settings.getWindowX();
+        Integer savedY = settings.getWindowY();
+        if (savedX != null && savedY != null) {
+            Rectangle candidate = new Rectangle(savedX, savedY, initialSize.width, initialSize.height);
+            if (isWindowBoundsVisibleOnScreens(candidate, resolveScreenBoundsList())) {
+                hostFrame.setBounds(candidate);
+            } else {
+                hostFrame.setSize(initialSize.width, initialSize.height);
+                hostFrame.setLocationRelativeTo(null);
+            }
+        } else {
+            hostFrame.setSize(initialSize.width, initialSize.height);
+            hostFrame.setLocationRelativeTo(null);
+        }
+        lastNormalBounds = new Rectangle(hostFrame.getBounds());
+        if (settings.isWindowMaximized()) {
+            hostFrame.setExtendedState(Frame.MAXIMIZED_BOTH);
+        }
         hostFrame.setContentPane(this);
+
+        hostFrame.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentMoved(ComponentEvent e) {
+                recordNormalWindowBounds();
+            }
+
+            @Override
+            public void componentResized(ComponentEvent e) {
+                recordNormalWindowBounds();
+            }
+        });
 
         hostFrame.addWindowListener(new java.awt.event.WindowAdapter() {
             @Override
             public void windowOpened(java.awt.event.WindowEvent e) {
                 onWindowOpened();
+            }
+
+            @Override
+            public void windowClosing(java.awt.event.WindowEvent e) {
+                saveWindowStateOnClose();
             }
         });
 
@@ -231,9 +298,6 @@ public final class MainFrame extends JPanel {
             public void windowGainedFocus(WindowEvent e) {
                 stopBlinkTimer();
                 applyIconImages(currentStatus, false);
-                if (sidebar != null) {
-                    sidebar.updateAgentStatus(getActiveProjectName(), currentStatus, false);
-                }
             }
 
             @Override
@@ -245,6 +309,123 @@ public final class MainFrame extends JPanel {
         });
 
         applyIconImages(currentStatus, false);
+    }
+
+    static Dimension clampWindowSize(int requestedWidth, int requestedHeight, @Nullable Rectangle maxScreenBounds) {
+        int width = AppSettings.DEFAULT_WINDOW_WIDTH;
+        if (requestedWidth > 0) {
+            width = requestedWidth;
+        }
+        int height = AppSettings.DEFAULT_WINDOW_HEIGHT;
+        if (requestedHeight > 0) {
+            height = requestedHeight;
+        }
+        if (maxScreenBounds != null && maxScreenBounds.width > 0 && maxScreenBounds.height > 0) {
+            width = Math.min(width, maxScreenBounds.width);
+            height = Math.min(height, maxScreenBounds.height);
+        }
+        width = Math.max(MIN_WINDOW_WIDTH, width);
+        height = Math.max(MIN_WINDOW_HEIGHT, height);
+        return new Dimension(width, height);
+    }
+
+    static boolean isWindowBoundsVisibleOnScreens(Rectangle windowBounds, List<Rectangle> screenBoundsList) {
+        if (windowBounds == null || screenBoundsList == null || screenBoundsList.isEmpty()) {
+            return false;
+        }
+        for (Rectangle screenBounds : screenBoundsList) {
+            if (screenBounds != null && screenBounds.intersects(windowBounds)) {
+                Rectangle intersection = screenBounds.intersection(windowBounds);
+                if (intersection.width >= 100 && intersection.height >= 100) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static Rectangle resolveMaximumWindowBounds() {
+        if (GraphicsEnvironment.isHeadless()) {
+            return null;
+        }
+        try {
+            return GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static List<Rectangle> resolveScreenBoundsList() {
+        if (GraphicsEnvironment.isHeadless()) {
+            return List.of();
+        }
+        try {
+            GraphicsDevice[] devices = GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices();
+            if (devices == null || devices.length == 0) {
+                return List.of();
+            }
+            List<Rectangle> boundsList = new java.util.ArrayList<>(devices.length);
+            for (GraphicsDevice device : devices) {
+                if (device != null) {
+                    GraphicsConfiguration config = device.getDefaultConfiguration();
+                    if (config != null && config.getBounds() != null) {
+                        boundsList.add(config.getBounds());
+                    }
+                }
+            }
+            return boundsList;
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    int getWindowExtendedState() {
+        if (simulatedExtendedState != Frame.NORMAL) {
+            return simulatedExtendedState;
+        }
+        if (hostFrame != null) {
+            return hostFrame.getExtendedState();
+        }
+        return Frame.NORMAL;
+    }
+
+    Rectangle getCurrentWindowBounds() {
+        if (hostFrame != null) {
+            return hostFrame.getBounds();
+        }
+        return getBounds();
+    }
+
+    void recordNormalWindowBounds() {
+        if ((getWindowExtendedState() & Frame.MAXIMIZED_BOTH) == 0) {
+            Rectangle bounds = getCurrentWindowBounds();
+            if (bounds != null && bounds.width > 0 && bounds.height > 0) {
+                lastNormalBounds = new Rectangle(bounds);
+            }
+        }
+    }
+
+    void saveWindowStateOnClose() {
+        if (settingsService == null) {
+            return;
+        }
+        recordNormalWindowBounds();
+        boolean maximized = (getWindowExtendedState() & Frame.MAXIMIZED_BOTH) != 0;
+        Rectangle boundsToSave;
+        if (lastNormalBounds != null) {
+            boundsToSave = lastNormalBounds;
+        } else {
+            boundsToSave = getCurrentWindowBounds();
+        }
+        AppSettings settings = settingsService.getSettings();
+        if (boundsToSave != null && boundsToSave.width > 0 && boundsToSave.height > 0) {
+            settings.setWindowX(boundsToSave.x);
+            settings.setWindowY(boundsToSave.y);
+            settings.setWindowWidth(boundsToSave.width);
+            settings.setWindowHeight(boundsToSave.height);
+        }
+        settings.setWindowMaximized(maximized);
+        settingsService.saveSettingsSync();
     }
 
     void onWindowOpened() {
@@ -431,11 +612,6 @@ public final class MainFrame extends JPanel {
 
         updateTitle();
         applyIconImages(newStatus, blinkHighlight);
-
-        String projName = getActiveProjectName();
-        if (sidebar != null) {
-            sidebar.updateAgentStatus(projName, newStatus, blinkHighlight);
-        }
     }
 
     AppIconRenderer.AgentStatus resolveCurrentStatus() {
@@ -477,9 +653,6 @@ public final class MainFrame extends JPanel {
         blinkTimer = new Timer(750, e -> {
             blinkHighlight = !blinkHighlight;
             applyIconImages(currentStatus, blinkHighlight);
-            if (sidebar != null) {
-                sidebar.updateAgentStatus(getActiveProjectName(), currentStatus, blinkHighlight);
-            }
         });
         blinkTimer.setRepeats(true);
         blinkTimer.start();

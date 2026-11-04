@@ -153,6 +153,20 @@ public class SettingsService {
         }
     }
 
+    public void saveSettingsSync() {
+        AppSettings snapshot;
+        Path path;
+        CompletableFuture<Void> pendingSaveFuture;
+        synchronized (this) {
+            snapshot = getSettings().copy();
+            path = getSettingsPath();
+            pendingSaveFuture = lastSaveFuture;
+        }
+        pendingSaveFuture.handle((v, ex) -> null).join();
+        writeSettingsToDisk(path, snapshot);
+        eventPublisher.publishEvent(new SettingsChangedEvent(snapshot));
+    }
+
     private void writeSettingsToDisk(Path path, AppSettings currentSettings) {
         synchronized (writeLock) {
             try {
