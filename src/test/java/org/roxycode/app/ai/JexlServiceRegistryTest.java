@@ -28,7 +28,7 @@ class JexlServiceRegistryTest {
 
     @Test
     void testEmptyPhasesDisallowsAllPhases() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
+        JexlServiceRegistry registry = new JexlServiceRegistry(null, null);
         EmptyPhasesService emptyService = new EmptyPhasesService();
         registry.register(emptyService);
 
@@ -41,7 +41,7 @@ class JexlServiceRegistryTest {
 
     @Test
     void testServicePhaseFiltering() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
+        JexlServiceRegistry registry = new JexlServiceRegistry(null, null);
         FileEditorService editor = mock(FileEditorService.class);
         GenericBuildToolService buildTool = mock(GenericBuildToolService.class);
         MemoryService memoryService = mock(MemoryService.class);
@@ -97,7 +97,7 @@ class JexlServiceRegistryTest {
 
     @Test
     void testRegisterAndGetServicesUnwrapsJdkAndCglibProxiesAndSubclasses() {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
+        JexlServiceRegistry registry = new JexlServiceRegistry(null, null);
         org.springframework.aop.framework.ProxyFactory jdkFactory = new org.springframework.aop.framework.ProxyFactory(
                 new ContractServiceImpl());
         jdkFactory.setInterfaces(ServiceContract.class);
@@ -119,7 +119,7 @@ class JexlServiceRegistryTest {
         SystemToolService systemToolService = mock(SystemToolService.class);
         when(systemToolService.checkGitAvailable()).thenReturn(false);
 
-        JexlServiceRegistry registry = new JexlServiceRegistry(systemToolService);
+        JexlServiceRegistry registry = new JexlServiceRegistry(systemToolService, null);
         GitService gitService = new GitService(null);
         MemoryService memoryService = mock(MemoryService.class);
         registry.register(gitService);

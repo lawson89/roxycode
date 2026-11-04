@@ -19,6 +19,7 @@ public final class MarkdownPane extends JTextPane {
     private static final long serialVersionUID = 1L;
     private static final String COPY_PREFIX = "copy:";
     private static final String FEATURE_PREFIX = "feature:";
+    private static final String TOGGLE_TOOL_PREFIX = "toggle-tool:";
     private static final int COPY_FEEDBACK_DELAY_MS = 1500;
     private static final int INITIAL_MESSAGE_COUNT = 1;
     private static final String ERROR_RENDERING_HTML = "<div>Error rendering message</div>";
@@ -34,8 +35,12 @@ public final class MarkdownPane extends JTextPane {
     public record ChatTranscriptEntry(String role, String content, String timestamp) {
     }
 
+    public record PersistedChatEntry(String role, String content, String timestamp, boolean isTool, boolean success,
+            String error, boolean toolExpanded) {
+    }
+
     private record Message(String role, String content, String timestamp, boolean isTool, boolean success, String error,
-            String renderedHtml) {
+            String renderedHtml, boolean toolExpanded) {
     }
 
     public MarkdownPane(boolean taskMode) {
@@ -73,6 +78,11 @@ public final class MarkdownPane extends JTextPane {
                 }
             } catch (NumberFormatException ignored) {
             }
+        } else if (desc.startsWith(TOGGLE_TOOL_PREFIX)) {
+            try {
+                toggleToolLog(Integer.parseInt(desc.substring(TOGGLE_TOOL_PREFIX.length())));
+            } catch (NumberFormatException ignored) {
+            }
         }
     }
 
@@ -103,7 +113,7 @@ public final class MarkdownPane extends JTextPane {
         String timestamp = LocalDateTime.now().format(TIME_FORMATTER);
         int index = messages.size();
         Message msg = new Message(role, safeContent, timestamp, false, true, null,
-                renderMarkdownBodySafely(safeContent));
+                renderMarkdownBodySafely(safeContent), true);
         messages.add(msg);
         appendRenderedEntry(formatMessageEntryHtml(msg, index));
     }
@@ -112,10 +122,45 @@ public final class MarkdownPane extends JTextPane {
         String safeOutput = StringUtils.defaultString(output);
         String timestamp = LocalDateTime.now().format(TIME_FORMATTER);
         int index = messages.size();
-        Message msg = new Message(null, safeOutput, timestamp, true, success, error,
-                renderToolLogSafely(safeOutput, success, error, timestamp));
+        boolean expanded = ChatHtmlTemplates.shouldDefaultToolExpanded(safeOutput, success);
+        Message msg = new Message(null, safeOutput, timestamp, true, success, error, null, expanded);
         messages.add(msg);
         appendRenderedEntry(formatMessageEntryHtml(msg, index));
+    }
+
+    public void toggleToolLog(int index) {
+        if (index < 0 || index >= messages.size()) {
+            return;
+        }
+        Message msg = messages.get(index);
+        if (!msg.isTool()) {
+            return;
+        }
+        Message updated = new Message(msg.role(), msg.content(), msg.timestamp(), true, msg.success(), msg.error(),
+                msg.renderedHtml(), !msg.toolExpanded());
+        messages.set(index, updated);
+        if (!updateToolCellInPlace(index, updated)) {
+            renderAll(false);
+        }
+    }
+
+    private boolean updateToolCellInPlace(int messageIndex, Message msg) {
+        if (!(getDocument() instanceof HTMLDocument doc)) {
+            return false;
+        }
+        Element cellElem = doc.getElement(ChatHtmlTemplates.TOOL_BODY_CELL_ID_PREFIX + messageIndex);
+        if (cellElem == null) {
+            return false;
+        }
+        int savedCaret = getCaretPosition();
+        try {
+            doc.setInnerHTML(cellElem, ChatHtmlTemplates.renderToolBodyCellContent(msg.content(), msg.success(),
+                    msg.error(), msg.timestamp(), messageIndex, msg.toolExpanded()));
+            setCaretPosition(Math.min(savedCaret, doc.getLength()));
+            return true;
+        } catch (BadLocationException | IOException e) {
+            return false;
+        }
     }
 
     public void copyMessageMarkdown(int index) {
@@ -165,7 +210,7 @@ public final class MarkdownPane extends JTextPane {
         int savedCaret = getCaretPosition();
         try {
             boolean copied = messageIndex == this.copiedMessageIndex;
-            doc.setInnerHTML(cellElem, ChatHtmlTemplates.renderCopyActionHtml(messageIndex, copied));
+            doc.setInnerHTML(cellElem, ChatHtmlTemplates.renderAiActionCellContent(messageIndex, copied, !taskMode));
             setCaretPosition(Math.min(savedCaret, doc.getLength()));
             return true;
         } catch (BadLocationException | IOException e) {
@@ -222,9 +267,10 @@ public final class MarkdownPane extends JTextPane {
         }
     }
 
-    private static String renderToolLogSafely(String output, boolean success, String error, String timestamp) {
+    private static String renderToolLogSafely(String output, boolean success, String error, String timestamp,
+            int messageIndex, boolean expanded) {
         try {
-            return ChatHtmlTemplates.renderToolLog(output, success, error, timestamp);
+            return ChatHtmlTemplates.renderToolLog(output, success, error, timestamp, messageIndex, expanded);
         } catch (Exception e) {
             return ERROR_RENDERING_HTML;
         }
@@ -233,7 +279,8 @@ public final class MarkdownPane extends JTextPane {
     private String formatMessageEntryHtml(Message msg, int index) {
         try {
             if (msg.isTool()) {
-                return msg.renderedHtml();
+                return renderToolLogSafely(msg.content(), msg.success(), msg.error(), msg.timestamp(), index,
+                        msg.toolExpanded());
             }
             String safeRole = "";
             if (msg.role() != null) {
@@ -268,12 +315,47 @@ public final class MarkdownPane extends JTextPane {
     public List<ChatTranscriptEntry> getConversationMessages() {
         List<ChatTranscriptEntry> transcript = new ArrayList<>();
         for (Message msg : messages) {
-            if (!msg.isTool() && msg.role() != null
-                    && ("user".equalsIgnoreCase(msg.role()) || "ai".equalsIgnoreCase(msg.role()))) {
+            if (!msg.isTool() && msg.role() != null && (ChatHtmlTemplates.ROLE_USER.equalsIgnoreCase(msg.role())
+                    || ChatHtmlTemplates.ROLE_AI.equalsIgnoreCase(msg.role()))) {
                 transcript.add(new ChatTranscriptEntry(msg.role(), msg.content(), msg.timestamp()));
             }
         }
         return List.copyOf(transcript);
+    }
+
+    public List<PersistedChatEntry> exportMessages() {
+        List<PersistedChatEntry> exported = new ArrayList<>(messages.size());
+        for (Message msg : messages) {
+            exported.add(new PersistedChatEntry(msg.role(), msg.content(), msg.timestamp(), msg.isTool(), msg.success(),
+                    msg.error(), msg.toolExpanded()));
+        }
+        return List.copyOf(exported);
+    }
+
+    public void restoreMessages(List<PersistedChatEntry> entries) {
+        if (copyFeedbackTimer != null && copyFeedbackTimer.isRunning()) {
+            copyFeedbackTimer.stop();
+        }
+        copiedMessageIndex = -1;
+        messages.clear();
+        if (entries != null) {
+            for (PersistedChatEntry entry : entries) {
+                if (entry == null) {
+                    continue;
+                }
+                String safeContent = StringUtils.defaultString(entry.content());
+                String safeTimestamp = StringUtils.defaultIfBlank(entry.timestamp(),
+                        LocalDateTime.now().format(TIME_FORMATTER));
+                if (entry.isTool()) {
+                    messages.add(new Message(null, safeContent, safeTimestamp, true, entry.success(), entry.error(),
+                            null, entry.toolExpanded()));
+                } else {
+                    messages.add(new Message(entry.role(), safeContent, safeTimestamp, false, true, null,
+                            renderMarkdownBodySafely(safeContent), true));
+                }
+            }
+        }
+        renderAll(true);
     }
 
     public void clear() {

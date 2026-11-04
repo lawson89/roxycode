@@ -59,6 +59,33 @@ public final class PathUtils {
         Objects.requireNonNullElse(mapper, AiConfig.SHARED_TOML_MAPPER).writeValue(path.toFile(), value);
     }
 
+    public static <T> T readJsonOrDefault(Path path, Class<T> type, T fallback) {
+        if (path == null || !Files.exists(path)) {
+            return fallback;
+        }
+        try {
+            return Objects.requireNonNullElse(AiConfig.SHARED_OBJECT_MAPPER.readValue(path.toFile(), type), fallback);
+        } catch (IOException e) {
+            return fallback;
+        }
+    }
+
+    public static void writeJson(Path path, Object value) throws IOException {
+        createParentDirectories(path);
+        AiConfig.SHARED_OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), value);
+    }
+
+    public static void deleteIfExistsQuietly(Path path) {
+        if (path == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException ignored) {
+            // Ignore cleanup errors
+        }
+    }
+
     public static void setOwnerOnlyPermissionsIfPosix(Path path) throws IOException {
         if (path == null || !Files.exists(path)) {
             return;

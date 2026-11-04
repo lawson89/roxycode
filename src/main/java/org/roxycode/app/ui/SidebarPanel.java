@@ -13,7 +13,6 @@ import org.kordamp.ikonli.swing.FontIcon;
 
 public final class SidebarPanel extends JPanel {
     private static final long serialVersionUID = 1L;
-    private static final String LOGO_RESOURCE_PATH = "/static/images/roxy.png";
     static final int LOGO_SIZE = 88;
     static final String SUBTITLE_BADGE_TEXT = "AI Workspace";
     static final String TOOLS_ATTENTION_TOOLTIP = "Required system tools are missing";
@@ -91,7 +90,7 @@ public final class SidebarPanel extends JPanel {
         JLabel subtitleBadge = new JLabel(SUBTITLE_BADGE_TEXT);
         subtitleBadge.putClientProperty(FlatClientProperties.STYLE,
                 "font: bold -2; foreground: $Label.disabledForeground; background: darken($Panel.background, 5%); arc: 8; border: 2,8,2,8");
-        brandingPanel.add(UiComponents.createRoundedImagePanel(LOGO_RESOURCE_PATH, LOGO_SIZE, 20),
+        brandingPanel.add(UiComponents.createRoundedImagePanel(UiComponents.ROXY_LOGO_RESOURCE, LOGO_SIZE, 20),
                 "w " + LOGO_SIZE + "!, h " + LOGO_SIZE + "!");
         brandingPanel.add(titleLabel);
         brandingPanel.add(subtitleBadge);

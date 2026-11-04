@@ -30,8 +30,12 @@ class GitServiceTest {
     }
 
     private void stubGit(MockedStatic<ProcessRunner> runner, int exit, String out, String... args) {
+        String errOut = out;
+        if (exit == 0) {
+            errOut = "";
+        }
         runner.when(() -> ProcessRunner.run(eq(List.of(args)), eq(tempDir), anyMap()))
-                .thenReturn(new ProcessResult(exit, out, exit == 0 ? "" : out, false));
+                .thenReturn(new ProcessResult(exit, out, errOut, false));
     }
 
     @Test

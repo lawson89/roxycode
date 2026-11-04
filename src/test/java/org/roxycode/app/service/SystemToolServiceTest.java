@@ -144,13 +144,20 @@ class SystemToolServiceTest {
         AtomicInteger probeCount = new AtomicInteger(0);
 
         SystemToolService service1 = new SystemToolService(settingsService, mapper, event -> {
-            if (event instanceof SystemToolsUpdatedEvent e)
+            if (event instanceof SystemToolsUpdatedEvent e) {
                 publishedEvents.add(e);
+            }
         });
         service1.setToolProber(() -> {
             int call = probeCount.incrementAndGet();
-            return List.of(SystemTool.ofKnownTool("Git", "2.45." + call, "Detected"), SystemTool.ofKnownTool("Docker",
-                    call == 1 ? "Not found" : "Docker 28.0.0", call == 1 ? "Missing" : "Detected"));
+            String dockerVersion = "Docker 28.0.0";
+            String dockerStatus = "Detected";
+            if (call == 1) {
+                dockerVersion = "Not found";
+                dockerStatus = "Missing";
+            }
+            return List.of(SystemTool.ofKnownTool("Git", "2.45." + call, "Detected"),
+                    SystemTool.ofKnownTool("Docker", dockerVersion, dockerStatus));
         });
 
         assertTrue(service1.getCachedTools().isEmpty());

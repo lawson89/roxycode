@@ -375,7 +375,7 @@ public class SystemToolService {
             return SystemTool.ofKnownTool(DOCKER, versionDisplay, STATUS_DETECTED);
         } catch (Throwable t) {
             ExceptionUtils.rethrowIfCancelled(t, "Docker detection cancelled");
-            String rootMessage = extractDiagnosticMessage(t);
+            String rootMessage = ExceptionUtils.getRootCauseMessage(t);
             log.warn("Testcontainers Docker detection failed: {}", rootMessage);
             if (isGenericEnvironmentNotFound(rootMessage)
                     && (dockerCliPresentSupplier == null || !dockerCliPresentSupplier.getAsBoolean())) {
@@ -383,20 +383,6 @@ public class SystemToolService {
             }
             return SystemTool.ofKnownTool(DOCKER, formatDockerErrorMessage(rootMessage), STATUS_ERROR);
         }
-    }
-
-    private static String extractDiagnosticMessage(Throwable t) {
-        Throwable root = ExceptionUtils.getRootCause(t);
-        if (root != null && StringUtils.isNotBlank(root.getMessage())) {
-            return root.getMessage().trim();
-        }
-        if (StringUtils.isNotBlank(t.getMessage())) {
-            return t.getMessage().trim();
-        }
-        if (root != null) {
-            return ExceptionUtils.getMessageOrSimpleName(root);
-        }
-        return ExceptionUtils.getMessageOrSimpleName(t);
     }
 
     private static boolean isGenericEnvironmentNotFound(String message) {

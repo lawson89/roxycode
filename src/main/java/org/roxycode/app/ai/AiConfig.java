@@ -241,16 +241,10 @@ public class AiConfig {
     public ToolExecutionExceptionProcessor toolExecutionExceptionProcessor() {
         return exception -> {
             ExceptionUtils.rethrowIfCancelled(exception, "Tool execution cancelled");
-            Throwable cause = ExceptionUtils.getRootCause(exception);
-            String rawMessage;
-            if (cause != null && StringUtils.hasText(cause.getMessage())) {
-                rawMessage = cause.getMessage();
-            } else {
-                rawMessage = exception.getMessage();
-            }
             String message;
-            if (StringUtils.hasText(rawMessage)) {
-                message = rawMessage;
+            if (exception != null && (StringUtils.hasText(exception.getMessage())
+                    || StringUtils.hasText(ExceptionUtils.getRootCause(exception).getMessage()))) {
+                message = ExceptionUtils.getRootCauseMessage(exception);
             } else {
                 message = "Tool execution failed";
             }

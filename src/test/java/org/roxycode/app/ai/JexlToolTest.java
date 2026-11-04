@@ -97,7 +97,7 @@ public class JexlToolTest {
     }
 
     private static JexlTool createTool(AtomicReference<ToolExecutionEvent> capturedEvent, Object... services) {
-        JexlServiceRegistry registry = new JexlServiceRegistry();
+        JexlServiceRegistry registry = new JexlServiceRegistry(null, null);
         for (Object service : services) {
             registry.register(service);
         }
@@ -159,7 +159,7 @@ public class JexlToolTest {
 
         List<AgentTurnEvent> turnEvents = new ArrayList<>();
         List<ToolExecutionEvent> toolEvents = new ArrayList<>();
-        JexlTool tool = new JexlTool(new JexlServiceRegistry(), event -> {
+        JexlTool tool = new JexlTool(new JexlServiceRegistry(null, null), event -> {
             if (event instanceof AgentTurnEvent ate) {
                 turnEvents.add(ate);
             } else if (event instanceof ToolExecutionEvent tee) {
@@ -221,7 +221,7 @@ public class JexlToolTest {
                 throw new JsonGenerationException("Simulated failure", (JsonGenerator) null);
             }
         };
-        JexlTool failingTool = new JexlTool(new JexlServiceRegistry(), null, failingMapper, null);
+        JexlTool failingTool = new JexlTool(new JexlServiceRegistry(null, null), null, failingMapper, null);
         String result = failingTool.executeJexl("if (");
         assertEquals("Internal Error during error serialization",
                 AiConfig.SHARED_OBJECT_MAPPER.readTree(result).get("error").asText());

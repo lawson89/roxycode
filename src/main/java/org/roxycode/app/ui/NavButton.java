@@ -20,8 +20,6 @@ public final class NavButton extends JButton {
     private static final int BUSY_ANIMATION_DELAY_MS = 500;
     private static final FontAwesomeSolid[] HOURGLASS_FRAMES = {FontAwesomeSolid.HOURGLASS_START,
             FontAwesomeSolid.HOURGLASS_HALF, FontAwesomeSolid.HOURGLASS_END};
-    private static final Color AMBER_LIGHT = new Color(0xd9, 0x77, 0x06);
-    private static final Color AMBER_DARK = new Color(0xf5, 0x9e, 0x0b);
     private static final Color AMBER_TINT_LIGHT = new Color(245, 158, 11, 30);
     private static final Color AMBER_TINT_DARK = new Color(245, 158, 11, 45);
 
@@ -185,13 +183,11 @@ public final class NavButton extends JButton {
         updateIconColor();
         boolean highlightWaiting = !isSelected() && !busy && waitingApproval;
         boolean dark = FlatLaf.isLafDark();
-        Color amberAccent;
+        Color amberAccent = UiComponents.resolveInfoIconColor();
         Color amberTint;
         if (dark) {
-            amberAccent = AMBER_DARK;
             amberTint = AMBER_TINT_DARK;
         } else {
-            amberAccent = AMBER_LIGHT;
             amberTint = AMBER_TINT_LIGHT;
         }
 

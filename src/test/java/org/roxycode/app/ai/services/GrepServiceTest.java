@@ -101,8 +101,9 @@ class GrepServiceTest {
     void testOutputCappingAtMaxLines() {
         StringBuilder manyLines = new StringBuilder();
         for (int i = 1; i <= 250; i++) {
-            if (i > 1)
+            if (i > 1) {
                 manyLines.append(NL);
+            }
             manyLines.append("src/Many.java:").append(i).append(":1:match ").append(i);
         }
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {

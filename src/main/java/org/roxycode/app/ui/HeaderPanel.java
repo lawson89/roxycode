@@ -3,9 +3,12 @@ package org.roxycode.app.ui;
 import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.FlatLaf;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
@@ -43,6 +46,7 @@ public final class HeaderPanel extends JPanel {
     private final transient ProjectService projectService;
     private final transient GitService gitService;
     private final transient SettingsService settingsService;
+    private transient Consumer<String> onNavigateToCard;
 
     final JLabel projectLabel;
     final JButton changeProjectButton;
@@ -66,6 +70,13 @@ public final class HeaderPanel extends JPanel {
 
         projectLabel = new JLabel(projectService.getProjectName());
         projectLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +1");
+        projectLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        projectLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                chooseProject();
+            }
+        });
         leftPanel.add(projectLabel);
 
         changeProjectButton = createChangeProjectButton(e -> chooseProject());
@@ -83,12 +94,26 @@ public final class HeaderPanel extends JPanel {
         rightPanel.setOpaque(false);
 
         modelLabel = new JLabel();
-        modelLabel.setToolTipText("Active Gemini model");
+        modelLabel.setToolTipText("Click to configure AI model & thinking level");
+        modelLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        modelLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                navigateFromModelPill();
+            }
+        });
 
         groundingLabel = new JLabel();
         groundingLabel.setToolTipText("Google Search Grounding enabled");
+        groundingLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        groundingLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                navigateFromGroundingPill();
+            }
+        });
 
-        updateModelDisplay(resolveEffectiveModel(), resolveEffectiveThinkingLevel());
+        updateModelDisplay();
         themeToggleButton = createIconButton(Codicons.COLOR_MODE, "Toggle Light/Dark Theme", e -> toggleTheme());
 
         rightPanel.add(modelLabel);
@@ -111,14 +136,6 @@ public final class HeaderPanel extends JPanel {
             changeProjectButton.setText(SELECT_PROJECT_TEXT);
             noProjectNoticeLabel.setVisible(true);
         }
-    }
-
-    private String resolveEffectiveModel() {
-        return ProjectService.resolveEffectiveGeminiModel(projectService, settingsService);
-    }
-
-    private ThinkingLevel resolveEffectiveThinkingLevel() {
-        return ProjectService.resolveEffectiveThinkingLevel(projectService, settingsService);
     }
 
     private void updateProjectTooltip(Path root) {
@@ -207,14 +224,14 @@ public final class HeaderPanel extends JPanel {
             projectLabel.setText(projectService.getProjectName());
             updateProjectStateDisplay();
             updateProjectTooltip(event.projectRoot());
-            updateModelDisplay(resolveEffectiveModel(), resolveEffectiveThinkingLevel());
+            updateModelDisplay();
             updateBranchLabel();
         });
     }
 
     @EventListener
     public void onSettingsChanged(SettingsChangedEvent event) {
-        Edt.run(() -> updateModelDisplay(resolveEffectiveModel(), resolveEffectiveThinkingLevel()));
+        Edt.run(this::updateModelDisplay);
     }
 
     private void toggleTheme() {
@@ -277,7 +294,9 @@ public final class HeaderPanel extends JPanel {
         });
     }
 
-    private void updateModelDisplay(String modelName, ThinkingLevel thinkingLevel) {
+    private void updateModelDisplay() {
+        String modelName = ProjectService.resolveEffectiveGeminiModel(projectService, settingsService);
+        ThinkingLevel thinkingLevel = ProjectService.resolveEffectiveThinkingLevel(projectService, settingsService);
         groundingLabel.setVisible(settingsService.getSettings().isGoogleGroundingEnabled());
         modelLabel.setIcon(FontIcon.of(Codicons.HUBOT, 14, resolveModelAccentColor()));
         String baseModelText = java.util.Objects.requireNonNullElse(modelName, "No model selected");
@@ -287,8 +306,31 @@ public final class HeaderPanel extends JPanel {
         } else {
             modelLabel.setText(baseModelText);
         }
-        modelLabel.setToolTipText(
-                "Active Gemini model: " + baseModelText + " (Thinking: " + resolvedLevel.getDisplayName() + ")");
+        modelLabel.setToolTipText("Active Gemini model: " + baseModelText + " (Thinking: "
+                + resolvedLevel.getDisplayName() + ") — Click to configure AI model & thinking level");
+    }
+
+    public void setOnNavigateToCard(Consumer<String> onNavigateToCard) {
+        this.onNavigateToCard = onNavigateToCard;
+    }
+
+    void navigateFromModelPill() {
+        if (onNavigateToCard == null) {
+            return;
+        }
+        boolean hasProject = projectService != null && projectService.hasActiveProject();
+        boolean hasApiKey = settingsService != null && settingsService.hasConfiguredApiKey();
+        if (hasProject && hasApiKey) {
+            onNavigateToCard.accept(MainFrame.BUILD_CONFIG_VIEW);
+        } else {
+            onNavigateToCard.accept(MainFrame.SETTINGS_VIEW);
+        }
+    }
+
+    void navigateFromGroundingPill() {
+        if (onNavigateToCard != null) {
+            onNavigateToCard.accept(MainFrame.SETTINGS_VIEW);
+        }
     }
 
     private void chooseProject() {

@@ -41,7 +41,13 @@ public final class ExceptionUtils {
         }
         Throwable root = getRootCause(t);
         if (root != null && StringUtils.isNotBlank(root.getMessage())) {
-            return root.getMessage();
+            return root.getMessage().trim();
+        }
+        if (StringUtils.isNotBlank(t.getMessage())) {
+            return t.getMessage().trim();
+        }
+        if (root != null) {
+            return getMessageOrSimpleName(root);
         }
         return getMessageOrSimpleName(t);
     }

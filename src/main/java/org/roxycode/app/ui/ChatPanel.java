@@ -110,6 +110,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     transient FileMentionPopup fileMentionPopup;
     private transient ProjectService projectService;
     private transient Runnable onViewPlanAction;
+    private String defaultPlaceholderText = DEFAULT_PLACEHOLDER_TEXT;
     private boolean loading = false;
     private final List<Consumer<Boolean>> loadingListeners = new ArrayList<>();
     private final List<Consumer<Boolean>> userInputListeners = new CopyOnWriteArrayList<>();
@@ -167,7 +168,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         this.inlineActionPanel = createInlineActionPanel();
         this.userInputPromptPanel = createUserInputPromptPanel();
         Component topComponent = createOutputSection(isTaskMode);
-        JPanel telemetrySection = createTelemetrySection();
+        initTelemetryComponents();
         JPanel inputSection = createInputSection(isTaskMode);
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topComponent, inputSection);
@@ -176,7 +177,6 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         splitPane.putClientProperty(FlatClientProperties.STYLE, "style: plain");
         splitPane.setBorder(BorderFactory.createEmptyBorder());
         add(splitPane, BorderLayout.CENTER);
-        add(telemetrySection, BorderLayout.SOUTH);
 
         SwingHtmlUtils.installTextContextMenu(inputArea);
         setupUndoRedo();
@@ -289,14 +289,16 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
         sendButton = UiComponents.createActionButton("Send", Codicons.CHEVRON_RIGHT, new Insets(5, 14, 5, 14), false,
                 "arc: 8; font: bold; " + UiComponents.ACCENT_BUTTON_STYLE, this::sendMessage);
+        sendButton.setToolTipText("Send message (Enter)");
 
         stopButton = UiComponents.createActionButton("Stop", Codicons.DEBUG_STOP, new Insets(5, 14, 5, 14), false,
                 "arc: 8; font: bold; " + UiComponents.RED_BUTTON_STYLE, e -> controller.stopTurn());
+        stopButton.setToolTipText("Stop active turn (Esc)");
         stopButton.setEnabled(false);
         stopButton.setVisible(false);
 
-        attachImageButton = UiComponents.createActionButton("Attach Image", Codicons.FILE_MEDIA, new Insets(4, 8, 4, 8),
-                true, TOOLBAR_BUTTON_STYLE, e -> chooseImageAttachment());
+        attachImageButton = UiComponents.createActionButton("Image", Codicons.FILE_MEDIA, new Insets(4, 8, 4, 8), true,
+                TOOLBAR_BUTTON_STYLE, e -> chooseImageAttachment());
         attachImageButton.setToolTipText("Attach Image (or paste with Ctrl+V)");
 
         String resetText;
@@ -323,11 +325,16 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
                 "font: $small.font; foreground: $Label.disabledForeground; background: darken($TextArea.background, 4%); arc: 8; border: 2,8,2,8");
         updateTurnLabel();
 
-        JPanel actionToolbar = new JPanel(new MigLayout("insets 4 8 6 8, fillx", "[]4[]4[]push[]8[]", "center"));
+        JPanel actionToolbar = new JPanel(
+                new MigLayout("insets 4 8 6 8, fillx", "[]4[]4[]push[]4[]10[]4[]push[]8[]", "center"));
         actionToolbar.setOpaque(false);
         actionToolbar.add(attachImageButton);
         actionToolbar.add(resetSessionButton);
         actionToolbar.add(mentionButton);
+        actionToolbar.add(ctxLabel);
+        actionToolbar.add(ctxProgressBar, "w 48!, h 6!");
+        actionToolbar.add(cacheLabel);
+        actionToolbar.add(cacheProgressBar, "w 44!, h 6!");
         actionToolbar.add(turnLabel);
         actionToolbar.add(sendButton, "hidemode 3");
         actionToolbar.add(stopButton, "hidemode 3");
@@ -351,10 +358,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
                 "arc: 12; background: $TextArea.background; border: 1,1,1,1," + borderColorToken);
     }
 
-    private JPanel createTelemetrySection() {
-        JPanel telemetryBar = new JPanel(new MigLayout("insets 0 16 6 16", "[] 6 [] 12 [] 6 []", "center"));
-        telemetryBar.setOpaque(false);
-
+    private void initTelemetryComponents() {
         Font statusFont = getFont().deriveFont(11f);
         ctxLabel = new JLabel();
         ctxLabel.setFont(statusFont);
@@ -369,12 +373,6 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         cacheProgressBar = new JProgressBar(0, 100);
         cacheProgressBar.setStringPainted(false);
         cacheProgressBar.putClientProperty(FlatClientProperties.STYLE, "arc: 6; foreground: $Actions.Green");
-
-        telemetryBar.add(ctxLabel);
-        telemetryBar.add(ctxProgressBar, "w 60!, h 8!");
-        telemetryBar.add(cacheLabel);
-        telemetryBar.add(cacheProgressBar, "w 60!, h 8!");
-        return telemetryBar;
     }
 
     private static Action createAction(Runnable action) {
@@ -449,18 +447,31 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
     void updateProjectComposerState() {
         boolean projectReady = isProjectReady();
-        String placeholder;
         if (projectReady) {
-            placeholder = DEFAULT_PLACEHOLDER_TEXT;
+            defaultPlaceholderText = DEFAULT_PLACEHOLDER_TEXT;
         } else {
-            placeholder = NO_PROJECT_PLACEHOLDER_TEXT;
+            defaultPlaceholderText = NO_PROJECT_PLACEHOLDER_TEXT;
         }
-        inputArea.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, placeholder);
+        updateInputPlaceholderText();
         boolean enableComposer = !loading && projectReady;
         inputArea.setEnabled(enableComposer);
         sendButton.setEnabled(enableComposer);
         attachImageButton.setEnabled(enableComposer);
         mentionButton.setEnabled(enableComposer);
+    }
+
+    private void updateInputPlaceholderText() {
+        if (inputArea == null) {
+            return;
+        }
+        String placeholder;
+        if (loading) {
+            placeholder = "Roxy is working (" + controller.formatCurrentTurnStatus()
+                    + ")... Press Esc or click Stop to cancel";
+        } else {
+            placeholder = defaultPlaceholderText;
+        }
+        inputArea.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, placeholder);
     }
 
     public void setOnViewPlanAction(Runnable action) {
@@ -570,6 +581,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
     void updateTurnLabel() {
         turnLabel.setText(controller.formatCurrentTurnStatus());
+        updateInputPlaceholderText();
         updateTelemetry();
     }
 
@@ -581,18 +593,24 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         int lastCacheHitPct = org.roxycode.app.util.TokenUtils.computeCacheHitPercent(lastCachedInputTokens,
                 lastPromptTokens);
 
+        String formattedPrompt;
         if (lastPromptTokens > 0) {
-            ctxLabel.setText(String.format(java.util.Locale.US, "Context Usage: %s / %s (%d%%)",
-                    org.roxycode.app.util.TokenUtils.formatTokenCount(lastPromptTokens),
-                    org.roxycode.app.util.TokenUtils.formatTokenCount(contextWindow), ctxPct));
-            cacheLabel.setText(String.format(java.util.Locale.US, "Cache Hit: %s / %s (%d%%)",
-                    org.roxycode.app.util.TokenUtils.formatTokenCount(lastCachedInputTokens),
-                    org.roxycode.app.util.TokenUtils.formatTokenCount(lastPromptTokens), lastCacheHitPct));
+            formattedPrompt = org.roxycode.app.util.TokenUtils.formatTokenCount(lastPromptTokens);
         } else {
-            ctxLabel.setText(String.format(java.util.Locale.US, "Context Usage: 0 / %s (0%%)",
-                    org.roxycode.app.util.TokenUtils.formatTokenCount(contextWindow)));
-            cacheLabel.setText("Cache Hit: 0 / 0 (0%)");
+            formattedPrompt = "0";
         }
+        String formattedWindow = org.roxycode.app.util.TokenUtils.formatTokenCount(contextWindow);
+        String formattedCached;
+        if (lastCachedInputTokens > 0) {
+            formattedCached = org.roxycode.app.util.TokenUtils.formatTokenCount(lastCachedInputTokens);
+        } else {
+            formattedCached = "0";
+        }
+
+        ctxLabel.setText(
+                String.format(java.util.Locale.US, "Ctx: %s / %s (%d%%)", formattedPrompt, formattedWindow, ctxPct));
+        cacheLabel.setText(String.format(java.util.Locale.US, "Cache: %d%%", lastCacheHitPct));
+
         String ctxBarStyle;
         if (ctxPct >= CTX_USAGE_CRITICAL_PCT) {
             ctxBarStyle = "arc: 6; foreground: $Actions.Red";
@@ -603,14 +621,14 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         }
         ctxProgressBar.putClientProperty(FlatClientProperties.STYLE, ctxBarStyle);
         ctxProgressBar.setValue(ctxPct);
-        String ctxTooltip = String.format(java.util.Locale.US, "Context window usage: %,d / %,d tokens (%d%%)",
-                lastPromptTokens, contextWindow, ctxPct);
+        String ctxTooltip = String.format(java.util.Locale.US, "Context window usage: %s / %s tokens (%d%%)",
+                formattedPrompt, formattedWindow, ctxPct);
         ctxLabel.setToolTipText(ctxTooltip);
         ctxProgressBar.setToolTipText(ctxTooltip);
 
         cacheProgressBar.setValue(lastCacheHitPct);
-        String cacheTooltip = String.format(java.util.Locale.US, "Implicit cache hit: %,d / %,d input tokens (%d%%)",
-                lastCachedInputTokens, lastPromptTokens, lastCacheHitPct);
+        String cacheTooltip = String.format(java.util.Locale.US, "Implicit cache hit: %s / %s input tokens (%d%%)",
+                formattedCached, formattedPrompt, lastCacheHitPct);
         cacheLabel.setToolTipText(cacheTooltip);
         cacheProgressBar.setToolTipText(cacheTooltip);
     }
@@ -658,6 +676,20 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         return label;
     }
 
+    private void resetPromptPanelWithHeader(String text, Codicons icon) {
+        userInputPromptPanel.removeAll();
+        userInputPromptPanel.add(createPromptHeaderLabel(text, icon));
+    }
+
+    private static JPanel createPromptActionsRow(JComponent... components) {
+        JPanel actionsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        actionsPanel.setOpaque(false);
+        for (JComponent component : components) {
+            actionsPanel.add(component);
+        }
+        return actionsPanel;
+    }
+
     private void showPromptPanel() {
         userInputPromptPanel.setVisible(true);
         userInputPromptPanel.revalidate();
@@ -668,8 +700,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     void showUserInputPrompt(UserInputRequestEvent event, Consumer<Object> onResponse) {
-        userInputPromptPanel.removeAll();
-        userInputPromptPanel.add(createPromptHeaderLabel(event.question(), Codicons.QUESTION));
+        resetPromptPanelWithHeader(event.question(), Codicons.QUESTION);
 
         if (StringUtils.isNotBlank(event.details())) {
             JLabel detailsLabel = new JLabel(event.details());
@@ -679,15 +710,11 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
         PromptType promptType = event.promptType();
         if (promptType == PromptType.CONFIRM) {
-            JPanel actionsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-            actionsPanel.setOpaque(false);
             JButton yesButton = UiComponents.createActionButton("Yes", Codicons.CHECK, null, false,
                     UiComponents.GREEN_BUTTON_STYLE, e -> onResponse.accept(Boolean.TRUE));
             JButton noButton = UiComponents.createActionButton("No", Codicons.CLOSE, null, false,
                     UiComponents.RED_BUTTON_STYLE, e -> onResponse.accept(Boolean.FALSE));
-            actionsPanel.add(yesButton);
-            actionsPanel.add(noButton);
-            userInputPromptPanel.add(actionsPanel);
+            userInputPromptPanel.add(createPromptActionsRow(yesButton, noButton));
         } else if (promptType == PromptType.SINGLE_SELECT) {
             JPanel optionsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
             optionsPanel.setOpaque(false);
@@ -750,11 +777,8 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     void showResetSessionPrompt(Runnable onConfirm) {
-        userInputPromptPanel.removeAll();
-        userInputPromptPanel.add(createPromptHeaderLabel(RESET_SESSION_PROMPT_MESSAGE, Codicons.QUESTION));
+        resetPromptPanelWithHeader(RESET_SESSION_PROMPT_MESSAGE, Codicons.QUESTION);
 
-        JPanel actionsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        actionsPanel.setOpaque(false);
         JButton confirmButton = UiComponents.createActionButton(CONFIRM_RESET_BUTTON_TEXT, Codicons.CHECK, null, false,
                 UiComponents.RED_BUTTON_STYLE, e -> {
                     hideUserInputPrompt();
@@ -764,16 +788,13 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
                 });
         JButton cancelButton = UiComponents.createActionButton(CANCEL_BUTTON_TEXT, Codicons.CLOSE, null, false, null,
                 e -> hideUserInputPrompt());
-        actionsPanel.add(confirmButton);
-        actionsPanel.add(cancelButton);
-        userInputPromptPanel.add(actionsPanel);
+        userInputPromptPanel.add(createPromptActionsRow(confirmButton, cancelButton));
 
         showPromptPanel();
     }
 
     void showNewTopicPrompt(String defaultTopicName, Consumer<NewTopicChoice> onChoice) {
-        userInputPromptPanel.removeAll();
-        userInputPromptPanel.add(createPromptHeaderLabel(NEW_TOPIC_PROMPT_MESSAGE, Codicons.COMMENT_DISCUSSION));
+        resetPromptPanelWithHeader(NEW_TOPIC_PROMPT_MESSAGE, Codicons.COMMENT_DISCUSSION);
 
         JPanel fieldPanel = new JPanel(new MigLayout("insets 0, fillx, gap 8", "[][grow, fill]"));
         fieldPanel.setOpaque(false);
@@ -792,8 +813,6 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         fieldPanel.add(topicNameField, "growx");
         userInputPromptPanel.add(fieldPanel);
 
-        JPanel actionsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        actionsPanel.setOpaque(false);
         JButton saveButton = UiComponents.createActionButton(SAVE_TOPIC_BUTTON_TEXT, Codicons.CHECK, null, false,
                 UiComponents.GREEN_BUTTON_STYLE, saveAction);
         JButton discardButton = UiComponents.createActionButton(DISCARD_TOPIC_BUTTON_TEXT, Codicons.TRASH, null, false,
@@ -810,10 +829,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
                         onChoice.accept(new NewTopicChoice(false, false, ""));
                     }
                 });
-        actionsPanel.add(saveButton);
-        actionsPanel.add(discardButton);
-        actionsPanel.add(cancelButton);
-        userInputPromptPanel.add(actionsPanel);
+        userInputPromptPanel.add(createPromptActionsRow(saveButton, discardButton, cancelButton));
 
         showPromptPanel();
         SwingUtilities.invokeLater(() -> {
@@ -905,14 +921,10 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
     void setLoading(boolean loading) {
         this.loading = loading;
-        boolean enableComposer = !loading && isProjectReady();
         stopButton.setEnabled(loading);
         stopButton.setVisible(loading);
-        sendButton.setEnabled(enableComposer);
         sendButton.setVisible(!loading);
-        attachImageButton.setEnabled(enableComposer);
-        mentionButton.setEnabled(enableComposer);
-        inputArea.setEnabled(enableComposer);
+        updateProjectComposerState();
         if (model.isTaskMode()) {
             boolean enableDecision = !loading && controller.hasPendingPhase();
             approveButton.setEnabled(enableDecision);
@@ -954,6 +966,14 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
     public List<MarkdownPane.ChatTranscriptEntry> getConversationMessages() {
         return outputArea.getConversationMessages();
+    }
+
+    public List<MarkdownPane.PersistedChatEntry> exportMessages() {
+        return outputArea.exportMessages();
+    }
+
+    public void restoreMessages(List<MarkdownPane.PersistedChatEntry> entries) {
+        outputArea.restoreMessages(entries);
     }
 
     public void focusInput() {
@@ -1009,7 +1029,24 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
                 () -> inputArea.insert("\t", inputArea.getCaretPosition()));
         bindPopupKey(im, am, KeyEvent.VK_UP, "autocomplete-or-up", fileMentionPopup::selectPrevious, null);
         bindPopupKey(im, am, KeyEvent.VK_DOWN, "autocomplete-or-down", fileMentionPopup::selectNext, null);
-        bindPopupKey(im, am, KeyEvent.VK_ESCAPE, "dismiss-autocomplete", fileMentionPopup::hidePopup, null);
+        bindPopupKey(im, am, KeyEvent.VK_ESCAPE, "dismiss-autocomplete", fileMentionPopup::hidePopup, () -> {
+            if (loading) {
+                controller.stopTurn();
+            }
+        });
+
+        InputMap panelIm = getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
+        ActionMap panelAm = getActionMap();
+        panelIm.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "stop-active-turn");
+        panelAm.put("stop-active-turn", createAction(() -> {
+            if (fileMentionPopup != null && fileMentionPopup.isPopupVisible()) {
+                fileMentionPopup.hidePopup();
+                return;
+            }
+            if (loading) {
+                controller.stopTurn();
+            }
+        }));
 
         im.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.SHIFT_DOWN_MASK), "insert-newline");
         am.put("insert-newline", createAction(() -> {

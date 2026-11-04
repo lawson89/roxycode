@@ -38,7 +38,7 @@ class AgentMemoryPanelTest {
         when(projectService.hasActiveProject()).thenReturn(true);
         when(projectService.resolveProjectDataPath(anyString()))
                 .thenAnswer(inv -> projectDataDir.resolve(inv.getArgument(0, String.class)));
-        memoryService = new MemoryService(settingsService, projectService);
+        memoryService = new MemoryService(settingsService, projectService, null);
     }
 
     @Test

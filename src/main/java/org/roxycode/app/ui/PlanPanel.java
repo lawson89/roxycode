@@ -70,7 +70,7 @@ public final class PlanPanel extends JPanel {
         if (plan == null) {
             return;
         }
-        String markdown = buildPlanMarkdown(plan);
+        String markdown = plan.toFullMarkdown();
         this.lastCopiedMarkdown = markdown;
         copyFeedbackTimer = UiComponents.copyWithFeedback(copyMarkdownButton, copyFeedbackTimer, markdown,
                 COPY_BUTTON_TEXT, COPY_FEEDBACK_DELAY_MS);
@@ -103,13 +103,6 @@ public final class PlanPanel extends JPanel {
         displayArea.setCaretPosition(0);
     }
 
-    static String buildPlanMarkdown(ImplementationPlan plan) {
-        if (plan == null) {
-            return "";
-        }
-        return plan.toFullMarkdown();
-    }
-
     static String buildPlanHtml(ImplementationPlan plan) {
         if (plan == null) {
             return """
@@ -120,7 +113,6 @@ public final class PlanPanel extends JPanel {
                     """;
         }
 
-        String markdown = buildPlanMarkdown(plan);
-        return "<html><body>" + SwingHtmlUtils.renderMarkdownToHtml(markdown) + "</body></html>";
+        return "<html><body>" + SwingHtmlUtils.renderMarkdownToHtml(plan.toFullMarkdown()) + "</body></html>";
     }
 }

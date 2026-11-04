@@ -354,13 +354,6 @@ public record ImplementationPlan(String title, String goal, List<String> require
                 approvedBy, completedBy, completedOn, handoffLog, fileChanges, newUsage);
     }
 
-    public ImplementationPlan withRecordedTokenUsage(TokenUsageEvent event) {
-        if (event == null) {
-            return this;
-        }
-        return withRecordedTokenUsage(event, event.phase());
-    }
-
     public ImplementationPlan withRecordedTokenUsage(TokenUsageEvent event, WorkflowPhase fallbackPhase) {
         if (event == null) {
             return this;

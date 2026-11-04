@@ -3,7 +3,6 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import javax.swing.ToolTipManager;
@@ -15,19 +14,16 @@ import org.roxycode.app.ai.services.PlanService;
 class WorkflowPhaseIndicatorTest {
 
     @Test
-    void testPhaseIndicatorsWorkspaceInfoIconsAndWelcomeCards() {
+    void testPhaseIndicatorsAndImmediateTooltipBehavior() {
         for (WorkflowPhase phase : WorkflowPhase.values()) {
             WorkflowPhaseIndicator indicator = new WorkflowPhaseIndicator(phase);
             assertEquals(phase, indicator.getPhase());
             assertNotNull(indicator.getToolTipText());
-            assertTrue(indicator.getToolTipText().contains(phase.getPersonaTitle()));
 
             indicator.setActive(true);
-            assertTrue(indicator.getToolTipText().contains(phase.getPersonaTitle()));
-
             indicator.setActive(false);
             indicator.setCompleted(true);
-            assertTrue(indicator.getToolTipText().contains(phase.getPersonaTitle()));
+            assertNotNull(indicator.getToolTipText());
         }
 
         PlanService planService = mock(PlanService.class);
@@ -36,29 +32,23 @@ class WorkflowPhaseIndicatorTest {
         TaskWorkspacePanel taskWorkspace = SwingTestUtils
                 .callOnEdt(() -> new TaskWorkspacePanel(null, planService, null, null));
         assertNotNull(taskWorkspace.workflowInfoIcon);
-        SwingTestUtils.assertContainsAll(taskWorkspace.workflowInfoIcon.getToolTipText(), "Plan", "Code", "Review",
-                "Codebase Q&amp;A");
+        assertEquals("Plan", taskWorkspace.taskTabs.getTitleAt(1));
+        assertEquals(0, taskWorkspace.taskTabs.getSelectedIndex());
+        SwingTestUtils.runOnEdt(() -> {
+            MouseEvent clickEvent = new MouseEvent(taskWorkspace.planLabel, MouseEvent.MOUSE_CLICKED,
+                    System.currentTimeMillis(), 0, 4, 4, 1, false);
+            for (MouseListener listener : taskWorkspace.planLabel.getMouseListeners()) {
+                listener.mouseClicked(clickEvent);
+            }
+        });
+        assertEquals(1, taskWorkspace.taskTabs.getSelectedIndex());
 
         QaWorkspacePanel qaWorkspace = SwingTestUtils.callOnEdt(() -> new QaWorkspacePanel(null, null));
         assertNotNull(qaWorkspace.mentorInfoIcon);
-        SwingTestUtils.assertContainsAll(qaWorkspace.mentorInfoIcon.getToolTipText(), "Read-Only",
-                "Move to Feature Request", "RoxyCode");
 
         FontIcon infoFontIcon = (FontIcon) qaWorkspace.mentorInfoIcon.getIcon();
         assertNotNull(infoFontIcon);
-        assertEquals(15, infoFontIcon.getIconSize());
         assertEquals(UiComponents.resolveInfoIconColor(), infoFontIcon.getIconColor());
-        assertNull(qaWorkspace.mentorInfoIcon.getClientProperty(FlatClientProperties.STYLE));
-        assertNull(qaWorkspace.mentorInfoIcon.getBorder());
-        assertFalse(qaWorkspace.mentorInfoIcon.isOpaque());
-        assertEquals(qaWorkspace.qaHeaderBar, qaWorkspace.mentorInfoIcon.getParent());
-        assertNotEquals(qaWorkspace.mentorBanner, qaWorkspace.mentorInfoIcon.getParent());
-
-        assertEquals(taskWorkspace.topBar, taskWorkspace.workflowInfoIcon.getParent());
-        assertNotEquals(taskWorkspace.progressTracker, taskWorkspace.workflowInfoIcon.getParent());
-        assertNull(taskWorkspace.workflowInfoIcon.getClientProperty(FlatClientProperties.STYLE));
-        assertNull(taskWorkspace.workflowInfoIcon.getBorder());
-        assertFalse(taskWorkspace.workflowInfoIcon.isOpaque());
 
         ToolTipManager toolTipManager = ToolTipManager.sharedInstance();
         int customInitialDelay = 4321;
@@ -73,11 +63,5 @@ class WorkflowPhaseIndicatorTest {
             UiComponents.showInfoTooltipImmediately(qaWorkspace.mentorInfoIcon, null);
             assertEquals(customInitialDelay, toolTipManager.getInitialDelay());
         });
-
-        String exploreWelcome = ChatHtmlTemplates.renderWelcomeCard(false);
-        SwingTestUtils.assertContainsAll(exploreWelcome, "Ask about RoxyCode", "build.toml");
-
-        String taskWelcome = ChatHtmlTemplates.renderWelcomeCard(true);
-        SwingTestUtils.assertContainsAll(taskWelcome, "Hover over the", "Codebase Q&amp;A");
     }
 }

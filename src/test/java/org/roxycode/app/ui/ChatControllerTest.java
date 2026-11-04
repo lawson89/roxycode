@@ -8,6 +8,7 @@ import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CancellationException;
@@ -30,12 +31,18 @@ import org.junit.jupiter.api.io.TempDir;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.AiConfig;
+import org.roxycode.app.ai.AiMemoryConfig;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.GrepService;
+import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.*;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.ProjectService;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 
 class ChatControllerTest extends ChatTestFixture {
 
@@ -339,17 +346,29 @@ class ChatControllerTest extends ChatTestFixture {
         assertFalse(chatPanel.sendButton.isVisible());
         assertTrue(chatPanel.stopButton.isVisible());
         assertFalse(chatPanel.approveButton.isEnabled());
-
-        chatPanel.setLoading(false);
-        assertTrue(chatPanel.sendButton.isVisible());
-        assertTrue(chatPanel.approveButton.isEnabled());
+        assertEquals("Image", chatPanel.attachImageButton.getText());
+        assertEquals("Send message (Enter)", chatPanel.sendButton.getToolTipText());
+        assertEquals("Stop active turn (Esc)", chatPanel.stopButton.getToolTipText());
+        String workingPlaceholder = String
+                .valueOf(chatPanel.inputArea.getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT));
+        assertContainsAll(workingPlaceholder, "Roxy is working", "Press Esc or click Stop to cancel");
 
         ImplementationPlan plan = samplePlan(new ImplementationPlan.TechStep("Step 0", true),
                 new ImplementationPlan.TechStep("Step 1", false));
         when(planService.getCurrentPlan()).thenReturn(plan);
         chatPanel.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 2, "CODE"));
         flushEdt();
-        assertEquals("Turns: 2 / 5 | Plan: 1/2 steps", chatPanel.turnLabel.getText());
+        assertEquals("Turn 2/5 • 1/2 steps", chatPanel.turnLabel.getText());
+        assertContainsAll(String.valueOf(chatPanel.inputArea.getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT)),
+                "Turn 2/5 • 1/2 steps");
+
+        SwingTestUtils.runOnEdt(() -> chatPanel.getActionMap().get("stop-active-turn").actionPerformed(null));
+        flushEdt();
+        assertFalse(chatPanel.isLoading());
+        assertTrue(chatPanel.sendButton.isVisible());
+        assertTrue(chatPanel.approveButton.isEnabled());
+        assertEquals(ChatPanel.DEFAULT_PLACEHOLDER_TEXT,
+                chatPanel.inputArea.getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT));
 
         BufferedImage src = new BufferedImage(120, 80, BufferedImage.TYPE_INT_ARGB);
         File imgFile = tempDir.resolve("sample.png").toFile();
@@ -411,9 +430,11 @@ class ChatControllerTest extends ChatTestFixture {
         taskPanel.onTokenUsage(qaEvent);
         flushEdt();
 
-        assertEquals("Context Usage: 10.0k / 1.0M (1%)", qaPanel.ctxLabel.getText());
-        assertEquals("Cache Hit: 8.0k / 10.0k (80%)", qaPanel.cacheLabel.getText());
-        assertEquals("Context Usage: 0 / 1.0M (0%)", taskPanel.ctxLabel.getText());
+        assertEquals("Ctx: 10.0k / 1.0M (1%)", qaPanel.ctxLabel.getText());
+        assertEquals("Cache: 80%", qaPanel.cacheLabel.getText());
+        assertEquals("Context window usage: 10.0k / 1.0M tokens (1%)", qaPanel.ctxLabel.getToolTipText());
+        assertEquals("Implicit cache hit: 8.0k / 10.0k input tokens (80%)", qaPanel.cacheLabel.getToolTipText());
+        assertEquals("Ctx: 0 / 1.0M (0%)", taskPanel.ctxLabel.getText());
 
         // 2. task:default event updates taskPanel
         TokenUsageEvent taskEvent = new TokenUsageEvent("task:default", "gemini-1.5-pro", 1_000_000, 20_000, 10_000,
@@ -421,19 +442,108 @@ class ChatControllerTest extends ChatTestFixture {
         taskPanel.onTokenUsage(taskEvent);
         flushEdt();
 
-        assertEquals("Context Usage: 20.0k / 1.0M (2%)", taskPanel.ctxLabel.getText());
-        assertEquals("Cache Hit: 10.0k / 20.0k (50%)", taskPanel.cacheLabel.getText());
+        assertEquals("Ctx: 20.0k / 1.0M (2%)", taskPanel.ctxLabel.getText());
+        assertEquals("Cache: 50%", taskPanel.cacheLabel.getText());
+        assertEquals("Implicit cache hit: 10.0k / 20.0k input tokens (50%)", taskPanel.cacheLabel.getToolTipText());
 
         // 3. Reset session resets telemetry for that panel
         taskPanel.controller.performResetSession();
         flushEdt();
-        assertEquals("Context Usage: 0 / 1.0M (0%)", taskPanel.ctxLabel.getText());
-        assertEquals("Context Usage: 10.0k / 1.0M (1%)", qaPanel.ctxLabel.getText()); // Still there
+        assertEquals("Ctx: 0 / 1.0M (0%)", taskPanel.ctxLabel.getText());
+        assertEquals("Cache: 0%", taskPanel.cacheLabel.getText());
+        assertEquals("Ctx: 10.0k / 1.0M (1%)", qaPanel.ctxLabel.getText()); // Still there
 
         // 4. Project change resets telemetry
         qaPanel.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/new-project")));
         flushEdt();
-        assertEquals("Context Usage: 0 / 1.0M (0%)", qaPanel.ctxLabel.getText());
+        assertEquals("Ctx: 0 / 1.0M (0%)", qaPanel.ctxLabel.getText());
+    }
+
+    @Test
+    void testPerProjectSessionPersistenceRestoreAndResetCleanup(@TempDir Path tempDir) {
+        AiMemoryConfig memoryConfig = new AiMemoryConfig();
+        ChatMemory realMemory = memoryConfig.chatMemory(new InMemoryChatMemoryRepository(), settingsService);
+
+        Path projectAData = tempDir.resolve("project-a-data");
+        Path projectBData = tempDir.resolve("project-b-data");
+        AtomicReference<Path> activeDataDir = new AtomicReference<>(projectAData);
+
+        ProjectService projectService = mock(ProjectService.class);
+        when(projectService.hasActiveProject()).thenReturn(true);
+        when(projectService.resolveProjectDataPath(anyString()))
+                .thenAnswer(inv -> activeDataDir.get().resolve(inv.getArgument(0, String.class)));
+
+        ChatPanel taskPanel = new ChatPanel(aiService, planService, publisher, realMemory,
+                ChatModel.TASK_SESSION_PREFIX, null, true, settingsService, directExecutor);
+        taskPanel.setProjectService(projectService);
+
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+        when(aiService.chat(eq("task:default"), any(), eq("Create plan"), any())).thenAnswer(inv -> {
+            realMemory.add("task:default",
+                    List.of(new UserMessage("Create plan"), new AssistantMessage("Plan submitted.")));
+            taskPanel.onToolExecution(new ToolExecutionEvent("task:default",
+                    "planService.submitPlan('Title', 'Goal', [], ['Step 1'])", "ok", true, null));
+            taskPanel.onTokenUsage(new TokenUsageEvent("task:default", "gemini-1.5-pro", 1_000_000, 25_000, 20_000,
+                    5_000, 600, 100, 25_700, 0.008));
+            return "Plan submitted.";
+        });
+
+        sendOnEdt(taskPanel, "Create plan");
+        flushEdt();
+
+        Path projectASessionFile = projectAData
+                .resolve(ChatController.resolveActiveChatFilename(ChatModel.TASK_CONVERSATION_ID));
+        assertTrue(Files.exists(projectASessionFile));
+        assertEquals(2, realMemory.get("task:default").size());
+        assertEquals(3, taskPanel.exportMessages().size());
+        assertEquals("Ctx: 25.0k / 1.0M (3%)", taskPanel.ctxLabel.getText());
+
+        // Switch to Project B: clears transcript, ChatMemory, and telemetry without deleting Project A's session file
+        activeDataDir.set(projectBData);
+        when(planService.getPendingPhase()).thenReturn(null);
+        taskPanel.onProjectChanged(new ProjectChangedEvent(tempDir.resolve("project-b")));
+        flushEdt();
+
+        assertTrue(Files.exists(projectASessionFile));
+        assertTrue(realMemory.get("task:default").isEmpty());
+        assertTrue(taskPanel.exportMessages().isEmpty());
+        assertEquals("Ctx: 0 / 1.0M (0%)", taskPanel.ctxLabel.getText());
+        assertFalse(taskPanel.inlineActionPanel.isVisible());
+
+        // Switch back to Project A with pending approval: restores transcript, tool card, ChatMemory, telemetry &
+        // banner
+        activeDataDir.set(projectAData);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+        when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
+        taskPanel.onProjectChanged(new ProjectChangedEvent(tempDir.resolve("project-a")));
+        flushEdt();
+
+        assertEquals(2, realMemory.get("task:default").size());
+        assertEquals("Create plan", realMemory.get("task:default").get(0).getText());
+        assertEquals("Plan submitted.", realMemory.get("task:default").get(1).getText());
+        assertEquals(3, taskPanel.exportMessages().size());
+        assertTrue(taskPanel.exportMessages().get(1).isTool());
+        assertContainsAll(taskPanel.outputArea.getText(), "Create plan", "Plan submitted.", "submitPlan");
+        assertEquals("Ctx: 25.0k / 1.0M (3%)", taskPanel.ctxLabel.getText());
+        assertEquals("Cache: 80%", taskPanel.cacheLabel.getText());
+        assertTrue(taskPanel.inlineActionPanel.isVisible());
+        assertEquals(PlanService.APPROVAL_PLAN_TO_CODE, taskPanel.transitionLabel.getText());
+
+        // Startup restoration on a newly created ChatPanel
+        realMemory.clear("task:default");
+        ChatPanel restartedPanel = new ChatPanel(aiService, planService, publisher, realMemory,
+                ChatModel.TASK_SESSION_PREFIX, null, true, settingsService, directExecutor);
+        restartedPanel.setProjectService(projectService);
+        flushEdt();
+        assertEquals(2, realMemory.get("task:default").size());
+        assertEquals(3, restartedPanel.exportMessages().size());
+        assertTrue(restartedPanel.inlineActionPanel.isVisible());
+
+        // Reset session deletes the persisted session file
+        restartedPanel.controller.performResetSession();
+        flushEdt();
+        assertFalse(Files.exists(projectASessionFile));
+        assertTrue(realMemory.get("task:default").isEmpty());
     }
 
     @Test

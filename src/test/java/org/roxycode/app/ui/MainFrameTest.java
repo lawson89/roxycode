@@ -6,7 +6,6 @@ import static org.mockito.Mockito.*;
 import java.nio.file.Path;
 import java.util.EnumSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -215,12 +214,16 @@ class MainFrameTest {
 
             String longTitle = "Consolidate EDT dispatch with Edt.run, clean up ProcessRunner buffers, and standardize PromptService";
             when(planService.getVisitedPhases()).thenReturn(EnumSet.of(WorkflowPhase.PLAN, WorkflowPhase.CODE));
-            when(planService.getCurrentPlan()).thenReturn(new ImplementationPlan("  " + longTitle + "  ", "Goal",
-                    List.of(), List.of(), false, null, null, null, null, List.of()));
+            when(planService.getCurrentPlan())
+                    .thenReturn(new ImplementationPlan("  " + longTitle + "  ", "Goal", List.of(),
+                            List.of(new ImplementationPlan.TechStep("Step 1", true),
+                                    new ImplementationPlan.TechStep("Step 2", false)),
+                            false, null, null, null, null, List.of()));
             taskWorkspacePanel.updateActivePhase(WorkflowPhase.CODE);
             assertTrue(taskWorkspacePanel.planLabel.isVisible());
-            assertEquals(longTitle.toUpperCase(Locale.ROOT).substring(0, 37) + "...",
-                    taskWorkspacePanel.planLabel.getText());
+            assertEquals(longTitle.substring(0, 37) + "...", taskWorkspacePanel.planLabel.getText());
+            assertEquals(longTitle, taskWorkspacePanel.planLabel.getToolTipText());
+            assertEquals("Plan (1/2)", taskWorkspacePanel.taskTabs.getTitleAt(1));
 
             taskWorkspacePanel.onWorkflowTransition(
                     new WorkflowTransitionEvent(WorkflowPhase.PLAN, WorkflowPhase.CODE, "Ready", false));

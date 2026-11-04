@@ -16,6 +16,7 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GraphicsEnvironment;
 import java.awt.Image;
+import java.awt.image.BufferedImage;
 import java.awt.LayoutManager;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
@@ -70,12 +71,13 @@ final class UiComponents {
     private static final Logger log = LoggerFactory.getLogger(UiComponents.class);
     private static final String GROWX_WMIN_0 = "growx, wmin 0";
     private static final String ROW_CENTER = "[center]";
+    static final String ROXY_LOGO_RESOURCE = "/static/images/roxy.png";
     static final int INFO_TOOLTIP_DISMISS_DELAY_MS = 20_000;
     static final String ACCENT_BUTTON_STYLE = "background: $Component.accentColor; focusedBackground: $Component.accentColor; hoverBackground: darken($Component.accentColor, 8%); pressedBackground: darken($Component.accentColor, 14%); foreground: #ffffff";
     static final String GREEN_BUTTON_STYLE = "background: $Actions.Green; focusedBackground: $Actions.Green; hoverBackground: darken($Actions.Green, 8%); pressedBackground: darken($Actions.Green, 14%); foreground: #ffffff";
     static final String RED_BUTTON_STYLE = "background: $Actions.Red; focusedBackground: $Actions.Red; hoverBackground: darken($Actions.Red, 8%); pressedBackground: darken($Actions.Red, 14%); foreground: #ffffff";
-    private static final Color INFO_ICON_LIGHT = new Color(0xd9, 0x77, 0x06);
-    private static final Color INFO_ICON_DARK = new Color(0xf5, 0x9e, 0x0b);
+    static final Color AMBER_LIGHT = new Color(0xd9, 0x77, 0x06);
+    static final Color AMBER_DARK = new Color(0xf5, 0x9e, 0x0b);
 
     private UiComponents() {
     }
@@ -83,7 +85,8 @@ final class UiComponents {
     /**
      * Loads an image from a classpath resource, returning null if unavailable.
      */
-    static Image loadClasspathImage(String resourcePath) {
+    @Nullable
+    static BufferedImage loadClasspathImage(String resourcePath) {
         try {
             URL url = UiComponents.class.getResource(resourcePath);
             if (url != null) {
@@ -269,9 +272,9 @@ final class UiComponents {
 
     static Color resolveInfoIconColor() {
         if (FlatLaf.isLafDark()) {
-            return INFO_ICON_DARK;
+            return AMBER_DARK;
         }
-        return INFO_ICON_LIGHT;
+        return AMBER_LIGHT;
     }
 
     static JLabel createInfoIcon(String htmlTooltip) {
@@ -823,22 +826,6 @@ final class UiComponents {
         return null;
     }
 
-    static void updateWarningBannerState(JPanel bannerPanel, JLabel iconLabel, JLabel messageLabel, String messageText,
-            boolean visible) {
-        if (bannerPanel == null) {
-            return;
-        }
-        if (visible) {
-            Color warnColor = SwingHtmlUtils.getWarningColor();
-            iconLabel.setIcon(FontIcon.of(Codicons.WARNING, 18, warnColor));
-            messageLabel.setText(messageText);
-            SwingHtmlUtils.applyTintedBannerStyle(bannerPanel, warnColor, 10, 14, 14);
-        }
-        bannerPanel.setVisible(visible);
-        bannerPanel.revalidate();
-        bannerPanel.repaint();
-    }
-
     static final class WarningBanner extends JPanel {
         private static final long serialVersionUID = 1L;
         final JLabel iconLabel;
@@ -858,15 +845,15 @@ final class UiComponents {
         }
 
         void setVisibleState(boolean visible, String messageText) {
-            updateWarningBannerState(this, iconLabel, messageLabel, messageText, visible);
-        }
-
-        JLabel getIconLabel() {
-            return iconLabel;
-        }
-
-        JLabel getMessageLabel() {
-            return messageLabel;
+            if (visible) {
+                Color warnColor = SwingHtmlUtils.getWarningColor();
+                iconLabel.setIcon(FontIcon.of(Codicons.WARNING, 18, warnColor));
+                messageLabel.setText(messageText);
+                SwingHtmlUtils.applyTintedBannerStyle(this, warnColor, 10, 14, 14);
+            }
+            setVisible(visible);
+            revalidate();
+            repaint();
         }
     }
 

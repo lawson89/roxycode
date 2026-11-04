@@ -14,15 +14,4 @@ public record TokenUsageEvent(String conversationId, String modelName, int conte
                 candidatesTokens, thoughtsTokens, totalTokens, null, 0.0, 0.0, 0.0, 0.0, estimatedCostUsd);
     }
 
-    public int outputAndThinkingTokens() {
-        return Math.max(0, candidatesTokens) + Math.max(0, thoughtsTokens);
-    }
-
-    public double inputCostUsd() {
-        return Math.max(0.0, uncachedInputCostUsd) + Math.max(0.0, cachedInputCostUsd);
-    }
-
-    public double outputAndThinkingCostUsd() {
-        return Math.max(0.0, outputCostUsd) + Math.max(0.0, thoughtsCostUsd);
-    }
 }

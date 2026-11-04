@@ -14,7 +14,6 @@ import org.roxycode.app.util.Edt;
 
 public final class SplashScreenWindow extends JWindow {
     private static final long serialVersionUID = 1L;
-    private static final String LOGO_RESOURCE_PATH = "/static/images/roxy.png";
 
     private final JLabel statusLabel = new JLabel("Starting Roxy...");
     private final JProgressBar progressBar = new JProgressBar();
@@ -40,7 +39,8 @@ public final class SplashScreenWindow extends JWindow {
         statusLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Label.disabledForeground");
         progressBar.setIndeterminate(true);
 
-        rootPanel.add(UiComponents.createRoundedImagePanel(LOGO_RESOURCE_PATH, 96, 20), "w 80!, h 80!, center");
+        rootPanel.add(UiComponents.createRoundedImagePanel(UiComponents.ROXY_LOGO_RESOURCE, 96, 20),
+                "w 80!, h 80!, center");
         rootPanel.add(titleLabel, "center");
         rootPanel.add(subtitleLabel, "center");
         rootPanel.add(statusLabel, "center");

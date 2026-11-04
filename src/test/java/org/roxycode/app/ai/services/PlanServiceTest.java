@@ -23,6 +23,7 @@ import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.TokenUsageEvent;
+import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.ProjectService;
@@ -97,11 +98,17 @@ class PlanServiceTest {
     void testWorkflowPhaseTransitionsGatesArchivingAndVerificationReset(@TempDir Path tempDir) throws Exception {
         ProjectService projectService = mock(ProjectService.class);
         Path projectRoot = tempDir.resolve("my-project");
-        Path archiveDir = tempDir.resolve("roxy-home/projects/my-project-12345678/archive/plans");
+        Path projectADataDir = tempDir.resolve("roxy-home/projects/my-project-12345678");
+        Path projectBDataDir = tempDir.resolve("roxy-home/projects/other-project-87654321");
+        Path archiveDir = projectADataDir.resolve("archive/plans");
+        Path projectAWorkflowFile = projectADataDir.resolve(PlanService.ACTIVE_WORKFLOW_FILENAME);
+        Path projectBWorkflowFile = projectBDataDir.resolve(PlanService.ACTIVE_WORKFLOW_FILENAME);
         when(projectService.hasActiveProject()).thenReturn(true);
         when(projectService.getProjectName()).thenReturn("my-project");
         when(projectService.getCurrentProjectRoot()).thenReturn(projectRoot);
         when(projectService.resolveProjectDataPath("archive/plans")).thenReturn(archiveDir);
+        when(projectService.resolveProjectDataPath(PlanService.ACTIVE_WORKFLOW_FILENAME))
+                .thenReturn(projectAWorkflowFile);
 
         PlanService archivingService = new PlanService(envService, eventPublisher, projectService);
         assertIllegalState(() -> archivingService.requestDevelopment("Reason"), "Implementation Plan is missing");
@@ -204,10 +211,13 @@ class PlanServiceTest {
         assertTrue(archivingService.requestCompletion("All checks passed")
                 .contains("Approve Feature Request as complete"));
 
+        assertTrue(Files.exists(projectAWorkflowFile));
         when(envService.getCurrentUser()).thenReturn("bob");
         archivingService.approveTransition();
         assertEquals(WorkflowPhase.PLAN, archivingService.getCurrentPhase());
         assertNull(archivingService.getCurrentPlan());
+        assertFalse(Files.exists(projectAWorkflowFile),
+                "Completing REVIEW -> PLAN transition should delete active-workflow.json");
 
         List<Path> archivedFiles;
         try (Stream<Path> stream = Files.list(archiveDir)) {
@@ -227,11 +237,41 @@ class PlanServiceTest {
         archivingService.requestDevelopment("Go");
         assertNotNull(archivingService.getCurrentPlan());
         assertEquals(WorkflowPhase.CODE, archivingService.getPendingPhase());
+        assertEquals("Go", archivingService.getPendingReason());
+        assertTrue(Files.exists(projectAWorkflowFile));
 
-        archivingService.onProjectChanged(new ProjectChangedEvent(projectRoot));
+        // Switch to Project B (no saved workflow): resets in-memory state without deleting Project A's file
+        when(projectService.resolveProjectDataPath(PlanService.ACTIVE_WORKFLOW_FILENAME))
+                .thenReturn(projectBWorkflowFile);
+        archivingService.onProjectChanged(new ProjectChangedEvent(tempDir.resolve("other-project")));
         assertNull(archivingService.getCurrentPlan());
         assertNull(archivingService.getPendingPhase());
         assertEquals(WorkflowPhase.PLAN, archivingService.getCurrentPhase());
         assertEquals(Set.of(WorkflowPhase.PLAN), archivingService.getVisitedPhases());
+        assertTrue(Files.exists(projectAWorkflowFile));
+
+        // Switch back to Project A: restores saved plan and pending transition
+        clearInvocations(eventPublisher);
+        when(projectService.resolveProjectDataPath(PlanService.ACTIVE_WORKFLOW_FILENAME))
+                .thenReturn(projectAWorkflowFile);
+        archivingService.onProjectChanged(new ProjectChangedEvent(projectRoot));
+        assertNotNull(archivingService.getCurrentPlan());
+        assertEquals("Temp Plan", archivingService.getCurrentPlan().title());
+        assertEquals(WorkflowPhase.PLAN, archivingService.getCurrentPhase());
+        assertEquals(WorkflowPhase.CODE, archivingService.getPendingPhase());
+        assertEquals("Go", archivingService.getPendingReason());
+        verify(eventPublisher)
+                .publishEvent(new WorkflowTransitionEvent(WorkflowPhase.PLAN, WorkflowPhase.CODE, "Go", false));
+
+        // Startup restoration via constructor and cleanup on explicit resetWorkflow()
+        PlanService restartedService = new PlanService(envService, eventPublisher, projectService);
+        assertNotNull(restartedService.getCurrentPlan());
+        assertEquals("Temp Plan", restartedService.getCurrentPlan().title());
+        assertEquals(WorkflowPhase.CODE, restartedService.getPendingPhase());
+
+        restartedService.resetWorkflow();
+        assertNull(restartedService.getCurrentPlan());
+        assertNull(restartedService.getPendingPhase());
+        assertFalse(Files.exists(projectAWorkflowFile));
     }
 }

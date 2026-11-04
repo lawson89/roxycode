@@ -269,12 +269,8 @@ public final class BuildConfigPanel extends JPanel {
         }
     }
 
-    private String resolveGlobalDefaultModel() {
-        return SettingsService.resolveGlobalGeminiModel(settingsService);
-    }
-
     void loadModelOptions() {
-        String globalModel = resolveGlobalDefaultModel();
+        String globalModel = SettingsService.resolveGlobalGeminiModel(settingsService);
         GeminiModelConfig defaultOption = new GeminiModelConfig("", "Use Global Default (" + globalModel + ")",
                 "Inherits the default Gemini model configured in Global Settings (" + globalModel + ").");
         DefaultComboBoxModel<GeminiModelConfig> comboModel = new DefaultComboBoxModel<>();
@@ -298,12 +294,8 @@ public final class BuildConfigPanel extends JPanel {
         UiComponents.selectModelByApiName(modelCombo, projectModel);
     }
 
-    private ThinkingLevel resolveGlobalDefaultThinkingLevel() {
-        return SettingsService.resolveGlobalThinkingLevel(settingsService);
-    }
-
     void loadThinkingLevelOptions() {
-        ThinkingLevel globalLevel = resolveGlobalDefaultThinkingLevel();
+        ThinkingLevel globalLevel = SettingsService.resolveGlobalThinkingLevel(settingsService);
         DefaultComboBoxModel<ThinkingLevelOption> comboModel = new DefaultComboBoxModel<>();
         comboModel.addElement(ThinkingLevelOption.useGlobalDefault(globalLevel));
         for (ThinkingLevel level : ThinkingLevel.values()) {
@@ -320,7 +312,7 @@ public final class BuildConfigPanel extends JPanel {
 
     void updateSelectedModelDetails() {
         UiComponents.updateModelSelectionDetails(modelCombo, modelApiBadgeLabel, modelDescriptionArea,
-                resolveGlobalDefaultModel());
+                SettingsService.resolveGlobalGeminiModel(settingsService));
     }
 
     private void applySectionStyling() {

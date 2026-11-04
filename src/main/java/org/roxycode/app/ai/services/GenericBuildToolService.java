@@ -177,11 +177,6 @@ public class GenericBuildToolService {
     private final ApplicationEventPublisher eventPublisher;
     private final PlanService planService;
 
-    public GenericBuildToolService(ProjectService projectService, TomlMapper tomlMapper,
-            BuildContainerService buildContainerService) {
-        this(projectService, tomlMapper, buildContainerService, null, null);
-    }
-
     @Autowired
     public GenericBuildToolService(ProjectService projectService, TomlMapper tomlMapper,
             BuildContainerService buildContainerService, @Nullable ApplicationEventPublisher eventPublisher,

@@ -8,7 +8,10 @@ import org.fife.ui.rsyntaxtextarea.TokenMaker;
 import org.fife.ui.rsyntaxtextarea.TokenTypes;
 import org.fife.ui.rsyntaxtextarea.modes.JavaScriptTokenMaker;
 
-public class JexlToHtmlConverter {
+public final class JexlToHtmlConverter {
+
+    private JexlToHtmlConverter() {
+    }
 
     private static final Set<String> EXTRA_KEYWORDS = Set.of("and", "or", "not", "mod", "div", "empty", "size",
             "assert", "interface", "record", "String", "List", "Map", "Set", "Optional", "int", "long", "double",

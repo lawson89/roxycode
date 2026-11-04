@@ -119,7 +119,7 @@ class FileEditorServiceTest {
         Path file = Files.writeString(tempDir.resolve("Calc.java"), initial);
         clearInvocations(eventPublisher);
 
-        JexlServiceRegistry registry = new JexlServiceRegistry();
+        JexlServiceRegistry registry = new JexlServiceRegistry(null, null);
         registry.register(fileEditorService);
         JexlTool jexlTool = new JexlTool(registry, null, AiConfig.SHARED_OBJECT_MAPPER, null);
         ToolContext codeContext = new ToolContext(new TurnToolContext("conv-1", WorkflowPhase.CODE, null).toMap());

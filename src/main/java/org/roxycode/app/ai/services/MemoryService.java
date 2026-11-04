@@ -18,6 +18,7 @@ import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.events.MemoryChangedEvent;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.ui.ChatHtmlTemplates;
 import org.roxycode.app.ui.MarkdownPane.ChatTranscriptEntry;
 import org.roxycode.app.util.FrontmatterUtils;
 import org.roxycode.app.util.PathUtils;
@@ -52,7 +53,7 @@ public class MemoryService {
     private static final String KEY_TITLE = "title";
     private static final String KEY_TAGS = "tags";
     private static final String KEY_UPDATED_AT = "updatedAt";
-    private static final String ROLE_USER = "user";
+    private static final String ROLE_USER = ChatHtmlTemplates.ROLE_USER;
     private static final String NO_ACTIVE_PROJECT = "No active project";
     private static final String GLOBAL_DIR_UNAVAILABLE = "Global memory directory is unavailable";
     private static final String MD_EXTENSION = ".md";
@@ -63,10 +64,6 @@ public class MemoryService {
     private final SettingsService settingsService;
     private final ProjectService projectService;
     private final ApplicationEventPublisher eventPublisher;
-
-    public MemoryService(SettingsService settingsService, ProjectService projectService) {
-        this(settingsService, projectService, null);
-    }
 
     @Autowired
     public MemoryService(SettingsService settingsService, ProjectService projectService,

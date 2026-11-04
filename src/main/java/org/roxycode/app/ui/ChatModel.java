@@ -157,13 +157,13 @@ public final class ChatModel {
     }
 
     public String formatTurnStatus(AppSettings settings, ImplementationPlan plan) {
-        StringBuilder sb = new StringBuilder("Turns: ").append(currentTurn);
+        StringBuilder sb = new StringBuilder("Turn ").append(currentTurn);
         if (settings != null) {
-            sb.append(" / ").append(settings.getMaxAgentToolTurns());
+            sb.append("/").append(settings.getMaxAgentToolTurns());
         }
         if (taskMode && plan != null && !plan.technicalSteps().isEmpty()) {
             long completed = plan.technicalSteps().stream().filter(ImplementationPlan.TechStep::completed).count();
-            sb.append(" | Plan: ").append(completed).append("/").append(plan.technicalSteps().size()).append(" steps");
+            sb.append(" • ").append(completed).append("/").append(plan.technicalSteps().size()).append(" steps");
         }
         return sb.toString();
     }

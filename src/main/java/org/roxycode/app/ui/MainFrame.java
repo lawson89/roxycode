@@ -43,6 +43,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Lazy
+@SuppressWarnings("PMD.CloseResource")
 public final class MainFrame extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(MainFrame.class);
     private static final long serialVersionUID = 1L;
@@ -61,7 +62,6 @@ public final class MainFrame extends JPanel {
 
     private final transient SettingsService settingsService;
     private final transient ProjectService projectService;
-    private final transient ChatMemory chatMemory;
     private final CardLayout cardLayout = new CardLayout();
     private final JPanel contentArea = new JPanel(cardLayout);
 
@@ -82,34 +82,20 @@ public final class MainFrame extends JPanel {
     Rectangle lastNormalBounds;
     int simulatedExtendedState = Frame.NORMAL;
 
-    public MainFrame(SettingsService settingsService, ProjectService projectService, ChatMemory chatMemory,
+    @Autowired
+    public MainFrame(SettingsService settingsService, ProjectService projectService, @Nullable ChatMemory chatMemory,
             HeaderPanel header, StatusPanel statusBar, QaWorkspacePanel qaWorkspacePanel,
             TaskWorkspacePanel taskWorkspacePanel, CodebaseCachePanel codebaseCachePanel, JexlApiPanel jexlApiPanel,
             SystemToolsPanel systemToolsPanel, SettingsPanel settingsPanel, BuildConfigPanel buildConfigPanel,
             ContextManagerPanel contextManagerPanel, @Nullable AgentMemoryPanel agentMemoryPanel) {
-        this(settingsService, projectService, chatMemory, header, statusBar, qaWorkspacePanel, taskWorkspacePanel,
-                codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel,
-                contextManagerPanel, agentMemoryPanel, null);
-    }
-
-    @Autowired
-    public MainFrame(SettingsService settingsService, ProjectService projectService, ChatMemory chatMemory,
-            HeaderPanel header, StatusPanel statusBar, QaWorkspacePanel qaWorkspacePanel,
-            TaskWorkspacePanel taskWorkspacePanel, CodebaseCachePanel codebaseCachePanel, JexlApiPanel jexlApiPanel,
-            SystemToolsPanel systemToolsPanel, SettingsPanel settingsPanel, BuildConfigPanel buildConfigPanel,
-            ContextManagerPanel contextManagerPanel, @Nullable AgentMemoryPanel agentMemoryPanel,
-            @Nullable PlanService planService) {
         this.settingsService = settingsService;
         this.projectService = projectService;
-        this.chatMemory = chatMemory;
         this.header = header;
         this.qaWorkspacePanel = qaWorkspacePanel;
         this.taskWorkspacePanel = taskWorkspacePanel;
         this.codebaseCachePanel = codebaseCachePanel;
         this.agentMemoryPanel = agentMemoryPanel;
-        if (planService != null) {
-            this.planService = planService;
-        } else if (taskWorkspacePanel != null) {
+        if (taskWorkspacePanel != null) {
             this.planService = taskWorkspacePanel.planService;
         } else {
             this.planService = null;
@@ -162,18 +148,26 @@ public final class MainFrame extends JPanel {
         Edt.run(this::updateWorkspaceState);
     }
 
+    @Nullable
+    ChatPanel qaChatPanel() {
+        if (qaWorkspacePanel != null) {
+            return qaWorkspacePanel.qaChatPanel;
+        }
+        return null;
+    }
+
+    @Nullable
+    ChatPanel taskChatPanel() {
+        if (taskWorkspacePanel != null) {
+            return taskWorkspacePanel.taskChatPanel;
+        }
+        return null;
+    }
+
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
         Edt.run(() -> {
             updateWorkspaceState();
-            if (qaWorkspacePanel != null && qaWorkspacePanel.qaChatPanel != null) {
-                qaWorkspacePanel.qaChatPanel.controller.resetForProjectChange();
-            }
-            if (taskWorkspacePanel != null && taskWorkspacePanel.taskChatPanel != null) {
-                taskWorkspacePanel.taskChatPanel.controller.resetForProjectChange();
-            }
-            chatMemory.clear(ChatModel.QA_CONVERSATION_ID);
-            chatMemory.clear(ChatModel.TASK_CONVERSATION_ID);
             updateOnboardingAndNavigationState();
         });
     }
@@ -472,22 +466,26 @@ public final class MainFrame extends JPanel {
         setLayout(new MigLayout("fill, insets 0", "[210!, fill]0[fill, grow]", "[fill, grow]"));
 
         sidebar = new SidebarPanel(this::showCard);
+        header.setOnNavigateToCard(this::showCard);
         qaWorkspacePanel.bindSidebar(sidebar);
         qaWorkspacePanel.setOnMoveToFeatureListener(content -> {
             showCard(TASK_VIEW);
-            if (taskWorkspacePanel != null && taskWorkspacePanel.taskChatPanel != null) {
-                taskWorkspacePanel.taskChatPanel.setInputText(content);
+            ChatPanel taskChat = taskChatPanel();
+            if (taskChat != null) {
+                taskChat.setInputText(content);
             }
         });
         taskWorkspacePanel.bindSidebar(sidebar);
 
-        if (qaWorkspacePanel != null && qaWorkspacePanel.qaChatPanel != null) {
-            qaWorkspacePanel.qaChatPanel.addLoadingListener(loading -> Edt.run(this::updateWorkspaceState));
-            qaWorkspacePanel.qaChatPanel.addUserInputListener(waiting -> Edt.run(this::updateWorkspaceState));
+        ChatPanel qaChat = qaChatPanel();
+        if (qaChat != null) {
+            qaChat.addLoadingListener(loading -> Edt.run(this::updateWorkspaceState));
+            qaChat.addUserInputListener(waiting -> Edt.run(this::updateWorkspaceState));
         }
-        if (taskWorkspacePanel != null && taskWorkspacePanel.taskChatPanel != null) {
-            taskWorkspacePanel.taskChatPanel.addLoadingListener(loading -> Edt.run(this::updateWorkspaceState));
-            taskWorkspacePanel.taskChatPanel.addUserInputListener(waiting -> Edt.run(this::updateWorkspaceState));
+        ChatPanel taskChat = taskChatPanel();
+        if (taskChat != null) {
+            taskChat.addLoadingListener(loading -> Edt.run(this::updateWorkspaceState));
+            taskChat.addUserInputListener(waiting -> Edt.run(this::updateWorkspaceState));
         }
 
         JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));
@@ -621,21 +619,19 @@ public final class MainFrame extends JPanel {
         if (sidebar != null && sidebar.isTaskWaitingApproval()) {
             return AppIconRenderer.AgentStatus.WAITING_FEEDBACK;
         }
-        if (qaWorkspacePanel != null && qaWorkspacePanel.qaChatPanel != null
-                && qaWorkspacePanel.qaChatPanel.isWaitingUserInput()) {
+        ChatPanel qaChat = qaChatPanel();
+        ChatPanel taskChat = taskChatPanel();
+        if (qaChat != null && qaChat.isWaitingUserInput()) {
             return AppIconRenderer.AgentStatus.WAITING_FEEDBACK;
         }
-        if (taskWorkspacePanel != null && taskWorkspacePanel.taskChatPanel != null
-                && taskWorkspacePanel.taskChatPanel.isWaitingUserInput()) {
+        if (taskChat != null && taskChat.isWaitingUserInput()) {
             return AppIconRenderer.AgentStatus.WAITING_FEEDBACK;
         }
 
-        if (qaWorkspacePanel != null && qaWorkspacePanel.qaChatPanel != null
-                && qaWorkspacePanel.qaChatPanel.isLoading()) {
+        if (qaChat != null && qaChat.isLoading()) {
             return AppIconRenderer.AgentStatus.BUSY;
         }
-        if (taskWorkspacePanel != null && taskWorkspacePanel.taskChatPanel != null
-                && taskWorkspacePanel.taskChatPanel.isLoading()) {
+        if (taskChat != null && taskChat.isLoading()) {
             return AppIconRenderer.AgentStatus.BUSY;
         }
         if (sidebar != null && (sidebar.isQaBusy() || sidebar.isTaskBusy())) {

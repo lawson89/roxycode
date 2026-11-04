@@ -108,8 +108,8 @@ class AiServiceTest {
         stubMockClientChain(chatClientBuilder, chatClient, requestSpec, responseSpec);
 
         jexlTool = new JexlTool(jexlServiceRegistry, eventPublisher, null, settingsService);
-        aiService = new AiService(chatClientBuilder, settingsService, promptService, jexlTool, planService, chatMemory,
-                toolCallingManager, eventPublisher);
+        aiService = new AiService(chatClientBuilder, settingsService, null, promptService, jexlTool, planService,
+                chatMemory, toolCallingManager, eventPublisher);
     }
 
     @SuppressWarnings("unchecked")
@@ -185,8 +185,8 @@ class AiServiceTest {
         when(mockChatModel.getOptions()).thenReturn(GoogleGenAiChatOptions.builder().model("gemini-2.5-flash").build());
         ChatMemory realMemory = MessageWindowChatMemory.builder()
                 .chatMemoryRepository(new InMemoryChatMemoryRepository()).maxMessages(20).build();
-        AiService service = new AiService(ChatClient.builder(mockChatModel), settingsService, promptService, jexlTool,
-                planService, realMemory, customToolManager, eventPublisher);
+        AiService service = new AiService(ChatClient.builder(mockChatModel), settingsService, null, promptService,
+                jexlTool, planService, realMemory, customToolManager, eventPublisher);
         service.setRetryTemplate(AiConfig.createRetryTemplate(3, Duration.ofMillis(5), 2.0));
         when(promptService.buildSystemPrompt(WorkflowPhase.EXPLORE)).thenReturn("EXPLORE PROMPT");
         return service;
@@ -420,15 +420,12 @@ class AiServiceTest {
         assertEquals(2_000, usageEvent.uncachedInputTokens());
         assertEquals(400, usageEvent.candidatesTokens());
         assertEquals(200, usageEvent.thoughtsTokens());
-        assertEquals(600, usageEvent.outputAndThinkingTokens());
         assertEquals(10_600, usageEvent.totalTokens());
         assertEquals(WorkflowPhase.EXPLORE, usageEvent.phase());
         assertEquals(0.0006, usageEvent.uncachedInputCostUsd(), 1e-6);
         assertEquals(0.0006, usageEvent.cachedInputCostUsd(), 1e-6);
-        assertEquals(0.0012, usageEvent.inputCostUsd(), 1e-6);
         assertEquals(0.0010, usageEvent.outputCostUsd(), 1e-6);
         assertEquals(0.0005, usageEvent.thoughtsCostUsd(), 1e-6);
-        assertEquals(0.0015, usageEvent.outputAndThinkingCostUsd(), 1e-6);
         assertEquals(0.0027, usageEvent.estimatedCostUsd(), 1e-6);
 
         clearInvocations(mockChatModel);

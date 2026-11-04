@@ -3,9 +3,11 @@ package org.roxycode.app.ui;
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Cursor;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Set;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -36,7 +38,7 @@ import org.springframework.stereotype.Component;
 public final class TaskWorkspacePanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final String LAYOUT_CENTER = "center";
-    static final String PHASE_HEADER_TEXT = "FEATURE MODE  • ";
+    static final String PLAN_TAB_BASE_TITLE = "Plan";
     static final String PAST_PLANS_TAB_TITLE = "Past Plans";
     static final int MAX_PLAN_TITLE_LENGTH = 40;
     static final String WORKFLOW_LIFECYCLE_TOOLTIP_HTML = """
@@ -55,7 +57,6 @@ public final class TaskWorkspacePanel extends JPanel {
     final ArchiveBrowserPanel pastPlansPanel;
     final JTabbedPane taskTabs;
     final JPanel topBar;
-    final JLabel phaseHeaderLabel = new JLabel(PHASE_HEADER_TEXT);
     final JLabel workflowInfoIcon = UiComponents.createInfoIcon(WORKFLOW_LIFECYCLE_TOOLTIP_HTML);
     final JLabel planLabel = new JLabel();
     final JPanel progressTracker;
@@ -85,17 +86,26 @@ public final class TaskWorkspacePanel extends JPanel {
         topBar.add(workflowInfoIcon, "gapleft 8, center");
 
         planLabel.setIconTextGap(6);
+        planLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        planLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (taskTabs != null && taskTabs.getTabCount() > 1) {
+                    taskTabs.setSelectedIndex(1);
+                }
+            }
+        });
         applyPlanBadgeStyling();
         topBar.add(planLabel, "gapleft 16, right, center, hidemode 3");
-
-        updateActivePhase(planService.getCurrentPhase());
 
         this.taskTabs = UiComponents.createUnderlinedTabbedPane(topBar);
         Color accent = SwingHtmlUtils.getAccentColor();
         Color muted = SwingHtmlUtils.getMutedForegroundColor();
         taskTabs.addTab("Chat", FontIcon.of(Codicons.COMMENT_DISCUSSION, 15, accent), taskChatPanel);
-        taskTabs.addTab("Plan", FontIcon.of(Codicons.LIST_ORDERED, 15, accent), planPanel);
+        taskTabs.addTab(PLAN_TAB_BASE_TITLE, FontIcon.of(Codicons.LIST_ORDERED, 15, accent), planPanel);
         taskTabs.addTab(PAST_PLANS_TAB_TITLE, FontIcon.of(Codicons.HISTORY, 15, muted), pastPlansPanel);
+
+        updateActivePhase(planService.getCurrentPhase());
         taskTabs.addChangeListener(e -> {
             if (taskChatPanel != null && taskChatPanel.equals(taskTabs.getSelectedComponent())) {
                 SwingUtilities.invokeLater(taskChatPanel::focusInput);
@@ -144,9 +154,6 @@ public final class TaskWorkspacePanel extends JPanel {
     void applyPhaseTrackerStyling() {
         Color accent = SwingHtmlUtils.getAccentColor();
         SwingHtmlUtils.applyTintedBannerStyle(progressTracker, accent, 3, 10, 8);
-        phaseHeaderLabel.setIcon(FontIcon.of(Codicons.GIT_PULL_REQUEST, 14, accent));
-        phaseHeaderLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -2");
-        phaseHeaderLabel.setForeground(accent);
         UiComponents.updateInfoIconTheme(workflowInfoIcon);
     }
 
@@ -166,6 +173,9 @@ public final class TaskWorkspacePanel extends JPanel {
     public void bindSidebar(SidebarPanel sidebar) {
         this.sidebar = sidebar;
         this.taskChatPanel.addLoadingListener(sidebar::setTaskBusy);
+        if (this.planService != null) {
+            sidebar.setTaskWaitingApproval(this.planService.getPendingPhase() != null);
+        }
     }
 
     @EventListener
@@ -207,7 +217,7 @@ public final class TaskWorkspacePanel extends JPanel {
         if (StringUtils.isBlank(rawTitle)) {
             return "";
         }
-        return StringUtils.abbreviate(rawTitle.trim().toUpperCase(Locale.ROOT), MAX_PLAN_TITLE_LENGTH);
+        return StringUtils.abbreviate(rawTitle.trim(), MAX_PLAN_TITLE_LENGTH);
     }
 
     void updateActivePhase(WorkflowPhase currentPhase) {
@@ -223,8 +233,17 @@ public final class TaskWorkspacePanel extends JPanel {
         }
         planLabel.setVisible(hasTitle);
 
+        if (taskTabs != null && taskTabs.getTabCount() > 1) {
+            if (plan != null && plan.technicalSteps() != null && !plan.technicalSteps().isEmpty()) {
+                long completed = plan.technicalSteps().stream().filter(ImplementationPlan.TechStep::completed).count();
+                int total = plan.technicalSteps().size();
+                taskTabs.setTitleAt(1, PLAN_TAB_BASE_TITLE + " (" + completed + "/" + total + ")");
+            } else {
+                taskTabs.setTitleAt(1, PLAN_TAB_BASE_TITLE);
+            }
+        }
+
         progressTracker.removeAll();
-        progressTracker.add(phaseHeaderLabel, "gapright 4, center");
         Set<WorkflowPhase> visitedPhases = planService.getVisitedPhases();
         for (int i = 0; i < indicators.size(); i++) {
             WorkflowPhaseIndicator indicator = indicators.get(i);

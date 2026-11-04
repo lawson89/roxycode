@@ -44,8 +44,14 @@ public class PlanService {
 
     private static final Logger log = LoggerFactory.getLogger(PlanService.class);
     static final String ARCHIVE_PLANS_SUBDIR = "archive/plans";
+    static final String ACTIVE_WORKFLOW_FILENAME = "active-workflow.json";
     static final int MAX_PLAN_SLUG_LENGTH = 40;
     public static final String TASK_CONVERSATION_ID = "task:default";
+
+    public record ActiveWorkflowState(ImplementationPlan currentPlan, WorkflowPhase currentPhase,
+            WorkflowPhase pendingPhase, String pendingReason, List<WorkflowPhase> visitedPhases,
+            ImplementationPlan.UsageSummary unassignedTaskUsage) {
+    }
 
     public static final String APPROVAL_PLAN_TO_CODE = "Approve Plan and proceed to Code";
     public static final String APPROVAL_REVIEW_TO_PLAN = "Approve Feature Request as complete";
@@ -120,11 +126,12 @@ public class PlanService {
         this.environmentService = environmentService;
         this.eventPublisher = eventPublisher;
         this.projectService = projectService;
+        restoreWorkflowForCurrentProject(false);
     }
 
     @EventListener
     public synchronized void onProjectChanged(ProjectChangedEvent event) {
-        resetWorkflow();
+        restoreWorkflowForCurrentProject(true);
     }
 
     @EventListener
@@ -156,6 +163,7 @@ public class PlanService {
             setCurrentPlan(currentPlan.withRecordedTokenUsage(event, effectivePhase));
         } else {
             unassignedTaskUsage = unassignedTaskUsage.addEvent(event, effectivePhase);
+            persistActiveWorkflowState();
         }
     }
 
@@ -329,6 +337,7 @@ public class PlanService {
 
     public synchronized void setCurrentPlan(ImplementationPlan plan) {
         this.currentPlan = plan;
+        persistActiveWorkflowState();
         publishPlanUpdated();
     }
 
@@ -415,6 +424,9 @@ public class PlanService {
                     String.format("%s -> %s: %s", oldPhase, nextPhase, reason));
             this.currentPhase = nextPhase;
             this.visitedPhases.add(nextPhase);
+            this.pendingPhase = null;
+            this.pendingReason = null;
+            persistActiveWorkflowState();
             publishPhaseChanged();
             if (eventPublisher != null) {
                 eventPublisher.publishEvent(new WorkflowTransitionEvent(oldPhase, nextPhase, reason, true));
@@ -426,6 +438,7 @@ public class PlanService {
 
         this.pendingPhase = nextPhase;
         this.pendingReason = reason;
+        persistActiveWorkflowState();
         publishTransitionRequested();
 
         String summary = formatPlanSummary(currentPlan);
@@ -501,6 +514,10 @@ public class PlanService {
         return pendingPhase;
     }
 
+    public String getPendingReason() {
+        return pendingReason;
+    }
+
     public void approveTransition() {
         ImplementationPlan planToArchive = null;
         String archiveTimestamp = null;
@@ -527,9 +544,19 @@ public class PlanService {
             }
 
             this.currentPhase = pendingPhase;
-            this.visitedPhases.add(pendingPhase);
+            if (planToArchive != null) {
+                this.visitedPhases.clear();
+                this.visitedPhases.add(WorkflowPhase.PLAN);
+            } else {
+                this.visitedPhases.add(pendingPhase);
+            }
             this.pendingPhase = null;
             this.pendingReason = null;
+            if (planToArchive != null) {
+                PathUtils.deleteIfExistsQuietly(resolveActiveWorkflowPath());
+            } else {
+                persistActiveWorkflowState();
+            }
         }
         if (planToArchive != null) {
             ImplementationPlan capturedPlan = planToArchive;
@@ -549,6 +576,7 @@ public class PlanService {
     public synchronized void rejectTransition() {
         this.pendingPhase = null;
         this.pendingReason = null;
+        persistActiveWorkflowState();
         publishTransitionRequested();
     }
 
@@ -557,14 +585,101 @@ public class PlanService {
     }
 
     public synchronized void resetWorkflow() {
+        resetWorkflowInternal(true, true);
+    }
+
+    private synchronized void resetWorkflowInternal(boolean deletePersistedFile, boolean publishEvents) {
         this.pendingPhase = null;
         this.pendingReason = null;
         this.currentPhase = WorkflowPhase.PLAN;
         this.visitedPhases.clear();
         this.visitedPhases.add(WorkflowPhase.PLAN);
-        clearPlan();
-        publishPhaseChanged();
-        publishTransitionRequested();
+        this.unassignedTaskUsage = ImplementationPlan.UsageSummary.EMPTY;
+        this.currentPlan = null;
+        if (deletePersistedFile) {
+            PathUtils.deleteIfExistsQuietly(resolveActiveWorkflowPath());
+        }
+        if (publishEvents) {
+            publishPlanUpdated();
+            publishPhaseChanged();
+            publishTransitionRequested();
+        }
+    }
+
+    private synchronized void restoreWorkflowForCurrentProject(boolean publishEvents) {
+        Path path = resolveActiveWorkflowPath();
+        ActiveWorkflowState saved = PathUtils.readJsonOrDefault(path, ActiveWorkflowState.class, null);
+        if (saved == null) {
+            resetWorkflowInternal(false, publishEvents);
+            return;
+        }
+        this.currentPlan = saved.currentPlan();
+        if (saved.currentPhase() != null && saved.currentPhase() != WorkflowPhase.EXPLORE) {
+            this.currentPhase = saved.currentPhase();
+        } else {
+            this.currentPhase = WorkflowPhase.PLAN;
+        }
+        this.pendingPhase = saved.pendingPhase();
+        this.pendingReason = saved.pendingReason();
+        this.visitedPhases.clear();
+        this.visitedPhases.add(WorkflowPhase.PLAN);
+        if (saved.visitedPhases() != null) {
+            for (WorkflowPhase phase : saved.visitedPhases()) {
+                if (phase != null && phase != WorkflowPhase.EXPLORE) {
+                    this.visitedPhases.add(phase);
+                }
+            }
+        }
+        this.visitedPhases.add(this.currentPhase);
+        if (saved.unassignedTaskUsage() != null) {
+            this.unassignedTaskUsage = saved.unassignedTaskUsage();
+        } else {
+            this.unassignedTaskUsage = ImplementationPlan.UsageSummary.EMPTY;
+        }
+        if (publishEvents) {
+            publishPlanUpdated();
+            publishPhaseChanged();
+            publishTransitionRequested();
+        }
+    }
+
+    private Path resolveActiveWorkflowPath() {
+        if (projectService == null || !projectService.hasActiveProject()) {
+            return null;
+        }
+        try {
+            return projectService.resolveProjectDataPath(ACTIVE_WORKFLOW_FILENAME);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private boolean hasActiveWorkflowStateToPersist() {
+        if (currentPlan != null || currentPhase != WorkflowPhase.PLAN || pendingPhase != null) {
+            return true;
+        }
+        if (unassignedTaskUsage != null && unassignedTaskUsage.hasUsage()) {
+            return true;
+        }
+        return visitedPhases.size() > 1;
+    }
+
+    private void persistActiveWorkflowState() {
+        Path path = resolveActiveWorkflowPath();
+        if (path == null) {
+            return;
+        }
+        if (!hasActiveWorkflowStateToPersist()) {
+            PathUtils.deleteIfExistsQuietly(path);
+            return;
+        }
+        try {
+            ActiveWorkflowState state = new ActiveWorkflowState(currentPlan, currentPhase, pendingPhase, pendingReason,
+                    List.copyOf(visitedPhases), unassignedTaskUsage);
+            PathUtils.writeJson(path, state);
+        } catch (Exception e) {
+            log.warn("Failed to persist active workflow state", e);
+        }
     }
 
     private void publishPhaseChanged() {

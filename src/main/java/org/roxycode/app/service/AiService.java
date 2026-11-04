@@ -82,13 +82,6 @@ public class AiService implements AutoCloseable {
     private ConnectionTester connectionTester = this::executeConnectionTest;
     private volatile RetryTemplate retryTemplate = AiConfig.createRetryTemplate();
 
-    public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService, PromptService promptService,
-            JexlTool jexlTool, PlanService planService, ChatMemory chatMemory, ToolCallingManager toolCallingManager,
-            ApplicationEventPublisher eventPublisher) {
-        this(chatClientBuilder, settingsService, null, promptService, jexlTool, planService, chatMemory,
-                toolCallingManager, eventPublisher);
-    }
-
     @Autowired
     public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService,
             @Nullable ProjectService projectService, PromptService promptService, JexlTool jexlTool,

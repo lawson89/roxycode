@@ -96,8 +96,9 @@ public final class SwingTestUtils {
     static void awaitCondition(BooleanSupplier condition) {
         for (int i = 0; i < 50; i++) {
             flushEdt();
-            if (condition.getAsBoolean())
+            if (condition.getAsBoolean()) {
                 return;
+            }
             try {
                 Thread.sleep(20);
             } catch (InterruptedException e) {
@@ -115,15 +116,17 @@ public final class SwingTestUtils {
         try {
             runOnEdt(() -> {
                 FlatDarkLaf.setup();
-                if (component != null)
+                if (component != null) {
                     SwingUtilities.updateComponentTreeUI(component);
+                }
             });
             invokeUnchecked(assertions);
         } finally {
             runOnEdt(() -> {
                 FlatLightLaf.setup();
-                if (component != null)
+                if (component != null) {
                     SwingUtilities.updateComponentTreeUI(component);
+                }
             });
         }
     }
@@ -134,16 +137,18 @@ public final class SwingTestUtils {
     }
 
     static <T extends Component> T findComponent(Container root, Class<T> type, Predicate<T> predicate) {
-        if (root == null)
+        if (root == null) {
             return null;
+        }
         for (Component comp : root.getComponents()) {
             if (type.isInstance(comp) && predicate.test(type.cast(comp))) {
                 return type.cast(comp);
             }
             if (comp instanceof Container child) {
                 T found = findComponent(child, type, predicate);
-                if (found != null)
+                if (found != null) {
                     return found;
+                }
             }
         }
         return null;

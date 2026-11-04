@@ -30,8 +30,9 @@ class SettingsServiceTest {
     void testSaveAndLoadSettings() {
         AtomicBoolean listenerCalled = new AtomicBoolean(false);
         SettingsService service = new SettingsService(null, event -> {
-            if (event instanceof SettingsChangedEvent)
+            if (event instanceof SettingsChangedEvent) {
                 listenerCalled.set(true);
+            }
         });
 
         Path defaultHome = service.getRoxyHomeDir();
@@ -148,7 +149,7 @@ class SettingsServiceTest {
     @Test
     void testGetAvailableModelsLoadsFromClasspathTomlAndCachesResult() throws Exception {
         SettingsService service = new SettingsService(null, null);
-        var models = service.getAvailableModels();
+        List<org.roxycode.app.model.GeminiModelConfig> models = service.getAvailableModels();
         assertNotNull(models);
         assertFalse(models.isEmpty(), "Available models from /models.toml should not be empty");
         assertTrue(models.stream().anyMatch(m -> "gemini-3.5-flash".equals(m.apiName())));

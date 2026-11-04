@@ -8,22 +8,15 @@ import java.awt.Graphics2D;
 import java.awt.Image;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
-import javax.imageio.ImageIO;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
 
 public final class AppIconRenderer {
-    private static final Logger log = LoggerFactory.getLogger(AppIconRenderer.class);
-    private static final String ROXY_IMAGE_RESOURCE = "/static/images/roxy.png";
 
     public enum AgentStatus {
         IDLE, BUSY, WAITING_FEEDBACK
@@ -40,7 +33,7 @@ public final class AppIconRenderer {
             new Color(0x02, 0x84, 0xc7), // Sky Blue
             new Color(0x0e, 0x74, 0x90) // Cyan
     );
-    public static final Color STATUS_WAITING_COLOR = new Color(0xf5, 0x9e, 0x0b); // Amber 500
+    public static final Color STATUS_WAITING_COLOR = UiComponents.AMBER_DARK; // Amber 500
     public static final Color STATUS_WAITING_ALT_COLOR = new Color(0xff, 0xfb, 0xeb); // Warm Ivory
     public static final Color STATUS_WAITING_DARK_TEXT = new Color(0x45, 0x1a, 0x03);
 
@@ -49,22 +42,10 @@ public final class AppIconRenderer {
     private static final int MIN_CHARS_FOR_MONOGRAM = 2;
 
     @Nullable
-    private static final BufferedImage BASE_ROXY_IMAGE = loadBaseRoxyImage();
+    private static final BufferedImage BASE_ROXY_IMAGE = UiComponents
+            .loadClasspathImage(UiComponents.ROXY_LOGO_RESOURCE);
 
     private AppIconRenderer() {
-    }
-
-    @Nullable
-    private static BufferedImage loadBaseRoxyImage() {
-        try {
-            URL url = AppIconRenderer.class.getResource(ROXY_IMAGE_RESOURCE);
-            if (url != null) {
-                return ImageIO.read(url);
-            }
-        } catch (IOException e) {
-            log.warn("Failed to load base Roxy image {}: {}", ROXY_IMAGE_RESOURCE, e.getMessage());
-        }
-        return null;
     }
 
     public static String extractMonogram(@Nullable String projectName) {

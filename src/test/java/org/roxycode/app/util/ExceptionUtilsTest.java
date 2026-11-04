@@ -21,6 +21,12 @@ class ExceptionUtilsTest {
         assertSame(root, ExceptionUtils.getRootCause(top));
         assertSame(root, ExceptionUtils.getRootCause(root));
         assertNull(ExceptionUtils.getRootCause(null));
+        assertEquals("disk full", ExceptionUtils.getRootCauseMessage(top));
+        assertEquals("wrapper message",
+                ExceptionUtils.getRootCauseMessage(new RuntimeException("  wrapper message  ", new IOException())));
+        assertEquals("IOException",
+                ExceptionUtils.getRootCauseMessage(new RuntimeException((String) null, new IOException())));
+        assertEquals("Unknown error", ExceptionUtils.getRootCauseMessage(null));
 
         assertFalse(ExceptionUtils.isCancellation(root));
         assertDoesNotThrow(() -> ExceptionUtils.rethrowIfCancelled(root, "Should not throw"));

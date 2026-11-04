@@ -28,14 +28,6 @@ public class JexlServiceRegistry {
     private Boolean gitAvailable;
     private Boolean webSearchAvailable;
 
-    public JexlServiceRegistry() {
-        this(null, null);
-    }
-
-    public JexlServiceRegistry(@Nullable SystemToolService systemToolService) {
-        this(systemToolService, null);
-    }
-
     public JexlServiceRegistry(@Nullable SystemToolService systemToolService,
             @Nullable SettingsService settingsService) {
         this.systemToolService = systemToolService;

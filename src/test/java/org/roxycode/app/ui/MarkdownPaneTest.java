@@ -4,10 +4,10 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
 import java.awt.event.ActionListener;
+import java.util.List;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.Document;
 import javax.swing.text.html.HTMLDocument;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class MarkdownPaneTest {
@@ -43,13 +43,11 @@ class MarkdownPaneTest {
         pane.appendToolLog("if (", false, "Syntax Error: <eof>");
         pane.appendMessage("ai", "AI Response 1");
         pane.appendMessage("user", "Prompt 2");
-        pane.appendMessage("ai", "| Col A | Col B |\n|---|---|\n| 1 | 2 |\n");
-        pane.appendMessage("system", "Notice");
-        assertSame(doc, pane.getDocument());
+        pane.appendMessage("ai", String.join(System.lineSeparator(), "| Col A | Col B |", "|---|---|", "| 1 | 2 |"));
 
         String html = pane.getText();
         assertContainsAll(html, "Executed successfully", "Error: Syntax Error: &lt;eof&gt;", "md-table", "copy-cell-3",
-                "copy-cell-5");
+                "copy-cell-5", "tool-accent", "tool-accent-error");
         assertFalse(html.contains("<eof>"));
 
         List<MarkdownPane.ChatTranscriptEntry> transcript = pane.getConversationMessages();
@@ -66,19 +64,74 @@ class MarkdownPaneTest {
         assertEquals(3, pane.copiedMessageIndex);
         assertEquals("AI Response 1", pane.lastCopiedMarkdown);
         assertEquals(5, pane.getCaretPosition());
-        assertContainsAll(pane.getText(), "Copied!", "copy:5");
+        assertContainsAll(pane.getText(), "Copied!", "feature:3", "feature:5", "copy:5");
 
         pane.copyMessageMarkdown(5);
         assertEquals(5, pane.copiedMessageIndex);
-        assertTrue(pane.getText().contains("copy:3"));
+        assertContainsAll(pane.getText(), "copy:3", "feature:3", "feature:5");
 
         for (ActionListener listener : pane.copyFeedbackTimer.getActionListeners()) {
             listener.actionPerformed(null);
         }
         pane.copyFeedbackTimer.stop();
         assertEquals(-1, pane.copiedMessageIndex);
+        assertContainsAll(pane.getText(), "copy:3", "copy:5", "feature:3", "feature:5");
 
         pane.clear();
         assertTrue(pane.getConversationMessages().isEmpty());
+    }
+
+    @Test
+    void testCollapsibleToolCardsAndSemanticSummary() {
+        String multiLineScript = String.join(System.lineSeparator(),
+                "var content = fileReadService.readLines('src/App.java', 1, 20);",
+                "fileEditorService.replaceBlock('src/App.java', 'old', 'new');", "planService.markStepCompleted(0);",
+                "var build = buildToolService.buildAndTest();", "build.success;");
+        String summary = ChatHtmlTemplates.summarizeToolScript(JexlToHtmlConverter.convert(multiLineScript));
+        assertContainsAll(summary, "fileReadService.readLines", "fileEditorService.replaceBlock",
+                "planService.markStepCompleted", "(+1 more)", "(5 lines)");
+
+        String plainFallbackSummary = ChatHtmlTemplates
+                .summarizeToolScript(String.join(System.lineSeparator(), "// comment", "var answer = 42;", "answer;"));
+        assertEquals("var answer = 42; (3 lines)", plainFallbackSummary);
+
+        MarkdownPane pane = new MarkdownPane(true);
+        pane.appendToolLog(multiLineScript, true, null);
+        String collapsedHtml = pane.getText();
+        assertContainsAll(collapsedHtml, "toggle-tool:0", "[Show 5 lines]", "fileReadService.readLines",
+                "fileEditorService.replaceBlock", "(5 lines)");
+        assertFalse(collapsedHtml.contains("build.success;"));
+
+        HTMLDocument htmlDoc = (HTMLDocument) pane.getDocument();
+        pane.fireHyperlinkUpdate(new HyperlinkEvent(pane, HyperlinkEvent.EventType.ACTIVATED, null, "toggle-tool:0"));
+        assertSame(htmlDoc, pane.getDocument());
+        String expandedHtml = pane.getText();
+        assertContainsAll(expandedHtml, "toggle-tool:0", "[Hide code]", "build.success;");
+
+        pane.fireHyperlinkUpdate(new HyperlinkEvent(pane, HyperlinkEvent.EventType.ACTIVATED, null, "toggle-tool:0"));
+        assertContainsAll(pane.getText(), "[Show 5 lines]", "fileReadService.readLines");
+        assertFalse(pane.getText().contains("build.success;"));
+
+        String failedMultiLine = String.join(System.lineSeparator(), "line1", "line2", "line3", "line4",
+                "line5_failed");
+        pane.appendToolLog(failedMultiLine, false, "Compilation failed");
+        assertContainsAll(pane.getText(), "tool-call-error", "tool-accent-error", "[Hide code]", "line5_failed",
+                "Compilation failed");
+
+        pane.appendMessage("user", "Verify persistence");
+        pane.appendMessage("ai", "Persistence verified.");
+        List<MarkdownPane.PersistedChatEntry> exported = pane.exportMessages();
+        assertEquals(4, exported.size());
+        assertTrue(exported.get(0).isTool());
+        assertFalse(exported.get(0).toolExpanded());
+        assertTrue(exported.get(1).isTool());
+        assertTrue(exported.get(1).toolExpanded());
+        assertEquals("Compilation failed", exported.get(1).error());
+
+        MarkdownPane restoredPane = new MarkdownPane(true);
+        restoredPane.restoreMessages(exported);
+        assertEquals(exported, restoredPane.exportMessages());
+        assertContainsAll(restoredPane.getText(), "[Show 5 lines]", "line5_failed", "Compilation failed",
+                "Verify persistence", "Persistence verified.");
     }
 }

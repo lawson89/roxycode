@@ -44,8 +44,8 @@ class LLMDocGeneratorTest {
                 Arguments.of(FileEditorService.class, new FileEditorService(ps, null)),
                 Arguments.of(GrepService.class, new GrepService(ps, frs)),
                 Arguments.of(GitService.class, new GitService(ps)),
-                Arguments.of(GenericBuildToolService.class, new GenericBuildToolService(ps, null, null)),
-                Arguments.of(MemoryService.class, new MemoryService(null, ps)),
+                Arguments.of(GenericBuildToolService.class, new GenericBuildToolService(ps, null, null, null, null)),
+                Arguments.of(MemoryService.class, new MemoryService(null, ps, null)),
                 Arguments.of(SymbolService.class,
                         new SymbolService(ps, new GrepService(ps, frs), AiConfig.SHARED_OBJECT_MAPPER)),
                 Arguments.of(PlanService.class, new PlanService(null, null, null)));

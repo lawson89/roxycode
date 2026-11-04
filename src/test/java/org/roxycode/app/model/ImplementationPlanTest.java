@@ -73,7 +73,8 @@ class ImplementationPlanTest {
         ImplementationPlan plan = emptyPlan
                 .withRecordedTokenUsage(
                         new TokenUsageEvent("task:default", "gemini-3.5-flash", 1_048_576, 40_000, 30_000, 10_000,
-                                1_500, 500, 42_000, WorkflowPhase.CODE, 0.0075, 0.00225, 0.005625, 0.001875, 0.01725))
+                                1_500, 500, 42_000, WorkflowPhase.CODE, 0.0075, 0.00225, 0.005625, 0.001875, 0.01725),
+                        WorkflowPhase.CODE)
                 .withRecordedFileChange("src/NewFile.java", FileChangedEvent.ChangeType.CREATED)
                 .withRecordedFileChange("src/NewFile.java", FileChangedEvent.ChangeType.MODIFIED)
                 .withRecordedFileChange("src/App.java", FileChangedEvent.ChangeType.MODIFIED)

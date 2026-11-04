@@ -1,6 +1,8 @@
 package org.roxycode.app.ui;
 
+import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import org.apache.commons.lang3.StringUtils;
@@ -34,21 +36,36 @@ import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.ui.MarkdownPane.ChatTranscriptEntry;
+import org.roxycode.app.ui.MarkdownPane.PersistedChatEntry;
 import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.ExceptionUtils;
+import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.MessageType;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.context.ApplicationEventPublisher;
 
 @SuppressWarnings({"PMD.NullAssignment", "PMD.CloseResource"})
 public final class ChatController implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(ChatController.class);
-    static final String ROLE_SYSTEM = "system";
-    static final String ROLE_USER = "user";
-    static final String ROLE_AI = "ai";
+    static final String ROLE_SYSTEM = ChatHtmlTemplates.ROLE_SYSTEM;
+    static final String ROLE_USER = ChatHtmlTemplates.ROLE_USER;
+    static final String ROLE_AI = ChatHtmlTemplates.ROLE_AI;
     static final String IMAGE_REQUIRES_TEXT_MESSAGE = "Please enter a prompt message to accompany the attached image.";
     private static final String BT = String.valueOf((char) 96);
+
+    public record PersistedMemoryMessage(String type, String text) {
+    }
+
+    public record ActiveChatSessionState(List<PersistedChatEntry> uiEntries,
+            List<PersistedMemoryMessage> memoryMessages, long lastPromptTokens, long lastCachedInputTokens,
+            int lastContextWindowTokens) {
+    }
 
     private final ChatModel model;
     private final ChatPanel view;
@@ -86,7 +103,16 @@ public final class ChatController implements AutoCloseable {
 
     void setProjectService(ProjectService projectService) {
         this.projectService = projectService;
-        resetTelemetry();
+        Path sessionPath = resolveActiveChatSessionPath();
+        ActiveChatSessionState saved = PathUtils.readJsonOrDefault(sessionPath, ActiveChatSessionState.class, null);
+        if (saved != null) {
+            applyRestoredSession(saved);
+        } else {
+            resetTelemetry();
+            if (model.isTaskMode() && planService != null && planService.getPendingPhase() != null) {
+                Edt.run(this::syncTransitionBannerWithPlanService);
+            }
+        }
     }
 
     void setTopicArchiveServices(MemoryService memoryService, EnvironmentService environmentService) {
@@ -163,6 +189,7 @@ public final class ChatController implements AutoCloseable {
         }
         view.hideUserInputPrompt();
         view.appendMessage(ROLE_USER, text);
+        persistActiveChatSession();
         view.clearInputText();
         triggerTurn(text);
     }
@@ -198,9 +225,13 @@ public final class ChatController implements AutoCloseable {
     }
 
     public void stopTurn() {
-        if (cancelActiveTurnState(true)) {
+        boolean hadActiveTurn = cancelActiveTurnState(true);
+        if (hadActiveTurn || view.isLoading()) {
             Edt.run(() -> {
-                view.appendMessage(ROLE_SYSTEM, "_Request cancelled by user._");
+                if (hadActiveTurn) {
+                    view.appendMessage(ROLE_SYSTEM, "_Request cancelled by user._");
+                    persistActiveChatSession();
+                }
                 view.setLoading(false);
             });
         }
@@ -222,7 +253,9 @@ public final class ChatController implements AutoCloseable {
                     chatMemory.clear(model.getConversationId());
                     view.appendMessage(ROLE_SYSTEM,
                             "Task complete. What is the next feature you would like to work on?");
+                    persistActiveChatSession();
                 } else {
+                    persistActiveChatSession();
                     triggerTurn("I approve the transition to " + requested.getDisplayName()
                             + ". Please proceed with the next phase.");
                 }
@@ -238,6 +271,7 @@ public final class ChatController implements AutoCloseable {
         cancelActiveTurnState(false);
         planService.rejectTransition();
         view.appendMessage(ROLE_SYSTEM, "Transition to **" + requested.getDisplayName() + "** rejected.");
+        persistActiveChatSession();
         triggerTurn("I have rejected the transition to " + requested.getDisplayName()
                 + ". Let's discuss what needs to be fixed or adjusted.");
     }
@@ -319,7 +353,10 @@ public final class ChatController implements AutoCloseable {
         model.setCurrentTurn(0);
         resetTelemetry();
         if (clearMemory) {
-            chatMemory.clear(model.getConversationId());
+            if (chatMemory != null) {
+                chatMemory.clear(model.getConversationId());
+            }
+            PathUtils.deleteIfExistsQuietly(resolveActiveChatSessionPath());
         }
         Edt.run(() -> {
             view.clearAttachments();
@@ -385,11 +422,10 @@ public final class ChatController implements AutoCloseable {
         deferredTransitionEvent = null;
 
         view.appendMessage(role, message);
+        persistActiveChatSession();
+        view.setLoading(false);
         if (transition != null && !model.isTurnCancelled()) {
-            view.setLoading(false);
             applyWorkflowTransition(transition);
-        } else {
-            view.setLoading(false);
         }
     }
 
@@ -403,6 +439,7 @@ public final class ChatController implements AutoCloseable {
         cancelPendingUserInput();
         deferredTransitionEvent = null;
         view.appendMessage(ROLE_SYSTEM, "_Request cancelled by user._");
+        persistActiveChatSession();
         view.setLoading(false);
     }
 
@@ -468,6 +505,7 @@ public final class ChatController implements AutoCloseable {
         if (event.autonomous()) {
             if (event.to() == WorkflowPhase.PLAN) {
                 view.appendMessage(ROLE_SYSTEM, "Task complete. What is the next feature you would like to work on?");
+                persistActiveChatSession();
             } else {
                 triggerTurn(buildAutonomousTransitionPrompt(event));
             }
@@ -515,8 +553,143 @@ public final class ChatController implements AutoCloseable {
     }
 
     void onProjectChanged(ProjectChangedEvent event) {
-        resetTelemetry();
-        Edt.run(view::updateTurnLabel);
+        restoreSessionForCurrentProject();
+    }
+
+    void restoreSessionForCurrentProject() {
+        cancelActiveTurnState(false);
+        model.clearPendingImages();
+        model.setCurrentTurn(0);
+        Path sessionPath = resolveActiveChatSessionPath();
+        ActiveChatSessionState saved = PathUtils.readJsonOrDefault(sessionPath, ActiveChatSessionState.class, null);
+        applyRestoredSession(saved);
+    }
+
+    private void applyRestoredSession(ActiveChatSessionState saved) {
+        if (saved != null) {
+            restoreChatMemoryMessages(saved.memoryMessages());
+            model.setLastPromptTokens(Math.max(0L, saved.lastPromptTokens()));
+            model.setLastCachedInputTokens(Math.max(0L, saved.lastCachedInputTokens()));
+            if (saved.lastContextWindowTokens() > 0) {
+                model.setLastContextWindowTokens(saved.lastContextWindowTokens());
+            } else {
+                model.setLastContextWindowTokens(resolveConfiguredContextWindowTokens());
+            }
+        } else {
+            if (chatMemory != null) {
+                chatMemory.clear(model.getConversationId());
+            }
+            resetTelemetry();
+        }
+        List<PersistedChatEntry> entriesToRestore;
+        if (saved != null && saved.uiEntries() != null) {
+            entriesToRestore = saved.uiEntries();
+        } else {
+            entriesToRestore = List.of();
+        }
+        Edt.run(() -> {
+            view.clearAttachments();
+            view.hideUserInputPrompt();
+            view.setLoading(false);
+            view.restoreMessages(entriesToRestore);
+            syncTransitionBannerWithPlanService();
+            view.updateTurnLabel();
+        });
+    }
+
+    private void syncTransitionBannerWithPlanService() {
+        if (!model.isTaskMode()) {
+            return;
+        }
+        if (planService != null && planService.getPendingPhase() != null) {
+            view.showTransitionBanner(
+                    PlanService.formatApprovalLabel(planService.getCurrentPhase(), planService.getPendingPhase()));
+        } else {
+            view.hideTransitionBanner();
+        }
+    }
+
+    static String resolveActiveChatFilename(String conversationId) {
+        return "active-chat-" + PathUtils.sanitizeSlug(conversationId, 40, "default") + ".json";
+    }
+
+    private Path resolveActiveChatSessionPath() {
+        if (projectService == null || !projectService.hasActiveProject()) {
+            return null;
+        }
+        try {
+            return projectService.resolveProjectDataPath(resolveActiveChatFilename(model.getConversationId()));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    void persistActiveChatSession() {
+        Path path = resolveActiveChatSessionPath();
+        if (path == null) {
+            return;
+        }
+        List<PersistedChatEntry> uiEntries = view.exportMessages();
+        List<PersistedMemoryMessage> memoryMessages = exportChatMemoryMessages();
+        if (uiEntries.isEmpty() && memoryMessages.isEmpty() && model.getLastPromptTokens() <= 0) {
+            PathUtils.deleteIfExistsQuietly(path);
+            return;
+        }
+        try {
+            ActiveChatSessionState state = new ActiveChatSessionState(uiEntries, memoryMessages,
+                    model.getLastPromptTokens(), model.getLastCachedInputTokens(), model.getLastContextWindowTokens());
+            PathUtils.writeJson(path, state);
+        } catch (Exception e) {
+            log.warn("Failed to persist active chat session state", e);
+        }
+    }
+
+    private List<PersistedMemoryMessage> exportChatMemoryMessages() {
+        if (chatMemory == null) {
+            return List.of();
+        }
+        List<Message> stored = chatMemory.get(model.getConversationId());
+        if (stored == null || stored.isEmpty()) {
+            return List.of();
+        }
+        List<PersistedMemoryMessage> result = new ArrayList<>(stored.size());
+        for (Message msg : stored) {
+            if (msg == null || msg.getMessageType() == null) {
+                continue;
+            }
+            MessageType type = msg.getMessageType();
+            if (type == MessageType.USER || type == MessageType.ASSISTANT || type == MessageType.SYSTEM) {
+                result.add(new PersistedMemoryMessage(type.name(), StringUtils.defaultString(msg.getText())));
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    private void restoreChatMemoryMessages(List<PersistedMemoryMessage> persisted) {
+        if (chatMemory == null) {
+            return;
+        }
+        chatMemory.clear(model.getConversationId());
+        if (persisted == null || persisted.isEmpty()) {
+            return;
+        }
+        List<Message> restored = new ArrayList<>(persisted.size());
+        for (PersistedMemoryMessage item : persisted) {
+            if (item == null || StringUtils.isBlank(item.type())) {
+                continue;
+            }
+            String text = StringUtils.defaultString(item.text());
+            if (MessageType.USER.name().equalsIgnoreCase(item.type())) {
+                restored.add(new UserMessage(text));
+            } else if (MessageType.ASSISTANT.name().equalsIgnoreCase(item.type())) {
+                restored.add(new AssistantMessage(text));
+            } else if (MessageType.SYSTEM.name().equalsIgnoreCase(item.type())) {
+                restored.add(new SystemMessage(text));
+            }
+        }
+        if (!restored.isEmpty()) {
+            chatMemory.add(model.getConversationId(), restored);
+        }
     }
 
     void onTokenUsage(TokenUsageEvent event) {
@@ -530,7 +703,10 @@ public final class ChatController implements AutoCloseable {
         } else {
             model.setLastContextWindowTokens(resolveConfiguredContextWindowTokens());
         }
-        Edt.run(view::updateTurnLabel);
+        Edt.run(() -> {
+            view.updateTurnLabel();
+            persistActiveChatSession();
+        });
     }
 
     private void resetTelemetry() {
@@ -562,6 +738,7 @@ public final class ChatController implements AutoCloseable {
         Edt.run(() -> {
             if (!model.isTurnCancelled()) {
                 view.appendToolLog(JexlToHtmlConverter.convert(event.script()), event.success(), event.error());
+                persistActiveChatSession();
             }
         });
     }
@@ -595,7 +772,7 @@ public final class ChatController implements AutoCloseable {
         log.debug("Phase changed to: {}", event.phase());
         Edt.run(() -> {
             if (model.isTaskMode()) {
-                view.hideTransitionBanner();
+                syncTransitionBannerWithPlanService();
                 view.updateTurnLabel();
             }
         });
