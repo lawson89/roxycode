@@ -118,7 +118,7 @@ public class RepoMapPackerService {
     }
 
     @SuppressWarnings("PMD.NullAssignment")
-    public void invalidateCache() {
+    private void invalidateCache() {
         synchronized (this) {
             generation.incrementAndGet();
             currentSnapshot = null;

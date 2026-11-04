@@ -3,8 +3,8 @@ package org.roxycode.app.ui;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Font;
-import java.awt.GraphicsEnvironment;
 import java.awt.GridLayout;
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -14,7 +14,6 @@ import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
-import javax.swing.JFileChooser;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
@@ -22,6 +21,7 @@ import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
+import javax.swing.Timer;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.events.ProjectChangedEvent;
@@ -50,16 +50,19 @@ public final class ContextManagerPanel extends JPanel {
     final JLabel subtitleLabel;
     final ContextScopeColumn globalColumn;
     final ContextScopeColumn projectColumn;
-    private transient Consumer<String> errorDialogPresenter;
+    final JLabel statusLabel;
+    private final Timer statusTimer;
 
     public ContextManagerPanel(PromptService promptService) {
-        this.errorDialogPresenter = msg -> UiComponents.showErrorDialog(ContextManagerPanel.this, msg);
         setLayout(new BorderLayout(0, 12));
         setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
         this.titleLabel = new JLabel(PAGE_TITLE);
         this.subtitleLabel = new JLabel(PAGE_SUBTITLE);
         add(UiComponents.createPageHeader(titleLabel, subtitleLabel, null), BorderLayout.NORTH);
+
+        this.statusLabel = new JLabel("");
+        this.statusTimer = UiComponents.createStatusTimer(statusLabel, 4000);
 
         this.globalColumn = new ContextScopeColumn(promptService, "Global Context", true, this::showError);
         this.projectColumn = new ContextScopeColumn(promptService, "Project Context", false, this::showError);
@@ -69,6 +72,7 @@ public final class ContextManagerPanel extends JPanel {
         columnsPanel.add(globalColumn);
         columnsPanel.add(projectColumn);
         add(columnsPanel, BorderLayout.CENTER);
+        add(statusLabel, BorderLayout.SOUTH);
     }
 
     @EventListener
@@ -85,13 +89,7 @@ public final class ContextManagerPanel extends JPanel {
     }
 
     void showError(String message) {
-        if (errorDialogPresenter != null) {
-            errorDialogPresenter.accept(message);
-        }
-    }
-
-    void setErrorDialogPresenter(Consumer<String> presenter) {
-        this.errorDialogPresenter = presenter;
+        UiComponents.showStatusMessage(statusLabel, statusTimer, message, false);
     }
 
     static final class ContextScopeColumn extends JPanel {
@@ -287,18 +285,15 @@ public final class ContextManagerPanel extends JPanel {
         }
 
         private void chooseAndAddFolder() {
-            if (GraphicsEnvironment.isHeadless()) {
-                return;
-            }
-            JFileChooser chooser = new JFileChooser();
-            chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+            String dialogTitle;
             if (globalScope) {
-                chooser.setDialogTitle("Select Global Context Folder");
+                dialogTitle = "Select Global Context Folder";
             } else {
-                chooser.setDialogTitle("Select Project Context Folder");
+                dialogTitle = "Select Project Context Folder";
             }
-            if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION && chooser.getSelectedFile() != null) {
-                addFolderAsync(chooser.getSelectedFile().getAbsolutePath());
+            File selectedFolder = UiComponents.chooseDirectory(this, dialogTitle, null);
+            if (selectedFolder != null) {
+                addFolderAsync(selectedFolder.getAbsolutePath());
             }
         }
 
@@ -348,6 +343,10 @@ public final class ContextManagerPanel extends JPanel {
                         btnRemoveFolder.setEnabled(folderList.getSelectedValue() != null);
                     }, ex -> {
                         log.warn("Failed to refresh context folders and files: {}", ex.getMessage());
+                        if (errorReporter != null) {
+                            errorReporter.accept(
+                                    "Error refreshing context folders: " + ExceptionUtils.getRootCauseMessage(ex));
+                        }
                     });
             lastRefreshFuture = future;
             return future;

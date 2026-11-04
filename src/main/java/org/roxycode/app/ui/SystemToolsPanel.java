@@ -48,16 +48,18 @@ public final class SystemToolsPanel extends JPanel {
     private final JLabel titleLabel;
     private final JLabel subtitleLabel;
     final JButton refreshBtn;
+    final UiComponents.WarningBanner warningBanner;
     final JProgressBar progressBar;
     private final JPanel cardsContainer;
     private final JScrollPane scrollPane;
     final List<ToolCard> toolCards = new ArrayList<>();
+    private List<String> lastMissingRequiredToolNames = List.of();
     transient volatile CompletableFuture<List<SystemTool>> initialToolsFuture = CompletableFuture
             .completedFuture(List.of());
 
     public SystemToolsPanel(SystemToolService toolService) {
         this.toolService = toolService;
-        setLayout(new MigLayout("fill, insets 20, hidemode 3", "[grow, fill]", "[]10[]10[grow, fill]"));
+        setLayout(new MigLayout("fill, insets 20, hidemode 3", "[grow, fill]", "[]10[]10[]10[grow, fill]"));
         setOpaque(true);
 
         titleLabel = new JLabel("System Tools Status");
@@ -67,6 +69,9 @@ public final class SystemToolsPanel extends JPanel {
         refreshBtn.addActionListener(e -> refreshTools());
 
         add(UiComponents.createPageHeader(titleLabel, subtitleLabel, refreshBtn), "growx, wmin 0, wrap");
+
+        warningBanner = new UiComponents.WarningBanner();
+        add(warningBanner, "growx, wmin 0, wrap, hidemode 3");
 
         progressBar = new JProgressBar();
         progressBar.setVisible(false);
@@ -130,10 +135,28 @@ public final class SystemToolsPanel extends JPanel {
         }
     }
 
+    static String formatMissingToolsWarningMessage(List<String> missingToolNames) {
+        if (missingToolNames == null || missingToolNames.isEmpty()) {
+            return "";
+        }
+        return "Required system tools missing (" + String.join(", ", missingToolNames)
+                + "). Install the missing tools using the commands below and click 'Refresh Status'.";
+    }
+
+    void updateWarningBannerState() {
+        boolean hasMissing = lastMissingRequiredToolNames != null && !lastMissingRequiredToolNames.isEmpty();
+        String messageText = "";
+        if (hasMissing) {
+            messageText = formatMissingToolsWarningMessage(lastMissingRequiredToolNames);
+        }
+        warningBanner.setVisibleState(hasMissing, messageText);
+    }
+
     private void populateCards(List<SystemTool> tools) {
         cardsContainer.removeAll();
         toolCards.clear();
         if (tools != null) {
+            lastMissingRequiredToolNames = SystemToolService.getMissingRequiredToolNames(tools);
             List<SystemTool> sortedTools = new ArrayList<>();
             for (SystemTool tool : tools) {
                 if (tool != null) {
@@ -146,7 +169,10 @@ public final class SystemToolsPanel extends JPanel {
                 toolCards.add(card);
                 cardsContainer.add(card, GROWX_WMIN_0);
             }
+        } else {
+            lastMissingRequiredToolNames = List.of();
         }
+        updateWarningBannerState();
         cardsContainer.revalidate();
         cardsContainer.repaint();
     }
@@ -219,6 +245,9 @@ public final class SystemToolsPanel extends JPanel {
     private void applyThemeStyling() {
         Color fg = SwingHtmlUtils.getUiColor(new Color(0x33, 0x33, 0x33), "Label.foreground");
         refreshBtn.setIcon(FontIcon.of(Codicons.REFRESH, 14, fg));
+        if (warningBanner != null) {
+            updateWarningBannerState();
+        }
         toolCards.forEach(ToolCard::applyCardTheme);
     }
 

@@ -77,11 +77,6 @@ public record GeminiModelConfig(String apiName, String name, String description,
         return (Math.max(0L, tokens) * outputPricePerMillion) / TOKENS_PER_MILLION;
     }
 
-    public double calculateCostUsd(long uncachedInputTokens, long cachedInputTokens, long outputAndThinkingTokens) {
-        return calculateUncachedInputCostUsd(uncachedInputTokens) + calculateCachedInputCostUsd(cachedInputTokens)
-                + calculateOutputCostUsd(outputAndThinkingTokens);
-    }
-
     @Override
     public String toString() {
         return name;

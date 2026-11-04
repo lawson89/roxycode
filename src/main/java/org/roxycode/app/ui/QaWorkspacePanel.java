@@ -3,6 +3,7 @@ package org.roxycode.app.ui;
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.util.List;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
@@ -113,10 +114,8 @@ public final class QaWorkspacePanel extends JPanel {
         Color muted = SwingHtmlUtils.getMutedForegroundColor();
         mentorSubtitleLabel.setForeground(muted);
         UiComponents.updateInfoIconTheme(mentorInfoIcon);
-        if (qaTabs != null && qaTabs.getTabCount() >= 2) {
-            qaTabs.setIconAt(0, FontIcon.of(Codicons.COMMENT_DISCUSSION, 15, accent));
-            qaTabs.setIconAt(1, FontIcon.of(Codicons.HISTORY, 15, muted));
-        }
+        UiComponents.updateTabIcons(qaTabs, List.of(Codicons.COMMENT_DISCUSSION, Codicons.HISTORY),
+                List.of(accent, muted));
     }
 
     public void bindSidebar(SidebarPanel sidebar) {

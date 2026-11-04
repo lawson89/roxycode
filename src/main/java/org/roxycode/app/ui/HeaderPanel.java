@@ -88,7 +88,7 @@ public final class HeaderPanel extends JPanel {
         groundingLabel = new JLabel();
         groundingLabel.setToolTipText("Google Search Grounding enabled");
 
-        updateModelDisplay(resolveEffectiveModel(), resolveEffectiveThinkingLevel(null));
+        updateModelDisplay(resolveEffectiveModel(), resolveEffectiveThinkingLevel());
         themeToggleButton = createIconButton(Codicons.COLOR_MODE, "Toggle Light/Dark Theme", e -> toggleTheme());
 
         rightPanel.add(modelLabel);
@@ -117,16 +117,7 @@ public final class HeaderPanel extends JPanel {
         return ProjectService.resolveEffectiveGeminiModel(projectService, settingsService);
     }
 
-    private ThinkingLevel resolveEffectiveThinkingLevel(AppSettings eventSettings) {
-        if (projectService != null && projectService.hasActiveProject()) {
-            String projectThinking = projectService.getProjectThinkingLevel();
-            if (projectThinking != null && !projectThinking.isEmpty()) {
-                return ThinkingLevel.fromString(projectThinking);
-            }
-        }
-        if (eventSettings != null && eventSettings.getThinkingLevel() != null) {
-            return ThinkingLevel.fromString(eventSettings.getThinkingLevel());
-        }
+    private ThinkingLevel resolveEffectiveThinkingLevel() {
         return ProjectService.resolveEffectiveThinkingLevel(projectService, settingsService);
     }
 
@@ -216,32 +207,14 @@ public final class HeaderPanel extends JPanel {
             projectLabel.setText(projectService.getProjectName());
             updateProjectStateDisplay();
             updateProjectTooltip(event.projectRoot());
-            updateModelDisplay(resolveEffectiveModel(), resolveEffectiveThinkingLevel(null));
+            updateModelDisplay(resolveEffectiveModel(), resolveEffectiveThinkingLevel());
             updateBranchLabel();
         });
     }
 
     @EventListener
     public void onSettingsChanged(SettingsChangedEvent event) {
-        Edt.run(() -> {
-            AppSettings eventSettings = null;
-            if (event != null) {
-                eventSettings = event.settings();
-            }
-            ThinkingLevel effectiveThinking = resolveEffectiveThinkingLevel(eventSettings);
-            if (projectService != null && projectService.hasActiveProject()) {
-                String projectModel = projectService.getProjectGeminiModel();
-                if (!projectModel.isEmpty()) {
-                    updateModelDisplay(projectModel, effectiveThinking);
-                    return;
-                }
-            }
-            if (eventSettings != null && eventSettings.getGeminiModel() != null) {
-                updateModelDisplay(eventSettings.getGeminiModel(), effectiveThinking);
-            } else {
-                updateModelDisplay(resolveEffectiveModel(), effectiveThinking);
-            }
-        });
+        Edt.run(() -> updateModelDisplay(resolveEffectiveModel(), resolveEffectiveThinkingLevel()));
     }
 
     private void toggleTheme() {
@@ -319,16 +292,10 @@ public final class HeaderPanel extends JPanel {
     }
 
     private void chooseProject() {
-        JFileChooser chooser = new JFileChooser();
-        chooser.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
-        if (projectService.getCurrentProjectRoot() != null) {
-            chooser.setCurrentDirectory(projectService.getCurrentProjectRoot().toFile());
-        }
-        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            File file = chooser.getSelectedFile();
-            if (file != null) {
-                switchProjectAsync(file.toPath());
-            }
+        File file = UiComponents.chooseDirectory(this, "Select Project Directory",
+                projectService.getCurrentProjectRoot());
+        if (file != null) {
+            switchProjectAsync(file.toPath());
         }
     }
 

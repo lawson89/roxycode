@@ -30,7 +30,7 @@ class CodebaseCachePanelTest {
     void testRefreshStatusTokenBreakdownCopyAndEvents() {
         when(packerService.forceRegenerateRepoMap()).thenReturn(new EditorResult(true, "# Initial Repo Map", null));
         when(packerService.getCachedSnapshot()).thenReturn(Optional.empty());
-        CodebaseCachePanel panel = new CodebaseCachePanel(packerService, promptService);
+        CodebaseCachePanel panel = new CodebaseCachePanel(packerService, promptService, null);
 
         SwingTestUtils.awaitCondition(() -> panel.packButton.isEnabled()
                 && CodebaseCachePanel.NO_SNAPSHOT_STATUS.equals(panel.statusLabel.getText()));

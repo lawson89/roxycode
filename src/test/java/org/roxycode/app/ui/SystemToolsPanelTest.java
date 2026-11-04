@@ -28,6 +28,9 @@ public class SystemToolsPanelTest {
 
         assertFalse(panel.progressBar.isVisible());
         assertTrue(panel.refreshBtn.isEnabled());
+        assertTrue(panel.warningBanner.isVisible());
+        SwingTestUtils.assertContainsAll(panel.warningBanner.messageLabel.getText(), "Universal Ctags",
+                "Refresh Status");
         assertEquals(1, panel.toolCards.size());
         ToolCard initialCard = panel.toolCards.get(0);
         assertEquals("Ripgrep", initialCard.nameLabel.getText());
@@ -55,6 +58,8 @@ public class SystemToolsPanelTest {
                         SystemTool.ofKnownTool("Universal Ctags", "Not found", "Missing")), false));
         SwingTestUtils.flushEdt();
 
+        assertTrue(panel.warningBanner.isVisible());
+        SwingTestUtils.assertContainsAll(panel.warningBanner.messageLabel.getText(), "Ripgrep", "Universal Ctags");
         assertEquals(3, panel.toolCards.size());
         ToolCard ctagsCard = panel.toolCards.get(0);
         assertEquals("Universal Ctags", ctagsCard.nameLabel.getText());
@@ -65,6 +70,13 @@ public class SystemToolsPanelTest {
 
         SwingTestUtils.clickOnEdt(ctagsCard.copyInstallButton);
         assertEquals("Copied!", ctagsCard.copyInstallButton.getText());
+
+        panel.onSystemToolsUpdated(
+                new SystemToolsUpdatedEvent(List.of(SystemTool.ofKnownTool("Ripgrep", "ripgrep 14.1.0", "Detected"),
+                        SystemTool.ofKnownTool("Git", "git version 2.43.0", "Detected"),
+                        SystemTool.ofKnownTool("Universal Ctags", "6.0.0", "Detected")), false));
+        SwingTestUtils.flushEdt();
+        assertFalse(panel.warningBanner.isVisible());
     }
 
     @Test

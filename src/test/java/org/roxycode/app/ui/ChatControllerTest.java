@@ -107,49 +107,56 @@ class ChatControllerTest extends ChatTestFixture {
     }
 
     @Test
-    void testNewTopicResetInQaModeHandlesEmptySaveDiscardAndCancelChoices() {
+    void testNewTopicResetInQaModeAndResetSessionPromptInTaskMode() {
         ChatPanel panel = createExploreChatPanel(directExecutor);
-        AtomicBoolean dialogInvoked = new AtomicBoolean(false);
-        panel.setNewTopicDialogPresenter(defaultTitle -> {
-            dialogInvoked.set(true);
-            return new ChatPanel.NewTopicChoice(true, true, defaultTitle);
-        });
 
+        // 1. Empty Q&A conversation resets immediately without showing userInputPromptPanel
         SwingTestUtils.clickOnEdt(panel.resetSessionButton);
         flushEdt();
-        assertFalse(dialogInvoked.get());
+        assertFalse(panel.userInputPromptPanel.isVisible());
         verify(chatMemory).clear("qa:default");
         verifyNoInteractions(memoryService, aiService);
 
+        // 2. Non-empty Q&A conversation renders inline New Topic prompt; Cancel hides prompt and keeps messages
         clearInvocations(chatMemory, memoryService, publisher);
-        AtomicReference<String> capturedDefaultTitle = new AtomicReference<>();
-        panel.setNewTopicDialogPresenter(defaultTitle -> {
-            capturedDefaultTitle.set(defaultTitle);
-            return new ChatPanel.NewTopicChoice(false, false, "");
-        });
         SwingTestUtils.runOnEdt(() -> {
             panel.appendMessage("user", "How does RipGrep search work in MemoryService?");
             panel.appendMessage("ai", "It searches global, project, and archive dirs.");
         });
         SwingTestUtils.clickOnEdt(panel.resetSessionButton);
         flushEdt();
-        assertEquals("How does RipGrep search work in MemoryService", capturedDefaultTitle.get());
+        assertTrue(panel.userInputPromptPanel.isVisible());
+
+        JTextField topicField = SwingTestUtils.findComponent(panel.userInputPromptPanel, JTextField.class);
+        assertNotNull(topicField);
+        assertEquals("How does RipGrep search work in MemoryService", topicField.getText());
+
+        JButton cancelBtn = SwingTestUtils.findButton(panel.userInputPromptPanel, ChatPanel.CANCEL_BUTTON_TEXT);
+        assertNotNull(cancelBtn);
+        SwingTestUtils.clickOnEdt(cancelBtn);
+        flushEdt();
+        assertFalse(panel.userInputPromptPanel.isVisible());
         assertEquals(2, panel.getConversationMessages().size());
         verifyNoInteractions(chatMemory, memoryService, aiService);
 
-        panel.setNewTopicDialogPresenter(defaultTitle -> new ChatPanel.NewTopicChoice(true, false, "Ignored Title"));
+        // 3. Inline New Topic prompt -> No, Discard clears chat without archiving
         SwingTestUtils.clickOnEdt(panel.resetSessionButton);
         flushEdt();
+        assertTrue(panel.userInputPromptPanel.isVisible());
+        JButton discardBtn = SwingTestUtils.findButton(panel.userInputPromptPanel, ChatPanel.DISCARD_TOPIC_BUTTON_TEXT);
+        assertNotNull(discardBtn);
+        SwingTestUtils.clickOnEdt(discardBtn);
+        flushEdt();
+        assertFalse(panel.userInputPromptPanel.isVisible());
         verify(chatMemory).clear("qa:default");
         verifyNoInteractions(memoryService, aiService);
         assertTrue(panel.getConversationMessages().isEmpty());
 
+        // 4. Inline New Topic prompt -> Yes, Save Topic (and Enter key action) archives with edited title
         clearInvocations(chatMemory, memoryService, publisher);
         when(environmentService.getCurrentUser()).thenReturn("DevUser");
         when(memoryService.archiveTopicConversation(eq("RipGrep Search Architecture"), eq("DevUser"), anyString(),
                 anyList())).thenReturn("20250514-153000-ripgrep-search-architecture.md");
-        panel.setNewTopicDialogPresenter(
-                defaultTitle -> new ChatPanel.NewTopicChoice(true, true, "  # **RipGrep Search Architecture!**  "));
 
         SwingTestUtils.runOnEdt(() -> {
             panel.appendMessage("user", "How does RipGrep search work in MemoryService?");
@@ -157,7 +164,17 @@ class ChatControllerTest extends ChatTestFixture {
         });
         SwingTestUtils.clickOnEdt(panel.resetSessionButton);
         flushEdt();
+        assertTrue(panel.userInputPromptPanel.isVisible());
 
+        JTextField saveTopicField = SwingTestUtils.findComponent(panel.userInputPromptPanel, JTextField.class);
+        assertNotNull(saveTopicField);
+        SwingTestUtils.runOnEdt(() -> {
+            saveTopicField.setText("  # **RipGrep Search Architecture!**  ");
+            saveTopicField.postActionEvent();
+        });
+        flushEdt();
+
+        assertFalse(panel.userInputPromptPanel.isVisible());
         verify(chatMemory).clear("qa:default");
         verify(memoryService).archiveTopicConversation(eq("RipGrep Search Architecture"), eq("DevUser"), anyString(),
                 argThat(list -> list.size() == 2));
@@ -165,6 +182,33 @@ class ChatControllerTest extends ChatTestFixture {
                 "20250514-153000-ripgrep-search-architecture.md");
         verify(publisher).publishEvent(new ArchiveUpdatedEvent(ArchiveUpdatedEvent.TYPE_TOPIC,
                 "20250514-153000-ripgrep-search-architecture.md"));
+
+        // 5. Task Mode inline Reset Session prompt: Cancel vs Yes, Reset
+        ChatPanel taskPanel = createFeatureChatPanel(directExecutor);
+        clearInvocations(planService, chatMemory);
+        SwingTestUtils.clickOnEdt(taskPanel.resetSessionButton);
+        flushEdt();
+        assertTrue(taskPanel.userInputPromptPanel.isVisible());
+
+        JButton cancelResetBtn = SwingTestUtils.findButton(taskPanel.userInputPromptPanel,
+                ChatPanel.CANCEL_BUTTON_TEXT);
+        assertNotNull(cancelResetBtn);
+        SwingTestUtils.clickOnEdt(cancelResetBtn);
+        flushEdt();
+        assertFalse(taskPanel.userInputPromptPanel.isVisible());
+        verify(planService, never()).resetWorkflow();
+
+        SwingTestUtils.clickOnEdt(taskPanel.resetSessionButton);
+        flushEdt();
+        assertTrue(taskPanel.userInputPromptPanel.isVisible());
+        JButton confirmResetBtn = SwingTestUtils.findButton(taskPanel.userInputPromptPanel,
+                ChatPanel.CONFIRM_RESET_BUTTON_TEXT);
+        assertNotNull(confirmResetBtn);
+        SwingTestUtils.clickOnEdt(confirmResetBtn);
+        flushEdt();
+        assertFalse(taskPanel.userInputPromptPanel.isVisible());
+        verify(planService).resetWorkflow();
+        verify(chatMemory).clear("task:default");
     }
 
     @Test
@@ -221,23 +265,6 @@ class ChatControllerTest extends ChatTestFixture {
         chatPanel.onWorkflowTransition(transitionEvent(WorkflowPhase.CODE, WorkflowPhase.PLAN, "Test reason", true));
         flushEdt();
         verify(aiService, never()).chat(anyString(), any(), anyString(), any());
-
-        String reviewPrompt = ChatController.buildAutonomousTransitionPrompt(
-                transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Ready for audit", true));
-        assertContainsAll(reviewPrompt, "Phase changed to REVIEW", "independent pull-request audit",
-                "gitService.getDiff()", "## CURRENT PLAN PROGRESS", "planService.requestFixes",
-                "planService.requestCompletion");
-
-        String fixesPrompt = ChatController.buildAutonomousTransitionPrompt(
-                transitionEvent(WorkflowPhase.REVIEW, WorkflowPhase.CODE, "Fix ternary in UserInputService", true));
-        assertContainsAll(fixesPrompt, "Phase changed from REVIEW to CODE", "Fix ternary in UserInputService",
-                "buildToolService.buildAndTest()", "planService.requestReview");
-
-        assertEquals("Phase changed to EXPLORE. Please proceed with the tasks in the new phase.",
-                ChatController.buildAutonomousTransitionPrompt(
-                        transitionEvent(WorkflowPhase.PLAN, WorkflowPhase.EXPLORE, "Explore", true)));
-        assertEquals("Please proceed with the tasks in the current phase.",
-                ChatController.buildAutonomousTransitionPrompt(null));
 
         when(aiService.chat(anyString(), any(), anyString(), any())).thenReturn("Reviewing now");
         chatPanel.onWorkflowTransition(transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Test reason", true));

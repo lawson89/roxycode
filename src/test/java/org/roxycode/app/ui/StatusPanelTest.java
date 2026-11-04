@@ -33,7 +33,5 @@ class StatusPanelTest {
 
         assertEquals("Session: 155.0k tok ($0.03)", panel.tokenCostLabel.getText());
         assertContainsAll(panel.tokenCostLabel.getToolTipText(), "Calls: 2", "155,000 tok");
-
-        assertEquals("Session: 155.0k tok ($0.03)", panel.tokenCostLabel.getText());
     }
 }

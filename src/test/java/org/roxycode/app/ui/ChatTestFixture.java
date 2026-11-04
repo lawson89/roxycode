@@ -40,10 +40,6 @@ abstract class ChatTestFixture {
         directExecutor = Runnable::run;
     }
 
-    protected ChatPanel createChatPanel() {
-        return new ChatPanel(aiService, planService, publisher, chatMemory, "test", null, true, null, null);
-    }
-
     protected ChatPanel createFeatureChatPanel(Executor executor) {
         return ChatPanel.createFeaturePanel(aiService, planService, publisher, chatMemory, settingsService, executor);
     }

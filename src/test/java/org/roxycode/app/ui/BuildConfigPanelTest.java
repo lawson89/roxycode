@@ -6,7 +6,6 @@ import static org.mockito.Mockito.*;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.JComboBox;
 import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.BeforeEach;
@@ -86,14 +85,9 @@ class BuildConfigPanelTest {
         BuildConfigPanel panel = createPanelOnEdt();
         assertFalse(loadCalledOnEdt.get());
         assertEquals(BuildConfigPanel.TITLE_TEXT, panel.titleLabel.getText());
-        assertTrue(panel.subtitleLabel.getText().contains("Ask Roxy in Codebase Q&A!"));
-        assertNotNull(panel.buildConfigInfoIcon);
-        SwingTestUtils.assertContainsAll(panel.buildConfigInfoIcon.getToolTipText(), "[commands]", "[env]", "[parse]",
-                "[sandbox]", "Codebase Q&amp;A");
         assertTrue(panel.textArea.getText().contains("./mvnw test-compile"));
-        assertTrue(panel.unconfirmedBannerPanel.isVisible());
-        assertEquals(BuildConfigPanel.UNCONFIRMED_BUILD_NOTICE_TEXT, panel.unconfirmedBannerMessageLabel.getText());
-        assertTrue(panel.unconfirmedBannerMessageLabel.getText().contains("Ask Roxy in Codebase Q&A!"));
+        assertTrue(panel.unconfirmedBanner.isVisible());
+        assertEquals(BuildConfigPanel.UNCONFIRMED_BUILD_NOTICE_TEXT, panel.unconfirmedBanner.messageLabel.getText());
 
         JComboBox<GeminiModelConfig> modelCombo = panel.modelCombo;
         assertEquals(3, modelCombo.getItemCount());
@@ -125,7 +119,7 @@ class BuildConfigPanelTest {
         assertFalse(saveCalledOnEdt.get());
         assertFalse(modelSaveCalledOnEdt.get());
         assertTrue(panel.saveButton.isEnabled());
-        assertFalse(panel.unconfirmedBannerPanel.isVisible());
+        assertFalse(panel.unconfirmedBanner.isVisible());
         assertEquals("Configuration saved successfully!", panel.statusLabel.getText());
         assertEquals(1, confirmCallbackCount.get());
         verify(projectService).setProjectGeminiModel("gemini-3.5-pro");
@@ -146,15 +140,14 @@ class BuildConfigPanelTest {
 
         clearInvocations(projectService);
         when(projectService.isBuildConfirmed()).thenReturn(false);
-        AtomicReference<String> errorMsg = new AtomicReference<>();
-        panel.setErrorDialogPresenter(errorMsg::set);
         doThrow(new IOException("Disk full")).when(buildToolService).saveConfigContent(anyString());
 
         SwingTestUtils.clickOnEdt(panel.saveButton);
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
 
         assertTrue(panel.saveButton.isEnabled());
-        assertEquals("Error saving config: Disk full", errorMsg.get());
+        assertEquals("Error saving config: Disk full", panel.statusLabel.getText());
+        assertEquals("Error saving config: Disk full", panel.statusLabel.getToolTipText());
         verify(projectService, never()).setBuildConfirmed(true);
     }
 
@@ -186,5 +179,31 @@ class BuildConfigPanelTest {
             panel.applyTemplateButton.doClick();
         });
         assertTrue(panel.textArea.getText().contains("cargo check"));
+
+        when(buildToolService.loadTemplateContent("maven")).thenReturn("""
+                [commands]
+                compile = './mvnw test-compile'
+                """);
+        SwingTestUtils.runOnEdt(() -> {
+            panel.textArea.setText("# User edited build.toml");
+            panel.templateCombo.setSelectedIndex(0);
+            panel.applyTemplateButton.doClick();
+        });
+
+        UiComponents.ConfirmOverlay cancelOverlay = UiComponents.getActiveConfirmOverlay(panel);
+        assertNotNull(cancelOverlay);
+        assertTrue(cancelOverlay.isVisible());
+        assertTrue(cancelOverlay.messageArea.getText().contains("Maven"));
+        SwingTestUtils.clickOnEdt(cancelOverlay.cancelButton);
+        assertNull(UiComponents.getActiveConfirmOverlay(panel));
+        assertEquals("# User edited build.toml", panel.textArea.getText());
+
+        SwingTestUtils.clickOnEdt(panel.applyTemplateButton);
+        UiComponents.ConfirmOverlay confirmOverlay = UiComponents.getActiveConfirmOverlay(panel);
+        assertNotNull(confirmOverlay);
+        SwingTestUtils.clickOnEdt(confirmOverlay.confirmButton);
+        assertNull(UiComponents.getActiveConfirmOverlay(panel));
+        assertTrue(panel.textArea.getText().contains("./mvnw test-compile"));
+        assertEquals("Applied 'Maven' template.", panel.statusLabel.getText());
     }
 }

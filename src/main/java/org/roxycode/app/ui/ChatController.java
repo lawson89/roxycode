@@ -153,6 +153,7 @@ public final class ChatController implements AutoCloseable {
             }
             return;
         }
+        view.hideUserInputPrompt();
         view.appendMessage(ROLE_USER, text);
         view.clearInputText();
         triggerTurn(text);
@@ -235,21 +236,20 @@ public final class ChatController implements AutoCloseable {
 
     public void resetSession() {
         if (!model.isTaskMode()) {
-            List<ChatTranscriptEntry> capturedTranscript = view.getConversationMessages();
-            if (capturedTranscript.isEmpty()) {
+            List<ChatTranscriptEntry> currentTranscript = view.getConversationMessages();
+            if (currentTranscript.isEmpty()) {
                 performNewTopicReset(false, "");
                 return;
             }
-            String defaultTitle = MemoryService.deriveDefaultTopicTitle(capturedTranscript);
-            ChatPanel.NewTopicChoice choice = view.promptNewTopicChoice(defaultTitle);
-            if (choice != null && choice.proceed()) {
-                performNewTopicReset(choice.saveTopic(), choice.topicName());
-            }
+            String defaultTitle = MemoryService.deriveDefaultTopicTitle(currentTranscript);
+            view.showNewTopicPrompt(defaultTitle, choice -> {
+                if (choice != null && choice.proceed()) {
+                    performNewTopicReset(choice.saveTopic(), choice.topicName());
+                }
+            });
             return;
         }
-        if (view.confirmResetSession()) {
-            performResetSession();
-        }
+        view.showResetSessionPrompt(this::performResetSession);
     }
 
     void performResetSession() {

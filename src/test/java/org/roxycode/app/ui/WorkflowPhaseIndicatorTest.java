@@ -3,7 +3,12 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.formdev.flatlaf.FlatClientProperties;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
+import javax.swing.ToolTipManager;
 import org.junit.jupiter.api.Test;
+import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
 
@@ -38,6 +43,27 @@ class WorkflowPhaseIndicatorTest {
         assertNotNull(qaWorkspace.mentorInfoIcon);
         SwingTestUtils.assertContainsAll(qaWorkspace.mentorInfoIcon.getToolTipText(), "Read-Only",
                 "Move to Feature Request", "RoxyCode");
+
+        FontIcon infoFontIcon = (FontIcon) qaWorkspace.mentorInfoIcon.getIcon();
+        assertNotNull(infoFontIcon);
+        assertEquals(15, infoFontIcon.getIconSize());
+        assertEquals(UiComponents.resolveInfoIconColor(), infoFontIcon.getIconColor());
+        String pillStyle = (String) qaWorkspace.mentorInfoIcon.getClientProperty(FlatClientProperties.STYLE);
+        SwingTestUtils.assertContainsAll(pillStyle, "arc: 999", "border: 2,5,2,5,");
+
+        ToolTipManager toolTipManager = ToolTipManager.sharedInstance();
+        int customInitialDelay = 4321;
+        SwingTestUtils.runOnEdt(() -> {
+            toolTipManager.setInitialDelay(customInitialDelay);
+            MouseEvent pressEvent = new MouseEvent(qaWorkspace.mentorInfoIcon, MouseEvent.MOUSE_PRESSED,
+                    System.currentTimeMillis(), 0, 4, 4, 1, false);
+            for (MouseListener listener : qaWorkspace.mentorInfoIcon.getMouseListeners()) {
+                listener.mousePressed(pressEvent);
+            }
+            assertEquals(customInitialDelay, toolTipManager.getInitialDelay());
+            UiComponents.showInfoTooltipImmediately(qaWorkspace.mentorInfoIcon, null);
+            assertEquals(customInitialDelay, toolTipManager.getInitialDelay());
+        });
 
         String exploreWelcome = ChatHtmlTemplates.renderWelcomeCard(false);
         SwingTestUtils.assertContainsAll(exploreWelcome, "Ask about RoxyCode", "build.toml");

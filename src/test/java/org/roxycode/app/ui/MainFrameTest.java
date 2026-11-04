@@ -43,6 +43,7 @@ class MainFrameTest {
     private RepoMapPackerService repoMapPackerService;
     private JexlServiceRegistry jexlServiceRegistry;
     private JexlApiPanel jexlApiPanel;
+    private SystemToolsPanel systemToolsPanel;
     private TaskWorkspacePanel taskWorkspacePanel;
     private SettingsPanel settingsPanel;
     private BuildConfigPanel buildConfigPanel;
@@ -73,7 +74,8 @@ class MainFrameTest {
                 ChatPanel.createFeaturePanel(aiService, planService, pub, chatMemory, settingsService, null),
                 planService, new PlanPanel(planService), null);
         repoMapPackerService = mock(RepoMapPackerService.class);
-        CodebaseCachePanel codebaseCachePanel = new CodebaseCachePanel(repoMapPackerService, mock(PromptService.class));
+        CodebaseCachePanel codebaseCachePanel = new CodebaseCachePanel(repoMapPackerService, mock(PromptService.class),
+                null);
         jexlServiceRegistry = mock(JexlServiceRegistry.class);
         when(jexlServiceRegistry.getDocumentation(null)).thenReturn("// initial doc");
         jexlApiPanel = new JexlApiPanel(jexlServiceRegistry);
@@ -81,7 +83,7 @@ class MainFrameTest {
         SystemToolService systemToolService = mock(SystemToolService.class);
         when(systemToolService.detectTools()).thenReturn(toolsFuture);
         when(systemToolService.isDockerAvailable()).thenReturn(CompletableFuture.completedFuture(false));
-        SystemToolsPanel systemToolsPanel = new SystemToolsPanel(systemToolService);
+        systemToolsPanel = new SystemToolsPanel(systemToolService);
 
         settingsPanel = new SettingsPanel(settingsService, null);
         GenericBuildToolService buildToolService = mock(GenericBuildToolService.class);
@@ -110,9 +112,8 @@ class MainFrameTest {
         try {
             SwingTestUtils.flushEdt();
             assertEquals(MainFrame.SETTINGS_VIEW, frame.currentCard);
-            assertNull(frame.lastStartupAlertMessage,
-                    "Missing API key should open SettingsPanel with onboarding banner without a modal popup");
-            assertTrue(settingsPanel.onboardingBannerPanel.isVisible());
+            assertTrue(settingsPanel.onboardingBanner.isVisible());
+            assertFalse(systemToolsPanel.warningBanner.isVisible());
             assertFalse(frame.sidebar.isToolsAttentionNeeded());
 
             NavButton settingsBtn = frame.sidebar.getCardButton(MainFrame.SETTINGS_VIEW);
@@ -132,7 +133,7 @@ class MainFrameTest {
             });
             SwingTestUtils.flushEdt();
 
-            assertFalse(settingsPanel.onboardingBannerPanel.isVisible());
+            assertFalse(settingsPanel.onboardingBanner.isVisible());
             assertEquals(MainFrame.BUILD_CONFIG_VIEW, frame.currentCard);
             assertTrue(buildConfigBtn.isEnabled());
             assertTrue(memoryBtn.isEnabled());
@@ -198,8 +199,8 @@ class MainFrameTest {
         try {
             SwingTestUtils.flushEdt();
             assertEquals(MainFrame.TOOLS_VIEW, frame.currentCard);
-            assertEquals(MainFrame.buildFirstTimeSetupMessage(List.of("Universal Ctags")),
-                    frame.lastStartupAlertMessage);
+            assertTrue(systemToolsPanel.warningBanner.isVisible());
+            assertTrue(systemToolsPanel.warningBanner.messageLabel.getText().contains("Universal Ctags"));
             assertTrue(frame.sidebar.isToolsAttentionNeeded());
 
             NavButton toolsBtn = frame.sidebar.getCardButton(MainFrame.TOOLS_VIEW);

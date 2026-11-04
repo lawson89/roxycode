@@ -56,9 +56,9 @@ class SettingsPanelTest {
             SettingsPanel.applyTheme(AppSettings.DEFAULT_THEME);
         }
 
-        assertTrue(settingsPanel.onboardingBannerPanel.isVisible());
+        assertTrue(settingsPanel.onboardingBanner.isVisible());
         assertEquals(SettingsPanel.ONBOARDING_API_KEY_NOTICE_TEXT,
-                settingsPanel.onboardingBannerMessageLabel.getText());
+                settingsPanel.onboardingBanner.messageLabel.getText());
         java.util.concurrent.atomic.AtomicInteger initialCallbackCount = new java.util.concurrent.atomic.AtomicInteger();
         settingsPanel.setOnInitialApiKeyConfiguredCallback(initialCallbackCount::incrementAndGet);
 
@@ -77,7 +77,7 @@ class SettingsPanelTest {
         assertEquals("HIGH", settings.getThinkingLevel());
         assertEquals(85, settings.getMaxAgentToolTurns());
         assertTrue(settings.isLogToolCalls());
-        assertFalse(settingsPanel.onboardingBannerPanel.isVisible());
+        assertFalse(settingsPanel.onboardingBanner.isVisible());
         assertEquals(1, initialCallbackCount.get());
 
         AppSettings copied = settings.copy();

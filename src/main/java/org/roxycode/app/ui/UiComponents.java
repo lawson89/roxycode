@@ -2,12 +2,16 @@ package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.FlatLaf;
+import com.formdev.flatlaf.util.SystemFileChooser;
 import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.Insets;
+import java.awt.event.ActionListener;
+import java.util.List;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GraphicsEnvironment;
@@ -17,10 +21,14 @@ import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Desktop;
 import java.awt.Shape;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.geom.RoundRectangle2D;
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
+import java.nio.file.Path;
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -28,15 +36,20 @@ import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JEditorPane;
 import javax.swing.JLabel;
+import java.awt.event.KeyEvent;
+import java.awt.event.MouseMotionAdapter;
+import java.util.function.Consumer;
 import javax.swing.JList;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JRootPane;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
+import javax.swing.KeyStroke;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.Scrollable;
+import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.ToolTipManager;
 import javax.swing.UIManager;
@@ -58,6 +71,11 @@ final class UiComponents {
     private static final String GROWX_WMIN_0 = "growx, wmin 0";
     private static final String ROW_CENTER = "[center]";
     static final int INFO_TOOLTIP_DISMISS_DELAY_MS = 20_000;
+    static final String ACCENT_BUTTON_STYLE = "background: $Component.accentColor; focusedBackground: $Component.accentColor; hoverBackground: darken($Component.accentColor, 8%); pressedBackground: darken($Component.accentColor, 14%); foreground: #ffffff";
+    static final String GREEN_BUTTON_STYLE = "background: $Actions.Green; focusedBackground: $Actions.Green; hoverBackground: darken($Actions.Green, 8%); pressedBackground: darken($Actions.Green, 14%); foreground: #ffffff";
+    static final String RED_BUTTON_STYLE = "background: $Actions.Red; focusedBackground: $Actions.Red; hoverBackground: darken($Actions.Red, 8%); pressedBackground: darken($Actions.Red, 14%); foreground: #ffffff";
+    private static final Color INFO_ICON_LIGHT = new Color(0xd9, 0x77, 0x06);
+    private static final Color INFO_ICON_DARK = new Color(0xf5, 0x9e, 0x0b);
 
     private UiComponents() {
     }
@@ -249,6 +267,13 @@ final class UiComponents {
         return label;
     }
 
+    static Color resolveInfoIconColor() {
+        if (FlatLaf.isLafDark()) {
+            return INFO_ICON_DARK;
+        }
+        return INFO_ICON_LIGHT;
+    }
+
     static JLabel createInfoIcon(String htmlTooltip) {
         ToolTipManager toolTipManager = ToolTipManager.sharedInstance();
         if (toolTipManager.getDismissDelay() < INFO_TOOLTIP_DISMISS_DELAY_MS) {
@@ -257,14 +282,45 @@ final class UiComponents {
         JLabel label = new JLabel();
         label.setToolTipText(htmlTooltip);
         label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        label.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                showInfoTooltipImmediately(label, e);
+            }
+        });
         updateInfoIconTheme(label);
         return label;
     }
 
-    static void updateInfoIconTheme(JLabel iconLabel) {
-        if (iconLabel != null) {
-            iconLabel.setIcon(FontIcon.of(Codicons.INFO, 14, SwingHtmlUtils.getAccentColor()));
+    static void showInfoTooltipImmediately(JComponent component, @Nullable MouseEvent event) {
+        if (component == null) {
+            return;
         }
+        ToolTipManager toolTipManager = ToolTipManager.sharedInstance();
+        int originalInitialDelay = toolTipManager.getInitialDelay();
+        MouseEvent targetEvent = event;
+        if (targetEvent == null) {
+            targetEvent = new MouseEvent(component, MouseEvent.MOUSE_MOVED, System.currentTimeMillis(), 0,
+                    Math.max(1, component.getWidth() / 2), Math.max(1, component.getHeight() / 2), 0, false);
+        }
+        try {
+            toolTipManager.setInitialDelay(0);
+            toolTipManager.mouseMoved(targetEvent);
+        } finally {
+            toolTipManager.setInitialDelay(originalInitialDelay);
+        }
+    }
+
+    static void updateInfoIconTheme(JLabel iconLabel) {
+        if (iconLabel == null) {
+            return;
+        }
+        Color infoColor = resolveInfoIconColor();
+        Color pillBg = SwingHtmlUtils.getTintedBackground(infoColor, 0.16);
+        Color borderColor = SwingHtmlUtils.blendColor(infoColor, pillBg, 0.45);
+        iconLabel.setIcon(FontIcon.of(Codicons.INFO, 15, infoColor));
+        iconLabel.putClientProperty(FlatClientProperties.STYLE, "background: " + SwingHtmlUtils.toHex(pillBg)
+                + "; arc: 999; border: 2,5,2,5," + SwingHtmlUtils.toHex(borderColor));
     }
 
     static JPanel createModelControlBox(JLabel badgeLabel, JComboBox<GeminiModelConfig> comboBox,
@@ -437,10 +493,335 @@ final class UiComponents {
         area.setWrapStyleWord(lineWrap);
     }
 
-    static void showErrorDialog(Component parent, String message) {
-        if (!GraphicsEnvironment.isHeadless()) {
-            JOptionPane.showMessageDialog(parent, message, "Error", JOptionPane.ERROR_MESSAGE);
+    private static final String ACTIVE_CONFIRM_OVERLAY_KEY = "roxycode.activeConfirmOverlay";
+
+    static Timer createStatusTimer(@Nullable JLabel statusLabel, int delayMs) {
+        Timer timer = new Timer(delayMs, e -> {
+            if (statusLabel != null) {
+                statusLabel.setText("");
+                statusLabel.setToolTipText(null);
+            }
+        });
+        timer.setRepeats(false);
+        return timer;
+    }
+
+    static void showStatusMessage(JLabel statusLabel, @Nullable Timer statusTimer, String message, boolean success) {
+        if (statusLabel == null) {
+            return;
         }
+        Color statusColor;
+        if (success) {
+            statusColor = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
+            statusLabel.setToolTipText(null);
+        } else {
+            statusColor = SwingHtmlUtils.getUiColor(new Color(0xdc, 0x35, 0x45), "Actions.Red");
+            statusLabel.setToolTipText(message);
+        }
+        statusLabel.setForeground(statusColor);
+        statusLabel.setText(message);
+        if (statusTimer != null) {
+            statusTimer.restart();
+        }
+    }
+
+    static JButton createActionButton(String text, @Nullable Codicons icon, @Nullable Insets margin, boolean borderless,
+            @Nullable String style, @Nullable ActionListener listener) {
+        FontIcon fontIcon = null;
+        if (icon != null) {
+            if (borderless) {
+                fontIcon = FontIcon.of(icon, 16);
+            } else {
+                fontIcon = FontIcon.of(icon, 16, Color.WHITE);
+            }
+        }
+        JButton btn = new JButton(text, fontIcon);
+        if (margin != null) {
+            btn.setMargin(margin);
+        }
+        if (borderless) {
+            btn.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
+        }
+        if (style != null) {
+            btn.putClientProperty(FlatClientProperties.STYLE, style);
+        }
+        if (listener != null) {
+            btn.addActionListener(listener);
+        }
+        return btn;
+    }
+
+    static void updateTabIcons(JTabbedPane tabbedPane, List<Codicons> icons, List<Color> colors) {
+        if (tabbedPane == null || icons == null || colors == null) {
+            return;
+        }
+        int count = Math.min(tabbedPane.getTabCount(), Math.min(icons.size(), colors.size()));
+        for (int i = 0; i < count; i++) {
+            tabbedPane.setIconAt(i, FontIcon.of(icons.get(i), 15, colors.get(i)));
+        }
+    }
+
+    static ConfirmOverlay showConfirmOverlay(JComponent hostComponent, String title, String message,
+            String confirmButtonText, boolean dangerAction, Runnable onConfirm) {
+        return showConfirmOverlay(hostComponent, title, message, confirmButtonText, dangerAction, confirmed -> {
+            if (Boolean.TRUE.equals(confirmed) && onConfirm != null) {
+                onConfirm.run();
+            }
+        });
+    }
+
+    static ConfirmOverlay showConfirmOverlay(JComponent hostComponent, String title, String message,
+            String confirmButtonText, boolean dangerAction, Consumer<Boolean> onResult) {
+        if (hostComponent != null) {
+            ConfirmOverlay existing = getActiveConfirmOverlay(hostComponent);
+            if (existing != null) {
+                existing.dismiss();
+            }
+        }
+        ConfirmOverlay overlay = new ConfirmOverlay(hostComponent, title, message, confirmButtonText, dangerAction,
+                onResult);
+        overlay.attach();
+        return overlay;
+    }
+
+    @Nullable
+    static ConfirmOverlay getActiveConfirmOverlay(@Nullable JComponent hostComponent) {
+        if (hostComponent == null) {
+            return null;
+        }
+        Object prop = hostComponent.getClientProperty(ACTIVE_CONFIRM_OVERLAY_KEY);
+        if (prop instanceof ConfirmOverlay overlay && overlay.isVisible()) {
+            return overlay;
+        }
+        JRootPane rootPane = SwingUtilities.getRootPane(hostComponent);
+        if (rootPane != null && rootPane.getGlassPane() instanceof ConfirmOverlay glassOverlay
+                && glassOverlay.isVisible()) {
+            return glassOverlay;
+        }
+        return null;
+    }
+
+    static final class ConfirmOverlay extends JPanel {
+        private static final long serialVersionUID = 1L;
+
+        private final transient JComponent hostComponent;
+        private final transient Consumer<Boolean> onResult;
+        final JPanel cardPanel;
+        final JLabel iconLabel;
+        final JLabel titleLabel;
+        final JTextArea messageArea;
+        final JButton cancelButton;
+        final JButton confirmButton;
+        private transient JRootPane attachedRootPane;
+        private transient Component previousGlassPane;
+        private boolean previousGlassPaneVisible;
+        private boolean closed;
+
+        ConfirmOverlay(@Nullable JComponent hostComponent, String title, String message, String confirmButtonText,
+                boolean dangerAction, @Nullable Consumer<Boolean> onResult) {
+            super(new MigLayout("fill, ins 24", "[center]", ROW_CENTER));
+            this.hostComponent = hostComponent;
+            this.onResult = onResult;
+            setOpaque(false);
+            setFocusCycleRoot(true);
+
+            cardPanel = new JPanel(new MigLayout("fillx, wrap 1, insets 18 20 16 20, gapy 10", "[grow, fill]", "[]"));
+            styleCardPanel(cardPanel);
+
+            Color iconColor;
+            if (dangerAction) {
+                iconColor = SwingHtmlUtils.getUiColor(new Color(0xdc, 0x35, 0x45), "Actions.Red");
+            } else {
+                iconColor = SwingHtmlUtils.getWarningColor();
+            }
+            iconLabel = new JLabel(FontIcon.of(Codicons.WARNING, 20, iconColor));
+            titleLabel = new JLabel(StringUtils.defaultString(title));
+            titleLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +2");
+
+            JPanel headerRow = new JPanel(new MigLayout("insets 0, gapx 10", "[][grow]", ROW_CENTER));
+            headerRow.setOpaque(false);
+            headerRow.add(iconLabel);
+            headerRow.add(titleLabel, GROWX_WMIN_0);
+            cardPanel.add(headerRow, GROWX_WMIN_0);
+
+            messageArea = createReadOnlyTextArea();
+            messageArea.setText(StringUtils.defaultString(message));
+            messageArea.setForeground(SwingHtmlUtils.getUiColor(new Color(0x33, 0x33, 0x33), "Label.foreground"));
+            cardPanel.add(messageArea, GROWX_WMIN_0);
+
+            JPanel footerRow = new JPanel(new MigLayout("insets 4 0 0 0, gapx 8", "push[][]", ROW_CENTER));
+            footerRow.setOpaque(false);
+
+            cancelButton = new JButton("Cancel");
+            cancelButton.addActionListener(e -> cancel());
+
+            confirmButton = new JButton(StringUtils.defaultIfBlank(confirmButtonText, "Confirm"));
+            Color actionBg;
+            if (dangerAction) {
+                actionBg = iconColor;
+            } else {
+                actionBg = SwingHtmlUtils.getAccentColor();
+            }
+            confirmButton.setForeground(Color.WHITE);
+            confirmButton.setBackground(actionBg);
+            confirmButton.putClientProperty(FlatClientProperties.STYLE, "font: bold; borderWidth: 0; focusWidth: 0");
+            confirmButton.addActionListener(e -> confirm());
+
+            footerRow.add(cancelButton);
+            footerRow.add(confirmButton);
+            cardPanel.add(footerRow, GROWX_WMIN_0);
+
+            cardPanel.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mousePressed(MouseEvent e) {
+                    e.consume();
+                }
+            });
+
+            add(cardPanel, "w 380:420:460");
+
+            addMouseListener(new MouseAdapter() {
+                @Override
+                public void mousePressed(MouseEvent e) {
+                    if (!cardPanel.getBounds().contains(e.getPoint())) {
+                        cancel();
+                    }
+                    e.consume();
+                }
+
+                @Override
+                public void mouseReleased(MouseEvent e) {
+                    e.consume();
+                }
+
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    e.consume();
+                }
+            });
+            addMouseMotionListener(new MouseMotionAdapter() {
+            });
+            addMouseWheelListener(e -> {
+            });
+
+            registerKeyboardAction(e -> cancel(), KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
+                    JComponent.WHEN_IN_FOCUSED_WINDOW);
+            registerKeyboardAction(e -> cancel(), KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
+                    JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
+        }
+
+        void attach() {
+            if (hostComponent != null) {
+                hostComponent.putClientProperty(ACTIVE_CONFIRM_OVERLAY_KEY, this);
+                attachedRootPane = SwingUtilities.getRootPane(hostComponent);
+            }
+            if (attachedRootPane != null) {
+                previousGlassPane = attachedRootPane.getGlassPane();
+                previousGlassPaneVisible = previousGlassPane != null && previousGlassPane.isVisible();
+                attachedRootPane.setGlassPane(this);
+                setVisible(true);
+                attachedRootPane.revalidate();
+                attachedRootPane.repaint();
+            } else {
+                setVisible(true);
+            }
+            confirmButton.requestFocusInWindow();
+        }
+
+        void confirm() {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            dismiss();
+            if (onResult != null) {
+                onResult.accept(Boolean.TRUE);
+            }
+        }
+
+        void cancel() {
+            if (closed) {
+                return;
+            }
+            closed = true;
+            dismiss();
+            if (onResult != null) {
+                onResult.accept(Boolean.FALSE);
+            }
+        }
+
+        @SuppressWarnings("PMD.NullAssignment")
+        void dismiss() {
+            setVisible(false);
+            if (hostComponent != null && equals(hostComponent.getClientProperty(ACTIVE_CONFIRM_OVERLAY_KEY))) {
+                hostComponent.putClientProperty(ACTIVE_CONFIRM_OVERLAY_KEY, null);
+            }
+            if (attachedRootPane != null) {
+                if (previousGlassPane != null && equals(attachedRootPane.getGlassPane())) {
+                    attachedRootPane.setGlassPane(previousGlassPane);
+                    previousGlassPane.setVisible(previousGlassPaneVisible);
+                }
+                attachedRootPane.revalidate();
+                attachedRootPane.repaint();
+                attachedRootPane = null;
+            }
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g.create();
+            try {
+                Color scrimColor;
+                if (FlatLaf.isLafDark()) {
+                    scrimColor = new Color(0, 0, 0, 120);
+                } else {
+                    scrimColor = new Color(15, 23, 42, 95);
+                }
+                g2.setColor(scrimColor);
+                g2.fillRect(0, 0, getWidth(), getHeight());
+            } finally {
+                g2.dispose();
+            }
+        }
+    }
+
+    @Nullable
+    static File chooseDirectory(Component parent, String dialogTitle, @Nullable Path initialDirectory) {
+        if (GraphicsEnvironment.isHeadless()) {
+            return null;
+        }
+        SystemFileChooser chooser = new SystemFileChooser();
+        chooser.setFileSelectionMode(SystemFileChooser.DIRECTORIES_ONLY);
+        if (StringUtils.isNotBlank(dialogTitle)) {
+            chooser.setDialogTitle(dialogTitle);
+        }
+        if (initialDirectory != null) {
+            chooser.setCurrentDirectory(initialDirectory.toFile());
+        }
+        if (chooser.showOpenDialog(parent) == SystemFileChooser.APPROVE_OPTION) {
+            return chooser.getSelectedFile();
+        }
+        return null;
+    }
+
+    @Nullable
+    static File chooseOpenFile(Component parent, String dialogTitle,
+            @Nullable SystemFileChooser.FileFilter fileFilter) {
+        if (GraphicsEnvironment.isHeadless()) {
+            return null;
+        }
+        SystemFileChooser chooser = new SystemFileChooser();
+        if (StringUtils.isNotBlank(dialogTitle)) {
+            chooser.setDialogTitle(dialogTitle);
+        }
+        if (fileFilter != null) {
+            chooser.setFileFilter(fileFilter);
+        }
+        if (chooser.showOpenDialog(parent) == SystemFileChooser.APPROVE_OPTION) {
+            return chooser.getSelectedFile();
+        }
+        return null;
     }
 
     static void updateWarningBannerState(JPanel bannerPanel, JLabel iconLabel, JLabel messageLabel, String messageText,
@@ -457,6 +838,37 @@ final class UiComponents {
         bannerPanel.setVisible(visible);
         bannerPanel.revalidate();
         bannerPanel.repaint();
+    }
+
+    static final class WarningBanner extends JPanel {
+        private static final long serialVersionUID = 1L;
+        final JLabel iconLabel;
+        final JLabel messageLabel;
+
+        WarningBanner() {
+            this("");
+        }
+
+        WarningBanner(String initialMessage) {
+            super(new MigLayout("fillx, insets 0", "[][grow]", "[]"));
+            this.iconLabel = new JLabel();
+            this.messageLabel = new JLabel(initialMessage);
+            add(iconLabel, "gapright 8");
+            add(messageLabel, "growx, wmin 100");
+            setVisible(false);
+        }
+
+        void setVisibleState(boolean visible, String messageText) {
+            updateWarningBannerState(this, iconLabel, messageLabel, messageText, visible);
+        }
+
+        JLabel getIconLabel() {
+            return iconLabel;
+        }
+
+        JLabel getMessageLabel() {
+            return messageLabel;
+        }
     }
 
     record ListCellColors(Color background, Color foreground, Color muted, Color iconColor) {

@@ -156,12 +156,10 @@ public final class TaskWorkspacePanel extends JPanel {
         planLabel.setForeground(accent);
         planLabel.putClientProperty(FlatClientProperties.STYLE,
                 "font: bold -2; background: " + SwingHtmlUtils.toHex(tintedBg) + "; arc: 10; border: 3,8,3,8");
-        if (taskTabs != null && taskTabs.getTabCount() >= 3) {
-            Color muted = SwingHtmlUtils.getMutedForegroundColor();
-            taskTabs.setIconAt(0, FontIcon.of(Codicons.COMMENT_DISCUSSION, 15, accent));
-            taskTabs.setIconAt(1, FontIcon.of(Codicons.LIST_ORDERED, 15, accent));
-            taskTabs.setIconAt(2, FontIcon.of(Codicons.HISTORY, 15, muted));
-        }
+        Color muted = SwingHtmlUtils.getMutedForegroundColor();
+        UiComponents.updateTabIcons(taskTabs,
+                List.of(Codicons.COMMENT_DISCUSSION, Codicons.LIST_ORDERED, Codicons.HISTORY),
+                List.of(accent, accent, muted));
     }
 
     public void bindSidebar(SidebarPanel sidebar) {

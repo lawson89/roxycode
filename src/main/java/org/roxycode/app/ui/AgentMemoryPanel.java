@@ -5,19 +5,16 @@ import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.FlowLayout;
-import java.awt.GraphicsEnvironment;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
-import java.util.function.Predicate;
+import java.util.function.Supplier;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JList;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
@@ -26,6 +23,7 @@ import javax.swing.JTextField;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingConstants;
+import javax.swing.Timer;
 import net.miginfocom.swing.MigLayout;
 import org.apache.commons.lang3.StringUtils;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
@@ -77,8 +75,6 @@ public final class AgentMemoryPanel extends JPanel {
     final MemoryScopeView globalScopeView;
     final MemoryScopeView projectScopeView;
 
-    private transient Consumer<String> errorDialogPresenter;
-    private transient Predicate<String> deleteConfirmPresenter;
     private boolean suppressMemoryEventRefresh;
 
     @Autowired
@@ -87,8 +83,6 @@ public final class AgentMemoryPanel extends JPanel {
         this.memoryService = memoryService;
         this.projectService = projectService;
         this.settingsService = settingsService;
-        this.errorDialogPresenter = this::presentDefaultErrorDialog;
-        this.deleteConfirmPresenter = this::presentDefaultDeleteConfirmDialog;
 
         setLayout(new BorderLayout(0, 12));
         setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
@@ -151,41 +145,6 @@ public final class AgentMemoryPanel extends JPanel {
         }
     }
 
-    void setErrorDialogPresenter(Consumer<String> presenter) {
-        this.errorDialogPresenter = presenter;
-    }
-
-    void setDeleteConfirmPresenter(Predicate<String> presenter) {
-        this.deleteConfirmPresenter = presenter;
-    }
-
-    void showError(String message) {
-        if (errorDialogPresenter != null) {
-            errorDialogPresenter.accept(message);
-        }
-    }
-
-    boolean confirmDelete(String slug) {
-        if (deleteConfirmPresenter != null) {
-            return deleteConfirmPresenter.test(slug);
-        }
-        return true;
-    }
-
-    private void presentDefaultErrorDialog(String message) {
-        UiComponents.showErrorDialog(this, message);
-    }
-
-    private boolean presentDefaultDeleteConfirmDialog(String slug) {
-        if (GraphicsEnvironment.isHeadless()) {
-            return true;
-        }
-        int choice = JOptionPane.showConfirmDialog(this,
-                "Delete topic note '" + slug + "'? This action cannot be undone.", "Confirm Delete Note",
-                JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
-        return choice == JOptionPane.YES_OPTION;
-    }
-
     record ScopeData(String pinnedMemory, List<NoteDetail> notes) {
     }
 
@@ -223,6 +182,7 @@ public final class AgentMemoryPanel extends JPanel {
         final JButton saveNoteButton = new JButton("Save Note");
         final JButton deleteNoteButton = new JButton("Delete Note");
         final JLabel statusLabel = new JLabel("");
+        private final Timer statusTimer;
 
         private String loadedMemoryContent = "";
         private boolean updatingMemoryProgrammatically;
@@ -263,6 +223,8 @@ public final class AgentMemoryPanel extends JPanel {
 
             add(verticalSplit, CARD_CONTENT);
             add(emptyProjectPanel, CARD_EMPTY);
+
+            statusTimer = UiComponents.createStatusTimer(statusLabel, 4000);
 
             setupListeners();
             updateTheme();
@@ -604,38 +566,48 @@ public final class AgentMemoryPanel extends JPanel {
             return future;
         }
 
-        private EditorResult executeSavePinnedMemory(String contentToSave) {
+        private EditorResult callMemoryServiceSuppressingRefresh(Supplier<EditorResult> action) {
             suppressMemoryEventRefresh = true;
             try {
+                return action.get();
+            } finally {
+                suppressMemoryEventRefresh = false;
+            }
+        }
+
+        private EditorResult executeSavePinnedMemory(String contentToSave) {
+            return callMemoryServiceSuppressingRefresh(() -> {
                 if (globalScope) {
                     return memoryService.updateGlobalMemory(contentToSave);
                 }
                 return memoryService.updateProjectMemory(contentToSave);
-            } finally {
-                suppressMemoryEventRefresh = false;
-            }
+            });
+        }
+
+        void showStatus(String message, boolean success) {
+            UiComponents.showStatusMessage(statusLabel, statusTimer, message, success);
         }
 
         private void handlePinnedMemorySaved(@Nullable EditorResult result, String contentToSave) {
             if (result != null && result.success()) {
                 loadedMemoryContent = contentToSave;
                 memoryDirty = false;
-                statusLabel.setText("Saved MEMORY.md");
+                showStatus("Saved MEMORY.md", true);
             } else {
-                showError(resolveErrorMessage(result, "Failed to save MEMORY.md"));
+                showStatus(resolveErrorMessage(result, "Failed to save MEMORY.md"), false);
             }
             updateMemoryStatsAndButtons();
         }
 
         private void handlePinnedMemorySaveError(Throwable ex) {
-            showError("Failed to save MEMORY.md: " + ExceptionUtils.getRootCauseMessage(ex));
+            showStatus("Failed to save MEMORY.md: " + ExceptionUtils.getRootCauseMessage(ex), false);
             updateMemoryStatsAndButtons();
         }
 
         void revertPinnedMemory() {
             runUpdatingMemory(this::resetMemoryEditorToLoadedContent);
             updateMemoryStatsAndButtons();
-            statusLabel.setText("Reverted MEMORY.md changes");
+            showStatus("Reverted MEMORY.md changes", true);
         }
 
         CompletableFuture<EditorResult> saveCurrentNote() {
@@ -651,7 +623,7 @@ public final class AgentMemoryPanel extends JPanel {
             try {
                 sanitizedSlug = MemoryService.sanitizeSlug(rawSlug);
             } catch (IllegalArgumentException ex) {
-                showError(ex.getMessage());
+                showStatus(ex.getMessage(), false);
                 return CompletableFuture.completedFuture(new EditorResult(false, "", ex.getMessage()));
             }
             String resolvedTitle = StringUtils.defaultIfBlank(title, sanitizedSlug);
@@ -661,22 +633,19 @@ public final class AgentMemoryPanel extends JPanel {
             CompletableFuture<EditorResult> future = Edt
                     .supplyAsync(() -> executeSaveNote(sanitizedSlug, resolvedTitle, tags, body),
                             result -> handleNoteSaved(result, sanitizedSlug, resolvedTitle, tags, body),
-                            ex -> showError("Failed to save note: " + ExceptionUtils.getRootCauseMessage(ex)))
+                            ex -> showStatus("Failed to save note: " + ExceptionUtils.getRootCauseMessage(ex), false))
                     .thenCompose(result -> refresh().thenApply(v -> result));
             lastAsyncFuture = future;
             return future;
         }
 
         private EditorResult executeSaveNote(String sanitizedSlug, String resolvedTitle, String tags, String body) {
-            suppressMemoryEventRefresh = true;
-            try {
+            return callMemoryServiceSuppressingRefresh(() -> {
                 if (globalScope) {
                     return memoryService.saveGlobalNote(sanitizedSlug, resolvedTitle, tags, body);
                 }
                 return memoryService.saveProjectNote(sanitizedSlug, resolvedTitle, tags, body);
-            } finally {
-                suppressMemoryEventRefresh = false;
-            }
+            });
         }
 
         private void handleNoteSaved(@Nullable EditorResult result, String sanitizedSlug, String resolvedTitle,
@@ -684,46 +653,46 @@ public final class AgentMemoryPanel extends JPanel {
             if (result != null && result.success()) {
                 creatingNewNote = false;
                 selectedNote = new NoteDetail(sanitizedSlug, resolvedTitle, tags, "", body, "");
-                statusLabel.setText("Saved note: " + sanitizedSlug);
+                showStatus("Saved note: " + sanitizedSlug, true);
             } else {
-                showError(resolveErrorMessage(result, "Failed to save note"));
+                showStatus(resolveErrorMessage(result, "Failed to save note"), false);
             }
         }
 
-        CompletableFuture<EditorResult> deleteCurrentNote() {
+        void deleteCurrentNote() {
             if (memoryService == null || selectedNote == null || !isScopeAvailable()) {
-                return CompletableFuture.completedFuture(new EditorResult(false, "", "No note selected"));
+                return;
             }
             String slug = selectedNote.slug();
-            if (!confirmDelete(slug)) {
-                return CompletableFuture.completedFuture(new EditorResult(false, "", "Cancelled"));
-            }
+            UiComponents.showConfirmOverlay(AgentMemoryPanel.this, "Delete Topic Note",
+                    "Delete topic note '" + slug + "'? This action cannot be undone.", "Delete Note", true,
+                    () -> performDeleteCurrentNote(slug));
+        }
+
+        CompletableFuture<EditorResult> performDeleteCurrentNote(String slug) {
             CompletableFuture<EditorResult> future = Edt
                     .supplyAsync(() -> executeDeleteNote(slug), result -> handleNoteDeleted(result, slug),
-                            ex -> showError("Failed to delete note: " + ExceptionUtils.getRootCauseMessage(ex)))
+                            ex -> showStatus("Failed to delete note: " + ExceptionUtils.getRootCauseMessage(ex), false))
                     .thenCompose(result -> refresh().thenApply(v -> result));
             lastAsyncFuture = future;
             return future;
         }
 
         private EditorResult executeDeleteNote(String slug) {
-            suppressMemoryEventRefresh = true;
-            try {
+            return callMemoryServiceSuppressingRefresh(() -> {
                 if (globalScope) {
                     return memoryService.deleteGlobalNote(slug);
                 }
                 return memoryService.deleteProjectNote(slug);
-            } finally {
-                suppressMemoryEventRefresh = false;
-            }
+            });
         }
 
         private void handleNoteDeleted(@Nullable EditorResult result, String slug) {
             if (result != null && result.success()) {
                 startNewNote();
-                statusLabel.setText("Deleted note: " + slug);
+                showStatus("Deleted note: " + slug, true);
             } else {
-                showError(resolveErrorMessage(result, "Failed to delete note"));
+                showStatus(resolveErrorMessage(result, "Failed to delete note"), false);
             }
         }
 

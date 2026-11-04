@@ -190,13 +190,6 @@ public record ImplementationPlan(String title, String goal, List<String> require
 
     public ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
             boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
-            List<LogEntry> handoffLog, List<FileChange> fileChanges) {
-        this(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp, approvedBy, completedBy,
-                completedOn, handoffLog, fileChanges, UsageSummary.EMPTY);
-    }
-
-    public ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
-            boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
             List<LogEntry> handoffLog) {
         this(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp, approvedBy, completedBy,
                 completedOn, handoffLog, List.of(), UsageSummary.EMPTY);

@@ -4,10 +4,8 @@ import java.awt.CardLayout;
 import java.awt.GraphicsEnvironment;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 import javax.swing.ImageIcon;
 import javax.swing.JFrame;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.events.ProjectChangedEvent;
@@ -42,7 +40,6 @@ public final class MainFrame extends JPanel {
     static final String BUILD_CONFIG_VIEW = "BUILD_CONFIG";
     static final String CONTEXT_MGR_VIEW = "CONTEXT_MGR";
     static final String MEMORY_VIEW = "MEMORY";
-    static final String FIRST_TIME_SETUP_TITLE = "First-Time Setup Required";
 
     private final transient SettingsService settingsService;
     private final transient ProjectService projectService;
@@ -60,19 +57,6 @@ public final class MainFrame extends JPanel {
     String currentCard = QA_VIEW;
     private boolean initialToolsCheckComplete;
     private List<SystemTool> lastStartupTools = List.of();
-    String lastStartupAlertMessage;
-    private boolean startupAlertPending;
-    private transient Consumer<String> startupAlertPresenter;
-
-    public MainFrame(SettingsService settingsService, ProjectService projectService, ChatMemory chatMemory,
-            HeaderPanel header, StatusPanel statusBar, QaWorkspacePanel qaWorkspacePanel,
-            TaskWorkspacePanel taskWorkspacePanel, CodebaseCachePanel codebaseCachePanel, JexlApiPanel jexlApiPanel,
-            SystemToolsPanel systemToolsPanel, SettingsPanel settingsPanel, BuildConfigPanel buildConfigPanel,
-            ContextManagerPanel contextManagerPanel) {
-        this(settingsService, projectService, chatMemory, header, statusBar, qaWorkspacePanel, taskWorkspacePanel,
-                codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel,
-                contextManagerPanel, null);
-    }
 
     @Autowired
     public MainFrame(SettingsService settingsService, ProjectService projectService, ChatMemory chatMemory,
@@ -211,11 +195,6 @@ public final class MainFrame extends JPanel {
         if (QA_VIEW.equals(currentCard) && qaWorkspacePanel != null) {
             qaWorkspacePanel.focusChatInput();
         }
-        if (startupAlertPending && lastStartupAlertMessage != null) {
-            startupAlertPending = false;
-            String message = lastStartupAlertMessage;
-            Edt.run(() -> presentStartupAlert(message));
-        }
     }
 
     @Override
@@ -325,51 +304,17 @@ public final class MainFrame extends JPanel {
         evaluateStartupSetupAlert();
     }
 
-    static String buildFirstTimeSetupMessage(List<String> missingToolNames) {
-        StringBuilder sb = new StringBuilder(
-                "Welcome to RoxyCode! Please complete the following setup steps to get started:");
-        if (missingToolNames != null && !missingToolNames.isEmpty()) {
-            sb.append((char) 10).append((char) 10).append("• Required System Tools Missing (")
-                    .append(String.join(", ", missingToolNames))
-                    .append("): Open Configuration → System Tools to install the missing tools and click Refresh Status.");
-        }
-        return sb.toString();
-    }
-
-    @SuppressWarnings("PMD.NullAssignment")
     private void evaluateStartupSetupAlert() {
+        boolean hasApiKey = settingsService != null && settingsService.hasConfiguredApiKey();
+        if (!hasApiKey) {
+            return;
+        }
         List<String> missingToolNames = List.of();
         if (lastStartupTools != null && !lastStartupTools.isEmpty()) {
             missingToolNames = SystemToolService.getMissingRequiredToolNames(lastStartupTools);
         }
-        if (missingToolNames.isEmpty()) {
-            lastStartupAlertMessage = null;
-            startupAlertPending = false;
-            return;
-        }
-        showCard(TOOLS_VIEW);
-        String message = buildFirstTimeSetupMessage(missingToolNames);
-        lastStartupAlertMessage = message;
-        if (startupAlertPresenter != null) {
-            startupAlertPresenter.accept(message);
-        } else if (!GraphicsEnvironment.isHeadless()) {
-            if (isShowing()) {
-                presentStartupAlert(message);
-            } else {
-                startupAlertPending = true;
-            }
-        }
-    }
-
-    private void presentStartupAlert(String message) {
-        if (startupAlertPresenter != null) {
-            startupAlertPresenter.accept(message);
-        } else if (!GraphicsEnvironment.isHeadless()) {
-            java.awt.Component parent = this;
-            if (hostFrame != null) {
-                parent = hostFrame;
-            }
-            JOptionPane.showMessageDialog(parent, message, FIRST_TIME_SETUP_TITLE, JOptionPane.WARNING_MESSAGE);
+        if (!missingToolNames.isEmpty()) {
+            showCard(TOOLS_VIEW);
         }
     }
 
@@ -388,10 +333,6 @@ public final class MainFrame extends JPanel {
         } else if (MEMORY_VIEW.equals(cardName) && agentMemoryPanel != null) {
             agentMemoryPanel.refresh();
         }
-    }
-
-    void setStartupAlertPresenter(Consumer<String> presenter) {
-        this.startupAlertPresenter = presenter;
     }
 
     private void updateTitle() {

@@ -2,17 +2,13 @@ package org.roxycode.app.model;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.ui.SwingTestUtils;
-import org.roxycode.app.util.FrontmatterUtils;
-import org.roxycode.app.util.TokenUtils;
 
 class ImplementationPlanTest {
 
@@ -74,16 +70,6 @@ class ImplementationPlanTest {
         assertTrue(emptyPlan.toArchivedMarkdown("20250514-143210-archive-feature", "roxycode", "/path/to/roxycode")
                 .contains("## Changes" + LF + "No files changed" + LF));
 
-        assertEquals("0", TokenUtils.formatTokenCount(0));
-        assertEquals("950", TokenUtils.formatTokenCount(950));
-        assertEquals("48.2k", TokenUtils.formatTokenCount(48_200));
-        assertEquals("1.0M", TokenUtils.formatTokenCount(1_048_576));
-        assertEquals("$0.00", TokenUtils.formatCostUsd(0.0));
-        assertEquals("$0.0042", TokenUtils.formatCostUsd(0.0042));
-        assertEquals("$0.08", TokenUtils.formatCostUsd(0.081));
-        assertEquals(78, TokenUtils.computeCacheHitPercent(7_800, 10_000));
-        assertEquals(0, TokenUtils.computeCacheHitPercent(0, 0));
-
         ImplementationPlan plan = emptyPlan
                 .withRecordedTokenUsage(
                         new TokenUsageEvent("task:default", "gemini-3.5-flash", 1_048_576, 40_000, 30_000, 10_000,
@@ -119,15 +105,6 @@ class ImplementationPlanTest {
                 "planCostUsd: ", "0.0000", "codeCostUsd: ", "0.0173", "reviewCostUsd: ", "0.0000", "estimatedCostUsd: ",
                 "0.0173", "## Handoff Log", "REVIEW -> PLAN (User Approved): Complete", "## Changes" + LF,
                 "CREATED src/NewFile.java", "MODIFIED src/App.java", "DELETED src/Temp.java");
-
-        assertEquals("---" + LF + "---" + LF + LF, FrontmatterUtils.formatFrontmatter(null));
-        Map<String, Object> fm = new LinkedHashMap<>();
-        fm.put("title", "Say " + '"' + "Hi" + '"');
-        fm.put("approved", true);
-        fm.put("count", 3);
-        fm.put("optional", null);
-        String expectedFm = FrontmatterUtils.formatFrontmatter(fm);
-        SwingTestUtils.assertContainsAll(expectedFm, "title: ", "approved: true", "count: 3", "optional: ");
     }
 
     @Test

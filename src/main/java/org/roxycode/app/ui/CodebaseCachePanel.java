@@ -88,10 +88,6 @@ public final class CodebaseCachePanel extends JPanel {
             long totalTokens, String repoMapText, String stableContextText, String sessionContextText) {
     }
 
-    public CodebaseCachePanel(RepoMapPackerService packerService, PromptService promptService) {
-        this(packerService, promptService, null);
-    }
-
     @Autowired
     public CodebaseCachePanel(RepoMapPackerService packerService, PromptService promptService,
             @Nullable SettingsService settingsService) {

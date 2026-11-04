@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JLabel;
 import org.junit.jupiter.api.Test;
@@ -67,10 +66,9 @@ class ContextManagerPanelTest {
         assertTrue(globalCol.folderListModel.isEmpty());
 
         doThrow(new IllegalStateException("No active project")).when(promptService).setProjectContextFolders(anyList());
-        List<String> errors = new ArrayList<>();
-        panel.setErrorDialogPresenter(errors::add);
         SwingTestUtils.awaitFuture(panel.projectColumn.addFolderAsync("/tmp/folder"));
-        SwingTestUtils.awaitCondition(() -> !errors.isEmpty());
-        assertTrue(errors.get(0).contains("No active project"));
+        SwingTestUtils.awaitCondition(() -> !panel.statusLabel.getText().isEmpty());
+        assertTrue(panel.statusLabel.getText().contains("No active project"));
+        assertTrue(panel.statusLabel.getToolTipText().contains("No active project"));
     }
 }

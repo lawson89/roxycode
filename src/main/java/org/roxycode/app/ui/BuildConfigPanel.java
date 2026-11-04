@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
@@ -71,9 +70,7 @@ public final class BuildConfigPanel extends JPanel {
     final JLabel buildConfigInfoIcon;
     final JComboBox<BuildTemplateInfo> templateCombo;
     final JButton applyTemplateButton;
-    final JPanel unconfirmedBannerPanel;
-    final JLabel unconfirmedBannerIconLabel;
-    final JLabel unconfirmedBannerMessageLabel;
+    final UiComponents.WarningBanner unconfirmedBanner;
     final RSyntaxTextArea textArea;
     final JButton saveButton;
     final JLabel statusLabel;
@@ -82,7 +79,6 @@ public final class BuildConfigPanel extends JPanel {
     private boolean updatingTextProgrammatically = false;
     private boolean textEditedByUser = false;
     String detectedTemplateId = DEFAULT_TEMPLATE_ID;
-    private transient Consumer<String> errorDialogPresenter;
     private transient Runnable onConfirmSavedCallback;
     transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
 
@@ -172,13 +168,8 @@ public final class BuildConfigPanel extends JPanel {
 
         loadTemplateOptions();
 
-        unconfirmedBannerPanel = new JPanel(new MigLayout("fillx, insets 0", "[][grow]", "[]"));
-        unconfirmedBannerIconLabel = new JLabel();
-        unconfirmedBannerMessageLabel = new JLabel(UNCONFIRMED_BUILD_NOTICE_TEXT);
-        unconfirmedBannerPanel.add(unconfirmedBannerIconLabel, "gapright 8");
-        unconfirmedBannerPanel.add(unconfirmedBannerMessageLabel, "growx, wmin 100");
-        unconfirmedBannerPanel.setVisible(false);
-        add(unconfirmedBannerPanel, "growx, wrap, gapbottom 8, hidemode 3");
+        unconfirmedBanner = new UiComponents.WarningBanner(UNCONFIRMED_BUILD_NOTICE_TEXT);
+        add(unconfirmedBanner, "growx, wrap, gapbottom 8, hidemode 3");
 
         textArea = new RSyntaxTextArea();
         UiComponents.configureSyntaxTextArea(textArea, SyntaxConstants.SYNTAX_STYLE_INI, true, false);
@@ -197,8 +188,7 @@ public final class BuildConfigPanel extends JPanel {
         buttonPanel.add(statusLabel);
         add(buttonPanel, "growx, gaptop 15");
 
-        statusTimer = new Timer(3000, e -> statusLabel.setText(""));
-        statusTimer.setRepeats(false);
+        statusTimer = UiComponents.createStatusTimer(statusLabel, 3000);
 
         applySectionStyling();
         lastAsyncFuture = loadConfig();
@@ -243,33 +233,39 @@ public final class BuildConfigPanel extends JPanel {
         }
     }
 
-    @SuppressWarnings("PMD.UnusedAssignment")
     void applySelectedTemplate() {
         BuildTemplateInfo selected = (BuildTemplateInfo) templateCombo.getSelectedItem();
         if (selected == null || buildToolService == null) {
             return;
         }
-        if (textEditedByUser && !GraphicsEnvironment.isHeadless()) {
-            int result = JOptionPane.showConfirmDialog(this,
+        if (textEditedByUser) {
+            UiComponents.showConfirmOverlay(this, APPLY_TEMPLATE_TEXT,
                     "Replace current build.toml editor contents with the '" + selected.displayName() + "' template?",
-                    "Apply Template", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
-            if (result != JOptionPane.YES_OPTION) {
-                return;
-            }
+                    APPLY_TEMPLATE_TEXT, false, () -> performApplyTemplate(selected));
+            return;
         }
+        performApplyTemplate(selected);
+    }
+
+    @SuppressWarnings("PMD.UnusedAssignment")
+    private void setEditorContentProgrammatically(String content) {
+        updatingTextProgrammatically = true;
+        try {
+            textArea.setText(content);
+            textArea.setCaretPosition(0);
+            textEditedByUser = false;
+        } finally {
+            updatingTextProgrammatically = false;
+        }
+        updateBannerState();
+    }
+
+    private void performApplyTemplate(BuildTemplateInfo selected) {
         String content = buildToolService.loadTemplateContent(selected.id());
         if (content != null) {
-            updatingTextProgrammatically = true;
-            try {
-                textArea.setText(content);
-                textArea.setCaretPosition(0);
-                textEditedByUser = false;
-            } finally {
-                updatingTextProgrammatically = false;
-            }
-            updateBannerState();
-            statusLabel.setText("Applied '" + selected.displayName() + "' template.");
-            statusTimer.restart();
+            setEditorContentProgrammatically(content);
+            UiComponents.showStatusMessage(statusLabel, statusTimer,
+                    "Applied '" + selected.displayName() + "' template.", true);
         }
     }
 
@@ -374,7 +370,7 @@ public final class BuildConfigPanel extends JPanel {
         if (modelCardPanel != null) {
             applySectionStyling();
         }
-        if (unconfirmedBannerPanel != null) {
+        if (unconfirmedBanner != null) {
             updateBannerState();
         }
     }
@@ -382,11 +378,9 @@ public final class BuildConfigPanel extends JPanel {
     void updateBannerState() {
         boolean showUnconfirmedNotice = projectService != null && projectService.hasActiveProject()
                 && !projectService.isBuildConfirmed();
-        UiComponents.updateWarningBannerState(unconfirmedBannerPanel, unconfirmedBannerIconLabel,
-                unconfirmedBannerMessageLabel, UNCONFIRMED_BUILD_NOTICE_TEXT, showUnconfirmedNotice);
+        unconfirmedBanner.setVisibleState(showUnconfirmedNotice, UNCONFIRMED_BUILD_NOTICE_TEXT);
     }
 
-    @SuppressWarnings("PMD.UnusedAssignment")
     CompletableFuture<String> loadConfig() {
         if (buildToolService == null) {
             CompletableFuture<String> done = CompletableFuture.completedFuture("");
@@ -400,17 +394,7 @@ public final class BuildConfigPanel extends JPanel {
                 log.error("Failed to load build config", e);
                 return "# Error loading config: " + e.getMessage();
             }
-        }, content -> {
-            updatingTextProgrammatically = true;
-            try {
-                textArea.setText(content);
-                textArea.setCaretPosition(0);
-                textEditedByUser = false;
-            } finally {
-                updatingTextProgrammatically = false;
-            }
-            updateBannerState();
-        });
+        }, this::setEditorContentProgrammatically);
         lastAsyncFuture = future;
         return future;
     }
@@ -453,8 +437,7 @@ public final class BuildConfigPanel extends JPanel {
             saveButton.setEnabled(true);
             textEditedByUser = false;
             updateBannerState();
-            statusLabel.setText("Configuration saved successfully!");
-            statusTimer.restart();
+            UiComponents.showStatusMessage(statusLabel, statusTimer, "Configuration saved successfully!", true);
             if (!wasBuildConfirmed && onConfirmSavedCallback != null) {
                 onConfirmSavedCallback.run();
             }
@@ -462,7 +445,8 @@ public final class BuildConfigPanel extends JPanel {
             saveButton.setEnabled(true);
             Throwable cause = ExceptionUtils.getRootCause(ex);
             log.error("Failed to save build config: {}", cause.getMessage());
-            showSaveErrorDialog(cause.getMessage());
+            UiComponents.showStatusMessage(statusLabel, statusTimer, "Error saving config: " + cause.getMessage(),
+                    false);
         });
         lastAsyncFuture = future;
         return future;
@@ -470,19 +454,6 @@ public final class BuildConfigPanel extends JPanel {
 
     void setOnConfirmSavedCallback(Runnable callback) {
         this.onConfirmSavedCallback = callback;
-    }
-
-    private void showSaveErrorDialog(String message) {
-        String fullMsg = "Error saving config: " + message;
-        if (errorDialogPresenter != null) {
-            errorDialogPresenter.accept(fullMsg);
-        } else {
-            UiComponents.showErrorDialog(this, fullMsg);
-        }
-    }
-
-    void setErrorDialogPresenter(Consumer<String> errorDialogPresenter) {
-        this.errorDialogPresenter = errorDialogPresenter;
     }
 
     private void updateTextAreaTheme() {

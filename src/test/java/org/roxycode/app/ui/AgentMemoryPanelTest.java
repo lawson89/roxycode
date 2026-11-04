@@ -8,7 +8,6 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -125,16 +124,33 @@ class AgentMemoryPanelTest {
         });
         assertEquals(2, panel.projectScopeView.noteListModel.size());
 
-        AtomicReference<String> confirmedSlug = new AtomicReference<>();
-        panel.setDeleteConfirmPresenter(slug -> {
-            confirmedSlug.set(slug);
-            return true;
-        });
         String selectedSlug = panel.projectScopeView.noteList.getSelectedValue().slug();
         SwingTestUtils.clickOnEdt(panel.projectScopeView.deleteNoteButton);
+        UiComponents.ConfirmOverlay cancelOverlay = UiComponents.getActiveConfirmOverlay(panel);
+        assertNotNull(cancelOverlay);
+        assertEquals("Delete Topic Note", cancelOverlay.titleLabel.getText());
+        assertTrue(cancelOverlay.messageArea.getText().contains(selectedSlug));
+        SwingTestUtils.runOnEdt(cancelOverlay::cancel);
+        assertNull(UiComponents.getActiveConfirmOverlay(panel));
+        assertEquals(2, panel.projectScopeView.noteListModel.size());
+
+        SwingTestUtils.clickOnEdt(panel.projectScopeView.deleteNoteButton);
+        UiComponents.ConfirmOverlay confirmOverlay = UiComponents.getActiveConfirmOverlay(panel);
+        assertNotNull(confirmOverlay);
+        SwingTestUtils.clickOnEdt(confirmOverlay.confirmButton);
         SwingTestUtils.awaitFuture(panel.projectScopeView.lastAsyncFuture);
 
-        assertEquals(selectedSlug, confirmedSlug.get());
+        assertNull(UiComponents.getActiveConfirmOverlay(panel));
         assertEquals(1, panel.projectScopeView.noteListModel.size());
+        assertEquals("Deleted note: " + selectedSlug, panel.projectScopeView.statusLabel.getText());
+
+        SwingTestUtils.runOnEdt(() -> {
+            panel.projectScopeView.startNewNote();
+            panel.projectScopeView.noteTitleField.setText("   ");
+            panel.projectScopeView.noteSlugField.setText("!!!");
+        });
+        SwingTestUtils.clickOnEdt(panel.projectScopeView.saveNoteButton);
+        assertTrue(panel.projectScopeView.statusLabel.getText().contains("Note slug"));
+        assertNotNull(panel.projectScopeView.statusLabel.getToolTipText());
     }
 }

@@ -80,9 +80,7 @@ public final class SettingsPanel extends JPanel {
     final JSpinner maxAgentToolTurnsSpinner;
     final JCheckBox logToolCallsCheckBox;
     final JCheckBox googleGroundingCheckBox;
-    final JPanel onboardingBannerPanel;
-    final JLabel onboardingBannerIconLabel;
-    final JLabel onboardingBannerMessageLabel;
+    final UiComponents.WarningBanner onboardingBanner;
     final JButton saveButton;
     final JLabel statusLabel;
     final Timer statusTimer;
@@ -119,13 +117,8 @@ public final class SettingsPanel extends JPanel {
 
         add(UiComponents.createPageHeader(titleLabel, subtitleLabel, headerActions), "growx, wmin 0, wrap");
 
-        onboardingBannerPanel = new JPanel(new MigLayout("fillx, insets 0", "[][grow]", "[]"));
-        onboardingBannerIconLabel = new JLabel();
-        onboardingBannerMessageLabel = new JLabel(ONBOARDING_API_KEY_NOTICE_TEXT);
-        onboardingBannerPanel.add(onboardingBannerIconLabel, "gapright 8");
-        onboardingBannerPanel.add(onboardingBannerMessageLabel, "growx, wmin 100");
-        onboardingBannerPanel.setVisible(false);
-        add(onboardingBannerPanel, "growx, wmin 0, wrap, gaptop 8, hidemode 3");
+        onboardingBanner = new UiComponents.WarningBanner(ONBOARDING_API_KEY_NOTICE_TEXT);
+        add(onboardingBanner, "growx, wmin 0, wrap, gaptop 8, hidemode 3");
 
         themeCombo = new JComboBox<>(
                 new String[]{"FlatLaf Light", "FlatLaf Dark", "IntelliJ", "Darcula", "macOS Light", "macOS Dark"});
@@ -190,8 +183,7 @@ public final class SettingsPanel extends JPanel {
 
         add(UiComponents.createBorderlessScrollPane(cardsContainer), "grow, wmin 0");
 
-        statusTimer = new Timer(3000, e -> statusLabel.setText(""));
-        statusTimer.setRepeats(false);
+        statusTimer = UiComponents.createStatusTimer(statusLabel, 3000);
 
         applyThemeStyling();
         updateOnboardingBannerState();
@@ -354,7 +346,7 @@ public final class SettingsPanel extends JPanel {
         if (subtitleLabel != null) {
             applyThemeStyling();
         }
-        if (onboardingBannerPanel != null) {
+        if (onboardingBanner != null) {
             updateOnboardingBannerState();
         }
     }
@@ -371,9 +363,7 @@ public final class SettingsPanel extends JPanel {
     }
 
     void updateOnboardingBannerState() {
-        boolean showOnboarding = !isApiKeyConfigured();
-        UiComponents.updateWarningBannerState(onboardingBannerPanel, onboardingBannerIconLabel,
-                onboardingBannerMessageLabel, ONBOARDING_API_KEY_NOTICE_TEXT, showOnboarding);
+        onboardingBanner.setVisibleState(!isApiKeyConfigured(), ONBOARDING_API_KEY_NOTICE_TEXT);
     }
 
     @EventListener
@@ -484,15 +474,7 @@ public final class SettingsPanel extends JPanel {
     }
 
     private void showStatusMessage(String message, boolean success) {
-        Color statusColor;
-        if (success) {
-            statusColor = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
-        } else {
-            statusColor = SwingHtmlUtils.getUiColor(new Color(0xdc, 0x35, 0x45), "Actions.Red");
-        }
-        statusLabel.setForeground(statusColor);
-        statusLabel.setText(message);
-        statusTimer.restart();
+        UiComponents.showStatusMessage(statusLabel, statusTimer, message, success);
     }
 
     private void saveSettings() {
