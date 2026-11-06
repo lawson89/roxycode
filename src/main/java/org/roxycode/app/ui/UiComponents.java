@@ -76,6 +76,7 @@ final class UiComponents {
     static final String ACCENT_BUTTON_STYLE = "background: $Component.accentColor; focusedBackground: $Component.accentColor; hoverBackground: darken($Component.accentColor, 8%); pressedBackground: darken($Component.accentColor, 14%); foreground: #ffffff";
     static final String GREEN_BUTTON_STYLE = "background: $Actions.Green; focusedBackground: $Actions.Green; hoverBackground: darken($Actions.Green, 8%); pressedBackground: darken($Actions.Green, 14%); foreground: #ffffff";
     static final String RED_BUTTON_STYLE = "background: $Actions.Red; focusedBackground: $Actions.Red; hoverBackground: darken($Actions.Red, 8%); pressedBackground: darken($Actions.Red, 14%); foreground: #ffffff";
+    static final String SUBTLE_RED_BUTTON_STYLE = "foreground: $Actions.Red; hoverBackground: fade($Actions.Red, 12%); pressedBackground: fade($Actions.Red, 20%); borderColor: fade($Actions.Red, 45%); focusedBorderColor: $Actions.Red; hoverBorderColor: $Actions.Red";
     static final Color AMBER_LIGHT = new Color(0xd9, 0x77, 0x06);
     static final Color AMBER_DARK = new Color(0xf5, 0x9e, 0x0b);
 
@@ -527,6 +528,16 @@ final class UiComponents {
         }
     }
 
+    static Color resolveActionButtonIconColor(@Nullable String style) {
+        if (style != null && style.contains("foreground: #ffffff")) {
+            return Color.WHITE;
+        }
+        if (style != null && style.contains("$Actions.Red")) {
+            return SwingHtmlUtils.getUiColor(new Color(0xdc, 0x35, 0x45), "Actions.Red");
+        }
+        return SwingHtmlUtils.getUiColor(Color.DARK_GRAY, "Button.foreground", "Label.foreground");
+    }
+
     static JButton createActionButton(String text, @Nullable Codicons icon, @Nullable Insets margin, boolean borderless,
             @Nullable String style, @Nullable ActionListener listener) {
         FontIcon fontIcon = null;
@@ -534,7 +545,7 @@ final class UiComponents {
             if (borderless) {
                 fontIcon = FontIcon.of(icon, 16);
             } else {
-                fontIcon = FontIcon.of(icon, 16, Color.WHITE);
+                fontIcon = FontIcon.of(icon, 16, resolveActionButtonIconColor(style));
             }
         }
         JButton btn = new JButton(text, fontIcon);
@@ -551,6 +562,29 @@ final class UiComponents {
             btn.addActionListener(listener);
         }
         return btn;
+    }
+
+    static void refreshActionButtonIcons(@Nullable JComponent container) {
+        if (container == null) {
+            return;
+        }
+        for (Component child : container.getComponents()) {
+            if (child instanceof JButton button && button.getIcon() instanceof FontIcon fontIcon) {
+                boolean borderless = FlatClientProperties.BUTTON_TYPE_BORDERLESS
+                        .equals(button.getClientProperty(FlatClientProperties.BUTTON_TYPE));
+                if (!borderless) {
+                    Object rawStyle = button.getClientProperty(FlatClientProperties.STYLE);
+                    String style = null;
+                    if (rawStyle instanceof String s) {
+                        style = s;
+                    }
+                    button.setIcon(FontIcon.of(fontIcon.getIkon(), fontIcon.getIconSize(),
+                            resolveActionButtonIconColor(style)));
+                }
+            } else if (child instanceof JComponent childContainer) {
+                refreshActionButtonIcons(childContainer);
+            }
+        }
     }
 
     static void updateTabIcons(JTabbedPane tabbedPane, List<Codicons> icons, List<Color> colors) {

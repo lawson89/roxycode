@@ -6,6 +6,10 @@ import static org.mockito.Mockito.*;
 import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
 import com.formdev.flatlaf.FlatClientProperties;
+import java.awt.Color;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.nio.file.Files;
@@ -25,7 +29,10 @@ import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import javax.swing.border.CompoundBorder;
+import javax.swing.border.MatteBorder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.kordamp.ikonli.codicons.Codicons;
@@ -138,13 +145,47 @@ class ChatControllerTest extends ChatTestFixture {
         assertNotNull(topicField);
         assertEquals("How does RipGrep search work in MemoryService", topicField.getText());
 
+        SettingsPanel.applyTheme("Light");
+        SwingTestUtils.runOnEdt(() -> SwingUtilities.updateComponentTreeUI(panel));
+        assertInstanceOf(CompoundBorder.class, panel.userInputPromptPanel.getBorder());
+        MatteBorder promptAccentStripe = assertInstanceOf(MatteBorder.class,
+                ((CompoundBorder) panel.userInputPromptPanel.getBorder()).getOutsideBorder());
+        assertEquals(4, promptAccentStripe.getBorderInsets(panel.userInputPromptPanel).left);
+
+        JButton saveBtn = SwingTestUtils.findButton(panel.userInputPromptPanel, ChatPanel.SAVE_TOPIC_BUTTON_TEXT);
+        JButton discardBtnInitial = SwingTestUtils.findButton(panel.userInputPromptPanel,
+                ChatPanel.DISCARD_TOPIC_BUTTON_TEXT);
         JButton cancelBtn = SwingTestUtils.findButton(panel.userInputPromptPanel, ChatPanel.CANCEL_BUTTON_TEXT);
+        assertNotNull(saveBtn);
+        assertNotNull(discardBtnInitial);
         assertNotNull(cancelBtn);
+        assertEquals(UiComponents.ACCENT_BUTTON_STYLE, saveBtn.getClientProperty(FlatClientProperties.STYLE));
+        assertEquals(UiComponents.SUBTLE_RED_BUTTON_STYLE,
+                discardBtnInitial.getClientProperty(FlatClientProperties.STYLE));
+        assertNull(cancelBtn.getClientProperty(FlatClientProperties.STYLE));
+        assertEquals(Color.WHITE, assertInstanceOf(FontIcon.class, saveBtn.getIcon()).getIconColor());
+        assertNotEquals(Color.WHITE, assertInstanceOf(FontIcon.class, cancelBtn.getIcon()).getIconColor());
+
+        SettingsPanel.applyTheme("Dark");
+        SwingTestUtils.runOnEdt(() -> SwingUtilities.updateComponentTreeUI(panel));
         SwingTestUtils.clickOnEdt(cancelBtn);
         flushEdt();
         assertFalse(panel.userInputPromptPanel.isVisible());
         assertEquals(2, panel.getConversationMessages().size());
         verifyNoInteractions(chatMemory, memoryService, aiService);
+
+        // Escape key on New Topic prompt cancels without clearing messages
+        SwingTestUtils.clickOnEdt(panel.resetSessionButton);
+        flushEdt();
+        assertTrue(panel.userInputPromptPanel.isVisible());
+        ActionListener escapeAction = panel.userInputPromptPanel
+                .getActionForKeyStroke(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0));
+        assertNotNull(escapeAction);
+        SwingTestUtils
+                .runOnEdt(() -> escapeAction.actionPerformed(new ActionEvent(panel.userInputPromptPanel, 0, "esc")));
+        flushEdt();
+        assertFalse(panel.userInputPromptPanel.isVisible());
+        assertEquals(2, panel.getConversationMessages().size());
 
         // 3. Inline New Topic prompt -> No, Discard clears chat without archiving
         SwingTestUtils.clickOnEdt(panel.resetSessionButton);
@@ -197,10 +238,21 @@ class ChatControllerTest extends ChatTestFixture {
         flushEdt();
         assertTrue(taskPanel.userInputPromptPanel.isVisible());
 
+        assertInstanceOf(CompoundBorder.class, taskPanel.inlineActionPanel.getBorder());
+        assertEquals(UiComponents.ACCENT_BUTTON_STYLE,
+                taskPanel.approveButton.getClientProperty(FlatClientProperties.STYLE));
+        assertNull(taskPanel.viewPlanButton.getClientProperty(FlatClientProperties.STYLE));
+        assertEquals(UiComponents.SUBTLE_RED_BUTTON_STYLE,
+                taskPanel.rejectButton.getClientProperty(FlatClientProperties.STYLE));
+
         JButton cancelResetBtn = SwingTestUtils.findButton(taskPanel.userInputPromptPanel,
                 ChatPanel.CANCEL_BUTTON_TEXT);
         assertNotNull(cancelResetBtn);
-        SwingTestUtils.clickOnEdt(cancelResetBtn);
+        ActionListener resetEscape = taskPanel.userInputPromptPanel
+                .getActionForKeyStroke(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0));
+        assertNotNull(resetEscape);
+        SwingTestUtils
+                .runOnEdt(() -> resetEscape.actionPerformed(new ActionEvent(taskPanel.userInputPromptPanel, 0, "esc")));
         flushEdt();
         assertFalse(taskPanel.userInputPromptPanel.isVisible());
         verify(planService, never()).resetWorkflow();
@@ -564,9 +616,27 @@ class ChatControllerTest extends ChatTestFixture {
         assertTrue(qaPanel.userInputPromptPanel.isVisible());
 
         JButton yesButton = SwingTestUtils.findButton(qaPanel.userInputPromptPanel, "Yes");
+        JButton noButton = SwingTestUtils.findButton(qaPanel.userInputPromptPanel, "No");
         assertNotNull(yesButton);
+        assertNotNull(noButton);
+        assertEquals(UiComponents.ACCENT_BUTTON_STYLE, yesButton.getClientProperty(FlatClientProperties.STYLE));
+        assertNull(noButton.getClientProperty(FlatClientProperties.STYLE));
         SwingTestUtils.clickOnEdt(yesButton);
         assertEquals(Boolean.TRUE, confirmFuture.get(5, TimeUnit.SECONDS));
+        assertFalse(qaPanel.userInputPromptPanel.isVisible());
+
+        // Escape on CONFIRM prompt resolves to Boolean.FALSE and hides prompt
+        CompletableFuture<Object> escapeConfirmFuture = new CompletableFuture<>();
+        qaPanel.onUserInputRequest(new UserInputRequestEvent("qa:default", UserInputRequestEvent.PromptType.CONFIRM,
+                "Confirm via Esc?", null, null, List.of(), escapeConfirmFuture));
+        flushEdt();
+        assertTrue(qaPanel.userInputPromptPanel.isVisible());
+        ActionListener confirmEsc = qaPanel.userInputPromptPanel
+                .getActionForKeyStroke(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0));
+        assertNotNull(confirmEsc);
+        SwingTestUtils
+                .runOnEdt(() -> confirmEsc.actionPerformed(new ActionEvent(qaPanel.userInputPromptPanel, 0, "esc")));
+        assertEquals(Boolean.FALSE, escapeConfirmFuture.get(5, TimeUnit.SECONDS));
         assertFalse(qaPanel.userInputPromptPanel.isVisible());
 
         // 2. SINGLE_SELECT prompt on taskPanel

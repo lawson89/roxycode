@@ -110,6 +110,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     transient FileMentionPopup fileMentionPopup;
     private transient ProjectService projectService;
     private transient Runnable onViewPlanAction;
+    private transient Runnable activePromptCancelAction;
     private String defaultPlaceholderText = DEFAULT_PLACEHOLDER_TEXT;
     private boolean loading = false;
     private final List<Consumer<Boolean>> loadingListeners = new ArrayList<>();
@@ -185,28 +186,26 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     private JPanel createInlineActionPanel() {
-        JPanel panel = new JPanel(new MigLayout("insets 10 20 10 20, gap 15", "", "center"));
-        panel.putClientProperty(FlatClientProperties.STYLE,
-                "background: darken($TextPane.background, 3%); border: 1,0,0,0,$Component.borderColor");
+        JPanel panel = new JPanel(new MigLayout("insets 0, gap 15", "", "center"));
+        SwingHtmlUtils.applyTintedBannerStyle(panel, SwingHtmlUtils.getAccentColor(), 10, 16, 20);
         panel.setVisible(false);
 
         transitionLabel = createPromptHeaderLabel("Workflow Transition", Codicons.ROCKET);
         transitionLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Component.accentColor");
 
         approveButton = UiComponents.createActionButton("Approve", Codicons.CHECK, null, false,
-                UiComponents.GREEN_BUTTON_STYLE, e -> controller.approvePhase());
+                UiComponents.ACCENT_BUTTON_STYLE, e -> controller.approvePhase());
         approveButton.setEnabled(false);
 
-        viewPlanButton = UiComponents.createActionButton("View Plan", Codicons.LIST_ORDERED, null, false,
-                UiComponents.ACCENT_BUTTON_STYLE, e -> {
-                    if (onViewPlanAction != null) {
-                        onViewPlanAction.run();
-                    }
-                });
+        viewPlanButton = UiComponents.createActionButton("View Plan", Codicons.LIST_ORDERED, null, false, null, e -> {
+            if (onViewPlanAction != null) {
+                onViewPlanAction.run();
+            }
+        });
         viewPlanButton.setVisible(false);
 
         rejectButton = UiComponents.createActionButton("Reject", Codicons.CLOSE, null, false,
-                UiComponents.RED_BUTTON_STYLE, e -> controller.rejectPhase());
+                UiComponents.SUBTLE_RED_BUTTON_STYLE, e -> controller.rejectPhase());
         rejectButton.setEnabled(false);
 
         panel.add(transitionLabel);
@@ -246,9 +245,12 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     private JPanel createUserInputPromptPanel() {
-        JPanel panel = new JPanel(new MigLayout("insets 10 20 10 20, fillx, wrap 1, gapy 8", GROW_FILL_COL));
-        panel.putClientProperty(FlatClientProperties.STYLE,
-                "background: darken($TextPane.background, 3%); border: 1,0,0,0,$Component.borderColor");
+        JPanel panel = new JPanel(new MigLayout("insets 0, fillx, wrap 1, gapy 8", GROW_FILL_COL));
+        SwingHtmlUtils.applyTintedBannerStyle(panel, SwingHtmlUtils.getAccentColor(), 10, 16, 20);
+        KeyStroke escapeKey = KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0);
+        ActionListener escapeListener = e -> cancelActivePrompt();
+        panel.registerKeyboardAction(escapeListener, escapeKey, JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
+        panel.registerKeyboardAction(escapeListener, escapeKey, JComponent.WHEN_IN_FOCUSED_WINDOW);
         panel.setVisible(false);
         return panel;
     }
@@ -415,9 +417,28 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         if (outputScrollPane != null) {
             updateOutputScrollPaneBorder();
         }
+        if (inlineActionPanel != null && userInputPromptPanel != null) {
+            applyInlineBannerStyling();
+        }
         if (fileMentionPopup != null) {
             fileMentionPopup.updateTheme();
         }
+    }
+
+    void applyInlineBannerStyling() {
+        Color accent = SwingHtmlUtils.getAccentColor();
+        SwingHtmlUtils.applyTintedBannerStyle(inlineActionPanel, accent, 10, 16, 20);
+        SwingHtmlUtils.applyTintedBannerStyle(userInputPromptPanel, accent, 10, 16, 20);
+        if (transitionLabel != null && transitionLabel.getIcon() instanceof FontIcon fontIcon) {
+            transitionLabel.setIcon(FontIcon.of(fontIcon.getIkon(), fontIcon.getIconSize(), accent));
+        }
+        for (Component child : userInputPromptPanel.getComponents()) {
+            if (child instanceof JLabel label && label.getIcon() instanceof FontIcon fontIcon) {
+                label.setIcon(FontIcon.of(fontIcon.getIkon(), fontIcon.getIconSize(), accent));
+            }
+        }
+        UiComponents.refreshActionButtonIcons(inlineActionPanel);
+        UiComponents.refreshActionButtonIcons(userInputPromptPanel);
     }
 
     private void updateOutputScrollPaneBorder() {
@@ -710,10 +731,11 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
         PromptType promptType = event.promptType();
         if (promptType == PromptType.CONFIRM) {
+            activePromptCancelAction = () -> onResponse.accept(Boolean.FALSE);
             JButton yesButton = UiComponents.createActionButton("Yes", Codicons.CHECK, null, false,
-                    UiComponents.GREEN_BUTTON_STYLE, e -> onResponse.accept(Boolean.TRUE));
-            JButton noButton = UiComponents.createActionButton("No", Codicons.CLOSE, null, false,
-                    UiComponents.RED_BUTTON_STYLE, e -> onResponse.accept(Boolean.FALSE));
+                    UiComponents.ACCENT_BUTTON_STYLE, e -> onResponse.accept(Boolean.TRUE));
+            JButton noButton = UiComponents.createActionButton("No", Codicons.CLOSE, null, false, null,
+                    e -> onResponse.accept(Boolean.FALSE));
             userInputPromptPanel.add(createPromptActionsRow(yesButton, noButton));
         } else if (promptType == PromptType.SINGLE_SELECT) {
             JPanel optionsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
@@ -763,7 +785,18 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         showPromptPanel();
     }
 
+    boolean cancelActivePrompt() {
+        if (!userInputPromptPanel.isVisible() || activePromptCancelAction == null) {
+            return false;
+        }
+        Runnable action = activePromptCancelAction;
+        activePromptCancelAction = null;
+        action.run();
+        return true;
+    }
+
     void hideUserInputPrompt() {
+        activePromptCancelAction = null;
         boolean wasVisible = userInputPromptPanel.isVisible();
         userInputPromptPanel.removeAll();
         userInputPromptPanel.setVisible(false);
@@ -778,9 +811,10 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
     void showResetSessionPrompt(Runnable onConfirm) {
         resetPromptPanelWithHeader(RESET_SESSION_PROMPT_MESSAGE, Codicons.QUESTION);
+        activePromptCancelAction = this::hideUserInputPrompt;
 
-        JButton confirmButton = UiComponents.createActionButton(CONFIRM_RESET_BUTTON_TEXT, Codicons.CHECK, null, false,
-                UiComponents.RED_BUTTON_STYLE, e -> {
+        JButton confirmButton = UiComponents.createActionButton(CONFIRM_RESET_BUTTON_TEXT, Codicons.TRASH, null, false,
+                UiComponents.SUBTLE_RED_BUTTON_STYLE, e -> {
                     hideUserInputPrompt();
                     if (onConfirm != null) {
                         onConfirm.run();
@@ -795,6 +829,13 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
     void showNewTopicPrompt(String defaultTopicName, Consumer<NewTopicChoice> onChoice) {
         resetPromptPanelWithHeader(NEW_TOPIC_PROMPT_MESSAGE, Codicons.COMMENT_DISCUSSION);
+        Runnable cancelTopicAction = () -> {
+            hideUserInputPrompt();
+            if (onChoice != null) {
+                onChoice.accept(new NewTopicChoice(false, false, ""));
+            }
+        };
+        activePromptCancelAction = cancelTopicAction;
 
         JPanel fieldPanel = new JPanel(new MigLayout("insets 0, fillx, gap 8", "[][grow, fill]"));
         fieldPanel.setOpaque(false);
@@ -814,21 +855,16 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         userInputPromptPanel.add(fieldPanel);
 
         JButton saveButton = UiComponents.createActionButton(SAVE_TOPIC_BUTTON_TEXT, Codicons.CHECK, null, false,
-                UiComponents.GREEN_BUTTON_STYLE, saveAction);
+                UiComponents.ACCENT_BUTTON_STYLE, saveAction);
         JButton discardButton = UiComponents.createActionButton(DISCARD_TOPIC_BUTTON_TEXT, Codicons.TRASH, null, false,
-                UiComponents.RED_BUTTON_STYLE, e -> {
+                UiComponents.SUBTLE_RED_BUTTON_STYLE, e -> {
                     hideUserInputPrompt();
                     if (onChoice != null) {
                         onChoice.accept(new NewTopicChoice(true, false, ""));
                     }
                 });
         JButton cancelButton = UiComponents.createActionButton(CANCEL_BUTTON_TEXT, Codicons.CLOSE, null, false, null,
-                e -> {
-                    hideUserInputPrompt();
-                    if (onChoice != null) {
-                        onChoice.accept(new NewTopicChoice(false, false, ""));
-                    }
-                });
+                e -> cancelTopicAction.run());
         userInputPromptPanel.add(createPromptActionsRow(saveButton, discardButton, cancelButton));
 
         showPromptPanel();
@@ -1030,6 +1066,9 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         bindPopupKey(im, am, KeyEvent.VK_UP, "autocomplete-or-up", fileMentionPopup::selectPrevious, null);
         bindPopupKey(im, am, KeyEvent.VK_DOWN, "autocomplete-or-down", fileMentionPopup::selectNext, null);
         bindPopupKey(im, am, KeyEvent.VK_ESCAPE, "dismiss-autocomplete", fileMentionPopup::hidePopup, () -> {
+            if (!loading && cancelActivePrompt()) {
+                return;
+            }
             if (loading) {
                 controller.stopTurn();
             }
@@ -1041,6 +1080,9 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         panelAm.put("stop-active-turn", createAction(() -> {
             if (fileMentionPopup != null && fileMentionPopup.isPopupVisible()) {
                 fileMentionPopup.hidePopup();
+                return;
+            }
+            if (!loading && cancelActivePrompt()) {
                 return;
             }
             if (loading) {
