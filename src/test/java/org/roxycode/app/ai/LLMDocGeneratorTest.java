@@ -124,8 +124,8 @@ class LLMDocGeneratorTest {
 
         String planDoc = generator.generateDoc(List.of(svc), WorkflowPhase.PLAN);
         SwingTestUtils.assertContainsAll(planDoc,
-                "// Plan only" + (char) 10 + "    planOnlyMethod(): ParentRecord;" + (char) 10
-                        + "    // Wildcard method" + (char) 10 + "    wildcardMethod(): string;",
+                "// Plan only\n    planOnlyMethod(): ParentRecord;\n"
+                        + "    // Wildcard method\n    wildcardMethod(): string;",
                 "interface ParentRecord {", "child: ChildRecord;", "enum Status {");
         assertFalse(planDoc.contains("@param"));
         assertFalse(planDoc.contains("codeReviewMethod"));

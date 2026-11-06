@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -15,6 +14,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Stream;
 import org.apache.commons.lang3.StringUtils;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 import org.apache.commons.text.StringSubstitutor;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.JexlServiceRegistry;
@@ -70,10 +71,6 @@ public class PromptService {
     public record ProjectContextConfig(List<String> folders, List<String> referenceFolders) {
         public static final ProjectContextConfig EMPTY = new ProjectContextConfig(List.of(), List.of());
 
-        public ProjectContextConfig(List<String> folders) {
-            this(folders, List.of());
-        }
-
         public ProjectContextConfig {
             folders = List.copyOf(Objects.requireNonNullElse(folders, List.of()));
             referenceFolders = List.copyOf(Objects.requireNonNullElse(referenceFolders, List.of()));
@@ -117,14 +114,14 @@ public class PromptService {
             return "";
         }
         StringBuilder sb = new StringBuilder(HEADER_REFERENCE_FOLDERS);
-        sb.append("The following external source folders are mounted read-only. Pass ").append((char) 96)
-                .append("@<alias>").append((char) 96).append(" or ").append((char) 96).append("@<alias>/subpath")
-                .append((char) 96).append(" to ").append((char) 96).append("grepService").append((char) 96).append(", ")
-                .append((char) 96).append("fileReadService").append((char) 96).append(", and ").append((char) 96)
-                .append("symbolService").append((char) 96).append(" to list files, search, or read code on demand:\n");
+        sb.append("The following external source folders are mounted read-only. Pass ").append('`').append("@<alias>")
+                .append('`').append(" or ").append('`').append("@<alias>/subpath").append('`').append(" to ")
+                .append('`').append("grepService").append('`').append(", ").append('`').append("fileReadService")
+                .append('`').append(", and ").append('`').append("symbolService").append('`')
+                .append(" to list files, search, or read code on demand:\n");
         for (ReferenceFolderMount mount : mounts) {
-            sb.append("- ").append((char) 96).append(mount.aliasPrefix()).append((char) 96).append(" (")
-                    .append((char) 96).append(mount.rootPath()).append((char) 96).append(")\n");
+            sb.append("- ").append('`').append(mount.aliasPrefix()).append('`').append(" (").append('`')
+                    .append(mount.rootPath()).append('`').append(")\n");
         }
         return sb.toString();
     }
@@ -242,7 +239,7 @@ public class PromptService {
 
         EditorResult repoMap = repoMapPackerService.generateRepoMap();
         if (repoMap != null && repoMap.success()) {
-            systemPrompt.append(HEADER_REPO_MAP).append(repoMap.content()).append((char) 10);
+            systemPrompt.append(HEADER_REPO_MAP).append(repoMap.content()).append('\n');
         }
         systemPrompt.append(NEWLINE_DOUBLE).append(loadPhasePrompt(currentPhase))
                 .append(getStaticPhaseContext(currentPhase)).append(getVolatileSessionContext());
@@ -272,20 +269,22 @@ public class PromptService {
         return readClasspathResource(USER_GUIDE_DOC_PATH);
     }
 
-    public List<String> getGlobalContextFolders() {
+    static List<String> getGlobalFolderList(SettingsService settingsService,
+            Function<AppSettings, List<String>> getter) {
         if (settingsService == null || settingsService.getSettings() == null) {
             return List.of();
         }
-        return normalizeFolderList(settingsService.getSettings().getGlobalContextFolders());
+        return normalizeFolderList(getter.apply(settingsService.getSettings()));
     }
 
-    public void setGlobalContextFolders(List<String> folders) {
+    static void setGlobalFolderList(SettingsService settingsService, ApplicationEventPublisher eventPublisher,
+            List<String> folders, BiConsumer<AppSettings, List<String>> setter) {
         if (settingsService == null) {
             return;
         }
         AppSettings settings = settingsService.getSettings();
         if (settings != null) {
-            settings.setGlobalContextFolders(normalizeFolderList(folders));
+            setter.accept(settings, normalizeFolderList(folders));
             settingsService.saveSettings();
             if (eventPublisher != null) {
                 eventPublisher.publishEvent(new ContextChangedEvent(true));
@@ -293,16 +292,17 @@ public class PromptService {
         }
     }
 
-    private ProjectContextConfig readProjectContextConfig() {
-        if (!hasActiveProject()) {
+    static ProjectContextConfig readProjectContextConfig(ProjectService projectService) {
+        if (projectService == null || !projectService.hasActiveProject()) {
             return ProjectContextConfig.EMPTY;
         }
         return PathUtils.readTomlOrDefault(projectService.resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE),
                 ProjectContextConfig.class, ProjectContextConfig.EMPTY, AiConfig.SHARED_TOML_MAPPER);
     }
 
-    private void writeProjectContextConfig(ProjectContextConfig config) {
-        if (!hasActiveProject()) {
+    static void writeProjectContextConfig(ProjectService projectService, ApplicationEventPublisher eventPublisher,
+            ProjectContextConfig config) {
+        if (projectService == null || !projectService.hasActiveProject()) {
             throw new IllegalStateException("No active project");
         }
         Path configFile = projectService.resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE);
@@ -317,61 +317,47 @@ public class PromptService {
         }
     }
 
+    public List<String> getGlobalContextFolders() {
+        return getGlobalFolderList(settingsService, AppSettings::getGlobalContextFolders);
+    }
+
+    public void setGlobalContextFolders(List<String> folders) {
+        setGlobalFolderList(settingsService, eventPublisher, folders, AppSettings::setGlobalContextFolders);
+    }
+
     public List<String> getProjectContextFolders() {
-        return normalizeFolderList(readProjectContextConfig().folders());
+        return normalizeFolderList(readProjectContextConfig(projectService).folders());
     }
 
     public void setProjectContextFolders(List<String> folders) {
-        ProjectContextConfig existing = readProjectContextConfig();
-        writeProjectContextConfig(new ProjectContextConfig(normalizeFolderList(folders), existing.referenceFolders()));
+        ProjectContextConfig existing = readProjectContextConfig(projectService);
+        writeProjectContextConfig(projectService, eventPublisher,
+                new ProjectContextConfig(normalizeFolderList(folders), existing.referenceFolders()));
     }
 
     public List<String> getGlobalReferenceFolders() {
-        if (settingsService == null || settingsService.getSettings() == null) {
-            return List.of();
-        }
-        return normalizeFolderList(settingsService.getSettings().getGlobalReferenceFolders());
+        return projectService.getGlobalReferenceFolders();
     }
 
     public void setGlobalReferenceFolders(List<String> folders) {
-        if (settingsService == null) {
-            return;
-        }
-        AppSettings settings = settingsService.getSettings();
-        if (settings != null) {
-            settings.setGlobalReferenceFolders(normalizeFolderList(folders));
-            settingsService.saveSettings();
-            if (eventPublisher != null) {
-                eventPublisher.publishEvent(new ContextChangedEvent(true));
-            }
-        }
+        projectService.setGlobalReferenceFolders(folders);
     }
 
     public List<String> getProjectReferenceFolders() {
-        return normalizeFolderList(readProjectContextConfig().referenceFolders());
+        return projectService.getProjectReferenceFolders();
     }
 
     public void setProjectReferenceFolders(List<String> folders) {
-        ProjectContextConfig existing = readProjectContextConfig();
-        writeProjectContextConfig(new ProjectContextConfig(existing.folders(), normalizeFolderList(folders)));
+        projectService.setProjectReferenceFolders(folders);
     }
 
     public List<ReferenceFolderMount> getReferenceFolderMounts() {
-        Path projectRoot = null;
-        if (hasActiveProject()) {
-            projectRoot = projectService.getCurrentProjectRoot();
-        }
-        return ProjectService.resolveReferenceFolderMounts(getProjectReferenceFolders(), getGlobalReferenceFolders(),
-                projectRoot);
+        return projectService.getReferenceFolderMounts();
     }
 
     public List<ReferenceFolderMount> listGlobalReferenceFolderMounts() {
-        Path projectRoot = null;
-        if (hasActiveProject()) {
-            projectRoot = projectService.getCurrentProjectRoot();
-        }
         List<ReferenceFolderMount> allMounts = ProjectService.resolveReferenceFolderMountsInternal(
-                getProjectReferenceFolders(), getGlobalReferenceFolders(), projectRoot, false);
+                getProjectReferenceFolders(), getGlobalReferenceFolders(), resolveActiveProjectRoot(), false);
         return allMounts.stream().filter(ReferenceFolderMount::globalScope).toList();
     }
 
@@ -477,19 +463,14 @@ public class PromptService {
     }
 
     private Path resolveFolderPath(String folderStr, boolean resolveRelativeToProject) {
-        try {
-            Path path = Path.of(folderStr);
-            if (!path.isAbsolute() && resolveRelativeToProject && hasActiveProject()) {
-                Path projectRoot = projectService.getCurrentProjectRoot();
-                if (projectRoot != null) {
-                    path = projectRoot.resolve(path);
-                }
-            }
-            return path.toAbsolutePath().normalize();
-        } catch (InvalidPathException e) {
-            log.warn("Invalid context folder path '{}': {}", folderStr, e.getMessage());
-            return null;
+        return ProjectService.resolveMountFolderPath(folderStr, resolveRelativeToProject, resolveActiveProjectRoot());
+    }
+
+    private Path resolveActiveProjectRoot() {
+        if (hasActiveProject()) {
+            return projectService.getCurrentProjectRoot();
         }
+        return null;
     }
 
     private boolean hasActiveProject() {

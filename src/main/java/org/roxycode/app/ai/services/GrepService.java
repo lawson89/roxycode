@@ -37,7 +37,7 @@ public class GrepService {
     private static final String COLOR_NEVER_ARG = "--color=never";
     private static final String GLOB_FLAG = "-g";
     private static final String END_OF_OPTIONS = "--";
-    private static final char LF = 10;
+    private static final char LF = '\n';
     private final ProjectService projectService;
     private final FileReadService fileReadService;
 
@@ -51,13 +51,7 @@ public class GrepService {
     }
 
     private ResolvedSearchTarget resolveTarget(String relativePath) {
-        ResolvedSearchTarget target = projectService.resolveSearchTarget(relativePath);
-        if (target != null) {
-            return target;
-        }
-        Path root = projectService.getCurrentProjectRoot().toAbsolutePath().normalize();
-        String relTarget = projectService.resolveRelativePath(relativePath);
-        return new ResolvedSearchTarget(root, relTarget, "");
+        return projectService.resolveSearchTarget(relativePath);
     }
 
     @AgentDoc(value = "Searches for a regex pattern in the project files using RipGrep.", examples = "grepService.grep('TODO')")

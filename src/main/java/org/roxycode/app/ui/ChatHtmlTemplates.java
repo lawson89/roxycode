@@ -7,13 +7,14 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.text.StringEscapeUtils;
 
 public final class ChatHtmlTemplates {
 
     public static final String ROLE_AI = "ai";
     public static final String ROLE_USER = "user";
     public static final String ROLE_SYSTEM = "system";
-    private static final String CAT_EARS = "/" + (char) 92 + "_/" + (char) 92;
+    private static final String CAT_EARS = "/\\_/\\";
     public static final String COPY_CELL_ID_PREFIX = "copy-cell-";
     public static final String TOOL_BODY_CELL_ID_PREFIX = "tool-body-cell-";
     public static final int AUTO_COLLAPSE_LINE_THRESHOLD = 4;
@@ -143,8 +144,7 @@ public final class ChatHtmlTemplates {
 
     private static String stripHtmlTagsAndUnescape(String input) {
         String withoutTags = HTML_TAG_PATTERN.matcher(input).replaceAll("");
-        return withoutTags.replace("&quot;", String.valueOf((char) 34)).replace("&#39;", "'").replace("&lt;", "<")
-                .replace("&gt;", ">").replace("&amp;", "&");
+        return StringEscapeUtils.unescapeHtml4(withoutTags);
     }
 
     public static String renderToolLog(String output, boolean success, String error, String timestamp) {

@@ -34,7 +34,7 @@ public class FileReadServiceTest {
 
     @Test
     void testReadLinesReadFileNumberedAndGetLineCount() throws IOException {
-        String nl = String.valueOf((char) 10);
+        String nl = "\n";
         Files.writeString(tempDir.resolve("empty.txt"), "");
         assertEquals(0, fileReadService.getLineCount("empty.txt"));
         assertEquals("", fileReadService.readFileNumbered("empty.txt"));
@@ -67,7 +67,7 @@ public class FileReadServiceTest {
 
     @Test
     void testReadFilesAndReadFilesNumberedWithPartialErrors() throws IOException {
-        String nl = String.valueOf((char) 10);
+        String nl = "\n";
         assertTrue(fileReadService.readFiles((List<String>) null).isEmpty());
         assertTrue(fileReadService.readFiles((String[]) null).isEmpty());
         assertTrue(fileReadService.readFiles(new String[0]).isEmpty());
@@ -160,7 +160,7 @@ public class FileReadServiceTest {
         assertFalse(FileReadService.isBinaryFile(tempDir));
         assertFalse(FileReadService.isBinaryFile(tempDir.resolve("missing.bin")));
 
-        Path textFile = Files.writeString(tempDir.resolve("plain.txt"), "Hello UTF-8 text" + (char) 10 + "Line 2");
+        Path textFile = Files.writeString(tempDir.resolve("plain.txt"), "Hello UTF-8 text\nLine 2");
         assertFalse(FileReadService.isBinaryFile(textFile));
 
         Path binFile = Files.write(tempDir.resolve("binary.dat"), new byte[]{0x48, 0x65, 0x00, 0x6c});
@@ -176,7 +176,7 @@ public class FileReadServiceTest {
 
     @Test
     void testReadFileAndReadFileNumberedTruncateAtMaxSingleFileCharsWhileReadLinesReadsFullFile() throws IOException {
-        String nl = String.valueOf((char) 10);
+        String nl = "\n";
         String linePayload = "x".repeat(95);
         StringBuilder sb = new StringBuilder();
         int totalLines = 1200;
@@ -207,7 +207,7 @@ public class FileReadServiceTest {
 
     @Test
     void testReadAndListFromReferenceFolderAliasAndBlockTraversal() throws IOException {
-        String nl = String.valueOf((char) 10);
+        String nl = "\n";
         Path refRoot = Files.createDirectories(tempDir.resolve("external-billing"));
         Path nestedDir = Files.createDirectories(refRoot.resolve("src/main"));
         Files.writeString(nestedDir.resolve("Invoice.java"), "package billing;" + nl + "public class Invoice {}" + nl);

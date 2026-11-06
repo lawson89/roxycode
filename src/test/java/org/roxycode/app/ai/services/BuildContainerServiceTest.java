@@ -130,7 +130,7 @@ class BuildContainerServiceTest {
         ContainerExecResult res1 = buildContainerService.executeCommand(tempDir, config, Map.of("A", "1"),
                 "./mvnw compile");
         assertEquals(0, res1.exitCode());
-        assertEquals("out" + (char) 10 + "err", res1.combinedOutput());
+        assertEquals("out\nerr", res1.combinedOutput());
 
         buildContainerService.executeCommand(tempDir, config, Map.of("A", "1"), "./mvnw test");
         assertEquals(1, sessionsCreated.get());
@@ -243,8 +243,8 @@ class BuildContainerServiceTest {
                     existingSubdir.toAbsolutePath().normalize().toString(), "--bind", rootStr, rootStr, "--chdir",
                     rootStr, "--die-with-parent", "sh", "-c", "./mvnw compile"), bwrapCmd);
 
-            String dq = String.valueOf((char) 34);
-            String bs = String.valueOf((char) 92);
+            String dq = "\"";
+            String bs = "\\";
             Path pathWithQuote = fakeHome.resolve("dir" + dq + "quote" + bs + "slash");
             String seatbeltProfile = BuildContainerService.buildSeatbeltProfile(projectRoot, List.of(pathWithQuote));
             SwingTestUtils.assertContainsAll(seatbeltProfile, "(version 1)", "(allow default)", "(deny file-write*)",

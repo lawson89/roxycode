@@ -45,7 +45,8 @@ public class MemoryService {
     public static final int MAX_PINNED_MEMORY_CHARS = 8192;
     private static final int SEARCH_CONTEXT_LINES = 2;
     private static final String STRIP_TITLE_CHARS_REGEX = "[#*_~`\"']";
-    private static final char LF = 10;
+    private static final char LF = '\n';
+    private static final char CR = '\r';
     private static final String NL = String.valueOf(LF);
     private static final String SCOPE_GLOBAL = "global";
     private static final String SCOPE_PROJECT = "project";
@@ -267,7 +268,7 @@ public class MemoryService {
                     return "";
                 }
                 char nextChar = stripped.charAt(afterHeader);
-                if (nextChar == LF || nextChar == 13) {
+                if (nextChar == LF || nextChar == CR) {
                     stripped = stripped.substring(afterHeader).stripLeading();
                 }
             }
@@ -471,10 +472,7 @@ public class MemoryService {
                 if (colonIdx <= 0) {
                     continue;
                 }
-                String filePart = line.substring(0, colonIdx).trim();
-                if (filePart.startsWith("./") || filePart.startsWith("." + (char) 92)) {
-                    filePart = filePart.substring(2);
-                }
+                String filePart = PathUtils.normalizeRelativePath(line.substring(0, colonIdx).trim());
                 String snippetPart = line.substring(colonIdx + 1).trim();
                 if (!filePart.isEmpty() && !snippetPart.isEmpty()) {
                     snippetsByFile.putIfAbsent(filePart, snippetPart);
@@ -532,7 +530,7 @@ public class MemoryService {
         if (StringUtils.isBlank(rawSlug)) {
             throw new IllegalArgumentException("Note slug must not be blank");
         }
-        if (rawSlug.contains("..") || rawSlug.indexOf('/') >= 0 || rawSlug.indexOf(92) >= 0) {
+        if (rawSlug.contains("..") || rawSlug.indexOf('/') >= 0 || rawSlug.indexOf('\\') >= 0) {
             throw new IllegalArgumentException("Invalid note slug (path traversal not allowed): " + rawSlug);
         }
         String trimmed = StringUtils.removeEndIgnoreCase(rawSlug.trim(), MD_EXTENSION).trim();
@@ -552,7 +550,7 @@ public class MemoryService {
         if (colonIdx > 0) {
             trimmed = trimmed.substring(0, colonIdx).trim();
         }
-        if (trimmed.contains("..") || trimmed.indexOf('/') >= 0 || trimmed.indexOf(92) >= 0) {
+        if (trimmed.contains("..") || trimmed.indexOf('/') >= 0 || trimmed.indexOf('\\') >= 0) {
             throw new IllegalArgumentException("Invalid archived filename (path traversal not allowed): " + filename);
         }
         return StringUtils.appendIfMissingIgnoreCase(trimmed, MD_EXTENSION);
@@ -599,7 +597,7 @@ public class MemoryService {
 
         StringBuilder md = new StringBuilder(FrontmatterUtils.formatFrontmatter(frontmatter));
 
-        if (!body.startsWith("# ") && !body.startsWith("#" + (char) 9)) {
+        if (!body.startsWith("# ") && !body.startsWith("#\t")) {
             md.append("# ").append(resolvedTitle).append(NL).append(NL);
         }
         md.append(body);

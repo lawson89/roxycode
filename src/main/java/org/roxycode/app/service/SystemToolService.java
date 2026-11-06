@@ -9,7 +9,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
@@ -279,22 +279,15 @@ public class SystemToolService {
         if (tools == null || tools.isEmpty()) {
             return SystemTool.REQUIRED_TOOL_NAMES;
         }
-        Set<String> detectedNames = new HashSet<>();
-        List<String> missing = new ArrayList<>();
+        Set<String> missing = new LinkedHashSet<>(SystemTool.REQUIRED_TOOL_NAMES);
         for (SystemTool tool : tools) {
-            if (tool == null) {
+            if (tool == null || tool.name() == null) {
                 continue;
             }
-            boolean detected = STATUS_DETECTED.equals(tool.status());
-            if (detected && tool.name() != null) {
-                detectedNames.add(tool.name());
-            } else if (tool.required() && tool.name() != null && !missing.contains(tool.name())) {
+            if (STATUS_DETECTED.equals(tool.status())) {
+                missing.remove(tool.name());
+            } else if (tool.required()) {
                 missing.add(tool.name());
-            }
-        }
-        for (String reqName : SystemTool.REQUIRED_TOOL_NAMES) {
-            if (!detectedNames.contains(reqName) && !missing.contains(reqName)) {
-                missing.add(reqName);
             }
         }
         return List.copyOf(missing);

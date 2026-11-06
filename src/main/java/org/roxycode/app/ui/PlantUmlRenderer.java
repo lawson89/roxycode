@@ -22,6 +22,7 @@ import net.sourceforge.plantuml.FileFormat;
 import net.sourceforge.plantuml.FileFormatOption;
 import net.sourceforge.plantuml.SourceStringReader;
 import net.sourceforge.plantuml.core.DiagramDescription;
+import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -435,7 +436,7 @@ public final class PlantUmlRenderer {
     }
 
     private static String computeSha256Hex(String input) {
-        return org.roxycode.app.util.PathUtils.computeSha256Hex(input, 16);
+        return PathUtils.computeSha256Hex(input, 16);
     }
 
     static void clearCacheForTesting() {

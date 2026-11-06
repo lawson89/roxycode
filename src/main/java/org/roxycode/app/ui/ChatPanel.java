@@ -13,6 +13,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -36,6 +37,7 @@ import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.util.Edt;
+import org.roxycode.app.util.TokenUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -531,26 +533,24 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         long lastCachedInputTokens = model.getLastCachedInputTokens();
         int contextWindow = Math.max(1, model.getLastContextWindowTokens());
         int ctxPct = (int) Math.min(100L, Math.max(0L, Math.round((lastPromptTokens * 100.0) / contextWindow)));
-        int lastCacheHitPct = org.roxycode.app.util.TokenUtils.computeCacheHitPercent(lastCachedInputTokens,
-                lastPromptTokens);
+        int lastCacheHitPct = TokenUtils.computeCacheHitPercent(lastCachedInputTokens, lastPromptTokens);
 
         String formattedPrompt;
         if (lastPromptTokens > 0) {
-            formattedPrompt = org.roxycode.app.util.TokenUtils.formatTokenCount(lastPromptTokens);
+            formattedPrompt = TokenUtils.formatTokenCount(lastPromptTokens);
         } else {
             formattedPrompt = "0";
         }
-        String formattedWindow = org.roxycode.app.util.TokenUtils.formatTokenCount(contextWindow);
+        String formattedWindow = TokenUtils.formatTokenCount(contextWindow);
         String formattedCached;
         if (lastCachedInputTokens > 0) {
-            formattedCached = org.roxycode.app.util.TokenUtils.formatTokenCount(lastCachedInputTokens);
+            formattedCached = TokenUtils.formatTokenCount(lastCachedInputTokens);
         } else {
             formattedCached = "0";
         }
 
-        ctxLabel.setText(
-                String.format(java.util.Locale.US, "Ctx: %s / %s (%d%%)", formattedPrompt, formattedWindow, ctxPct));
-        cacheLabel.setText(String.format(java.util.Locale.US, "Cache: %d%%", lastCacheHitPct));
+        ctxLabel.setText(String.format(Locale.US, "Ctx: %s / %s (%d%%)", formattedPrompt, formattedWindow, ctxPct));
+        cacheLabel.setText(String.format(Locale.US, "Cache: %d%%", lastCacheHitPct));
 
         String ctxBarStyle;
         if (ctxPct >= CTX_USAGE_CRITICAL_PCT) {
@@ -562,13 +562,13 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         }
         ctxProgressBar.putClientProperty(FlatClientProperties.STYLE, ctxBarStyle);
         ctxProgressBar.setValue(ctxPct);
-        String ctxTooltip = String.format(java.util.Locale.US, "Context window usage: %s / %s tokens (%d%%)",
-                formattedPrompt, formattedWindow, ctxPct);
+        String ctxTooltip = String.format(Locale.US, "Context window usage: %s / %s tokens (%d%%)", formattedPrompt,
+                formattedWindow, ctxPct);
         ctxLabel.setToolTipText(ctxTooltip);
         ctxProgressBar.setToolTipText(ctxTooltip);
 
         cacheProgressBar.setValue(lastCacheHitPct);
-        String cacheTooltip = String.format(java.util.Locale.US, "Implicit cache hit: %s / %s input tokens (%d%%)",
+        String cacheTooltip = String.format(Locale.US, "Implicit cache hit: %s / %s input tokens (%d%%)",
                 formattedCached, formattedPrompt, lastCacheHitPct);
         cacheLabel.setToolTipText(cacheTooltip);
         cacheProgressBar.setToolTipText(cacheTooltip);

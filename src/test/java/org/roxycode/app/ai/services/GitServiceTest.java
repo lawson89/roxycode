@@ -70,7 +70,7 @@ class GitServiceTest {
 
         String headDiffOut = String.join("\n", "diff --git a/Tracked.java b/Tracked.java", "--- a/Tracked.java",
                 "+++ b/Tracked.java", "@@ -1,2 +1,2 @@", "+line 1 staged", "+line 2 unstaged");
-        String nl = String.valueOf((char) 10);
+        String nl = "\n";
         String statusOut = String.join(nl, "MM Tracked.java", "R  OldName.java -> Renamed.java",
                 "?? src/NewFeature.java");
         String noIndexDiffOut = String.join(nl, "diff --git a//dev/null b/src/NewFeature.java", "new file mode 100644",
@@ -106,9 +106,9 @@ class GitServiceTest {
     @Test
     void testGetChangedFilesPreservesFirstLineLeadingSpaceAndHandlesPorcelainV1Paths() {
         GitService gitService = new GitService(createActiveProjectService());
-        char dq = (char) 34;
-        char bs = (char) 92;
-        String nl = String.valueOf((char) 10);
+        char dq = '\"';
+        char bs = '\\';
+        String nl = "\n";
         String statusOut = String.join(nl, " M FirstUnstaged.java",
                 "?? dir with spaces/quote" + dq + "file" + bs + "name.txt", "R  old name.txt -> new name.txt",
                 "?? café_über_файл.java");

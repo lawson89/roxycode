@@ -26,7 +26,7 @@ public record ImplementationPlan(String title, String goal, List<String> require
     public static final String STEP_COMPILE = "Code compiles successfully";
     public static final String STEP_UNIT_TESTS = "Unit tests pass";
     public static final String STEP_CODE_REVIEW = "Automated code review passes";
-    private static final String CODE_FENCE = String.valueOf((char) 96).repeat(3);
+    private static final String CODE_FENCE = "```";
 
     public record TechStep(String description, boolean completed) {
     }

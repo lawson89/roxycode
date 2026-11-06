@@ -44,8 +44,7 @@ class FileMentionPopupTest {
 
     @Test
     void testFileCandidateNormalizationMultiTierRankingAndResultCap() {
-        String winPath = "." + (char) 92 + "src" + (char) 92 + "main" + (char) 92 + "java" + (char) 92 + "org"
-                + (char) 92 + "roxycode" + (char) 92 + "ChatPanel.java";
+        String winPath = ".\\src\\main\\java\\org\\roxycode\\ChatPanel.java";
         assertEquals("src/main/java/org/roxycode/chatpanel.java", FileCandidate.fromPath(winPath).pathLower());
 
         FileCandidate rootFile = FileCandidate.fromPath("/pom.xml");

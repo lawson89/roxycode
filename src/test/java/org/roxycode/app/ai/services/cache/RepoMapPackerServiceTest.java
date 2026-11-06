@@ -100,10 +100,10 @@ class RepoMapPackerServiceTest {
         assertTrue(result.success());
         String content = result.content();
 
-        assertEquals(String.join(String.valueOf((char) 10), "# Repo Map Snapshot", "README.md", "pom.xml",
-                "src/main/java/demo/Empty.java", "src/main/java/demo/SmallService.java",
-                "  3: public class SmallService {", "  5: public void execute() {}// comment",
-                "  6: public String submitPlan(", "src/test/java/demo/SmallServiceTest.java", ""), content);
+        assertEquals(String.join("\n", "# Repo Map Snapshot", "README.md", "pom.xml", "src/main/java/demo/Empty.java",
+                "src/main/java/demo/SmallService.java", "  3: public class SmallService {",
+                "  5: public void execute() {}// comment", "  6: public String submitPlan(",
+                "src/test/java/demo/SmallServiceTest.java", ""), content);
         SwingTestUtils.assertContainsNone(content, "## Project Tree", "--- ", "1: package demo;",
                 "2: import java.util.List;", "secretBodyLine", "Some markdown prose", "testIt");
         assertEquals(1, ctagsCommands.size());

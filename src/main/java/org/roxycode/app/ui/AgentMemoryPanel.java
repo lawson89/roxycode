@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Supplier;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
@@ -540,11 +541,17 @@ public final class AgentMemoryPanel extends JPanel {
         }
 
         private EditorResult executeSavePinnedMemory(String contentToSave) {
+            return supplyInMemoryScope(() -> memoryService.updateGlobalMemory(contentToSave),
+                    () -> memoryService.updateProjectMemory(contentToSave));
+        }
+
+        private EditorResult supplyInMemoryScope(Supplier<EditorResult> globalAction,
+                Supplier<EditorResult> projectAction) {
             return memoryEventRefreshGuard.supply(() -> {
                 if (globalScope) {
-                    return memoryService.updateGlobalMemory(contentToSave);
+                    return globalAction.get();
                 }
-                return memoryService.updateProjectMemory(contentToSave);
+                return projectAction.get();
             });
         }
 
@@ -604,12 +611,8 @@ public final class AgentMemoryPanel extends JPanel {
         }
 
         private EditorResult executeSaveNote(String sanitizedSlug, String resolvedTitle, String tags, String body) {
-            return memoryEventRefreshGuard.supply(() -> {
-                if (globalScope) {
-                    return memoryService.saveGlobalNote(sanitizedSlug, resolvedTitle, tags, body);
-                }
-                return memoryService.saveProjectNote(sanitizedSlug, resolvedTitle, tags, body);
-            });
+            return supplyInMemoryScope(() -> memoryService.saveGlobalNote(sanitizedSlug, resolvedTitle, tags, body),
+                    () -> memoryService.saveProjectNote(sanitizedSlug, resolvedTitle, tags, body));
         }
 
         private void handleNoteSaved(@Nullable EditorResult result, String sanitizedSlug, String resolvedTitle,
@@ -642,12 +645,8 @@ public final class AgentMemoryPanel extends JPanel {
         }
 
         private EditorResult executeDeleteNote(String slug) {
-            return memoryEventRefreshGuard.supply(() -> {
-                if (globalScope) {
-                    return memoryService.deleteGlobalNote(slug);
-                }
-                return memoryService.deleteProjectNote(slug);
-            });
+            return supplyInMemoryScope(() -> memoryService.deleteGlobalNote(slug),
+                    () -> memoryService.deleteProjectNote(slug));
         }
 
         private void handleNoteDeleted(@Nullable EditorResult result, String slug) {

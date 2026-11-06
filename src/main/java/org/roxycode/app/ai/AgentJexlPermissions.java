@@ -10,6 +10,11 @@ import java.util.Set;
 import org.apache.commons.jexl3.introspection.JexlPermissions;
 import org.springframework.core.annotation.AnnotationUtils;
 
+/**
+ * Enforces JEXL sandbox security by blocking arbitrary constructor calls and reflection while permitting only
+ * whitelisted JDK value/collection types, application records/enums, and {@link AgentService} methods annotated with
+ * {@link AgentDoc}.
+ */
 public final class AgentJexlPermissions extends JexlPermissions.Delegate {
 
     private static final String APP_PACKAGE_PREFIX = "org.roxycode.app.";

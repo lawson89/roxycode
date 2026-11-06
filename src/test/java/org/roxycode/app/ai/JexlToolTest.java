@@ -277,8 +277,8 @@ public class JexlToolTest {
         Files.writeString(tempDir.resolve("a.txt"), "alpha");
         Files.writeString(tempDir.resolve("b.txt"), "beta");
         ProjectService projectService = mock(ProjectService.class);
-        when(projectService.resolvePath("a.txt")).thenReturn(tempDir.resolve("a.txt"));
-        when(projectService.resolvePath("b.txt")).thenReturn(tempDir.resolve("b.txt"));
+        when(projectService.resolveReadPath("a.txt")).thenReturn(tempDir.resolve("a.txt"));
+        when(projectService.resolveReadPath("b.txt")).thenReturn(tempDir.resolve("b.txt"));
 
         JexlTool tool = createTool(new FileReadService(projectService));
         JsonNode plainNode = evalJson(tool, "fileReadService.readFiles(['a.txt', 'b.txt'])");

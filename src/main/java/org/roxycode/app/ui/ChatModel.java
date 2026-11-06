@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.imageio.ImageIO;
 import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
 import org.slf4j.Logger;
@@ -19,8 +20,7 @@ public final class ChatModel {
     public static final String QA_SESSION_PREFIX = "qa";
     public static final String TASK_SESSION_PREFIX = "task";
     public static final String DEFAULT_CONVERSATION_SUFFIX = ":default";
-    public static final String QA_CONVERSATION_ID = QA_SESSION_PREFIX + DEFAULT_CONVERSATION_SUFFIX;
-    public static final String TASK_CONVERSATION_ID = org.roxycode.app.ai.services.PlanService.TASK_CONVERSATION_ID;
+    public static final String TASK_CONVERSATION_ID = PlanService.TASK_CONVERSATION_ID;
 
     private final String conversationId;
     private final WorkflowPhase lockedPhase;

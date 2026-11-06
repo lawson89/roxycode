@@ -9,6 +9,10 @@ import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import javax.swing.SwingUtilities;
 
+/**
+ * Utility for marshaling UI updates onto the Swing Event Dispatch Thread (EDT) and running background tasks on virtual
+ * threads with EDT completion callbacks.
+ */
 public final class Edt {
 
     public static final Executor EXECUTOR = Edt::run;

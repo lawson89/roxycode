@@ -47,7 +47,7 @@ class PathUtilsTest {
 
     @Test
     void testGetFileNameAndLowerExtensionHelpers() {
-        String winPath = "src" + (char) 92 + "main" + (char) 92 + "ChatPanel.java";
+        String winPath = "src\\main\\ChatPanel.java";
         assertEquals("ChatPanel.java", PathUtils.getFileName(winPath));
         assertEquals("", PathUtils.getFileName(null));
         assertEquals("", PathUtils.getFileName("   "));
@@ -57,8 +57,9 @@ class PathUtilsTest {
         assertEquals("gitignore", PathUtils.getLowerExtension(".gitignore", true));
 
         assertEquals("", PathUtils.normalizeRelativePath(null));
-        assertEquals("src/main/ChatPanel.java", PathUtils.normalizeRelativePath("." + (char) 92 + winPath));
+        assertEquals("src/main/ChatPanel.java", PathUtils.normalizeRelativePath(".\\" + winPath));
         assertEquals("src/main/ChatPanel.java", PathUtils.normalizeRelativePath("./src/main/ChatPanel.java"));
+        assertEquals("src/main/ChatPanel.java", PathUtils.normalizeRelativePath("././src/main/ChatPanel.java"));
     }
 
     @Test

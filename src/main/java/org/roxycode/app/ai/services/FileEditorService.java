@@ -45,9 +45,6 @@ public class FileEditorService {
     }
 
     private Path resolveWriteTarget(String relativePath) {
-        if (ProjectService.isReferencePath(relativePath)) {
-            throw new SecurityException("Reference folder path is strictly read-only: " + relativePath);
-        }
         return projectService.resolvePath(relativePath);
     }
 

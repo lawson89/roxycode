@@ -15,6 +15,10 @@ import javax.swing.text.html.HTML;
 import javax.swing.text.html.HTMLDocument;
 import org.apache.commons.lang3.StringUtils;
 
+/**
+ * Swing {@link JTextPane} component that renders chat transcripts and collapsible JEXL tool execution logs as
+ * theme-aware HTML 3.2 tables.
+ */
 public final class MarkdownPane extends JTextPane {
     private static final long serialVersionUID = 1L;
     private static final String COPY_PREFIX = "copy:";

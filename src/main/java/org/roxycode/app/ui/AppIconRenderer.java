@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import org.apache.commons.lang3.StringUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.springframework.lang.Nullable;
@@ -75,10 +76,10 @@ public final class AppIconRenderer {
             return "";
         }
 
-        List<String> words = splitCamelCase(clean);
-        if (words.size() >= MIN_PARTS_FOR_MONOGRAM) {
-            String w1 = words.get(0);
-            String w2 = words.get(1);
+        String[] words = StringUtils.splitByCharacterTypeCamelCase(clean);
+        if (words.length >= MIN_PARTS_FOR_MONOGRAM) {
+            String w1 = words[0];
+            String w2 = words[1];
             if (!w1.isEmpty() && !w2.isEmpty()) {
                 String result = w1.substring(0, 1) + w2.substring(0, 1);
                 return result.toUpperCase(Locale.ROOT);
@@ -89,25 +90,6 @@ public final class AppIconRenderer {
             return clean.substring(0, 2).toUpperCase(Locale.ROOT);
         }
         return clean.toUpperCase(Locale.ROOT);
-    }
-
-    private static List<String> splitCamelCase(String s) {
-        List<String> result = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            if (i > 0 && Character.isUpperCase(c) && !Character.isUpperCase(s.charAt(i - 1))) {
-                if (current.length() > 0) {
-                    result.add(current.toString());
-                    current.setLength(0);
-                }
-            }
-            current.append(c);
-        }
-        if (current.length() > 0) {
-            result.add(current.toString());
-        }
-        return result;
     }
 
     public static Color resolveProjectColor(@Nullable String projectName) {

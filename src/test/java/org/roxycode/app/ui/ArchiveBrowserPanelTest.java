@@ -61,7 +61,7 @@ class ArchiveBrowserPanelTest {
         assertEquals("1 plan", plansPanel.countLabel.getText());
         assertContainsAll(plansPanel.displayArea.getText(), "Completed On:", "Charlie");
 
-        String bt3 = String.valueOf((char) 96).repeat(3);
+        String bt3 = "```";
         String detailHtml = ArchiveBrowserPanel.buildDetailHtml(topic1,
                 "---\nid: '1'\n---\n\n" + bt3 + "java\npublic class Demo { int x = 1; }\n" + bt3 + "\n",
                 ArchiveMode.TOPICS);

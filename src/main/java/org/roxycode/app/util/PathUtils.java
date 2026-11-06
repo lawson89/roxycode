@@ -101,7 +101,11 @@ public final class PathUtils {
     }
 
     public static String normalizeRelativePath(String path) {
-        return StringUtils.removeStart(FilenameUtils.separatorsToUnix(StringUtils.defaultString(path)), "./");
+        String result = FilenameUtils.separatorsToUnix(StringUtils.defaultString(path));
+        while (result.startsWith("./")) {
+            result = result.substring(2);
+        }
+        return result;
     }
 
     public static String getFileName(String path) {

@@ -12,7 +12,6 @@ import java.util.Objects;
 import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AiConfig;
-import org.roxycode.app.events.ContextChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
@@ -91,8 +90,7 @@ public class ProjectService {
         }
 
         public String formatResultPath(String rawRelativePath) {
-            String norm = stripLeadingDotSlash(
-                    PathUtils.normalizeRelativePath(StringUtils.trimToEmpty(rawRelativePath)));
+            String norm = PathUtils.normalizeRelativePath(StringUtils.trimToEmpty(rawRelativePath));
             if (prefixAlias.isEmpty()) {
                 return norm;
             }
@@ -112,8 +110,7 @@ public class ProjectService {
             if (CONTEXT_SEPARATOR.equals(rawLine.trim())) {
                 return CONTEXT_SEPARATOR;
             }
-            String normalized = PathUtils.normalizeRelativePath(rawLine);
-            String stripped = stripLeadingDotSlash(normalized);
+            String stripped = PathUtils.normalizeRelativePath(rawLine);
             if (prefixAlias.isEmpty()) {
                 return stripped;
             }
@@ -286,50 +283,22 @@ public class ProjectService {
     }
 
     public List<String> getGlobalReferenceFolders() {
-        if (settingsService == null || settingsService.getSettings() == null) {
-            return List.of();
-        }
-        return PromptService.normalizeFolderList(settingsService.getSettings().getGlobalReferenceFolders());
+        return PromptService.getGlobalFolderList(settingsService, AppSettings::getGlobalReferenceFolders);
     }
 
     public void setGlobalReferenceFolders(List<String> folders) {
-        if (settingsService == null) {
-            return;
-        }
-        AppSettings settings = settingsService.getSettings();
-        if (settings != null) {
-            settings.setGlobalReferenceFolders(PromptService.normalizeFolderList(folders));
-            settingsService.saveSettings();
-            eventPublisher.publishEvent(new ContextChangedEvent(true));
-        }
+        PromptService.setGlobalFolderList(settingsService, eventPublisher, folders,
+                AppSettings::setGlobalReferenceFolders);
     }
 
     public List<String> getProjectReferenceFolders() {
-        if (!hasActiveProject()) {
-            return List.of();
-        }
-        ProjectContextConfig config = PathUtils.readTomlOrDefault(
-                resolveProjectDataPath(PromptService.PROJECT_CONTEXT_CONFIG_FILE), ProjectContextConfig.class,
-                ProjectContextConfig.EMPTY, AiConfig.SHARED_TOML_MAPPER);
-        return PromptService.normalizeFolderList(config.referenceFolders());
+        return PromptService.normalizeFolderList(PromptService.readProjectContextConfig(this).referenceFolders());
     }
 
     public void setProjectReferenceFolders(List<String> folders) {
-        if (!hasActiveProject()) {
-            throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
-        }
-        Path configFile = resolveProjectDataPath(PromptService.PROJECT_CONTEXT_CONFIG_FILE);
-        ProjectContextConfig existing = PathUtils.readTomlOrDefault(configFile, ProjectContextConfig.class,
-                ProjectContextConfig.EMPTY, AiConfig.SHARED_TOML_MAPPER);
-        try {
-            PathUtils.writeToml(configFile,
-                    new ProjectContextConfig(existing.folders(), PromptService.normalizeFolderList(folders)),
-                    AiConfig.SHARED_TOML_MAPPER);
-            eventPublisher.publishEvent(new ContextChangedEvent(false));
-        } catch (IOException e) {
-            log.error("Failed to save project context config {}: {}", configFile, e.getMessage());
-            throw new UncheckedIOException("Failed to save project context config", e);
-        }
+        ProjectContextConfig existing = PromptService.readProjectContextConfig(this);
+        PromptService.writeProjectContextConfig(this, eventPublisher,
+                new ProjectContextConfig(existing.folders(), PromptService.normalizeFolderList(folders)));
     }
 
     public List<ReferenceFolderMount> getReferenceFolderMounts() {
@@ -435,21 +404,12 @@ public class ProjectService {
         if (relativePath == null) {
             return false;
         }
-        String normalized = stripLeadingDotSlash(PathUtils.normalizeRelativePath(relativePath.trim()));
+        String normalized = PathUtils.normalizeRelativePath(relativePath.trim());
         return normalized.startsWith("@");
     }
 
-    static String stripLeadingDotSlash(String normalized) {
-        String result = StringUtils.defaultString(normalized);
-        while (result.startsWith("./")) {
-            result = result.substring(2);
-        }
-        return result;
-    }
-
     private ParsedReferencePath parseReferencePath(String relativePath) {
-        String normalized = stripLeadingDotSlash(
-                PathUtils.normalizeRelativePath(StringUtils.trimToEmpty(relativePath)));
+        String normalized = PathUtils.normalizeRelativePath(StringUtils.trimToEmpty(relativePath));
         if (!normalized.startsWith("@")) {
             throw new IllegalArgumentException("Not a reference folder path: " + relativePath);
         }
@@ -484,7 +444,7 @@ public class ProjectService {
             throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
         if (relativePath != null) {
-            String normalized = stripLeadingDotSlash(PathUtils.normalizeRelativePath(relativePath.trim()));
+            String normalized = PathUtils.normalizeRelativePath(relativePath.trim());
             if (ROXYCODE_TMP_DIR.equals(normalized) || normalized.startsWith(ROXYCODE_TMP_PREFIX)) {
                 Path tmpRoot = resolveProjectDataPath(DATA_TMP_DIR);
                 String subPath = StringUtils.defaultIfEmpty(StringUtils.removeStart(normalized, ROXYCODE_TMP_PREFIX),
@@ -550,7 +510,7 @@ public class ProjectService {
                 }
             }
         }
-        return stripLeadingDotSlash(PathUtils.normalizeRelativePath(StringUtils.trimToEmpty(fallbackRelativePath)));
+        return PathUtils.normalizeRelativePath(StringUtils.trimToEmpty(fallbackRelativePath));
     }
 
     public String resolveRelativePath(String relativePath) {

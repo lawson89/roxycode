@@ -52,6 +52,10 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 
+/**
+ * Coordinates asynchronous AI chat turns, tool execution telemetry, inline user input prompts, workflow phase
+ * transitions, and session persistence between {@link ChatModel}, {@link ChatPanel}, and backend AI services.
+ */
 @SuppressWarnings({"PMD.NullAssignment", "PMD.CloseResource"})
 public final class ChatController implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(ChatController.class);
@@ -59,8 +63,7 @@ public final class ChatController implements AutoCloseable {
     static final String ROLE_USER = ChatHtmlTemplates.ROLE_USER;
     static final String ROLE_AI = ChatHtmlTemplates.ROLE_AI;
     static final String IMAGE_REQUIRES_TEXT_MESSAGE = "Please enter a prompt message to accompany the attached image.";
-    private static final String BT = String.valueOf((char) 96);
-
+    private static final String BT = "`";
     public record PersistedMemoryMessage(String type, String text) {
     }
 

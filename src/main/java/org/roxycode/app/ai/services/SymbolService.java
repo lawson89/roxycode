@@ -286,12 +286,7 @@ public class SymbolService {
 
         String referencePrefix = extractReferenceAliasPrefix(normalizedPath);
         String sourceSubpath = extractNormalizedSubpath(stripReferenceAliasPrefix(normalizedPath), SOURCE_DIR_PREFIXES);
-        List<String> allFiles;
-        if (referencePrefix.isEmpty()) {
-            allFiles = grepService.listFiles();
-        } else {
-            allFiles = grepService.listFiles(referencePrefix);
-        }
+        List<String> allFiles = listFilesForScope(referencePrefix);
         List<String> mirroredTier1 = new ArrayList<>();
         List<String> otherTier1 = new ArrayList<>();
         if (allFiles != null) {
@@ -419,7 +414,7 @@ public class SymbolService {
                 continue;
             }
             try {
-                Path resolved = resolveReadTarget(relPath).toAbsolutePath().normalize();
+                Path resolved = projectService.resolveReadPath(relPath).toAbsolutePath().normalize();
                 if (Files.isRegularFile(resolved) && !relPathByAbsPath.containsKey(resolved)) {
                     String mappedRel = relPath;
                     if (normalizeRelPath) {
@@ -549,18 +544,10 @@ public class SymbolService {
         return normalizedPath.substring(slashIdx + 1);
     }
 
-    private Path resolveReadTarget(String relativePath) {
-        Path resolved = projectService.resolveReadPath(relativePath);
-        if (resolved == null && !ProjectService.isReferencePath(relativePath)) {
-            return projectService.resolvePath(relativePath);
-        }
-        return resolved;
-    }
-
     private String normalizeInputRelativePath(String relativePath) {
         String fallback = PathUtils.normalizeRelativePath(relativePath.trim());
         try {
-            Path resolved = resolveReadTarget(relativePath);
+            Path resolved = projectService.resolveReadPath(relativePath);
             if (resolved != null) {
                 return normalizeRelativePath(resolved.toAbsolutePath().normalize(), fallback);
             }
@@ -572,7 +559,7 @@ public class SymbolService {
 
     private boolean isExistingRegularFile(String normalizedPath) {
         try {
-            Path resolved = resolveReadTarget(normalizedPath);
+            Path resolved = projectService.resolveReadPath(normalizedPath);
             if (resolved != null && Files.isRegularFile(resolved)) {
                 return true;
             }
@@ -580,12 +567,7 @@ public class SymbolService {
             ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
         }
         String refPrefix = extractReferenceAliasPrefix(normalizedPath);
-        List<String> allFiles;
-        if (refPrefix.isEmpty()) {
-            allFiles = grepService.listFiles();
-        } else {
-            allFiles = grepService.listFiles(refPrefix);
-        }
+        List<String> allFiles = listFilesForScope(refPrefix);
         if (allFiles != null) {
             for (String file : allFiles) {
                 if (normalizedPath.equals(PathUtils.normalizeRelativePath(file))) {
@@ -594,6 +576,13 @@ public class SymbolService {
             }
         }
         return false;
+    }
+
+    private List<String> listFilesForScope(String referencePrefix) {
+        if (referencePrefix.isEmpty()) {
+            return grepService.listFiles();
+        }
+        return grepService.listFiles(referencePrefix);
     }
 
     private static String stripExtension(String fileName) {
@@ -794,7 +783,7 @@ public class SymbolService {
     }
 
     private Path resolveRegularFile(String relativePath) {
-        Path path = resolveReadTarget(relativePath);
+        Path path = projectService.resolveReadPath(relativePath);
         if (path == null || !Files.isRegularFile(path)) {
             throw new IllegalArgumentException(
                     ERROR_PREFIX + "Path is not a regular file or does not exist: " + relativePath);
@@ -806,17 +795,6 @@ public class SymbolService {
         String formatted = projectService.formatReadDisplayPath(resolvedPath, fallbackRelativePath);
         if (StringUtils.isNotEmpty(formatted)) {
             return formatted;
-        }
-        Path root = projectService.getCurrentProjectRoot();
-        if (root != null && resolvedPath != null) {
-            Path normalizedRoot = root.toAbsolutePath().normalize();
-            Path normalizedTarget = resolvedPath.toAbsolutePath().normalize();
-            if (normalizedTarget.startsWith(normalizedRoot)) {
-                String rel = PathUtils.normalizeRelativePath(normalizedRoot.relativize(normalizedTarget).toString());
-                if (!rel.isEmpty()) {
-                    return rel;
-                }
-            }
         }
         return PathUtils.normalizeRelativePath(StringUtils.trimToEmpty(fallbackRelativePath));
     }

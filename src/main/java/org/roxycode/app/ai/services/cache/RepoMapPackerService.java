@@ -38,7 +38,7 @@ public class RepoMapPackerService {
     static final int CTAGS_BATCH_SIZE = 100;
     private static final String CANCELLED_MSG = "Repo map operation cancelled";
     private static final List<String> CTAGS_SKELETON_FLAGS = List.of("--fields=+n", "--pattern-length-limit=0");
-    private static final char LF = 10;
+    private static final char LF = '\n';
     static final int MAX_SIGNATURE_CHARS = 240;
 
     static final Set<String> EXCLUDED_SKELETON_KINDS = Set.of("field", "constant", "enumconstant", "property",

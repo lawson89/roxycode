@@ -16,6 +16,10 @@ import org.apache.commons.io.output.TeeOutputStream;
 import org.apache.commons.io.output.ThresholdingOutputStream;
 import org.roxycode.app.util.ExceptionUtils;
 
+/**
+ * Executes external OS processes using Java 21 {@link ProcessBuilder} with bounded output buffering, timeout
+ * enforcement, thread-interruption cancellation, and recursive process-tree termination.
+ */
 public final class ProcessRunner {
 
     public static final Duration DEFAULT_TIMEOUT = Duration.ofSeconds(30);

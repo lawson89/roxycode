@@ -14,6 +14,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.util.Assert;
 
+/**
+ * Configures conversation chat memory windowing and ensures stored message windows always start with a
+ * {@link UserMessage} (after any leading {@link SystemMessage}) to satisfy Gemini turn-ordering requirements.
+ */
 @Configuration
 public class AiMemoryConfig {
 

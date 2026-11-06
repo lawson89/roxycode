@@ -13,8 +13,9 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowFocusListener;
-import org.roxycode.app.model.AppSettings;
+import java.util.ArrayList;
 import java.util.List;
+import org.roxycode.app.model.AppSettings;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
@@ -34,7 +35,6 @@ import org.roxycode.app.service.SystemToolService;
 import org.roxycode.app.util.Edt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
@@ -83,11 +83,11 @@ public final class MainFrame extends JPanel {
     int simulatedExtendedState = Frame.NORMAL;
 
     @Autowired
-    public MainFrame(SettingsService settingsService, ProjectService projectService, @Nullable ChatMemory chatMemory,
-            HeaderPanel header, StatusPanel statusBar, QaWorkspacePanel qaWorkspacePanel,
-            TaskWorkspacePanel taskWorkspacePanel, CodebaseCachePanel codebaseCachePanel, JexlApiPanel jexlApiPanel,
-            SystemToolsPanel systemToolsPanel, SettingsPanel settingsPanel, BuildConfigPanel buildConfigPanel,
-            ContextManagerPanel contextManagerPanel, @Nullable AgentMemoryPanel agentMemoryPanel) {
+    public MainFrame(SettingsService settingsService, ProjectService projectService, HeaderPanel header,
+            StatusPanel statusBar, QaWorkspacePanel qaWorkspacePanel, TaskWorkspacePanel taskWorkspacePanel,
+            CodebaseCachePanel codebaseCachePanel, JexlApiPanel jexlApiPanel, SystemToolsPanel systemToolsPanel,
+            SettingsPanel settingsPanel, BuildConfigPanel buildConfigPanel, ContextManagerPanel contextManagerPanel,
+            @Nullable AgentMemoryPanel agentMemoryPanel) {
         this.settingsService = settingsService;
         this.projectService = projectService;
         this.header = header;
@@ -358,7 +358,7 @@ public final class MainFrame extends JPanel {
             if (devices == null || devices.length == 0) {
                 return List.of();
             }
-            List<Rectangle> boundsList = new java.util.ArrayList<>(devices.length);
+            List<Rectangle> boundsList = new ArrayList<>(devices.length);
             for (GraphicsDevice device : devices) {
                 if (device != null) {
                     GraphicsConfiguration config = device.getDefaultConfiguration();

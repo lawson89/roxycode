@@ -8,6 +8,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Supplier;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import javax.swing.BorderFactory;
@@ -128,9 +129,6 @@ public final class ContextManagerPanel extends JPanel {
 
         record FolderAndFilesData(List<String> folders, List<ContextFileItem> files,
                 List<ReferenceFolderMount> referenceFolders) {
-            FolderAndFilesData(List<String> folders, List<ContextFileItem> files) {
-                this(folders, files, List.of());
-            }
         }
 
         ContextScopeColumn(PromptService promptService, String sectionTitle, boolean globalScope,
@@ -376,26 +374,30 @@ public final class ContextManagerPanel extends JPanel {
         }
 
         CompletableFuture<FolderAndFilesData> addFolderAsync(String folderPath) {
-            return mutateFoldersAsync(updated -> {
-                if (folderPath == null || folderPath.isBlank()) {
-                    throw new IllegalArgumentException("Folder path must not be blank");
-                }
-                String trimmed = folderPath.trim();
-                if (!updated.contains(trimmed)) {
-                    updated.add(trimmed);
-                }
-            }, null, "add", "adding", folderPath);
+            return addFolderToListAsync(this::loadConfiguredFolders, this::saveConfiguredFolders, "context folder",
+                    "Folder path must not be blank", folderPath);
         }
 
         CompletableFuture<FolderAndFilesData> removeFolderAsync(String folderPath) {
-            return mutateFoldersAsync(updated -> updated.remove(folderPath), this::clearSelection, "remove", "removing",
+            return removeFolderFromListAsync(this::loadConfiguredFolders, this::saveConfiguredFolders, "context folder",
                     folderPath);
         }
 
         CompletableFuture<FolderAndFilesData> addReferenceFolderAsync(String folderPath) {
-            return mutateReferenceFoldersAsync(updated -> {
+            return addFolderToListAsync(this::loadConfiguredReferenceFolders, this::saveConfiguredReferenceFolders,
+                    "reference folder", "Reference folder path must not be blank", folderPath);
+        }
+
+        CompletableFuture<FolderAndFilesData> removeReferenceFolderAsync(String folderPath) {
+            return removeFolderFromListAsync(this::loadConfiguredReferenceFolders, this::saveConfiguredReferenceFolders,
+                    "reference folder", folderPath);
+        }
+
+        private CompletableFuture<FolderAndFilesData> addFolderToListAsync(Supplier<List<String>> loader,
+                Consumer<List<String>> saver, String folderTypeLabel, String blankErrorMessage, String folderPath) {
+            return mutateFolderListAsync(loader, saver, folderTypeLabel, updated -> {
                 if (folderPath == null || folderPath.isBlank()) {
-                    throw new IllegalArgumentException("Reference folder path must not be blank");
+                    throw new IllegalArgumentException(blankErrorMessage);
                 }
                 String trimmed = folderPath.trim();
                 if (!updated.contains(trimmed)) {
@@ -404,38 +406,23 @@ public final class ContextManagerPanel extends JPanel {
             }, null, "add", "adding", folderPath);
         }
 
-        CompletableFuture<FolderAndFilesData> removeReferenceFolderAsync(String folderPath) {
-            return mutateReferenceFoldersAsync(updated -> updated.remove(folderPath), this::clearSelection, "remove",
-                    "removing", folderPath);
+        private CompletableFuture<FolderAndFilesData> removeFolderFromListAsync(Supplier<List<String>> loader,
+                Consumer<List<String>> saver, String folderTypeLabel, String folderPath) {
+            return mutateFolderListAsync(loader, saver, folderTypeLabel, updated -> updated.remove(folderPath),
+                    this::clearSelection, "remove", "removing", folderPath);
         }
 
-        private CompletableFuture<FolderAndFilesData> mutateFoldersAsync(Consumer<List<String>> mutator,
+        private CompletableFuture<FolderAndFilesData> mutateFolderListAsync(Supplier<List<String>> loader,
+                Consumer<List<String>> saver, String folderTypeLabel, Consumer<List<String>> mutator,
                 Runnable onEdtSuccess, String logVerb, String errorGerund, String folderPath) {
             CompletableFuture<FolderAndFilesData> future = Edt.runAsync(() -> {
-                List<String> updated = new ArrayList<>(loadConfiguredFolders());
+                List<String> updated = new ArrayList<>(loader.get());
                 mutator.accept(updated);
-                saveConfiguredFolders(updated);
+                saver.accept(updated);
             }, onEdtSuccess, ex -> {
-                log.warn("Failed to {} context folder {}: {}", logVerb, folderPath, ex.getMessage());
+                log.warn("Failed to {} {} {}: {}", logVerb, folderTypeLabel, folderPath, ex.getMessage());
                 if (errorReporter != null) {
-                    errorReporter.accept("Error " + errorGerund + " context folder " + folderPath + ": "
-                            + ExceptionUtils.getRootCauseMessage(ex));
-                }
-            }).thenCompose(v -> refreshFoldersAndFiles());
-            lastRefreshFuture = future;
-            return future;
-        }
-
-        private CompletableFuture<FolderAndFilesData> mutateReferenceFoldersAsync(Consumer<List<String>> mutator,
-                Runnable onEdtSuccess, String logVerb, String errorGerund, String folderPath) {
-            CompletableFuture<FolderAndFilesData> future = Edt.runAsync(() -> {
-                List<String> updated = new ArrayList<>(loadConfiguredReferenceFolders());
-                mutator.accept(updated);
-                saveConfiguredReferenceFolders(updated);
-            }, onEdtSuccess, ex -> {
-                log.warn("Failed to {} reference folder {}: {}", logVerb, folderPath, ex.getMessage());
-                if (errorReporter != null) {
-                    errorReporter.accept("Error " + errorGerund + " reference folder " + folderPath + ": "
+                    errorReporter.accept("Error " + errorGerund + " " + folderTypeLabel + " " + folderPath + ": "
                             + ExceptionUtils.getRootCauseMessage(ex));
                 }
             }).thenCompose(v -> refreshFoldersAndFiles());

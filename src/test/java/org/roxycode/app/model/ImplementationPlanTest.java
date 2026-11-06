@@ -12,7 +12,7 @@ import org.roxycode.app.ui.SwingTestUtils;
 
 class ImplementationPlanTest {
 
-    private static final String LF = String.valueOf((char) 10);
+    private static final String LF = "\n";
 
     private static ImplementationPlan createPlan(List<String> reqs, List<ImplementationPlan.TechStep> steps,
             List<ImplementationPlan.LogEntry> logs) {

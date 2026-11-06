@@ -54,6 +54,8 @@ class PromptServiceTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(settingsService.getSettings()).thenReturn(new AppSettings());
+        projectService = spy(new ProjectService(settingsService, eventPublisher));
         lenient().when(jexlServiceRegistry.isGitAvailable()).thenReturn(true);
         promptService = new PromptService(projectService, settingsService, planService, jexlServiceRegistry, gitService,
                 projectAnalysisService, repoMapPackerService, null, eventPublisher);
@@ -148,8 +150,8 @@ class PromptServiceTest {
         settings.setGlobalContextFolders(List.of(globalDir.toString()));
         when(settingsService.getSettings()).thenReturn(settings);
         when(projectService.hasActiveProject()).thenReturn(true);
-        when(projectService.resolveProjectDataPath(anyString()))
-                .thenAnswer(inv -> projectDataDir.resolve(inv.getArgument(0, String.class)));
+        doAnswer(inv -> projectDataDir.resolve(inv.getArgument(0, String.class))).when(projectService)
+                .resolveProjectDataPath(anyString());
         promptService.setProjectContextFolders(List.of(projectRulesDir.toString()));
 
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);

@@ -92,7 +92,7 @@ class MainFrameTest {
         AgentMemoryPanel agentMemoryPanel = new AgentMemoryPanel(mock(MemoryService.class), projectService,
                 settingsService);
 
-        return new MainFrame(settingsService, projectService, chatMemory, headerPanel, statusPanel, qaWorkspacePanel,
+        return new MainFrame(settingsService, projectService, headerPanel, statusPanel, qaWorkspacePanel,
                 taskWorkspacePanel, codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel,
                 contextManagerPanel, agentMemoryPanel);
     }

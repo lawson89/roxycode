@@ -71,7 +71,6 @@ final class UiComponents {
     static final String ROXY_LOGO_RESOURCE = "/static/images/roxy.png";
     static final int INFO_TOOLTIP_DISMISS_DELAY_MS = 20_000;
     static final String ACCENT_BUTTON_STYLE = "background: $Component.accentColor; focusedBackground: $Component.accentColor; hoverBackground: darken($Component.accentColor, 8%); pressedBackground: darken($Component.accentColor, 14%); foreground: #ffffff";
-    static final String GREEN_BUTTON_STYLE = "background: $Actions.Green; focusedBackground: $Actions.Green; hoverBackground: darken($Actions.Green, 8%); pressedBackground: darken($Actions.Green, 14%); foreground: #ffffff";
     static final String RED_BUTTON_STYLE = "background: $Actions.Red; focusedBackground: $Actions.Red; hoverBackground: darken($Actions.Red, 8%); pressedBackground: darken($Actions.Red, 14%); foreground: #ffffff";
     static final String SUBTLE_RED_BUTTON_STYLE = "foreground: $Actions.Red; hoverBackground: fade($Actions.Red, 12%); pressedBackground: fade($Actions.Red, 20%); borderColor: fade($Actions.Red, 45%); focusedBorderColor: $Actions.Red; hoverBorderColor: $Actions.Red";
     static final Color AMBER_LIGHT = new Color(0xd9, 0x77, 0x06);

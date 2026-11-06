@@ -26,8 +26,8 @@ public class GitService {
     private static final String GIT_DIFF = "diff";
     private static final String RENAME_ARROW = " -> ";
     private static final int MIN_PORCELAIN_LINE_LENGTH = 4;
-    private static final char NL = 10;
-    private static final char BACKSLASH = 92;
+    private static final char NL = '\n';
+    private static final char BACKSLASH = '\\';
     private final ProjectService projectService;
 
     public GitService(ProjectService projectService) {

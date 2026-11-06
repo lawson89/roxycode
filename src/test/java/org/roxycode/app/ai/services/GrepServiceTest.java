@@ -23,7 +23,7 @@ import org.roxycode.app.service.ProjectService;
 
 class GrepServiceTest {
 
-    private static final String NL = String.valueOf((char) 10);
+    private static final String NL = "\n";
 
     @TempDir
     Path tempDir;
@@ -127,8 +127,8 @@ class GrepServiceTest {
         Files.writeString(tempDir.resolve("root.txt"), "root");
         Files.writeString(Files.createDirectories(tempDir.resolve("sub")).resolve("nested.txt"), "nested");
         try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
-            runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyBoolean())).thenReturn(
-                    new ProcessResult(0, "./root.txt" + NL + "sub" + (char) 92 + "nested.txt" + NL, "", false));
+            runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
+                    .thenReturn(new ProcessResult(0, "./root.txt" + NL + "sub\\nested.txt" + NL, "", false));
             List<String> files = grepService.listFiles(null);
             assertTrue(files.containsAll(List.of("root.txt", "sub/nested.txt")));
             for (String file : files) {
@@ -148,7 +148,7 @@ class GrepServiceTest {
         assertTrue(grepService.findMatchingFiles(null).isEmpty());
 
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
-            String rawOut = String.join(NL, "./src/One.java", "src" + (char) 92 + "Two.java", "src/One.java") + NL;
+            String rawOut = String.join(NL, "./src/One.java", "src\\Two.java", "src/One.java") + NL;
             runner.when(() -> ProcessRunner.run(anyList(), eq(tempDir), eq(true)))
                     .thenReturn(new ProcessResult(0, rawOut, "", false));
 

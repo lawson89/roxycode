@@ -69,7 +69,7 @@ class GenericBuildToolServiceTest {
             if (arg == null || arg.isBlank() || ".".equals(arg.trim())) {
                 return ".";
             }
-            String trimmed = arg.trim().replace((char) 92, '/');
+            String trimmed = arg.trim().replace('\\', '/');
             while (trimmed.startsWith("./")) {
                 trimmed = trimmed.substring(2);
             }
@@ -357,9 +357,9 @@ class GenericBuildToolServiceTest {
 
     @Test
     void testSanitizeTomlEscapesAndSaveValidation() throws IOException {
-        String bs = String.valueOf((char) 92);
-        String dq = String.valueOf((char) 34);
-        String nl = String.valueOf((char) 10);
+        String bs = "\\";
+        String dq = "\"";
+        String nl = "\n";
         String rawTomlWithUnescapedDoubleQuotedRegex = "[commands]" + nl + "compile = " + dq + "./mvnw test-compile"
                 + dq + nl + "lint = " + dq + "./mvnw pmd:check spotless:check -DspotlessFiles=.*" + bs + "QApp.java"
                 + bs + "E$" + dq + nl + nl + "[parse]" + nl + "error_regex = " + dq + bs + "[ERROR" + bs + "].*" + bs
@@ -384,9 +384,9 @@ class GenericBuildToolServiceTest {
 
     @Test
     void testAnsiStrippingMultiLineRipGrepBlocksAndJunitXmlExtraction() throws IOException {
-        String esc = String.valueOf((char) 27);
-        String nl = String.valueOf((char) 10);
-        String bs = String.valueOf((char) 92);
+        String esc = "\u001b";
+        String nl = "\n";
+        String bs = "\\";
         String ansiLog = esc + "[1;31m[ERROR] /workspace/src/Foo.java:[42,15] cannot find symbol" + esc + "[0m" + nl
                 + "  symbol:   method bar()" + nl + "  location: class com.example.Foo" + nl + "[INFO] 1 error" + nl
                 + "[INFO] Building next module" + nl + "[INFO] Checking rust crate..." + nl + esc
@@ -465,10 +465,10 @@ class GenericBuildToolServiceTest {
                         </testsuite>
                         """);
 
-        writeBuildToml("[commands]" + nl + "test_all = 'printf " + (char) 34 + bs + "033[31mFAIL: console failure" + bs
-                + "033[0m" + bs + "n  at ConsoleTest.java:12" + bs + "n" + (char) 34 + " && exit 1'" + nl + "[parse]"
-                + nl + "test_failure_regex = '^FAIL:'" + nl + "context_lines = 2" + nl + "junit_xml_paths = ["
-                + (char) 34 + "target/surefire-reports" + (char) 34 + "]" + nl);
+        writeBuildToml("[commands]" + nl + "test_all = 'printf \"" + bs + "033[31mFAIL: console failure" + bs + "033[0m"
+                + bs + "n  at ConsoleTest.java:12" + bs + "n\" && exit 1'" + nl + "[parse]" + nl
+                + "test_failure_regex = '^FAIL:'" + nl + "context_lines = 2" + nl + "junit_xml_paths = ["
+                + "\"target/surefire-reports\"]" + nl);
 
         BuildResult testResult = buildToolService.runTests();
         assertFalse(testResult.isSuccess());

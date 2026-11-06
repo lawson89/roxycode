@@ -20,6 +20,10 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 
+/**
+ * Spring AI {@link CallAdvisor} ordered before chat memory persistence that automatically nudges the model once per
+ * turn if it completes tool execution with an empty text response.
+ */
 final class AutoNudgeAdvisor implements CallAdvisor {
     private static final Logger log = LoggerFactory.getLogger(AutoNudgeAdvisor.class);
 

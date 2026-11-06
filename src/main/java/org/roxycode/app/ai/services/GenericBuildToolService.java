@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -14,13 +15,20 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import javax.swing.SwingUtilities;
+import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.SystemUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -44,7 +52,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
+/**
+ * Executes project build, test, format, and lint commands configured in {@code build.toml} across host, native sandbox,
+ * or Docker environments, and automatically updates plan verification gates on compilation/test completion.
+ */
 @AgentService(value = "buildToolService", phases = {"CODE", "EXPLORE", "PLAN", "REVIEW"})
 @SuppressWarnings("PMD.AvoidDuplicateLiterals")
 public class GenericBuildToolService {
@@ -65,8 +81,7 @@ public class GenericBuildToolService {
     static final String LOG_TRUNCATED_PREFIX = "... [Log truncated. Full log saved to .roxycode/tmp/build.log]\n";
     private static final Duration BUILD_TIMEOUT = Duration.ofMinutes(10);
     private static final char ESC_CHAR = '\u001b';
-    private static final java.util.regex.Pattern ANSI_ESCAPE_PATTERN = java.util.regex.Pattern
-            .compile(ESC_CHAR + "\\[[;\\d]*[ -/]*[@-~]");
+    private static final Pattern ANSI_ESCAPE_PATTERN = Pattern.compile(ESC_CHAR + "\\[[;\\d]*[ -/]*[@-~]");
     private static final String DEFAULT_FALLBACK_TOML = """
             [commands]
             install = ""
@@ -250,30 +265,7 @@ public class GenericBuildToolService {
 
     @AgentDoc(value = "Runs all tests using the configured test_all command", examples = "buildToolService.runTests()")
     public BuildResult runTests() {
-        BuildResult testResult = runCommand("commands.test_all", config -> config.commands().testAll());
-        if (!testResult.success()) {
-            if (planService != null) {
-                planService.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, false);
-            }
-            return testResult;
-        }
-        if (planService != null) {
-            planService.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true);
-        }
-        BuildResult lintResult = lint();
-        if (!lintResult.success()) {
-            return new BuildResult(false, lintResult.exitCode(), """
-                    TEST OUTPUT:
-                    %s
-
-                    LINT OUTPUT:
-                    %s""".formatted(testResult.output(), lintResult.output()), lintResult.errors(),
-                    lintResult.failedTests());
-        }
-        if (planService != null) {
-            planService.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, true);
-        }
-        return testResult;
+        return runTestsAndLint(null);
     }
 
     @AgentDoc(value = "Runs a single test using the configured test_single command. {testName} is replaced with the argument.", examples = "buildToolService.runSingleTest('com.example.TestClass')")
@@ -316,33 +308,54 @@ public class GenericBuildToolService {
         if (!compileResult.success()) {
             return compileResult;
         }
+        return runTestsAndLint(compileResult.output());
+    }
+
+    private BuildResult runTestsAndLint(String compileOutput) {
         BuildResult testResult = runCommand("commands.test_all", config -> config.commands().testAll());
         if (!testResult.success()) {
             if (planService != null) {
                 planService.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, false);
+            }
+            if (compileOutput == null) {
+                return testResult;
             }
             return new BuildResult(false, testResult.exitCode(), """
                     COMPILE OUTPUT:
                     %s
 
                     TEST OUTPUT:
-                    %s""".formatted(compileResult.output(), testResult.output()), testResult.errors(),
-                    testResult.failedTests());
+                    %s""".formatted(compileOutput, testResult.output()), testResult.errors(), testResult.failedTests());
+        }
+        if (compileOutput == null && planService != null) {
+            planService.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true);
         }
         BuildResult lintResult = lint();
         if (planService != null) {
             planService.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, lintResult.success());
         }
-        return new BuildResult(lintResult.success(), lintResult.exitCode(), """
-                COMPILE OUTPUT:
-                %s
+        if (compileOutput != null) {
+            return new BuildResult(lintResult.success(), lintResult.exitCode(), """
+                    COMPILE OUTPUT:
+                    %s
 
-                TEST OUTPUT:
-                %s
+                    TEST OUTPUT:
+                    %s
 
-                LINT OUTPUT:
-                %s""".formatted(compileResult.output(), testResult.output(), lintResult.output()), lintResult.errors(),
-                lintResult.failedTests());
+                    LINT OUTPUT:
+                    %s""".formatted(compileOutput, testResult.output(), lintResult.output()), lintResult.errors(),
+                    lintResult.failedTests());
+        }
+        if (!lintResult.success()) {
+            return new BuildResult(false, lintResult.exitCode(), """
+                    TEST OUTPUT:
+                    %s
+
+                    LINT OUTPUT:
+                    %s""".formatted(testResult.output(), lintResult.output()), lintResult.errors(),
+                    lintResult.failedTests());
+        }
+        return testResult;
     }
 
     private void requireCodePhase(String methodName) {
@@ -494,6 +507,11 @@ public class GenericBuildToolService {
         NORMAL, COMMENT, BASIC_STRING, MULTILINE_BASIC_STRING, LITERAL_STRING, MULTILINE_LITERAL_STRING
     }
 
+    /**
+     * Escapes unescaped single backslashes inside TOML basic strings (such as regex patterns like {@code \s} or
+     * {@code \d}) while preserving valid TOML escape sequences and literal strings so Jackson's {@link TomlMapper} can
+     * parse user-edited {@code build.toml} regexes without syntax errors.
+     */
     static String sanitizeTomlEscapes(String toml) {
         if (toml == null || toml.indexOf(BACKSLASH_CHAR) < 0) {
             return StringUtils.defaultString(toml);
@@ -612,9 +630,7 @@ public class GenericBuildToolService {
             return false;
         }
         for (int i = 0; i < count; i++) {
-            char ch = text.charAt(start + i);
-            boolean isHex = (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F');
-            if (!isHex) {
+            if (!HexFormat.isHexDigit(text.charAt(start + i))) {
                 return false;
             }
         }
@@ -840,14 +856,14 @@ public class GenericBuildToolService {
 
         List<String> failures = new ArrayList<>();
         try {
-            javax.xml.parsers.DocumentBuilder builder = createSafeDocumentBuilder();
+            DocumentBuilder builder = createSafeDocumentBuilder();
             for (Path xmlFile : xmlFiles) {
                 parseJunitXmlFile(builder, xmlFile, failures);
                 if (failures.size() >= MAX_EXTRACTED_BLOCKS) {
                     break;
                 }
             }
-        } catch (javax.xml.parsers.ParserConfigurationException e) {
+        } catch (ParserConfigurationException e) {
             log.warn("Failed to configure JUnit XML parser: {}", e.getMessage());
         }
         return Collections.unmodifiableList(failures);
@@ -907,10 +923,9 @@ public class GenericBuildToolService {
         }
     }
 
-    private static javax.xml.parsers.DocumentBuilder createSafeDocumentBuilder()
-            throws javax.xml.parsers.ParserConfigurationException {
-        javax.xml.parsers.DocumentBuilderFactory factory = javax.xml.parsers.DocumentBuilderFactory.newInstance();
-        factory.setFeature(javax.xml.XMLConstants.FEATURE_SECURE_PROCESSING, true);
+    private static DocumentBuilder createSafeDocumentBuilder() throws ParserConfigurationException {
+        DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
         factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
         factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
         factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
@@ -919,14 +934,13 @@ public class GenericBuildToolService {
         return factory.newDocumentBuilder();
     }
 
-    private static void parseJunitXmlFile(javax.xml.parsers.DocumentBuilder builder, Path xmlFile,
-            List<String> failures) {
-        try (java.io.InputStream in = Files.newInputStream(xmlFile)) {
-            org.w3c.dom.Document doc = builder.parse(in);
-            org.w3c.dom.NodeList testCases = doc.getElementsByTagName("testcase");
+    private static void parseJunitXmlFile(DocumentBuilder builder, Path xmlFile, List<String> failures) {
+        try (InputStream in = Files.newInputStream(xmlFile)) {
+            Document doc = builder.parse(in);
+            NodeList testCases = doc.getElementsByTagName("testcase");
             for (int i = 0; i < testCases.getLength(); i++) {
-                org.w3c.dom.Node node = testCases.item(i);
-                if (node instanceof org.w3c.dom.Element testCase) {
+                Node node = testCases.item(i);
+                if (node instanceof Element testCase) {
                     extractTestCaseFailures(testCase, failures);
                     if (failures.size() >= MAX_EXTRACTED_BLOCKS) {
                         return;
@@ -938,14 +952,14 @@ public class GenericBuildToolService {
         }
     }
 
-    private static void extractTestCaseFailures(org.w3c.dom.Element testCase, List<String> failures) {
+    private static void extractTestCaseFailures(Element testCase, List<String> failures) {
         String className = StringUtils.trimToEmpty(testCase.getAttribute("classname"));
         String testName = StringUtils.trimToEmpty(testCase.getAttribute("name"));
         String testId = formatTestCaseIdentifier(className, testName);
-        org.w3c.dom.NodeList children = testCase.getChildNodes();
+        NodeList children = testCase.getChildNodes();
         for (int i = 0; i < children.getLength(); i++) {
-            org.w3c.dom.Node child = children.item(i);
-            if (child instanceof org.w3c.dom.Element childElem) {
+            Node child = children.item(i);
+            if (child instanceof Element childElem) {
                 String tag = childElem.getTagName();
                 if (TAG_FAILURE.equals(tag) || TAG_ERROR.equals(tag)) {
                     String formatted = formatJunitFailureElement(testId, tag, childElem);
@@ -973,13 +987,13 @@ public class GenericBuildToolService {
         return "unknown";
     }
 
-    private static String formatJunitFailureElement(String testId, String tag, org.w3c.dom.Element element) {
+    private static String formatJunitFailureElement(String testId, String tag, Element element) {
         String type = stripAnsiCodes(element.getAttribute("type")).trim();
         String message = stripAnsiCodes(element.getAttribute("message")).replace("\r\n", "\n").trim();
         String body = stripAnsiCodes(element.getTextContent());
 
         StringBuilder sb = new StringBuilder();
-        sb.append(testId).append(" [").append(tag.toUpperCase(java.util.Locale.ROOT)).append(']');
+        sb.append(testId).append(" [").append(tag.toUpperCase(Locale.ROOT)).append(']');
         String headerDetail = formatFailureHeaderDetail(type, message);
         if (!headerDetail.isEmpty()) {
             sb.append(": ").append(headerDetail);

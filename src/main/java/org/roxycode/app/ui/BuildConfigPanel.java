@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
+import org.apache.commons.lang3.StringUtils;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rtextarea.RTextScrollPane;
@@ -217,8 +218,7 @@ public final class BuildConfigPanel extends JPanel {
             if (fromService != null && !fromService.isEmpty()) {
                 templates = fromService;
             }
-            detectedTemplateId = org.apache.commons.lang3.StringUtils.defaultIfBlank(buildToolService.detectTemplate(),
-                    DEFAULT_TEMPLATE_ID);
+            detectedTemplateId = StringUtils.defaultIfBlank(buildToolService.detectTemplate(), DEFAULT_TEMPLATE_ID);
         } else {
             detectedTemplateId = DEFAULT_TEMPLATE_ID;
         }
@@ -383,7 +383,7 @@ public final class BuildConfigPanel extends JPanel {
         }
         CompletableFuture<String> future = Edt.supplyAsync(() -> {
             try {
-                return org.apache.commons.lang3.StringUtils.defaultString(buildToolService.getConfigContent());
+                return StringUtils.defaultString(buildToolService.getConfigContent());
             } catch (IOException e) {
                 log.error("Failed to load build config", e);
                 return "# Error loading config: " + e.getMessage();

@@ -21,7 +21,7 @@ import org.roxycode.app.service.ProjectService;
 
 class SymbolServiceTest {
 
-    private static final String NL = String.valueOf((char) 10);
+    private static final String NL = "\n";
 
     @TempDir
     Path tempDir;
@@ -349,7 +349,7 @@ class SymbolServiceTest {
                 "src/test/java/org/roxycode/service/SymbolServiceTest.java",
                 "src/test/java/org/roxycode/service/SymbolServiceIT.java", "tests/service/test_symbol_service.py",
                 "frontend/src/components/Button.spec.tsx"));
-        when(grepService.findMatchingFiles((char) 92 + "bSymbolService" + (char) 92 + "b"))
+        when(grepService.findMatchingFiles("\\bSymbolService\\b"))
                 .thenReturn(List.of("src/main/java/org/roxycode/ai/JexlServiceRegistry.java",
                         "src/test/java/org/roxycode/ai/JexlServiceRegistryTest.java",
                         "src/test/java/org/roxycode/service/SymbolServiceTest.java"));

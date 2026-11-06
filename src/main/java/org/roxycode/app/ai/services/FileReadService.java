@@ -27,7 +27,7 @@ public class FileReadService {
     private static final String ERROR_PREFIX = "Error: ";
     static final int BINARY_SNIFF_BYTES = 8000;
     static final int MAX_SINGLE_FILE_CHARS = 100_000;
-    static final String SINGLE_FILE_TRUNCATED_SUFFIX = (char) 10 + "... [Truncated at " + MAX_SINGLE_FILE_CHARS
+    static final String SINGLE_FILE_TRUNCATED_SUFFIX = "\n... [Truncated at " + MAX_SINGLE_FILE_CHARS
             + " chars. Use symbolService.readSymbol(path, symbolName), fileReadService.readLines(path, startLine, endLine), or grepService to inspect specific sections.]";
     static final int MAX_BATCH_FILES = 25;
     static final int MAX_BATCH_CHARS = 120_000;
@@ -55,20 +55,12 @@ public class FileReadService {
         }
     }
 
-    private Path resolveReadTarget(String relativePath) {
-        Path resolved = projectService.resolveReadPath(relativePath);
-        if (resolved == null && !ProjectService.isReferencePath(relativePath)) {
-            return projectService.resolvePath(relativePath);
-        }
-        return resolved;
-    }
-
     @AgentDoc(value = "Checks if a file or directory exists at the given path relative to the project root or a mounted @<alias> reference folder.", examples = {
             "fileReadService.fileExists('src/main/java/Main.java')",
             "fileReadService.fileExists('@billing-service/src/main/java/Invoice.java')"})
     public boolean fileExists(
             @AgentDoc("The file or directory path relative to the project root (or '@<alias>/path')") String relativePath) {
-        return Files.exists(resolveReadTarget(relativePath));
+        return Files.exists(projectService.resolveReadPath(relativePath));
     }
 
     @AgentDoc(value = "Reads the content of a file at the given path relative to the project root.", examples = "fileReadService.readFile('pom.xml')")
@@ -77,7 +69,7 @@ public class FileReadService {
     }
 
     private String readRawTextFile(String relativePath) throws IOException {
-        Path path = resolveReadTarget(relativePath);
+        Path path = projectService.resolveReadPath(relativePath);
         if (!Files.isRegularFile(path)) {
             throw new IllegalArgumentException("Error: Path is not a regular file or does not exist: " + relativePath);
         }
@@ -138,7 +130,7 @@ public class FileReadService {
             if (totalChars + entryContent.length() > MAX_BATCH_CHARS) {
                 int remainingBudget = MAX_BATCH_CHARS - totalChars;
                 if (remainingBudget > 0) {
-                    results.put(relativePath, entryContent.substring(0, remainingBudget) + (char) 10
+                    results.put(relativePath, entryContent.substring(0, remainingBudget) + '\n'
                             + "... [Truncated at batch character limit]");
                 }
                 results.put(TRUNCATED_KEY,
@@ -153,7 +145,7 @@ public class FileReadService {
 
     private String readSingleFileForBatch(String relativePath, boolean numbered) {
         try {
-            Path path = resolveReadTarget(relativePath);
+            Path path = projectService.resolveReadPath(relativePath);
             if (!Files.exists(path)) {
                 return ERROR_PREFIX + "File does not exist: " + relativePath;
             }
@@ -185,7 +177,7 @@ public class FileReadService {
         StringBuilder sb = new StringBuilder();
         for (int i = startLine; i <= clampedEnd; i++) {
             if (i > startLine) {
-                sb.append((char) 10);
+                sb.append('\n');
             }
             sb.append(i).append(": ").append(lines.get(i - 1));
         }
@@ -220,7 +212,7 @@ public class FileReadService {
     public List<String> listDirectory(
             @AgentDoc("The directory path relative to the project root (or '@<alias>' / '@<alias>/subpath')") String relativePath)
             throws IOException {
-        Path path = resolveReadTarget(relativePath);
+        Path path = projectService.resolveReadPath(relativePath);
         if (!Files.isDirectory(path)) {
             throw new IllegalArgumentException("Error: Path is not a directory or does not exist: " + relativePath);
         }
