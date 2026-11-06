@@ -82,15 +82,21 @@ class SwingHtmlUtilsTest {
         String fileUrl = tempPng.toUri().toURL().toExternalForm();
 
         org.roxycode.app.util.Edt.runAndWait(() -> {
+            assertFalse(SwingHtmlUtils.invalidateResponsiveImages(null));
+
             javax.swing.JEditorPane pane = SwingHtmlUtils.createHtmlEditorPane();
             pane.setBorder(javax.swing.BorderFactory.createEmptyBorder());
             SwingHtmlUtils.applyTheme(pane, 10);
+            pane.setText("<html><body><p>Plain text without images</p></body></html>");
+            pane.setSize(448, 600);
+            assertFalse(SwingHtmlUtils.invalidateResponsiveImages(pane));
+
             pane.setText("<html><body><table width='100%'><tr><td><img src='" + fileUrl
                     + "' width='800' height='400'></td></tr></table></body></html>");
 
             // 1. Container narrower than image (448px -> availableWidth = 448 - 48 = 400px -> 0.5x scale)
             pane.setSize(448, 600);
-            SwingHtmlUtils.invalidateResponsiveImages(pane);
+            assertTrue(SwingHtmlUtils.invalidateResponsiveImages(pane));
 
             javax.swing.text.View rootView = pane.getUI().getRootView(pane);
             SwingHtmlUtils.ResponsiveImageView imageView = findResponsiveImageView(rootView);

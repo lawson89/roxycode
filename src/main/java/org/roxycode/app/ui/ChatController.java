@@ -19,15 +19,16 @@ import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.UserInputService;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.AgentTurnEvent;
-import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.ArchiveUpdatedEvent;
+import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
+import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
+import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.events.UserInputRequestEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
-import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.model.AppSettings;
@@ -49,6 +50,7 @@ import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.EventListener;
 
 @SuppressWarnings({"PMD.NullAssignment", "PMD.CloseResource"})
 public final class ChatController implements AutoCloseable {
@@ -443,7 +445,8 @@ public final class ChatController implements AutoCloseable {
         view.setLoading(false);
     }
 
-    void onUserInputRequest(UserInputRequestEvent event) {
+    @EventListener
+    public void onUserInputRequest(UserInputRequestEvent event) {
         if (event == null || !model.getConversationId().equals(event.conversationId())) {
             return;
         }
@@ -474,7 +477,8 @@ public final class ChatController implements AutoCloseable {
         }
     }
 
-    void onWorkflowTransition(WorkflowTransitionEvent event) {
+    @EventListener
+    public void onWorkflowTransition(WorkflowTransitionEvent event) {
         if (event == null || !model.isTaskMode()) {
             return;
         }
@@ -552,8 +556,16 @@ public final class ChatController implements AutoCloseable {
         return GeminiModelConfig.DEFAULT_CONTEXT_WINDOW_TOKENS;
     }
 
-    void onProjectChanged(ProjectChangedEvent event) {
+    @EventListener
+    public void onProjectChanged(ProjectChangedEvent event) {
+        view.invalidateFileMentionCache();
         restoreSessionForCurrentProject();
+        Edt.run(view::updateProjectComposerState);
+    }
+
+    @EventListener
+    public void onFileChanged(FileChangedEvent event) {
+        view.invalidateFileMentionCache();
     }
 
     void restoreSessionForCurrentProject() {
@@ -692,7 +704,8 @@ public final class ChatController implements AutoCloseable {
         }
     }
 
-    void onTokenUsage(TokenUsageEvent event) {
+    @EventListener
+    public void onTokenUsage(TokenUsageEvent event) {
         if (event == null || !model.getConversationId().equals(event.conversationId())) {
             return;
         }
@@ -719,7 +732,8 @@ public final class ChatController implements AutoCloseable {
         return model.getConversationId().equals(conversationId) && !model.isTurnCancelled();
     }
 
-    void onAgentTurn(AgentTurnEvent event) {
+    @EventListener
+    public void onAgentTurn(AgentTurnEvent event) {
         if (event == null || !isMatchingActiveTurnEvent(event.conversationId())) {
             return;
         }
@@ -731,7 +745,8 @@ public final class ChatController implements AutoCloseable {
         });
     }
 
-    void onToolExecution(ToolExecutionEvent event) {
+    @EventListener
+    public void onToolExecution(ToolExecutionEvent event) {
         if (event == null || !isMatchingActiveTurnEvent(event.conversationId())) {
             return;
         }
@@ -743,7 +758,8 @@ public final class ChatController implements AutoCloseable {
         });
     }
 
-    void onAgentTurnComplete(AgentTurnCompleteEvent event) {
+    @EventListener
+    public void onAgentTurnComplete(AgentTurnCompleteEvent event) {
         if (event == null || !model.getConversationId().equals(event.conversationId())) {
             return;
         }
@@ -754,27 +770,28 @@ public final class ChatController implements AutoCloseable {
         });
     }
 
-    void onSettingsChanged(SettingsChangedEvent event) {
+    @EventListener
+    public void onSettingsChanged(SettingsChangedEvent event) {
         model.setLastContextWindowTokens(resolveConfiguredContextWindowTokens());
         Edt.run(view::updateTurnLabel);
     }
 
-    void onPlanUpdated(PlanUpdatedEvent event) {
+    @EventListener
+    public void onPlanUpdated(PlanUpdatedEvent event) {
         if (model.isTaskMode()) {
             Edt.run(view::updateTurnLabel);
         }
     }
 
-    void onPhaseChanged(PhaseChangedEvent event) {
-        if (event == null) {
+    @EventListener
+    public void onPhaseChanged(PhaseChangedEvent event) {
+        if (event == null || !model.isTaskMode()) {
             return;
         }
         log.debug("Phase changed to: {}", event.phase());
         Edt.run(() -> {
-            if (model.isTaskMode()) {
-                syncTransitionBannerWithPlanService();
-                view.updateTurnLabel();
-            }
+            syncTransitionBannerWithPlanService();
+            view.updateTurnLabel();
         });
     }
 }

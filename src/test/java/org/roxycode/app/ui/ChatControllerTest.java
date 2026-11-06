@@ -296,13 +296,15 @@ class ChatControllerTest extends ChatTestFixture {
         });
         assertTrue(callStarted.await(5, TimeUnit.SECONDS));
 
-        chatPanel.onWorkflowTransition(transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Pre-stop", true));
+        chatPanel.controller
+                .onWorkflowTransition(transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Pre-stop", true));
         flushEdt();
         SwingTestUtils.clickOnEdt(chatPanel.stopButton);
-        chatPanel.onWorkflowTransition(
+        chatPanel.controller.onWorkflowTransition(
                 transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Late transition", true));
-        chatPanel.onToolExecution(new ToolExecutionEvent("task:default", "lateToolCall()", "ok", true, null));
-        chatPanel.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 99, "CODE"));
+        chatPanel.controller
+                .onToolExecution(new ToolExecutionEvent("task:default", "lateToolCall()", "ok", true, null));
+        chatPanel.controller.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 99, "CODE"));
 
         allowExit.countDown();
         SwingTestUtils.awaitCondition(() -> !chatPanel.controller.isTurnActive());
@@ -321,18 +323,21 @@ class ChatControllerTest extends ChatTestFixture {
         assertSame(directExecutor, chatPanel.controller.turnExecutor);
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
 
-        chatPanel.onWorkflowTransition(transitionEvent(WorkflowPhase.CODE, WorkflowPhase.PLAN, "Test reason", true));
+        chatPanel.controller
+                .onWorkflowTransition(transitionEvent(WorkflowPhase.CODE, WorkflowPhase.PLAN, "Test reason", true));
         flushEdt();
         verify(aiService, never()).chat(anyString(), any(), anyString(), any());
 
         when(aiService.chat(anyString(), any(), anyString(), any())).thenReturn("Reviewing now");
-        chatPanel.onWorkflowTransition(transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Test reason", true));
+        chatPanel.controller
+                .onWorkflowTransition(transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Test reason", true));
         flushEdt();
         verify(aiService, times(1)).chat(eq("task:default"), any(), contains("independent pull-request audit"), any());
 
         clearInvocations(aiService);
         when(aiService.chat(anyString(), any(), anyString(), any())).thenAnswer(inv -> {
-            chatPanel.onWorkflowTransition(transitionEvent(WorkflowPhase.PLAN, WorkflowPhase.CODE, "Ready", false));
+            chatPanel.controller
+                    .onWorkflowTransition(transitionEvent(WorkflowPhase.PLAN, WorkflowPhase.CODE, "Ready", false));
             return "FINAL_PLAN_SUMMARY";
         });
 
@@ -408,7 +413,7 @@ class ChatControllerTest extends ChatTestFixture {
         ImplementationPlan plan = samplePlan(new ImplementationPlan.TechStep("Step 0", true),
                 new ImplementationPlan.TechStep("Step 1", false));
         when(planService.getCurrentPlan()).thenReturn(plan);
-        chatPanel.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 2, "CODE"));
+        chatPanel.controller.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 2, "CODE"));
         flushEdt();
         assertEquals("Turn 2/5 • 1/2 steps", chatPanel.turnLabel.getText());
         assertContainsAll(String.valueOf(chatPanel.inputArea.getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT)),
@@ -465,7 +470,7 @@ class ChatControllerTest extends ChatTestFixture {
                 chatPanel.inputArea.getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT));
 
         when(projectService.hasActiveProject()).thenReturn(true);
-        chatPanel.onProjectChanged(new ProjectChangedEvent(Path.of(".")));
+        chatPanel.controller.onProjectChanged(new ProjectChangedEvent(Path.of(".")));
         flushEdt();
         assertTrue(chatPanel.inputArea.isEnabled());
     }
@@ -478,8 +483,8 @@ class ChatControllerTest extends ChatTestFixture {
         // 1. Isolation: qa:default event ignored by taskPanel
         TokenUsageEvent qaEvent = new TokenUsageEvent("qa:default", "gemini-1.5-pro", 1_000_000, 10_000, 8_000, 2_000,
                 500, 200, 10_700, 0.005);
-        qaPanel.onTokenUsage(qaEvent);
-        taskPanel.onTokenUsage(qaEvent);
+        qaPanel.controller.onTokenUsage(qaEvent);
+        taskPanel.controller.onTokenUsage(qaEvent);
         flushEdt();
 
         assertEquals("Ctx: 10.0k / 1.0M (1%)", qaPanel.ctxLabel.getText());
@@ -491,7 +496,7 @@ class ChatControllerTest extends ChatTestFixture {
         // 2. task:default event updates taskPanel
         TokenUsageEvent taskEvent = new TokenUsageEvent("task:default", "gemini-1.5-pro", 1_000_000, 20_000, 10_000,
                 10_000, 1_000, 500, 21_500, 0.012);
-        taskPanel.onTokenUsage(taskEvent);
+        taskPanel.controller.onTokenUsage(taskEvent);
         flushEdt();
 
         assertEquals("Ctx: 20.0k / 1.0M (2%)", taskPanel.ctxLabel.getText());
@@ -506,7 +511,7 @@ class ChatControllerTest extends ChatTestFixture {
         assertEquals("Ctx: 10.0k / 1.0M (1%)", qaPanel.ctxLabel.getText()); // Still there
 
         // 4. Project change resets telemetry
-        qaPanel.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/new-project")));
+        qaPanel.controller.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/new-project")));
         flushEdt();
         assertEquals("Ctx: 0 / 1.0M (0%)", qaPanel.ctxLabel.getText());
     }
@@ -533,10 +538,10 @@ class ChatControllerTest extends ChatTestFixture {
         when(aiService.chat(eq("task:default"), any(), eq("Create plan"), any())).thenAnswer(inv -> {
             realMemory.add("task:default",
                     List.of(new UserMessage("Create plan"), new AssistantMessage("Plan submitted.")));
-            taskPanel.onToolExecution(new ToolExecutionEvent("task:default",
+            taskPanel.controller.onToolExecution(new ToolExecutionEvent("task:default",
                     "planService.submitPlan('Title', 'Goal', [], ['Step 1'])", "ok", true, null));
-            taskPanel.onTokenUsage(new TokenUsageEvent("task:default", "gemini-1.5-pro", 1_000_000, 25_000, 20_000,
-                    5_000, 600, 100, 25_700, 0.008));
+            taskPanel.controller.onTokenUsage(new TokenUsageEvent("task:default", "gemini-1.5-pro", 1_000_000, 25_000,
+                    20_000, 5_000, 600, 100, 25_700, 0.008));
             return "Plan submitted.";
         });
 
@@ -553,7 +558,7 @@ class ChatControllerTest extends ChatTestFixture {
         // Switch to Project B: clears transcript, ChatMemory, and telemetry without deleting Project A's session file
         activeDataDir.set(projectBData);
         when(planService.getPendingPhase()).thenReturn(null);
-        taskPanel.onProjectChanged(new ProjectChangedEvent(tempDir.resolve("project-b")));
+        taskPanel.controller.onProjectChanged(new ProjectChangedEvent(tempDir.resolve("project-b")));
         flushEdt();
 
         assertTrue(Files.exists(projectASessionFile));
@@ -567,7 +572,7 @@ class ChatControllerTest extends ChatTestFixture {
         activeDataDir.set(projectAData);
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
         when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
-        taskPanel.onProjectChanged(new ProjectChangedEvent(tempDir.resolve("project-a")));
+        taskPanel.controller.onProjectChanged(new ProjectChangedEvent(tempDir.resolve("project-a")));
         flushEdt();
 
         assertEquals(2, realMemory.get("task:default").size());
@@ -581,12 +586,16 @@ class ChatControllerTest extends ChatTestFixture {
         assertTrue(taskPanel.inlineActionPanel.isVisible());
         assertEquals(PlanService.APPROVAL_PLAN_TO_CODE, taskPanel.transitionLabel.getText());
 
-        // Startup restoration on a newly created ChatPanel
+        // Startup restoration on a newly created ChatPanel (and idempotent second setProjectService call)
         realMemory.clear("task:default");
         ChatPanel restartedPanel = new ChatPanel(aiService, planService, publisher, realMemory,
                 ChatModel.TASK_SESSION_PREFIX, null, true, settingsService, directExecutor);
+        clearInvocations(projectService);
         restartedPanel.setProjectService(projectService);
         flushEdt();
+        verify(projectService, times(1)).resolveProjectDataPath(anyString());
+        restartedPanel.setProjectService(projectService);
+        verify(projectService, times(1)).resolveProjectDataPath(anyString());
         assertEquals(2, realMemory.get("task:default").size());
         assertEquals(3, restartedPanel.exportMessages().size());
         assertTrue(restartedPanel.inlineActionPanel.isVisible());
@@ -608,8 +617,8 @@ class ChatControllerTest extends ChatTestFixture {
         UserInputRequestEvent confirmEvent = new UserInputRequestEvent("qa:default",
                 UserInputRequestEvent.PromptType.CONFIRM, "Proceed with refactor?", "Affects 4 files", null, List.of(),
                 confirmFuture);
-        taskPanel.onUserInputRequest(confirmEvent);
-        qaPanel.onUserInputRequest(confirmEvent);
+        taskPanel.controller.onUserInputRequest(confirmEvent);
+        qaPanel.controller.onUserInputRequest(confirmEvent);
         flushEdt();
 
         assertFalse(taskPanel.userInputPromptPanel.isVisible());
@@ -627,8 +636,9 @@ class ChatControllerTest extends ChatTestFixture {
 
         // Escape on CONFIRM prompt resolves to Boolean.FALSE and hides prompt
         CompletableFuture<Object> escapeConfirmFuture = new CompletableFuture<>();
-        qaPanel.onUserInputRequest(new UserInputRequestEvent("qa:default", UserInputRequestEvent.PromptType.CONFIRM,
-                "Confirm via Esc?", null, null, List.of(), escapeConfirmFuture));
+        qaPanel.controller
+                .onUserInputRequest(new UserInputRequestEvent("qa:default", UserInputRequestEvent.PromptType.CONFIRM,
+                        "Confirm via Esc?", null, null, List.of(), escapeConfirmFuture));
         flushEdt();
         assertTrue(qaPanel.userInputPromptPanel.isVisible());
         ActionListener confirmEsc = qaPanel.userInputPromptPanel
@@ -641,7 +651,7 @@ class ChatControllerTest extends ChatTestFixture {
 
         // 2. SINGLE_SELECT prompt on taskPanel
         CompletableFuture<Object> singleFuture = new CompletableFuture<>();
-        taskPanel.onUserInputRequest(
+        taskPanel.controller.onUserInputRequest(
                 new UserInputRequestEvent("task:default", UserInputRequestEvent.PromptType.SINGLE_SELECT,
                         "Select build tool:", null, null, List.of("Maven", "Gradle"), singleFuture));
         flushEdt();
@@ -658,7 +668,7 @@ class ChatControllerTest extends ChatTestFixture {
 
         // 3. MULTI_SELECT prompt on taskPanel
         CompletableFuture<Object> multiFuture = new CompletableFuture<>();
-        taskPanel.onUserInputRequest(
+        taskPanel.controller.onUserInputRequest(
                 new UserInputRequestEvent("task:default", UserInputRequestEvent.PromptType.MULTI_SELECT,
                         "Select modules:", null, null, List.of("core", "ui", "api"), multiFuture));
         flushEdt();
@@ -679,8 +689,8 @@ class ChatControllerTest extends ChatTestFixture {
 
         // 4. TEXT prompt on qaPanel
         CompletableFuture<Object> textFuture = new CompletableFuture<>();
-        qaPanel.onUserInputRequest(new UserInputRequestEvent("qa:default", UserInputRequestEvent.PromptType.TEXT,
-                "Target branch?", null, "main", List.of(), textFuture));
+        qaPanel.controller.onUserInputRequest(new UserInputRequestEvent("qa:default",
+                UserInputRequestEvent.PromptType.TEXT, "Target branch?", null, "main", List.of(), textFuture));
         flushEdt();
         assertTrue(qaPanel.userInputPromptPanel.isVisible());
 
@@ -695,8 +705,8 @@ class ChatControllerTest extends ChatTestFixture {
 
         // 5. Cancellation on stopTurn() and session reset
         CompletableFuture<Object> stopFuture = new CompletableFuture<>();
-        taskPanel.onUserInputRequest(new UserInputRequestEvent("task:default", UserInputRequestEvent.PromptType.CONFIRM,
-                "Confirm before stop?", null, null, List.of(), stopFuture));
+        taskPanel.controller.onUserInputRequest(new UserInputRequestEvent("task:default",
+                UserInputRequestEvent.PromptType.CONFIRM, "Confirm before stop?", null, null, List.of(), stopFuture));
         flushEdt();
         assertTrue(taskPanel.userInputPromptPanel.isVisible());
 
@@ -706,8 +716,8 @@ class ChatControllerTest extends ChatTestFixture {
         assertFalse(taskPanel.userInputPromptPanel.isVisible());
 
         CompletableFuture<Object> resetFuture = new CompletableFuture<>();
-        taskPanel.onUserInputRequest(new UserInputRequestEvent("task:default", UserInputRequestEvent.PromptType.CONFIRM,
-                "Confirm before reset?", null, null, List.of(), resetFuture));
+        taskPanel.controller.onUserInputRequest(new UserInputRequestEvent("task:default",
+                UserInputRequestEvent.PromptType.CONFIRM, "Confirm before reset?", null, null, List.of(), resetFuture));
         flushEdt();
         assertTrue(taskPanel.userInputPromptPanel.isVisible());
 

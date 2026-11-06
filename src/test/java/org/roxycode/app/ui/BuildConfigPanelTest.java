@@ -190,19 +190,22 @@ class BuildConfigPanelTest {
             panel.applyTemplateButton.doClick();
         });
 
-        UiComponents.ConfirmOverlay cancelOverlay = UiComponents.getActiveConfirmOverlay(panel);
-        assertNotNull(cancelOverlay);
-        assertTrue(cancelOverlay.isVisible());
-        assertTrue(cancelOverlay.messageArea.getText().contains("Maven"));
-        SwingTestUtils.clickOnEdt(cancelOverlay.cancelButton);
-        assertNull(UiComponents.getActiveConfirmOverlay(panel));
+        UiComponents.InlineConfirmBar confirmBar = panel.templateConfirmBar;
+        assertTrue(confirmBar.isPromptVisible());
+        assertEquals("Replace unsaved build.toml edits with 'Maven'?", confirmBar.getMessage());
+        SwingTestUtils.clickOnEdt(confirmBar.cancelButton);
+        assertFalse(confirmBar.isPromptVisible());
         assertEquals("# User edited build.toml", panel.textArea.getText());
 
         SwingTestUtils.clickOnEdt(panel.applyTemplateButton);
-        UiComponents.ConfirmOverlay confirmOverlay = UiComponents.getActiveConfirmOverlay(panel);
-        assertNotNull(confirmOverlay);
-        SwingTestUtils.clickOnEdt(confirmOverlay.confirmButton);
-        assertNull(UiComponents.getActiveConfirmOverlay(panel));
+        assertTrue(confirmBar.isPromptVisible());
+        SwingTestUtils.runOnEdt(() -> panel.textArea.setText("# User edited build.toml again"));
+        assertFalse(confirmBar.isPromptVisible());
+
+        SwingTestUtils.clickOnEdt(panel.applyTemplateButton);
+        assertTrue(confirmBar.isPromptVisible());
+        SwingTestUtils.clickOnEdt(confirmBar.confirmButton);
+        assertFalse(confirmBar.isPromptVisible());
         assertTrue(panel.textArea.getText().contains("./mvnw test-compile"));
         assertEquals("Applied 'Maven' template.", panel.statusLabel.getText());
     }

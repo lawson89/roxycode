@@ -4,6 +4,7 @@ import java.awt.GraphicsEnvironment;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import javax.swing.SwingUtilities;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.service.SettingsService;
@@ -68,15 +69,23 @@ public class RoxyCode {
             throw e;
         }
 
-        Edt.run(() -> {
-            SplashScreenWindow splash = splashRef.get();
+        SplashScreenWindow splash = splashRef.get();
+        if (splash != null) {
             try {
-                if (splash != null) {
-                    splash.setStatus("Building workspace UI...");
-                }
-                context.getBean(MainFrame.class).setVisible(true);
-            } finally {
+                Edt.runAndWait(() -> splash.setStatus("Building workspace UI..."));
+            } catch (Exception e) {
+                log.debug("Failed to update splash status: {}", e.getMessage());
+            }
+        }
+
+        Edt.run(() -> {
+            try {
+                MainFrame mainFrame = context.getBean(MainFrame.class);
+                mainFrame.setVisible(true);
+                SwingUtilities.invokeLater(() -> SwingUtilities.invokeLater(() -> disposeSplash(splash)));
+            } catch (RuntimeException e) {
                 disposeSplash(splash);
+                throw e;
             }
         });
     }

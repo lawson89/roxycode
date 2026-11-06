@@ -3,6 +3,7 @@ package org.roxycode.app.ui;
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.FlowLayout;
 import java.time.format.DateTimeFormatter;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.JButton;
@@ -81,6 +82,8 @@ public final class CodebaseCachePanel extends JPanel {
     final RSyntaxTextArea sessionContextArea = new RSyntaxTextArea();
 
     private Timer copyFeedbackTimer;
+    private transient CacheStatusData latestStatusData;
+    private boolean pendingEditorUpdate;
     String lastCopiedContent;
 
     record CacheStatusData(Optional<RepoMapSnapshot> snapshot, long repoMapTokens, long stableTokens,
@@ -118,6 +121,14 @@ public final class CodebaseCachePanel extends JPanel {
     @EventListener
     public void onSettingsChanged(SettingsChangedEvent event) {
         Edt.run(this::updateTheme);
+    }
+
+    @Override
+    public void setVisible(boolean aFlag) {
+        super.setVisible(aFlag);
+        if (aFlag) {
+            flushPendingEditorTexts();
+        }
     }
 
     @Override
@@ -204,6 +215,7 @@ public final class CodebaseCachePanel extends JPanel {
     }
 
     void copyCurrentTabContent() {
+        flushPendingEditorTexts();
         int index = tabbedPane.getSelectedIndex();
         String content;
         if (index == TAB_INDEX_STABLE_PROMPT) {
@@ -262,13 +274,34 @@ public final class CodebaseCachePanel extends JPanel {
                 truncateForDisplay(sessionContext));
     }
 
+    void flushPendingEditorTexts() {
+        if (pendingEditorUpdate && latestStatusData != null) {
+            applyEditorTexts(latestStatusData);
+            pendingEditorUpdate = false;
+        }
+    }
+
+    private void applyEditorTexts(CacheStatusData data) {
+        updateEditorText(repoMapArea, data.repoMapText());
+        updateEditorText(stableContextArea, data.stableContextText());
+        updateEditorText(sessionContextArea, data.sessionContextText());
+    }
+
+    private static void updateEditorText(RSyntaxTextArea area, String text) {
+        if (!Objects.equals(area.getText(), text)) {
+            area.setText(text);
+            area.setCaretPosition(0);
+        }
+    }
+
     private void applyStatusDataOnEdt(CacheStatusData data) {
-        repoMapArea.setText(data.repoMapText());
-        repoMapArea.setCaretPosition(0);
-        stableContextArea.setText(data.stableContextText());
-        stableContextArea.setCaretPosition(0);
-        sessionContextArea.setText(data.sessionContextText());
-        sessionContextArea.setCaretPosition(0);
+        this.latestStatusData = data;
+        if (isVisible()) {
+            applyEditorTexts(data);
+            this.pendingEditorUpdate = false;
+        } else {
+            this.pendingEditorUpdate = true;
+        }
 
         repoMapTokensLabel.setText(String.format("Repo Map: %,d (%s)", data.repoMapTokens(),
                 TokenUtils.formatTokenCount(data.repoMapTokens())));

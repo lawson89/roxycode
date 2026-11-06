@@ -126,21 +126,26 @@ class AgentMemoryPanelTest {
 
         String selectedSlug = panel.projectScopeView.noteList.getSelectedValue().slug();
         SwingTestUtils.clickOnEdt(panel.projectScopeView.deleteNoteButton);
-        UiComponents.ConfirmOverlay cancelOverlay = UiComponents.getActiveConfirmOverlay(panel);
-        assertNotNull(cancelOverlay);
-        assertEquals("Delete Topic Note", cancelOverlay.titleLabel.getText());
-        assertTrue(cancelOverlay.messageArea.getText().contains(selectedSlug));
-        SwingTestUtils.runOnEdt(cancelOverlay::cancel);
-        assertNull(UiComponents.getActiveConfirmOverlay(panel));
+        UiComponents.InlineConfirmBar confirmBar = panel.projectScopeView.deleteConfirmBar;
+        assertTrue(confirmBar.isPromptVisible());
+        assertEquals("Delete '" + selectedSlug + "'?", confirmBar.getMessage());
+        assertEquals("Confirm Delete", confirmBar.confirmButton.getText());
+        SwingTestUtils.runOnEdt(confirmBar::cancel);
+        assertFalse(confirmBar.isPromptVisible());
         assertEquals(2, panel.projectScopeView.noteListModel.size());
 
         SwingTestUtils.clickOnEdt(panel.projectScopeView.deleteNoteButton);
-        UiComponents.ConfirmOverlay confirmOverlay = UiComponents.getActiveConfirmOverlay(panel);
-        assertNotNull(confirmOverlay);
-        SwingTestUtils.clickOnEdt(confirmOverlay.confirmButton);
+        assertTrue(confirmBar.isPromptVisible());
+        SwingTestUtils.runOnEdt(() -> panel.projectScopeView.noteList.setSelectedIndex(1));
+        assertFalse(confirmBar.isPromptVisible());
+
+        SwingTestUtils.runOnEdt(() -> panel.projectScopeView.noteList.setSelectedIndex(0));
+        SwingTestUtils.clickOnEdt(panel.projectScopeView.deleteNoteButton);
+        assertTrue(confirmBar.isPromptVisible());
+        SwingTestUtils.clickOnEdt(confirmBar.confirmButton);
         SwingTestUtils.awaitFuture(panel.projectScopeView.lastAsyncFuture);
 
-        assertNull(UiComponents.getActiveConfirmOverlay(panel));
+        assertFalse(confirmBar.isPromptVisible());
         assertEquals(1, panel.projectScopeView.noteListModel.size());
         assertEquals("Deleted note: " + selectedSlug, panel.projectScopeView.statusLabel.getText());
 

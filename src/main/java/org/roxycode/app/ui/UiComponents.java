@@ -12,6 +12,8 @@ import java.awt.Font;
 import java.awt.Insets;
 import java.awt.event.ActionListener;
 import java.util.List;
+import java.util.function.Function;
+import java.util.function.Supplier;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GraphicsEnvironment;
@@ -32,25 +34,20 @@ import java.net.URL;
 import java.nio.file.Path;
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
+import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JEditorPane;
 import javax.swing.JLabel;
-import java.awt.event.KeyEvent;
-import java.awt.event.MouseMotionAdapter;
-import java.util.function.Consumer;
 import javax.swing.JList;
 import javax.swing.JPanel;
-import javax.swing.JRootPane;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
-import javax.swing.KeyStroke;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.Scrollable;
-import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.ToolTipManager;
 import javax.swing.UIManager;
@@ -496,8 +493,6 @@ final class UiComponents {
         area.setWrapStyleWord(lineWrap);
     }
 
-    private static final String ACTIVE_CONFIRM_OVERLAY_KEY = "roxycode.activeConfirmOverlay";
-
     static Timer createStatusTimer(@Nullable JLabel statusLabel, int delayMs) {
         Timer timer = new Timer(delayMs, e -> {
             if (statusLabel != null) {
@@ -597,228 +592,106 @@ final class UiComponents {
         }
     }
 
-    static ConfirmOverlay showConfirmOverlay(JComponent hostComponent, String title, String message,
-            String confirmButtonText, boolean dangerAction, Runnable onConfirm) {
-        return showConfirmOverlay(hostComponent, title, message, confirmButtonText, dangerAction, confirmed -> {
-            if (Boolean.TRUE.equals(confirmed) && onConfirm != null) {
-                onConfirm.run();
+    @SuppressWarnings("PMD.UnusedAssignment")
+    static final class UiGuard {
+        private boolean active;
+
+        boolean isActive() {
+            return active;
+        }
+
+        void run(Runnable action) {
+            boolean previous = active;
+            active = true;
+            try {
+                action.run();
+            } finally {
+                active = previous;
             }
-        });
-    }
+        }
 
-    static ConfirmOverlay showConfirmOverlay(JComponent hostComponent, String title, String message,
-            String confirmButtonText, boolean dangerAction, Consumer<Boolean> onResult) {
-        if (hostComponent != null) {
-            ConfirmOverlay existing = getActiveConfirmOverlay(hostComponent);
-            if (existing != null) {
-                existing.dismiss();
+        <T> T supply(Supplier<T> supplier) {
+            boolean previous = active;
+            active = true;
+            try {
+                return supplier.get();
+            } finally {
+                active = previous;
             }
         }
-        ConfirmOverlay overlay = new ConfirmOverlay(hostComponent, title, message, confirmButtonText, dangerAction,
-                onResult);
-        overlay.attach();
-        return overlay;
     }
 
-    @Nullable
-    static ConfirmOverlay getActiveConfirmOverlay(@Nullable JComponent hostComponent) {
-        if (hostComponent == null) {
-            return null;
-        }
-        Object prop = hostComponent.getClientProperty(ACTIVE_CONFIRM_OVERLAY_KEY);
-        if (prop instanceof ConfirmOverlay overlay && overlay.isVisible()) {
-            return overlay;
-        }
-        JRootPane rootPane = SwingUtilities.getRootPane(hostComponent);
-        if (rootPane != null && rootPane.getGlassPane() instanceof ConfirmOverlay glassOverlay
-                && glassOverlay.isVisible()) {
-            return glassOverlay;
-        }
-        return null;
-    }
-
-    static final class ConfirmOverlay extends JPanel {
+    static final class InlineConfirmBar extends JPanel {
         private static final long serialVersionUID = 1L;
-
-        private final transient JComponent hostComponent;
-        private final transient Consumer<Boolean> onResult;
-        final JPanel cardPanel;
-        final JLabel iconLabel;
-        final JLabel titleLabel;
-        final JTextArea messageArea;
-        final JButton cancelButton;
+        final JLabel promptLabel;
         final JButton confirmButton;
-        private transient JRootPane attachedRootPane;
-        private transient Component previousGlassPane;
-        private boolean previousGlassPaneVisible;
-        private boolean closed;
+        final JButton cancelButton;
+        private transient Runnable onConfirm;
 
-        ConfirmOverlay(@Nullable JComponent hostComponent, String title, String message, String confirmButtonText,
-                boolean dangerAction, @Nullable Consumer<Boolean> onResult) {
-            super(new MigLayout("fill, ins 24", "[center]", ROW_CENTER));
-            this.hostComponent = hostComponent;
-            this.onResult = onResult;
+        InlineConfirmBar() {
+            super(new MigLayout("insets 0, gapx 6", "[][][]", ROW_CENTER));
             setOpaque(false);
-            setFocusCycleRoot(true);
+            this.promptLabel = new JLabel();
+            this.promptLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold");
+            this.confirmButton = new JButton("Confirm");
+            this.confirmButton.addActionListener(e -> confirm());
+            this.cancelButton = new JButton("Cancel");
+            this.cancelButton.addActionListener(e -> cancel());
 
-            cardPanel = new JPanel(new MigLayout("fillx, wrap 1, insets 18 20 16 20, gapy 10", "[grow, fill]", "[]"));
-            styleCardPanel(cardPanel);
-
-            Color iconColor;
-            if (dangerAction) {
-                iconColor = SwingHtmlUtils.getUiColor(new Color(0xdc, 0x35, 0x45), "Actions.Red");
-            } else {
-                iconColor = SwingHtmlUtils.getWarningColor();
-            }
-            iconLabel = new JLabel(FontIcon.of(Codicons.WARNING, 20, iconColor));
-            titleLabel = new JLabel(StringUtils.defaultString(title));
-            titleLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +2");
-
-            JPanel headerRow = new JPanel(new MigLayout("insets 0, gapx 10", "[][grow]", ROW_CENTER));
-            headerRow.setOpaque(false);
-            headerRow.add(iconLabel);
-            headerRow.add(titleLabel, GROWX_WMIN_0);
-            cardPanel.add(headerRow, GROWX_WMIN_0);
-
-            messageArea = createReadOnlyTextArea();
-            messageArea.setText(StringUtils.defaultString(message));
-            messageArea.setForeground(SwingHtmlUtils.getUiColor(new Color(0x33, 0x33, 0x33), "Label.foreground"));
-            cardPanel.add(messageArea, GROWX_WMIN_0);
-
-            JPanel footerRow = new JPanel(new MigLayout("insets 4 0 0 0, gapx 8", "push[][]", ROW_CENTER));
-            footerRow.setOpaque(false);
-
-            cancelButton = new JButton("Cancel");
-            cancelButton.addActionListener(e -> cancel());
-
-            confirmButton = new JButton(StringUtils.defaultIfBlank(confirmButtonText, "Confirm"));
-            Color actionBg;
-            if (dangerAction) {
-                actionBg = iconColor;
-            } else {
-                actionBg = SwingHtmlUtils.getAccentColor();
-            }
-            confirmButton.setForeground(Color.WHITE);
-            confirmButton.setBackground(actionBg);
-            confirmButton.putClientProperty(FlatClientProperties.STYLE, "font: bold; borderWidth: 0; focusWidth: 0");
-            confirmButton.addActionListener(e -> confirm());
-
-            footerRow.add(cancelButton);
-            footerRow.add(confirmButton);
-            cardPanel.add(footerRow, GROWX_WMIN_0);
-
-            cardPanel.addMouseListener(new MouseAdapter() {
-                @Override
-                public void mousePressed(MouseEvent e) {
-                    e.consume();
-                }
-            });
-
-            add(cardPanel, "w 380:420:460");
-
-            addMouseListener(new MouseAdapter() {
-                @Override
-                public void mousePressed(MouseEvent e) {
-                    if (!cardPanel.getBounds().contains(e.getPoint())) {
-                        cancel();
-                    }
-                    e.consume();
-                }
-
-                @Override
-                public void mouseReleased(MouseEvent e) {
-                    e.consume();
-                }
-
-                @Override
-                public void mouseClicked(MouseEvent e) {
-                    e.consume();
-                }
-            });
-            addMouseMotionListener(new MouseMotionAdapter() {
-            });
-            addMouseWheelListener(e -> {
-            });
-
-            registerKeyboardAction(e -> cancel(), KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
-                    JComponent.WHEN_IN_FOCUSED_WINDOW);
-            registerKeyboardAction(e -> cancel(), KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
-                    JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
+            add(this.promptLabel);
+            add(this.confirmButton);
+            add(this.cancelButton);
+            setVisible(false);
         }
 
-        void attach() {
-            if (hostComponent != null) {
-                hostComponent.putClientProperty(ACTIVE_CONFIRM_OVERLAY_KEY, this);
-                attachedRootPane = SwingUtilities.getRootPane(hostComponent);
-            }
-            if (attachedRootPane != null) {
-                previousGlassPane = attachedRootPane.getGlassPane();
-                previousGlassPaneVisible = previousGlassPane != null && previousGlassPane.isVisible();
-                attachedRootPane.setGlassPane(this);
-                setVisible(true);
-                attachedRootPane.revalidate();
-                attachedRootPane.repaint();
+        void prompt(String message, String confirmText, boolean danger, @Nullable Runnable onConfirmAction) {
+            this.onConfirm = onConfirmAction;
+            this.promptLabel.setText(StringUtils.defaultString(message));
+            Color promptColor;
+            String buttonStyle;
+            if (danger) {
+                promptColor = SwingHtmlUtils.getUiColor(new Color(0xdc, 0x35, 0x45), "Actions.Red");
+                buttonStyle = RED_BUTTON_STYLE;
             } else {
-                setVisible(true);
+                promptColor = SwingHtmlUtils.getWarningColor();
+                buttonStyle = ACCENT_BUTTON_STYLE;
             }
-            confirmButton.requestFocusInWindow();
+            this.promptLabel.setForeground(promptColor);
+            this.confirmButton.setText(StringUtils.defaultIfBlank(confirmText, "Confirm"));
+            this.confirmButton.putClientProperty(FlatClientProperties.STYLE, buttonStyle);
+            setVisible(true);
+            revalidate();
+            repaint();
         }
 
+        @SuppressWarnings("PMD.NullAssignment")
         void confirm() {
-            if (closed) {
-                return;
-            }
-            closed = true;
-            dismiss();
-            if (onResult != null) {
-                onResult.accept(Boolean.TRUE);
-            }
-        }
-
-        void cancel() {
-            if (closed) {
-                return;
-            }
-            closed = true;
-            dismiss();
-            if (onResult != null) {
-                onResult.accept(Boolean.FALSE);
+            Runnable action = this.onConfirm;
+            this.onConfirm = null;
+            setVisible(false);
+            revalidate();
+            repaint();
+            if (action != null) {
+                action.run();
             }
         }
 
         @SuppressWarnings("PMD.NullAssignment")
-        void dismiss() {
-            setVisible(false);
-            if (hostComponent != null && equals(hostComponent.getClientProperty(ACTIVE_CONFIRM_OVERLAY_KEY))) {
-                hostComponent.putClientProperty(ACTIVE_CONFIRM_OVERLAY_KEY, null);
-            }
-            if (attachedRootPane != null) {
-                if (previousGlassPane != null && equals(attachedRootPane.getGlassPane())) {
-                    attachedRootPane.setGlassPane(previousGlassPane);
-                    previousGlassPane.setVisible(previousGlassPaneVisible);
-                }
-                attachedRootPane.revalidate();
-                attachedRootPane.repaint();
-                attachedRootPane = null;
+        void cancel() {
+            this.onConfirm = null;
+            if (isVisible()) {
+                setVisible(false);
+                revalidate();
+                repaint();
             }
         }
 
-        @Override
-        protected void paintComponent(Graphics g) {
-            super.paintComponent(g);
-            Graphics2D g2 = (Graphics2D) g.create();
-            try {
-                Color scrimColor;
-                if (FlatLaf.isLafDark()) {
-                    scrimColor = new Color(0, 0, 0, 120);
-                } else {
-                    scrimColor = new Color(15, 23, 42, 95);
-                }
-                g2.setColor(scrimColor);
-                g2.fillRect(0, 0, getWidth(), getHeight());
-            } finally {
-                g2.dispose();
-            }
+        boolean isPromptVisible() {
+            return isVisible();
+        }
+
+        String getMessage() {
+            return promptLabel.getText();
         }
     }
 
@@ -889,6 +762,41 @@ final class UiComponents {
             revalidate();
             repaint();
         }
+    }
+
+    static <T> void replaceListItems(DefaultListModel<T> model, @Nullable List<T> items) {
+        model.clear();
+        if (items == null) {
+            return;
+        }
+        for (T item : items) {
+            model.addElement(item);
+        }
+    }
+
+    static <T, K> int replaceListItemsPreservingSelection(DefaultListModel<T> model, JList<T> list,
+            @Nullable List<T> items, Function<T, K> keyExtractor, @Nullable K keyToSelect,
+            boolean selectFirstIfUnmatched) {
+        model.clear();
+        if (items == null || items.isEmpty()) {
+            return -1;
+        }
+        int matchedIndex = -1;
+        for (int i = 0; i < items.size(); i++) {
+            T item = items.get(i);
+            model.addElement(item);
+            if (keyToSelect != null && keyToSelect.equals(keyExtractor.apply(item))) {
+                matchedIndex = i;
+            }
+        }
+        int selectedIndex = matchedIndex;
+        if (selectedIndex < 0 && selectFirstIfUnmatched) {
+            selectedIndex = 0;
+        }
+        if (selectedIndex >= 0) {
+            list.setSelectedIndex(selectedIndex);
+        }
+        return selectedIndex;
     }
 
     record ListCellColors(Color background, Color foreground, Color muted, Color iconColor) {

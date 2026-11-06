@@ -47,6 +47,7 @@ public final class SplashScreenWindow extends JWindow {
         rootPanel.add(progressBar, "growx, w 260::, h 6!");
 
         setContentPane(rootPanel);
+        setAlwaysOnTop(true);
         setSize(420, 240);
         setMinimumSize(new Dimension(420, 240));
         setLocationRelativeTo(null);
@@ -59,6 +60,11 @@ public final class SplashScreenWindow extends JWindow {
     }
 
     public void setStatus(String status) {
-        Edt.run(() -> statusLabel.setText(status));
+        Edt.run(() -> {
+            statusLabel.setText(status);
+            if (statusLabel.isShowing()) {
+                statusLabel.paintImmediately(0, 0, statusLabel.getWidth(), statusLabel.getHeight());
+            }
+        });
     }
 }

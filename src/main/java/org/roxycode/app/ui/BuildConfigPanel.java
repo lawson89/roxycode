@@ -70,13 +70,14 @@ public final class BuildConfigPanel extends JPanel {
     final JLabel buildConfigInfoIcon;
     final JComboBox<BuildTemplateInfo> templateCombo;
     final JButton applyTemplateButton;
+    final UiComponents.InlineConfirmBar templateConfirmBar;
     final UiComponents.WarningBanner unconfirmedBanner;
     final RSyntaxTextArea textArea;
     final JButton saveButton;
     final JLabel statusLabel;
     private final Timer statusTimer;
 
-    private boolean updatingTextProgrammatically = false;
+    private final transient UiComponents.UiGuard textUpdateGuard = new UiComponents.UiGuard();
     private boolean textEditedByUser = false;
     String detectedTemplateId = DEFAULT_TEMPLATE_ID;
     private transient Runnable onConfirmSavedCallback;
@@ -141,7 +142,7 @@ public final class BuildConfigPanel extends JPanel {
         buildHeaderRow.add(buildConfigInfoIcon);
         add(buildHeaderRow, "growx, wrap, gapbottom 6");
 
-        JPanel templateToolbar = new JPanel(new MigLayout("fillx, insets 0", "[][grow][]", "[]"));
+        JPanel templateToolbar = new JPanel(new MigLayout("fillx, insets 0, hidemode 3", "[][grow][][]", "[]"));
         templateToolbar.setOpaque(false);
         JLabel templateLabel = new JLabel("Build Template:");
         templateCombo = new JComboBox<>();
@@ -158,12 +159,15 @@ public final class BuildConfigPanel extends JPanel {
                 return this;
             }
         });
+        templateConfirmBar = new UiComponents.InlineConfirmBar();
+        templateCombo.addActionListener(e -> templateConfirmBar.cancel());
         applyTemplateButton = new JButton(APPLY_TEMPLATE_TEXT);
         applyTemplateButton.addActionListener(e -> applySelectedTemplate());
 
         templateToolbar.add(templateLabel, "gapright 6");
         templateToolbar.add(templateCombo, "w 220:280:360, gapright 8");
-        templateToolbar.add(applyTemplateButton);
+        templateToolbar.add(applyTemplateButton, "gapright 8");
+        templateToolbar.add(templateConfirmBar);
         add(templateToolbar, "growx, wrap, gapbottom 8");
 
         loadTemplateOptions();
@@ -239,24 +243,20 @@ public final class BuildConfigPanel extends JPanel {
             return;
         }
         if (textEditedByUser) {
-            UiComponents.showConfirmOverlay(this, APPLY_TEMPLATE_TEXT,
-                    "Replace current build.toml editor contents with the '" + selected.displayName() + "' template?",
-                    APPLY_TEMPLATE_TEXT, false, () -> performApplyTemplate(selected));
+            templateConfirmBar.prompt("Replace unsaved build.toml edits with '" + selected.displayName() + "'?",
+                    "Confirm", false, () -> performApplyTemplate(selected));
             return;
         }
+        templateConfirmBar.cancel();
         performApplyTemplate(selected);
     }
 
-    @SuppressWarnings("PMD.UnusedAssignment")
     private void setEditorContentProgrammatically(String content) {
-        updatingTextProgrammatically = true;
-        try {
+        textUpdateGuard.run(() -> {
             textArea.setText(content);
             textArea.setCaretPosition(0);
             textEditedByUser = false;
-        } finally {
-            updatingTextProgrammatically = false;
-        }
+        });
         updateBannerState();
     }
 
@@ -350,8 +350,9 @@ public final class BuildConfigPanel extends JPanel {
     }
 
     private void onTomlTextEdited() {
-        if (!updatingTextProgrammatically) {
+        if (!textUpdateGuard.isActive()) {
             textEditedByUser = true;
+            templateConfirmBar.cancel();
             updateBannerState();
         }
     }
@@ -374,6 +375,7 @@ public final class BuildConfigPanel extends JPanel {
     }
 
     CompletableFuture<String> loadConfig() {
+        templateConfirmBar.cancel();
         if (buildToolService == null) {
             CompletableFuture<String> done = CompletableFuture.completedFuture("");
             lastAsyncFuture = done;
@@ -392,6 +394,7 @@ public final class BuildConfigPanel extends JPanel {
     }
 
     CompletableFuture<Void> saveConfig() {
+        templateConfirmBar.cancel();
         if (buildToolService == null && projectService == null) {
             CompletableFuture<Void> done = CompletableFuture.completedFuture(null);
             lastAsyncFuture = done;

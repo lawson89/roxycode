@@ -79,6 +79,16 @@ class CodebaseCachePanelTest {
         SwingTestUtils.awaitCondition(
                 () -> "updated session context after memory change".equals(panel.sessionContextArea.getText()));
 
+        // While hidden (e.g. in MainFrame CardLayout), editor text updates are deferred until shown
+        SwingTestUtils.runOnEdt(() -> panel.setVisible(false));
+        when(promptService.getSessionContext()).thenReturn("deferred session context while hidden");
+        panel.refreshStatus().join();
+        SwingTestUtils.flushEdt();
+        assertEquals("updated session context after memory change", panel.sessionContextArea.getText());
+
+        SwingTestUtils.runOnEdt(() -> panel.setVisible(true));
+        assertEquals("deferred session context while hidden", panel.sessionContextArea.getText());
+
         assertEquals("", CodebaseCachePanel.truncateForDisplay(null));
         assertEquals("short", CodebaseCachePanel.truncateForDisplay("short"));
         String truncated = CodebaseCachePanel

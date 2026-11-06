@@ -430,6 +430,12 @@ public final class MainFrame extends JPanel {
 
     @Override
     public void setVisible(boolean visible) {
+        if (visible) {
+            validate();
+            if (hostFrame != null) {
+                hostFrame.validate();
+            }
+        }
         super.setVisible(visible);
         if (hostFrame != null) {
             hostFrame.setVisible(visible);

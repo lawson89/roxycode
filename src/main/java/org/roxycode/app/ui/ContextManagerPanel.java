@@ -449,12 +449,9 @@ public final class ContextManagerPanel extends JPanel {
                             Objects.requireNonNullElse(loadDiscoveredFiles(), List.of()),
                             Objects.requireNonNullElse(loadReferenceFolderMounts(), List.of())),
                     data -> {
-                        folderListModel.clear();
-                        data.folders().forEach(folderListModel::addElement);
-                        fileListModel.clear();
-                        data.files().forEach(fileListModel::addElement);
-                        referenceFolderListModel.clear();
-                        data.referenceFolders().forEach(referenceFolderListModel::addElement);
+                        UiComponents.replaceListItems(folderListModel, data.folders());
+                        UiComponents.replaceListItems(fileListModel, data.files());
+                        UiComponents.replaceListItems(referenceFolderListModel, data.referenceFolders());
                         btnRemoveFolder.setEnabled(folderList.getSelectedValue() != null);
                         btnRemoveReferenceFolder.setEnabled(referenceFolderList.getSelectedValue() != null);
                     }, ex -> {

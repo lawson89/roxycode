@@ -218,28 +218,17 @@ public final class ArchiveBrowserPanel extends JPanel {
             previousFilename = currentSelectedEntry.filename();
         }
 
-        listModel.clear();
-        int indexToSelect = -1;
-        for (int i = 0; i < safeResults.size(); i++) {
-            ArchiveEntrySummary item = safeResults.get(i);
-            listModel.addElement(item);
-            if (previousFilename != null && previousFilename.equals(item.filename())) {
-                indexToSelect = i;
-            }
-        }
         countLabel.setText(formatCountText(safeResults.size()));
-
-        if (safeResults.isEmpty()) {
+        lastSelectionFuture = CompletableFuture.completedFuture("");
+        int selectedIndex = UiComponents.replaceListItemsPreservingSelection(listModel, entryList, safeResults,
+                ArchiveEntrySummary::filename, previousFilename, true);
+        if (selectedIndex < 0) {
             currentSelectedEntry = null;
             currentRawMarkdown = "";
             detailSummaryLabel.setText("");
             copyMarkdownButton.setEnabled(false);
             renderEmptyState(query != null && !query.isBlank());
             lastSelectionFuture = CompletableFuture.completedFuture("");
-        } else {
-            lastSelectionFuture = CompletableFuture.completedFuture("");
-            int targetIndex = Math.max(0, indexToSelect);
-            entryList.setSelectedIndex(targetIndex);
         }
     }
 

@@ -91,7 +91,7 @@ public final class SettingsPanel extends JPanel {
     private transient Runnable onInitialApiKeyConfiguredCallback;
     transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
 
-    private boolean updatingFromSettings = false;
+    private final transient UiComponents.UiGuard settingsUpdateGuard = new UiComponents.UiGuard();
 
     @Autowired
     public SettingsPanel(SettingsService settingsService, @Nullable AiService aiService) {
@@ -367,7 +367,6 @@ public final class SettingsPanel extends JPanel {
     }
 
     @EventListener
-    @SuppressWarnings("PMD.UnusedAssignment")
     public void onSettingsChanged(SettingsChangedEvent event) {
         if (event == null || event.settings() == null) {
             return;
@@ -375,12 +374,7 @@ public final class SettingsPanel extends JPanel {
         Edt.run(() -> {
             String theme = event.settings().getTheme();
             if (theme != null && !theme.equals(themeCombo.getSelectedItem())) {
-                updatingFromSettings = true;
-                try {
-                    themeCombo.setSelectedItem(theme);
-                } finally {
-                    updatingFromSettings = false;
-                }
+                settingsUpdateGuard.run(() -> themeCombo.setSelectedItem(theme));
             }
             String apiKey = event.settings().getGeminiApiKey();
             if (apiKey != null) {
@@ -420,7 +414,7 @@ public final class SettingsPanel extends JPanel {
     }
 
     private void updateTheme() {
-        if (updatingFromSettings) {
+        if (settingsUpdateGuard.isActive()) {
             return;
         }
         String selectedTheme = (String) themeCombo.getSelectedItem();

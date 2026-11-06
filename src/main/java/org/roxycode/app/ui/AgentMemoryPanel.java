@@ -9,7 +9,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Supplier;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
@@ -75,7 +74,7 @@ public final class AgentMemoryPanel extends JPanel {
     final MemoryScopeView globalScopeView;
     final MemoryScopeView projectScopeView;
 
-    private boolean suppressMemoryEventRefresh;
+    private final transient UiComponents.UiGuard memoryEventRefreshGuard = new UiComponents.UiGuard();
 
     @Autowired
     public AgentMemoryPanel(MemoryService memoryService, @Nullable ProjectService projectService,
@@ -109,7 +108,7 @@ public final class AgentMemoryPanel extends JPanel {
 
     @EventListener
     public void onMemoryChanged(MemoryChangedEvent event) {
-        if (event == null || suppressMemoryEventRefresh) {
+        if (event == null || memoryEventRefreshGuard.isActive()) {
             return;
         }
         Edt.run(() -> {
@@ -181,18 +180,19 @@ public final class AgentMemoryPanel extends JPanel {
         final RSyntaxTextArea noteBodyEditor = new RSyntaxTextArea();
         final JButton saveNoteButton = new JButton("Save Note");
         final JButton deleteNoteButton = new JButton("Delete Note");
+        final UiComponents.InlineConfirmBar deleteConfirmBar = new UiComponents.InlineConfirmBar();
         final JLabel statusLabel = new JLabel("");
         private final Timer statusTimer;
 
         private String loadedMemoryContent = "";
-        private boolean updatingMemoryProgrammatically;
+        private final transient UiComponents.UiGuard memoryUpdateGuard = new UiComponents.UiGuard();
         private boolean memoryDirty;
 
         private List<NoteDetail> allNotes = List.of();
         private transient NoteDetail selectedNote;
         private boolean creatingNewNote = true;
         private boolean slugManuallyEdited;
-        private boolean updatingNoteFieldsProgrammatically;
+        private final transient UiComponents.UiGuard noteFieldsUpdateGuard = new UiComponents.UiGuard();
         transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
 
         MemoryScopeView(boolean globalScope) {
@@ -310,6 +310,7 @@ public final class AgentMemoryPanel extends JPanel {
             deleteNoteButton.setEnabled(false);
             noteButtons.add(saveNoteButton);
             noteButtons.add(deleteNoteButton);
+            noteButtons.add(deleteConfirmBar);
             noteButtons.add(statusLabel);
             rightPane.add(noteButtons, "span 4, growx");
 
@@ -353,7 +354,7 @@ public final class AgentMemoryPanel extends JPanel {
         }
 
         private void onPinnedMemoryEdited() {
-            if (!updatingMemoryProgrammatically) {
+            if (!memoryUpdateGuard.isActive()) {
                 memoryDirty = !Objects.equals(memoryEditor.getText(), loadedMemoryContent);
             }
             updateMemoryStatsAndButtons();
@@ -380,44 +381,25 @@ public final class AgentMemoryPanel extends JPanel {
             revertMemoryButton.setEnabled(available && memoryDirty);
         }
 
-        @SuppressWarnings("PMD.UnusedAssignment")
-        private void runUpdatingMemory(Runnable action) {
-            updatingMemoryProgrammatically = true;
-            try {
-                action.run();
-            } finally {
-                updatingMemoryProgrammatically = false;
-            }
-        }
-
-        @SuppressWarnings("PMD.UnusedAssignment")
-        private void runUpdatingNoteFields(Runnable action) {
-            updatingNoteFieldsProgrammatically = true;
-            try {
-                action.run();
-            } finally {
-                updatingNoteFieldsProgrammatically = false;
-            }
-        }
-
         private void onTitleFieldEdited() {
-            if (updatingNoteFieldsProgrammatically) {
+            if (noteFieldsUpdateGuard.isActive()) {
                 return;
             }
             if (creatingNewNote && !slugManuallyEdited) {
                 String rawTitle = noteTitleField.getText();
                 String autoSlug = PathUtils.sanitizeSlug(rawTitle, 50, "");
-                runUpdatingNoteFields(() -> noteSlugField.setText(autoSlug));
+                noteFieldsUpdateGuard.run(() -> noteSlugField.setText(autoSlug));
             }
         }
 
         private void onSlugFieldEdited() {
-            if (!updatingNoteFieldsProgrammatically && creatingNewNote) {
+            if (!noteFieldsUpdateGuard.isActive() && creatingNewNote) {
                 slugManuallyEdited = !StringUtils.isBlank(noteSlugField.getText());
             }
         }
 
         CompletableFuture<ScopeData> refresh() {
+            deleteConfirmBar.cancel();
             boolean available = isScopeAvailable();
             if (!available) {
                 scopeCardLayout.show(this, CARD_EMPTY);
@@ -449,7 +431,7 @@ public final class AgentMemoryPanel extends JPanel {
         private void applyScopeData(ScopeData data) {
             loadedMemoryContent = StringUtils.defaultString(data.pinnedMemory());
             if (!memoryDirty) {
-                runUpdatingMemory(this::resetMemoryEditorToLoadedContent);
+                memoryUpdateGuard.run(this::resetMemoryEditorToLoadedContent);
             } else {
                 memoryDirty = !Objects.equals(memoryEditor.getText(), loadedMemoryContent);
             }
@@ -485,20 +467,8 @@ public final class AgentMemoryPanel extends JPanel {
                     filtered.add(note);
                 }
             }
-            noteListModel.clear();
-            int indexToSelect = -1;
-            for (int i = 0; i < filtered.size(); i++) {
-                NoteDetail item = filtered.get(i);
-                noteListModel.addElement(item);
-                if (slugToSelect != null && slugToSelect.equals(item.slug())) {
-                    indexToSelect = i;
-                }
-            }
-            if (indexToSelect >= 0) {
-                noteList.setSelectedIndex(indexToSelect);
-            } else if (!creatingNewNote && !filtered.isEmpty()) {
-                noteList.setSelectedIndex(0);
-            }
+            UiComponents.replaceListItemsPreservingSelection(noteListModel, noteList, filtered, NoteDetail::slug,
+                    slugToSelect, !creatingNewNote);
         }
 
         private boolean matchesFilter(NoteDetail note, String query) {
@@ -513,16 +483,18 @@ public final class AgentMemoryPanel extends JPanel {
 
         @SuppressWarnings("PMD.NullAssignment")
         void startNewNote() {
+            deleteConfirmBar.cancel();
             selectedNote = null;
             creatingNewNote = true;
             slugManuallyEdited = false;
             noteList.clearSelection();
-            runUpdatingNoteFields(this::clearNoteEditorFields);
+            noteFieldsUpdateGuard.run(this::clearNoteEditorFields);
             deleteNoteButton.setEnabled(false);
             statusLabel.setText("");
         }
 
         private void clearNoteEditorFields() {
+            deleteConfirmBar.cancel();
             noteTitleField.setText("");
             noteSlugField.setText("");
             noteSlugField.setEditable(true);
@@ -532,13 +504,14 @@ public final class AgentMemoryPanel extends JPanel {
         }
 
         void onNoteSelected(@Nullable NoteDetail note) {
+            deleteConfirmBar.cancel();
             if (note == null) {
                 return;
             }
             selectedNote = note;
             creatingNewNote = false;
             slugManuallyEdited = true;
-            runUpdatingNoteFields(() -> populateNoteEditorFields(note));
+            noteFieldsUpdateGuard.run(() -> populateNoteEditorFields(note));
             deleteNoteButton.setEnabled(isScopeAvailable());
             statusLabel.setText("");
         }
@@ -566,17 +539,8 @@ public final class AgentMemoryPanel extends JPanel {
             return future;
         }
 
-        private EditorResult callMemoryServiceSuppressingRefresh(Supplier<EditorResult> action) {
-            suppressMemoryEventRefresh = true;
-            try {
-                return action.get();
-            } finally {
-                suppressMemoryEventRefresh = false;
-            }
-        }
-
         private EditorResult executeSavePinnedMemory(String contentToSave) {
-            return callMemoryServiceSuppressingRefresh(() -> {
+            return memoryEventRefreshGuard.supply(() -> {
                 if (globalScope) {
                     return memoryService.updateGlobalMemory(contentToSave);
                 }
@@ -605,7 +569,7 @@ public final class AgentMemoryPanel extends JPanel {
         }
 
         void revertPinnedMemory() {
-            runUpdatingMemory(this::resetMemoryEditorToLoadedContent);
+            memoryUpdateGuard.run(this::resetMemoryEditorToLoadedContent);
             updateMemoryStatsAndButtons();
             showStatus("Reverted MEMORY.md changes", true);
         }
@@ -640,7 +604,7 @@ public final class AgentMemoryPanel extends JPanel {
         }
 
         private EditorResult executeSaveNote(String sanitizedSlug, String resolvedTitle, String tags, String body) {
-            return callMemoryServiceSuppressingRefresh(() -> {
+            return memoryEventRefreshGuard.supply(() -> {
                 if (globalScope) {
                     return memoryService.saveGlobalNote(sanitizedSlug, resolvedTitle, tags, body);
                 }
@@ -664,8 +628,7 @@ public final class AgentMemoryPanel extends JPanel {
                 return;
             }
             String slug = selectedNote.slug();
-            UiComponents.showConfirmOverlay(AgentMemoryPanel.this, "Delete Topic Note",
-                    "Delete topic note '" + slug + "'? This action cannot be undone.", "Delete Note", true,
+            deleteConfirmBar.prompt("Delete '" + slug + "'?", "Confirm Delete", true,
                     () -> performDeleteCurrentNote(slug));
         }
 
@@ -679,7 +642,7 @@ public final class AgentMemoryPanel extends JPanel {
         }
 
         private EditorResult executeDeleteNote(String slug) {
-            return callMemoryServiceSuppressingRefresh(() -> {
+            return memoryEventRefreshGuard.supply(() -> {
                 if (globalScope) {
                     return memoryService.deleteGlobalNote(slug);
                 }

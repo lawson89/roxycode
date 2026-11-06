@@ -247,33 +247,60 @@ public final class SwingHtmlUtils {
         });
     }
 
-    static void invalidateResponsiveImages(JEditorPane textPane) {
+    static boolean invalidateResponsiveImages(JEditorPane textPane) {
         if (textPane == null || textPane.getUI() == null) {
-            return;
+            return false;
         }
         View rootView = textPane.getUI().getRootView(textPane);
-        if (rootView != null) {
-            invalidateResponsiveImageViews(rootView);
-            if (textPane.getWidth() > 0 && textPane.getHeight() > 0) {
-                rootView.setSize(textPane.getWidth(), textPane.getHeight());
-            }
-            textPane.revalidate();
-            textPane.repaint();
+        if (rootView == null) {
+            return false;
         }
+        Element rootElement = null;
+        if (textPane.getDocument() != null) {
+            rootElement = textPane.getDocument().getDefaultRootElement();
+        }
+        boolean hasResponsiveView = invalidateResponsiveImageViews(rootView);
+        if (!hasResponsiveView && !hasImageElement(rootElement)) {
+            return false;
+        }
+        if (textPane.getWidth() > 0 && textPane.getHeight() > 0) {
+            rootView.setSize(textPane.getWidth(), textPane.getHeight());
+        }
+        textPane.revalidate();
+        textPane.repaint();
+        return true;
     }
 
-    private static void invalidateResponsiveImageViews(View view) {
+    private static boolean hasImageElement(Element elem) {
+        if (elem == null) {
+            return false;
+        }
+        if (HTML.Tag.IMG.toString().equalsIgnoreCase(elem.getName())) {
+            return true;
+        }
+        int count = elem.getElementCount();
+        for (int i = 0; i < count; i++) {
+            if (hasImageElement(elem.getElement(i))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean invalidateResponsiveImageViews(View view) {
         if (view instanceof ResponsiveImageView) {
             view.preferenceChanged(null, true, true);
-            return;
+            return true;
         }
+        boolean found = false;
         int count = view.getViewCount();
         for (int i = 0; i < count; i++) {
             View child = view.getView(i);
-            if (child != null) {
-                invalidateResponsiveImageViews(child);
+            if (child != null && invalidateResponsiveImageViews(child)) {
+                found = true;
             }
         }
+        return found;
     }
 
     private static boolean isNoWrap(Element elem) {

@@ -89,7 +89,7 @@ public final class FileMentionPopup {
     private volatile List<FileCandidate> cachedCandidates = List.of();
 
     private boolean popupActive = false;
-    private boolean updatingInputText = false;
+    private final UiComponents.UiGuard inputTextUpdateGuard = new UiComponents.UiGuard();
     private MentionToken activeToken;
 
     public FileMentionPopup(JTextArea inputArea, JScrollPane inputScrollPane) {
@@ -139,7 +139,7 @@ public final class FileMentionPopup {
     }
 
     private void onInputChanged() {
-        if (!updatingInputText) {
+        if (!inputTextUpdateGuard.isActive()) {
             Edt.run(this::evaluateCurrentInput);
         }
     }
@@ -259,7 +259,7 @@ public final class FileMentionPopup {
     }
 
     void evaluateCurrentInput() {
-        if (updatingInputText || !inputArea.isEnabled() || !inputArea.isEditable()) {
+        if (inputTextUpdateGuard.isActive() || !inputArea.isEnabled() || !inputArea.isEditable()) {
             hidePopup();
             return;
         }
@@ -295,17 +295,15 @@ public final class FileMentionPopup {
 
     private void updateCandidateListModel(List<FileCandidate> matches) {
         FileCandidate previousSelection = candidateList.getSelectedValue();
-        listModel.clear();
-        int selectedIndex = 0;
-        for (int i = 0; i < matches.size(); i++) {
-            FileCandidate c = matches.get(i);
-            listModel.addElement(c);
-            if (previousSelection != null && previousSelection.relativePath().equals(c.relativePath())) {
-                selectedIndex = i;
-            }
+        String previousKey = null;
+        if (previousSelection != null) {
+            previousKey = previousSelection.relativePath();
         }
-        candidateList.setSelectedIndex(selectedIndex);
-        candidateList.ensureIndexIsVisible(selectedIndex);
+        int selectedIndex = UiComponents.replaceListItemsPreservingSelection(listModel, candidateList, matches,
+                FileCandidate::relativePath, previousKey, true);
+        if (selectedIndex >= 0) {
+            candidateList.ensureIndexIsVisible(selectedIndex);
+        }
     }
 
     void updatePopupPosition(int atTokenStartOffset) {
@@ -408,7 +406,6 @@ public final class FileMentionPopup {
         candidateList.ensureIndexIsVisible(next);
     }
 
-    @SuppressWarnings("PMD.UnusedAssignment")
     public boolean acceptSelected() {
         if (!isPopupVisible()) {
             return false;
@@ -425,13 +422,10 @@ public final class FileMentionPopup {
         int end = Math.max(start, Math.min(token.endOffset(), docLen));
         String replacement = "@" + selected.relativePath() + " ";
 
-        updatingInputText = true;
-        try {
+        inputTextUpdateGuard.run(() -> {
             inputArea.replaceRange(replacement, start, end);
             inputArea.setCaretPosition(start + replacement.length());
-        } finally {
-            updatingInputText = false;
-        }
+        });
 
         hidePopup();
         if (inputArea.isShowing()) {

@@ -6,7 +6,6 @@ import java.awt.*;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.awt.event.KeyEvent;
@@ -14,7 +13,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -24,7 +23,6 @@ import javax.swing.*;
 import javax.swing.text.DefaultEditorKit;
 import javax.swing.undo.UndoManager;
 import net.miginfocom.swing.MigLayout;
-import org.apache.commons.lang3.StringUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
@@ -32,18 +30,7 @@ import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.UserInputService;
-import org.roxycode.app.events.TokenUsageEvent;
-import org.roxycode.app.events.AgentTurnCompleteEvent;
-import org.roxycode.app.events.AgentTurnEvent;
-import org.roxycode.app.events.FileChangedEvent;
-import org.roxycode.app.events.PhaseChangedEvent;
-import org.roxycode.app.events.PlanUpdatedEvent;
-import org.roxycode.app.events.ProjectChangedEvent;
-import org.roxycode.app.events.SettingsChangedEvent;
-import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.events.UserInputRequestEvent;
-import org.roxycode.app.events.UserInputRequestEvent.PromptType;
-import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.ProjectService;
@@ -53,11 +40,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
-import org.springframework.context.event.EventListener;
 
 @SuppressWarnings("PMD.NullAssignment")
 public final class ChatPanel extends JPanel implements AutoCloseable {
@@ -98,7 +85,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     JButton rejectButton;
     JButton resetSessionButton;
     final JPanel inlineActionPanel;
-    final JPanel userInputPromptPanel;
+    final ChatPromptBanner userInputPromptPanel;
     JLabel transitionLabel;
     JLabel turnLabel;
     JLabel ctxLabel;
@@ -110,11 +97,9 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     transient FileMentionPopup fileMentionPopup;
     private transient ProjectService projectService;
     private transient Runnable onViewPlanAction;
-    private transient Runnable activePromptCancelAction;
     private String defaultPlaceholderText = DEFAULT_PLACEHOLDER_TEXT;
     private boolean loading = false;
     private final List<Consumer<Boolean>> loadingListeners = new ArrayList<>();
-    private final List<Consumer<Boolean>> userInputListeners = new CopyOnWriteArrayList<>();
 
     @Configuration
     static class ChatPanelBeans {
@@ -122,23 +107,30 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         @Lazy
         ChatPanel exploreChatPanel(AiService aiService, PlanService planService,
                 ApplicationEventPublisher eventPublisher, ChatMemory chatMemory, SettingsService settingsService,
-                ExecutorService chatTurnExecutor, MemoryService memoryService, EnvironmentService environmentService,
-                ProjectService projectService) {
-            ChatPanel panel = createExplorePanel(aiService, planService, eventPublisher, chatMemory, settingsService,
+                ExecutorService chatTurnExecutor, MemoryService memoryService, EnvironmentService environmentService) {
+            return createExplorePanel(aiService, planService, eventPublisher, chatMemory, settingsService,
                     chatTurnExecutor, memoryService, environmentService);
-            panel.setProjectService(projectService);
-            return panel;
         }
 
         @Bean("featureChatPanel")
         @Lazy
         ChatPanel featureChatPanel(AiService aiService, PlanService planService,
                 ApplicationEventPublisher eventPublisher, ChatMemory chatMemory, SettingsService settingsService,
-                ExecutorService chatTurnExecutor, ProjectService projectService) {
-            ChatPanel panel = createFeaturePanel(aiService, planService, eventPublisher, chatMemory, settingsService,
+                ExecutorService chatTurnExecutor) {
+            return createFeaturePanel(aiService, planService, eventPublisher, chatMemory, settingsService,
                     chatTurnExecutor);
-            panel.setProjectService(projectService);
-            return panel;
+        }
+
+        @Bean("exploreChatController")
+        @Lazy
+        ChatController exploreChatController(@Qualifier("exploreChatPanel") ChatPanel exploreChatPanel) {
+            return exploreChatPanel.controller;
+        }
+
+        @Bean("featureChatController")
+        @Lazy
+        ChatController featureChatController(@Qualifier("featureChatPanel") ChatPanel featureChatPanel) {
+            return featureChatPanel.controller;
         }
     }
 
@@ -167,7 +159,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         setLayout(new BorderLayout());
 
         this.inlineActionPanel = createInlineActionPanel();
-        this.userInputPromptPanel = createUserInputPromptPanel();
+        this.userInputPromptPanel = new ChatPromptBanner();
         Component topComponent = createOutputSection(isTaskMode);
         initTelemetryComponents();
         JPanel inputSection = createInputSection(isTaskMode);
@@ -190,7 +182,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         SwingHtmlUtils.applyTintedBannerStyle(panel, SwingHtmlUtils.getAccentColor(), 10, 16, 20);
         panel.setVisible(false);
 
-        transitionLabel = createPromptHeaderLabel("Workflow Transition", Codicons.ROCKET);
+        transitionLabel = ChatPromptBanner.createPromptHeaderLabel("Workflow Transition", Codicons.ROCKET);
         transitionLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Component.accentColor");
 
         approveButton = UiComponents.createActionButton("Approve", Codicons.CHECK, null, false,
@@ -242,17 +234,6 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         outputPanel.add(outputScrollPane, BorderLayout.CENTER);
         outputPanel.add(southPanel, BorderLayout.SOUTH);
         return outputPanel;
-    }
-
-    private JPanel createUserInputPromptPanel() {
-        JPanel panel = new JPanel(new MigLayout("insets 0, fillx, wrap 1, gapy 8", GROW_FILL_COL));
-        SwingHtmlUtils.applyTintedBannerStyle(panel, SwingHtmlUtils.getAccentColor(), 10, 16, 20);
-        KeyStroke escapeKey = KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0);
-        ActionListener escapeListener = e -> cancelActivePrompt();
-        panel.registerKeyboardAction(escapeListener, escapeKey, JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
-        panel.registerKeyboardAction(escapeListener, escapeKey, JComponent.WHEN_IN_FOCUSED_WINDOW);
-        panel.setVisible(false);
-        return panel;
     }
 
     private JPanel createInputSection(boolean isTaskMode) {
@@ -428,17 +409,11 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     void applyInlineBannerStyling() {
         Color accent = SwingHtmlUtils.getAccentColor();
         SwingHtmlUtils.applyTintedBannerStyle(inlineActionPanel, accent, 10, 16, 20);
-        SwingHtmlUtils.applyTintedBannerStyle(userInputPromptPanel, accent, 10, 16, 20);
         if (transitionLabel != null && transitionLabel.getIcon() instanceof FontIcon fontIcon) {
             transitionLabel.setIcon(FontIcon.of(fontIcon.getIkon(), fontIcon.getIconSize(), accent));
         }
-        for (Component child : userInputPromptPanel.getComponents()) {
-            if (child instanceof JLabel label && label.getIcon() instanceof FontIcon fontIcon) {
-                label.setIcon(FontIcon.of(fontIcon.getIkon(), fontIcon.getIconSize(), accent));
-            }
-        }
         UiComponents.refreshActionButtonIcons(inlineActionPanel);
-        UiComponents.refreshActionButtonIcons(userInputPromptPanel);
+        userInputPromptPanel.applyThemeStyling();
     }
 
     private void updateOutputScrollPaneBorder() {
@@ -457,6 +432,10 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
     @Autowired(required = false)
     public void setProjectService(ProjectService projectService) {
+        if (Objects.equals(this.projectService, projectService)) {
+            updateProjectComposerState();
+            return;
+        }
         this.projectService = projectService;
         controller.setProjectService(projectService);
         updateProjectComposerState();
@@ -537,67 +516,8 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         }
     }
 
-    @EventListener
-    public void onAgentTurn(AgentTurnEvent event) {
-        controller.onAgentTurn(event);
-    }
-
-    @EventListener
-    public void onToolExecution(ToolExecutionEvent event) {
-        controller.onToolExecution(event);
-    }
-
-    @EventListener
-    public void onUserInputRequest(UserInputRequestEvent event) {
-        controller.onUserInputRequest(event);
-    }
-
-    @EventListener
-    public void onTokenUsage(TokenUsageEvent event) {
-        controller.onTokenUsage(event);
-    }
-
-    @EventListener
-    public void onAgentTurnComplete(AgentTurnCompleteEvent event) {
-        controller.onAgentTurnComplete(event);
-    }
-
-    @EventListener
-    public void onSettingsChanged(SettingsChangedEvent event) {
-        controller.onSettingsChanged(event);
-    }
-
-    @EventListener
-    public void onProjectChanged(ProjectChangedEvent event) {
+    void invalidateFileMentionCache() {
         fileMentionPopup.invalidateCache();
-        controller.onProjectChanged(event);
-        Edt.run(this::updateProjectComposerState);
-    }
-
-    @EventListener
-    public void onFileChanged(FileChangedEvent event) {
-        fileMentionPopup.invalidateCache();
-    }
-
-    @EventListener
-    public void onWorkflowTransition(WorkflowTransitionEvent event) {
-        if (model.isTaskMode()) {
-            controller.onWorkflowTransition(event);
-        }
-    }
-
-    @EventListener
-    public void onPhaseChanged(PhaseChangedEvent event) {
-        if (model.isTaskMode()) {
-            controller.onPhaseChanged(event);
-        }
-    }
-
-    @EventListener
-    public void onPlanUpdated(PlanUpdatedEvent event) {
-        if (model.isTaskMode()) {
-            controller.onPlanUpdated(event);
-        }
     }
 
     void updateTurnLabel() {
@@ -690,188 +610,24 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         inlineActionPanel.setVisible(false);
     }
 
-    private static JLabel createPromptHeaderLabel(String text, Codicons icon) {
-        Color accentColor = SwingHtmlUtils.getUiColor(Color.GRAY, "Component.accentColor", "Label.foreground");
-        JLabel label = new JLabel(text, FontIcon.of(icon, 16, accentColor), SwingConstants.LEFT);
-        label.setFont(label.getFont().deriveFont(Font.BOLD));
-        return label;
-    }
-
-    private void resetPromptPanelWithHeader(String text, Codicons icon) {
-        userInputPromptPanel.removeAll();
-        userInputPromptPanel.add(createPromptHeaderLabel(text, icon));
-    }
-
-    private static JPanel createPromptActionsRow(JComponent... components) {
-        JPanel actionsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        actionsPanel.setOpaque(false);
-        for (JComponent component : components) {
-            actionsPanel.add(component);
-        }
-        return actionsPanel;
-    }
-
-    private void showPromptPanel() {
-        userInputPromptPanel.setVisible(true);
-        userInputPromptPanel.revalidate();
-        userInputPromptPanel.repaint();
-        for (Consumer<Boolean> listener : userInputListeners) {
-            listener.accept(Boolean.TRUE);
-        }
-    }
-
     void showUserInputPrompt(UserInputRequestEvent event, Consumer<Object> onResponse) {
-        resetPromptPanelWithHeader(event.question(), Codicons.QUESTION);
-
-        if (StringUtils.isNotBlank(event.details())) {
-            JLabel detailsLabel = new JLabel(event.details());
-            detailsLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Label.disabledForeground");
-            userInputPromptPanel.add(detailsLabel);
-        }
-
-        PromptType promptType = event.promptType();
-        if (promptType == PromptType.CONFIRM) {
-            activePromptCancelAction = () -> onResponse.accept(Boolean.FALSE);
-            JButton yesButton = UiComponents.createActionButton("Yes", Codicons.CHECK, null, false,
-                    UiComponents.ACCENT_BUTTON_STYLE, e -> onResponse.accept(Boolean.TRUE));
-            JButton noButton = UiComponents.createActionButton("No", Codicons.CLOSE, null, false, null,
-                    e -> onResponse.accept(Boolean.FALSE));
-            userInputPromptPanel.add(createPromptActionsRow(yesButton, noButton));
-        } else if (promptType == PromptType.SINGLE_SELECT) {
-            JPanel optionsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
-            optionsPanel.setOpaque(false);
-            JComboBox<String> comboBox = new JComboBox<>(event.options().toArray(new String[0]));
-            optionsPanel.add(comboBox);
-            JButton submitButton = UiComponents.createActionButton("Submit", Codicons.CHECK, null, false,
-                    UiComponents.ACCENT_BUTTON_STYLE, e -> onResponse.accept((String) comboBox.getSelectedItem()));
-            optionsPanel.add(submitButton);
-            userInputPromptPanel.add(optionsPanel);
-        } else if (promptType == PromptType.MULTI_SELECT) {
-            JPanel checksPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 4));
-            checksPanel.setOpaque(false);
-            List<JCheckBox> checkBoxes = new ArrayList<>(event.options().size());
-            for (String option : event.options()) {
-                JCheckBox checkBox = new JCheckBox(option);
-                checkBox.setOpaque(false);
-                checkBoxes.add(checkBox);
-                checksPanel.add(checkBox);
-            }
-            JButton submitButton = UiComponents.createActionButton("Submit", Codicons.CHECK, null, false,
-                    UiComponents.ACCENT_BUTTON_STYLE, e -> {
-                        List<String> selected = new ArrayList<>();
-                        for (JCheckBox cb : checkBoxes) {
-                            if (cb.isSelected()) {
-                                selected.add(cb.getText());
-                            }
-                        }
-                        onResponse.accept(List.copyOf(selected));
-                    });
-            checksPanel.add(submitButton);
-            userInputPromptPanel.add(checksPanel);
-        } else if (promptType == PromptType.TEXT) {
-            JPanel textPanel = new JPanel(new MigLayout("insets 0, fillx, gap 8", "[grow, fill][]"));
-            textPanel.setOpaque(false);
-            JTextField textField = new JTextField(StringUtils.defaultString(event.defaultValue()));
-            ActionListener submitAction = e -> onResponse.accept(textField.getText());
-            textField.addActionListener(submitAction);
-            JButton submitButton = UiComponents.createActionButton("Submit", Codicons.CHECK, null, false,
-                    UiComponents.ACCENT_BUTTON_STYLE, submitAction);
-            textPanel.add(textField, "growx");
-            textPanel.add(submitButton);
-            userInputPromptPanel.add(textPanel);
-            SwingUtilities.invokeLater(textField::requestFocusInWindow);
-        }
-
-        showPromptPanel();
+        userInputPromptPanel.showUserInputPrompt(event, onResponse);
     }
 
     boolean cancelActivePrompt() {
-        if (!userInputPromptPanel.isVisible() || activePromptCancelAction == null) {
-            return false;
-        }
-        Runnable action = activePromptCancelAction;
-        activePromptCancelAction = null;
-        action.run();
-        return true;
+        return userInputPromptPanel.cancelActivePrompt();
     }
 
     void hideUserInputPrompt() {
-        activePromptCancelAction = null;
-        boolean wasVisible = userInputPromptPanel.isVisible();
-        userInputPromptPanel.removeAll();
-        userInputPromptPanel.setVisible(false);
-        userInputPromptPanel.revalidate();
-        userInputPromptPanel.repaint();
-        if (wasVisible) {
-            for (Consumer<Boolean> listener : userInputListeners) {
-                listener.accept(Boolean.FALSE);
-            }
-        }
+        userInputPromptPanel.hidePrompt();
     }
 
     void showResetSessionPrompt(Runnable onConfirm) {
-        resetPromptPanelWithHeader(RESET_SESSION_PROMPT_MESSAGE, Codicons.QUESTION);
-        activePromptCancelAction = this::hideUserInputPrompt;
-
-        JButton confirmButton = UiComponents.createActionButton(CONFIRM_RESET_BUTTON_TEXT, Codicons.TRASH, null, false,
-                UiComponents.SUBTLE_RED_BUTTON_STYLE, e -> {
-                    hideUserInputPrompt();
-                    if (onConfirm != null) {
-                        onConfirm.run();
-                    }
-                });
-        JButton cancelButton = UiComponents.createActionButton(CANCEL_BUTTON_TEXT, Codicons.CLOSE, null, false, null,
-                e -> hideUserInputPrompt());
-        userInputPromptPanel.add(createPromptActionsRow(confirmButton, cancelButton));
-
-        showPromptPanel();
+        userInputPromptPanel.showResetSessionPrompt(onConfirm);
     }
 
     void showNewTopicPrompt(String defaultTopicName, Consumer<NewTopicChoice> onChoice) {
-        resetPromptPanelWithHeader(NEW_TOPIC_PROMPT_MESSAGE, Codicons.COMMENT_DISCUSSION);
-        Runnable cancelTopicAction = () -> {
-            hideUserInputPrompt();
-            if (onChoice != null) {
-                onChoice.accept(new NewTopicChoice(false, false, ""));
-            }
-        };
-        activePromptCancelAction = cancelTopicAction;
-
-        JPanel fieldPanel = new JPanel(new MigLayout("insets 0, fillx, gap 8", "[][grow, fill]"));
-        fieldPanel.setOpaque(false);
-        JLabel nameLabel = new JLabel(TOPIC_NAME_LABEL_TEXT);
-        JTextField topicNameField = new JTextField(StringUtils.defaultString(defaultTopicName), 30);
-        topicNameField.selectAll();
-        ActionListener saveAction = e -> {
-            String enteredName = topicNameField.getText();
-            hideUserInputPrompt();
-            if (onChoice != null) {
-                onChoice.accept(new NewTopicChoice(true, true, enteredName));
-            }
-        };
-        topicNameField.addActionListener(saveAction);
-        fieldPanel.add(nameLabel);
-        fieldPanel.add(topicNameField, "growx");
-        userInputPromptPanel.add(fieldPanel);
-
-        JButton saveButton = UiComponents.createActionButton(SAVE_TOPIC_BUTTON_TEXT, Codicons.CHECK, null, false,
-                UiComponents.ACCENT_BUTTON_STYLE, saveAction);
-        JButton discardButton = UiComponents.createActionButton(DISCARD_TOPIC_BUTTON_TEXT, Codicons.TRASH, null, false,
-                UiComponents.SUBTLE_RED_BUTTON_STYLE, e -> {
-                    hideUserInputPrompt();
-                    if (onChoice != null) {
-                        onChoice.accept(new NewTopicChoice(true, false, ""));
-                    }
-                });
-        JButton cancelButton = UiComponents.createActionButton(CANCEL_BUTTON_TEXT, Codicons.CLOSE, null, false, null,
-                e -> cancelTopicAction.run());
-        userInputPromptPanel.add(createPromptActionsRow(saveButton, discardButton, cancelButton));
-
-        showPromptPanel();
-        SwingUtilities.invokeLater(() -> {
-            topicNameField.selectAll();
-            topicNameField.requestFocusInWindow();
-        });
+        userInputPromptPanel.showNewTopicPrompt(defaultTopicName, onChoice);
     }
 
     private void sendMessage(ActionEvent e) {
@@ -989,9 +745,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     public void addUserInputListener(Consumer<Boolean> listener) {
-        if (listener != null) {
-            userInputListeners.add(listener);
-        }
+        userInputPromptPanel.addVisibilityListener(listener);
     }
 
     public void addLoadingListener(Consumer<Boolean> listener) {
