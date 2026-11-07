@@ -9,6 +9,7 @@ import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.Document;
 import javax.swing.text.html.HTMLDocument;
 import org.junit.jupiter.api.Test;
+import org.roxycode.app.model.ChatTranscriptEntry;
 
 class MarkdownPaneTest {
 
@@ -50,7 +51,7 @@ class MarkdownPaneTest {
                 "copy-cell-5", "tool-accent", "tool-accent-error");
         assertFalse(html.contains("<eof>"));
 
-        List<MarkdownPane.ChatTranscriptEntry> transcript = pane.getConversationMessages();
+        List<ChatTranscriptEntry> transcript = pane.getConversationMessages();
         assertEquals(4, transcript.size());
         assertEquals("user", transcript.get(0).role());
         assertEquals("ai", transcript.get(1).role());

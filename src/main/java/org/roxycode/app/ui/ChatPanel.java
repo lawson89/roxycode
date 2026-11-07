@@ -13,7 +13,6 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -32,12 +31,12 @@ import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.UserInputService;
 import org.roxycode.app.events.UserInputRequestEvent;
+import org.roxycode.app.model.ChatTranscriptEntry;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.util.Edt;
-import org.roxycode.app.util.TokenUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -56,19 +55,10 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     static final String NEW_TOPIC_BUTTON_TEXT = "New Topic";
     static final String RESET_SESSION_BUTTON_TEXT = "Reset Session";
     static final String NEW_TOPIC_TOOLTIP = "Archive current conversation and start a new Q&A topic";
-    static final String NEW_TOPIC_PROMPT_MESSAGE = "Save the current topic to Past Topics before starting a new one?";
-    static final String TOPIC_NAME_LABEL_TEXT = "Topic Name:";
-    static final String SAVE_TOPIC_BUTTON_TEXT = "Yes, Save Topic";
-    static final String DISCARD_TOPIC_BUTTON_TEXT = "No, Discard";
-    static final String RESET_SESSION_PROMPT_MESSAGE = "Reset session? This cancels active tasks and clears chat history.";
-    static final String CONFIRM_RESET_BUTTON_TEXT = "Yes, Reset";
-    static final String CANCEL_BUTTON_TEXT = "Cancel";
     static final String DEFAULT_PLACEHOLDER_TEXT = "Type a message... (Enter to send, Shift+Enter for newline, @ to mention files, Ctrl+V to paste image)";
     static final String NO_PROJECT_PLACEHOLDER_TEXT = "Select a project folder in the top bar (Change Project...) to start chatting...";
     private static final String TOOLBAR_BUTTON_STYLE = "arc: 8; font: -1; foreground: $Label.disabledForeground";
     private static final String GROW_FILL_COL = "[grow, fill]";
-    private static final int CTX_USAGE_CRITICAL_PCT = 90;
-    private static final int CTX_USAGE_WARNING_PCT = 75;
     static final int THUMBNAIL_SIZE = 64;
 
     public record NewTopicChoice(boolean proceed, boolean saveTopic, String topicName) {
@@ -89,11 +79,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     final JPanel inlineActionPanel;
     final ChatPromptBanner userInputPromptPanel;
     JLabel transitionLabel;
-    JLabel turnLabel;
-    JLabel ctxLabel;
-    JProgressBar ctxProgressBar;
-    JLabel cacheLabel;
-    JProgressBar cacheProgressBar;
+    final transient ChatTelemetryBar telemetryBar;
     private JScrollPane outputScrollPane;
     private JPanel attachmentPanel;
     transient FileMentionPopup fileMentionPopup;
@@ -162,8 +148,8 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
         this.inlineActionPanel = createInlineActionPanel();
         this.userInputPromptPanel = new ChatPromptBanner();
+        this.telemetryBar = new ChatTelemetryBar(getFont());
         Component topComponent = createOutputSection(isTaskMode);
-        initTelemetryComponents();
         JPanel inputSection = createInputSection(isTaskMode);
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topComponent, inputSection);
@@ -305,9 +291,6 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
                 TOOLBAR_BUTTON_STYLE, e -> triggerMentionPopup());
         mentionButton.setToolTipText("Insert @ to search and mention project files");
 
-        turnLabel = new JLabel();
-        turnLabel.putClientProperty(FlatClientProperties.STYLE,
-                "font: $small.font; foreground: $Label.disabledForeground; background: darken($TextArea.background, 4%); arc: 8; border: 2,8,2,8");
         updateTurnLabel();
 
         JPanel actionToolbar = new JPanel(
@@ -316,11 +299,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         actionToolbar.add(attachImageButton);
         actionToolbar.add(resetSessionButton);
         actionToolbar.add(mentionButton);
-        actionToolbar.add(ctxLabel);
-        actionToolbar.add(ctxProgressBar, "w 48!, h 6!");
-        actionToolbar.add(cacheLabel);
-        actionToolbar.add(cacheProgressBar, "w 44!, h 6!");
-        actionToolbar.add(turnLabel);
+        telemetryBar.addToToolbar(actionToolbar);
         actionToolbar.add(sendButton, "hidemode 3");
         actionToolbar.add(stopButton, "hidemode 3");
 
@@ -341,23 +320,6 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         }
         composerCard.putClientProperty(FlatClientProperties.STYLE,
                 "arc: 12; background: $TextArea.background; border: 1,1,1,1," + borderColorToken);
-    }
-
-    private void initTelemetryComponents() {
-        Font statusFont = getFont().deriveFont(11f);
-        ctxLabel = new JLabel();
-        ctxLabel.setFont(statusFont);
-        ctxLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Label.disabledForeground");
-        ctxProgressBar = new JProgressBar(0, 100);
-        ctxProgressBar.setStringPainted(false);
-        ctxProgressBar.putClientProperty(FlatClientProperties.STYLE, "arc: 6; foreground: $Component.accentColor");
-
-        cacheLabel = new JLabel();
-        cacheLabel.setFont(statusFont);
-        cacheLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Label.disabledForeground");
-        cacheProgressBar = new JProgressBar(0, 100);
-        cacheProgressBar.setStringPainted(false);
-        cacheProgressBar.putClientProperty(FlatClientProperties.STYLE, "arc: 6; foreground: $Actions.Green");
     }
 
     private static Action createAction(Runnable action) {
@@ -523,55 +485,8 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     void updateTurnLabel() {
-        turnLabel.setText(controller.formatCurrentTurnStatus());
+        telemetryBar.update(model, controller.formatCurrentTurnStatus());
         updateInputPlaceholderText();
-        updateTelemetry();
-    }
-
-    private void updateTelemetry() {
-        long lastPromptTokens = model.getLastPromptTokens();
-        long lastCachedInputTokens = model.getLastCachedInputTokens();
-        int contextWindow = Math.max(1, model.getLastContextWindowTokens());
-        int ctxPct = (int) Math.min(100L, Math.max(0L, Math.round((lastPromptTokens * 100.0) / contextWindow)));
-        int lastCacheHitPct = TokenUtils.computeCacheHitPercent(lastCachedInputTokens, lastPromptTokens);
-
-        String formattedPrompt;
-        if (lastPromptTokens > 0) {
-            formattedPrompt = TokenUtils.formatTokenCount(lastPromptTokens);
-        } else {
-            formattedPrompt = "0";
-        }
-        String formattedWindow = TokenUtils.formatTokenCount(contextWindow);
-        String formattedCached;
-        if (lastCachedInputTokens > 0) {
-            formattedCached = TokenUtils.formatTokenCount(lastCachedInputTokens);
-        } else {
-            formattedCached = "0";
-        }
-
-        ctxLabel.setText(String.format(Locale.US, "Ctx: %s / %s (%d%%)", formattedPrompt, formattedWindow, ctxPct));
-        cacheLabel.setText(String.format(Locale.US, "Cache: %d%%", lastCacheHitPct));
-
-        String ctxBarStyle;
-        if (ctxPct >= CTX_USAGE_CRITICAL_PCT) {
-            ctxBarStyle = "arc: 6; foreground: $Actions.Red";
-        } else if (ctxPct >= CTX_USAGE_WARNING_PCT) {
-            ctxBarStyle = "arc: 6; foreground: $Actions.Yellow";
-        } else {
-            ctxBarStyle = "arc: 6; foreground: $Component.accentColor";
-        }
-        ctxProgressBar.putClientProperty(FlatClientProperties.STYLE, ctxBarStyle);
-        ctxProgressBar.setValue(ctxPct);
-        String ctxTooltip = String.format(Locale.US, "Context window usage: %s / %s tokens (%d%%)", formattedPrompt,
-                formattedWindow, ctxPct);
-        ctxLabel.setToolTipText(ctxTooltip);
-        ctxProgressBar.setToolTipText(ctxTooltip);
-
-        cacheProgressBar.setValue(lastCacheHitPct);
-        String cacheTooltip = String.format(Locale.US, "Implicit cache hit: %s / %s input tokens (%d%%)",
-                formattedCached, formattedPrompt, lastCacheHitPct);
-        cacheLabel.setToolTipText(cacheTooltip);
-        cacheProgressBar.setToolTipText(cacheTooltip);
     }
 
     void appendMessage(String role, String content) {
@@ -668,18 +583,6 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         });
     }
 
-    static BufferedImage createThumbnail(BufferedImage source, int size) {
-        BufferedImage thumb = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2 = thumb.createGraphics();
-        try {
-            g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-            g2.drawImage(source, 0, 0, size, size, null);
-        } finally {
-            g2.dispose();
-        }
-        return thumb;
-    }
-
     void addPendingImage(Image img) {
         BufferedImage bimage = model.addPendingImage(img);
         attachmentPanel.add(createAttachmentChip(bimage));
@@ -689,7 +592,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     private JPanel createAttachmentChip(BufferedImage bimage) {
-        JLabel thumbLabel = new JLabel(new ImageIcon(createThumbnail(bimage, THUMBNAIL_SIZE)));
+        JLabel thumbLabel = new JLabel(new ImageIcon(UiComponents.createThumbnail(bimage, THUMBNAIL_SIZE)));
         thumbLabel.setBorder(
                 BorderFactory.createLineBorder(SwingHtmlUtils.getUiColor(Color.GRAY, "Component.borderColor")));
 
@@ -754,7 +657,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         }
     }
 
-    public List<MarkdownPane.ChatTranscriptEntry> getConversationMessages() {
+    public List<ChatTranscriptEntry> getConversationMessages() {
         return outputArea.getConversationMessages();
     }
 

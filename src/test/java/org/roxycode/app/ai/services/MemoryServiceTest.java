@@ -23,7 +23,7 @@ import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
-import org.roxycode.app.ui.MarkdownPane.ChatTranscriptEntry;
+import org.roxycode.app.model.ChatTranscriptEntry;
 import org.roxycode.app.util.FrontmatterUtils;
 
 class MemoryServiceTest {

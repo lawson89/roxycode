@@ -17,7 +17,6 @@ import java.util.Set;
 import java.util.Collection;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Stream;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
@@ -196,7 +195,7 @@ public class SymbolService {
                 continue;
             }
             String relPath = fileEntry.getValue();
-            for (SymbolInfo symbol : finalizeSymbolsForFile(entriesForFile, relPath, filePath, -1)) {
+            for (SymbolInfo symbol : CtagsRunner.finalizeSymbolsForFile(entriesForFile, relPath, filePath, -1)) {
                 if (matchesSymbol(symbol, trimmedQuery)) {
                     matches.add(symbol);
                 }
@@ -402,7 +401,7 @@ public class SymbolService {
                 continue;
             }
             String relPath = fileEntry.getValue();
-            outlines.put(relPath, finalizeSymbolsForFile(entries, relPath, filePath, -1));
+            outlines.put(relPath, CtagsRunner.finalizeSymbolsForFile(entries, relPath, filePath, -1));
         }
         return outlines;
     }
@@ -621,7 +620,8 @@ public class SymbolService {
         if (entries.isEmpty()) {
             return List.of();
         }
-        return finalizeSymbolsForFile(entries, normalizeRelativePath(filePath, relativePath), filePath, totalLines);
+        return CtagsRunner.finalizeSymbolsForFile(entries, normalizeRelativePath(filePath, relativePath), filePath,
+                totalLines);
     }
 
     private String extractSymbolContent(String relativePath, String symbolName, List<SymbolInfo> outline,
@@ -734,54 +734,6 @@ public class SymbolService {
         return ERROR_PREFIX + "Symbol '" + StringUtils.defaultString(symbolName) + "' not found in " + relativePath;
     }
 
-    private static List<SymbolInfo> finalizeSymbolsForFile(List<CtagsEntry> entries, String relPath, Path filePath,
-            int knownTotalLines) {
-        List<CtagsEntry> sorted = new ArrayList<>(entries);
-        sorted.sort(Comparator.comparingInt(CtagsEntry::line).thenComparing(CtagsEntry::name));
-        int totalLines = knownTotalLines;
-        List<SymbolInfo> finalized = new ArrayList<>(sorted.size());
-        for (int i = 0; i < sorted.size(); i++) {
-            CtagsEntry current = sorted.get(i);
-            if (current.end() < current.line() && totalLines < 0 && !hasSubsequentLineSymbol(sorted, i)) {
-                totalLines = countLinesSafely(filePath);
-            }
-            int resolvedEnd = resolveEndLine(sorted, i, totalLines);
-            finalized.add(new SymbolInfo(current.name(), current.kind(), relPath, current.line(), resolvedEnd,
-                    current.scope(), current.signature()));
-        }
-        return finalized;
-    }
-
-    private static boolean hasSubsequentLineSymbol(List<CtagsEntry> sorted, int index) {
-        int currentLine = sorted.get(index).line();
-        for (int j = index + 1; j < sorted.size(); j++) {
-            if (sorted.get(j).line() > currentLine) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static int resolveEndLine(List<CtagsEntry> sorted, int index, int totalLines) {
-        CtagsEntry current = sorted.get(index);
-        if (current.end() >= current.line()) {
-            if (totalLines > 0) {
-                return Math.min(current.end(), Math.max(current.line(), totalLines));
-            }
-            return current.end();
-        }
-        for (int j = index + 1; j < sorted.size(); j++) {
-            int nextStart = sorted.get(j).line();
-            if (nextStart > current.line()) {
-                return nextStart - 1;
-            }
-        }
-        if (totalLines >= current.line()) {
-            return totalLines;
-        }
-        return current.line();
-    }
-
     private Path resolveRegularFile(String relativePath) {
         Path path = projectService.resolveReadPath(relativePath);
         if (path == null || !Files.isRegularFile(path)) {
@@ -797,13 +749,5 @@ public class SymbolService {
             return formatted;
         }
         return PathUtils.normalizeRelativePath(StringUtils.trimToEmpty(fallbackRelativePath));
-    }
-
-    private static int countLinesSafely(Path filePath) {
-        try (Stream<String> lines = Files.lines(filePath)) {
-            return (int) lines.count();
-        } catch (Exception e) {
-            return 0;
-        }
     }
 }

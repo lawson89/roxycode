@@ -36,7 +36,7 @@ import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.SettingsService;
-import org.roxycode.app.ui.MarkdownPane.ChatTranscriptEntry;
+import org.roxycode.app.model.ChatTranscriptEntry;
 import org.roxycode.app.ui.MarkdownPane.PersistedChatEntry;
 import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.ExceptionUtils;

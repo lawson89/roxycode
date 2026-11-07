@@ -1,6 +1,5 @@
 package org.roxycode.app.service;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
@@ -14,10 +13,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Stream;
 import org.apache.commons.lang3.StringUtils;
-import java.util.function.BiConsumer;
-import java.util.function.Function;
 import org.apache.commons.text.StringSubstitutor;
-import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.EditorResult;
@@ -26,13 +22,13 @@ import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
-import org.roxycode.app.events.ContextChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.ProjectService.ReferenceFolderMount;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
@@ -46,7 +42,6 @@ public class PromptService {
     private static final String REVIEW_PROMPT_PATH = "prompts/review_phase.md";
     private static final String PLAN_PROMPT_PATH = "prompts/plan_phase.md";
     private static final String CODE_PROMPT_PATH = "prompts/code_phase.md";
-    static final String PROJECT_CONTEXT_CONFIG_FILE = "context.toml";
     private static final int MAX_RECENT_ARCHIVED_PLANS = 5;
 
     private static final String NEWLINE_DOUBLE = "\n\n";
@@ -67,16 +62,6 @@ public class PromptService {
         }
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record ProjectContextConfig(List<String> folders, List<String> referenceFolders) {
-        public static final ProjectContextConfig EMPTY = new ProjectContextConfig(List.of(), List.of());
-
-        public ProjectContextConfig {
-            folders = List.copyOf(Objects.requireNonNullElse(folders, List.of()));
-            referenceFolders = List.copyOf(Objects.requireNonNullElse(referenceFolders, List.of()));
-        }
-    }
-
     private final ProjectService projectService;
     private final SettingsService settingsService;
     private final PlanService planService;
@@ -85,12 +70,12 @@ public class PromptService {
     private final ProjectAnalysisService projectAnalysisService;
     private final RepoMapPackerService repoMapPackerService;
     private final MemoryService memoryService;
-    private final ApplicationEventPublisher eventPublisher;
 
+    @Autowired
     public PromptService(ProjectService projectService, SettingsService settingsService, PlanService planService,
             JexlServiceRegistry jexlServiceRegistry, GitService gitService,
             ProjectAnalysisService projectAnalysisService, RepoMapPackerService repoMapPackerService,
-            MemoryService memoryService, ApplicationEventPublisher eventPublisher) {
+            MemoryService memoryService) {
         this.projectService = projectService;
         this.settingsService = settingsService;
         this.planService = planService;
@@ -99,7 +84,14 @@ public class PromptService {
         this.projectAnalysisService = projectAnalysisService;
         this.repoMapPackerService = repoMapPackerService;
         this.memoryService = memoryService;
-        this.eventPublisher = eventPublisher;
+    }
+
+    public PromptService(ProjectService projectService, SettingsService settingsService, PlanService planService,
+            JexlServiceRegistry jexlServiceRegistry, GitService gitService,
+            ProjectAnalysisService projectAnalysisService, RepoMapPackerService repoMapPackerService,
+            MemoryService memoryService, ApplicationEventPublisher eventPublisher) {
+        this(projectService, settingsService, planService, jexlServiceRegistry, gitService, projectAnalysisService,
+                repoMapPackerService, memoryService);
     }
 
     public String getStableContext() {
@@ -269,70 +261,20 @@ public class PromptService {
         return readClasspathResource(USER_GUIDE_DOC_PATH);
     }
 
-    static List<String> getGlobalFolderList(SettingsService settingsService,
-            Function<AppSettings, List<String>> getter) {
-        if (settingsService == null || settingsService.getSettings() == null) {
-            return List.of();
-        }
-        return normalizeFolderList(getter.apply(settingsService.getSettings()));
-    }
-
-    static void setGlobalFolderList(SettingsService settingsService, ApplicationEventPublisher eventPublisher,
-            List<String> folders, BiConsumer<AppSettings, List<String>> setter) {
-        if (settingsService == null) {
-            return;
-        }
-        AppSettings settings = settingsService.getSettings();
-        if (settings != null) {
-            setter.accept(settings, normalizeFolderList(folders));
-            settingsService.saveSettings();
-            if (eventPublisher != null) {
-                eventPublisher.publishEvent(new ContextChangedEvent(true));
-            }
-        }
-    }
-
-    static ProjectContextConfig readProjectContextConfig(ProjectService projectService) {
-        if (projectService == null || !projectService.hasActiveProject()) {
-            return ProjectContextConfig.EMPTY;
-        }
-        return PathUtils.readTomlOrDefault(projectService.resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE),
-                ProjectContextConfig.class, ProjectContextConfig.EMPTY, AiConfig.SHARED_TOML_MAPPER);
-    }
-
-    static void writeProjectContextConfig(ProjectService projectService, ApplicationEventPublisher eventPublisher,
-            ProjectContextConfig config) {
-        if (projectService == null || !projectService.hasActiveProject()) {
-            throw new IllegalStateException("No active project");
-        }
-        Path configFile = projectService.resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE);
-        try {
-            PathUtils.writeToml(configFile, config, AiConfig.SHARED_TOML_MAPPER);
-            if (eventPublisher != null) {
-                eventPublisher.publishEvent(new ContextChangedEvent(false));
-            }
-        } catch (IOException e) {
-            log.error("Failed to save project context config {}: {}", configFile, e.getMessage());
-            throw new UncheckedIOException("Failed to save project context config", e);
-        }
-    }
-
     public List<String> getGlobalContextFolders() {
-        return getGlobalFolderList(settingsService, AppSettings::getGlobalContextFolders);
+        return projectService.getGlobalContextFolders();
     }
 
     public void setGlobalContextFolders(List<String> folders) {
-        setGlobalFolderList(settingsService, eventPublisher, folders, AppSettings::setGlobalContextFolders);
+        projectService.setGlobalContextFolders(folders);
     }
 
     public List<String> getProjectContextFolders() {
-        return normalizeFolderList(readProjectContextConfig(projectService).folders());
+        return projectService.getProjectContextFolders();
     }
 
     public void setProjectContextFolders(List<String> folders) {
-        ProjectContextConfig existing = readProjectContextConfig(projectService);
-        writeProjectContextConfig(projectService, eventPublisher,
-                new ProjectContextConfig(normalizeFolderList(folders), existing.referenceFolders()));
+        projectService.setProjectContextFolders(folders);
     }
 
     public List<String> getGlobalReferenceFolders() {
@@ -483,13 +425,6 @@ public class PromptService {
         } catch (IOException e) {
             return false;
         }
-    }
-
-    static List<String> normalizeFolderList(List<String> folders) {
-        if (folders == null) {
-            return List.of();
-        }
-        return folders.stream().filter(f -> f != null && !f.isBlank()).map(String::trim).distinct().toList();
     }
 
     private String readClasspathResource(String path) {

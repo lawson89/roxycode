@@ -185,10 +185,10 @@ class GenericBuildToolServiceTest {
         assertTrue(buildToolService.runSingleTest("MyTest").getOutput().contains("MyTest"));
         assertTrue(Files.readString(projectDataDir.resolve("tmp/build.log")).contains("MyTest"));
 
-        String truncated = GenericBuildToolService.getLogTail("HEADER-" + "A".repeat(5000) + "-TAIL");
+        String truncated = BuildOutputParser.getLogTail("HEADER-" + "A".repeat(5000) + "-TAIL");
         assertTrue(truncated.startsWith(GenericBuildToolService.LOG_TRUNCATED_PREFIX));
         assertTrue(truncated.endsWith("-TAIL"));
-        assertEquals("", GenericBuildToolService.getLogTail(null));
+        assertEquals("", BuildOutputParser.getLogTail(null));
     }
 
     @Test
@@ -395,7 +395,7 @@ class GenericBuildToolServiceTest {
                 + "normal output line" + nl + "--- FAIL: TestAuth (0.01s)" + nl
                 + "    auth_test.go:42: expected 200, got 401" + nl;
 
-        String stripped = GenericBuildToolService.stripAnsiCodes(ansiLog);
+        String stripped = BuildOutputParser.stripAnsiCodes(ansiLog);
         assertFalse(stripped.contains(esc));
         assertTrue(stripped.startsWith("[ERROR] /workspace/src/Foo.java:[42,15] cannot find symbol"));
 
@@ -405,19 +405,19 @@ class GenericBuildToolServiceTest {
 
         String rustAndJavacRegex = "^(" + bs + "[ERROR" + bs + "].*" + bs + "[" + bs + "d+," + bs + "d+" + bs
                 + "]|error" + bs + "[E" + bs + "d+" + bs + "]:)";
-        List<String> javacAndRustErrors = buildToolService.extractWithRipGrep(rustAndJavacRegex, logFile, 4);
+        List<String> javacAndRustErrors = BuildOutputParser.extractWithRipGrep(rustAndJavacRegex, logFile, 4);
         assertEquals(2, javacAndRustErrors.size());
         assertContainsAll(javacAndRustErrors.get(0), "[ERROR] /workspace/src/Foo.java:[42,15] cannot find symbol",
                 "  symbol:   method bar()", "  location: class com.example.Foo");
         assertContainsAll(javacAndRustErrors.get(1), "error[E0308]: mismatched types", "  --> src/main.rs:14:9",
                 "   |         ^^^^^^^ expected 'i32', found '&str'");
 
-        List<String> goFailures = buildToolService.extractWithRipGrep("^--- FAIL:", logFile, 1);
+        List<String> goFailures = BuildOutputParser.extractWithRipGrep("^--- FAIL:", logFile, 1);
         assertEquals(1, goFailures.size());
         assertEquals("--- FAIL: TestAuth (0.01s)" + nl + "    auth_test.go:42: expected 200, got 401",
                 goFailures.get(0));
 
-        List<String> singleLineOnly = buildToolService.extractWithRipGrep("^--- FAIL:", logFile, 0);
+        List<String> singleLineOnly = BuildOutputParser.extractWithRipGrep("^--- FAIL:", logFile, 0);
         assertEquals(List.of("--- FAIL: TestAuth (0.01s)"), singleLineOnly);
 
         // Verify deduplication and MAX_EXTRACTED_BLOCKS cap in parseRipGrepOutput
@@ -428,7 +428,7 @@ class GenericBuildToolServiceTest {
             manyBlocks.append("--").append(nl).append("ERROR: unique-").append(i).append(nl).append("  line-").append(i)
                     .append(nl);
         }
-        List<String> cappedBlocks = GenericBuildToolService.parseRipGrepOutput(manyBlocks.toString(), 2);
+        List<String> cappedBlocks = BuildOutputParser.parseRipGrepOutput(manyBlocks.toString(), 2);
         assertEquals(GenericBuildToolService.MAX_EXTRACTED_BLOCKS, cappedBlocks.size());
         assertEquals("ERROR: duplicate" + nl + "  detail 1", cappedBlocks.get(0));
         assertEquals("ERROR: unique-0" + nl + "  line-0", cappedBlocks.get(1));

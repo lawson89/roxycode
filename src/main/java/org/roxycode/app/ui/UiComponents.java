@@ -96,6 +96,21 @@ final class UiComponents {
     }
 
     /**
+     * Scales an image into a square ARGB thumbnail of the given pixel size.
+     */
+    static BufferedImage createThumbnail(BufferedImage source, int size) {
+        BufferedImage thumb = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2 = thumb.createGraphics();
+        try {
+            g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g2.drawImage(source, 0, 0, size, size, null);
+        } finally {
+            g2.dispose();
+        }
+        return thumb;
+    }
+
+    /**
      * Creates a rounded image panel from a classpath resource path.
      */
     static JPanel createRoundedImagePanel(String resourcePath, int size, int arc) {

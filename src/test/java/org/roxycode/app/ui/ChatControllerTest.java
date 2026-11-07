@@ -152,10 +152,11 @@ class ChatControllerTest extends ChatTestFixture {
                 ((CompoundBorder) panel.userInputPromptPanel.getBorder()).getOutsideBorder());
         assertEquals(4, promptAccentStripe.getBorderInsets(panel.userInputPromptPanel).left);
 
-        JButton saveBtn = SwingTestUtils.findButton(panel.userInputPromptPanel, ChatPanel.SAVE_TOPIC_BUTTON_TEXT);
+        JButton saveBtn = SwingTestUtils.findButton(panel.userInputPromptPanel,
+                ChatPromptBanner.SAVE_TOPIC_BUTTON_TEXT);
         JButton discardBtnInitial = SwingTestUtils.findButton(panel.userInputPromptPanel,
-                ChatPanel.DISCARD_TOPIC_BUTTON_TEXT);
-        JButton cancelBtn = SwingTestUtils.findButton(panel.userInputPromptPanel, ChatPanel.CANCEL_BUTTON_TEXT);
+                ChatPromptBanner.DISCARD_TOPIC_BUTTON_TEXT);
+        JButton cancelBtn = SwingTestUtils.findButton(panel.userInputPromptPanel, ChatPromptBanner.CANCEL_BUTTON_TEXT);
         assertNotNull(saveBtn);
         assertNotNull(discardBtnInitial);
         assertNotNull(cancelBtn);
@@ -191,7 +192,8 @@ class ChatControllerTest extends ChatTestFixture {
         SwingTestUtils.clickOnEdt(panel.resetSessionButton);
         flushEdt();
         assertTrue(panel.userInputPromptPanel.isVisible());
-        JButton discardBtn = SwingTestUtils.findButton(panel.userInputPromptPanel, ChatPanel.DISCARD_TOPIC_BUTTON_TEXT);
+        JButton discardBtn = SwingTestUtils.findButton(panel.userInputPromptPanel,
+                ChatPromptBanner.DISCARD_TOPIC_BUTTON_TEXT);
         assertNotNull(discardBtn);
         SwingTestUtils.clickOnEdt(discardBtn);
         flushEdt();
@@ -246,7 +248,7 @@ class ChatControllerTest extends ChatTestFixture {
                 taskPanel.rejectButton.getClientProperty(FlatClientProperties.STYLE));
 
         JButton cancelResetBtn = SwingTestUtils.findButton(taskPanel.userInputPromptPanel,
-                ChatPanel.CANCEL_BUTTON_TEXT);
+                ChatPromptBanner.CANCEL_BUTTON_TEXT);
         assertNotNull(cancelResetBtn);
         ActionListener resetEscape = taskPanel.userInputPromptPanel
                 .getActionForKeyStroke(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0));
@@ -261,7 +263,7 @@ class ChatControllerTest extends ChatTestFixture {
         flushEdt();
         assertTrue(taskPanel.userInputPromptPanel.isVisible());
         JButton confirmResetBtn = SwingTestUtils.findButton(taskPanel.userInputPromptPanel,
-                ChatPanel.CONFIRM_RESET_BUTTON_TEXT);
+                ChatPromptBanner.CONFIRM_RESET_BUTTON_TEXT);
         assertNotNull(confirmResetBtn);
         SwingTestUtils.clickOnEdt(confirmResetBtn);
         flushEdt();
@@ -415,7 +417,7 @@ class ChatControllerTest extends ChatTestFixture {
         when(planService.getCurrentPlan()).thenReturn(plan);
         chatPanel.controller.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 2, "CODE"));
         flushEdt();
-        assertEquals("Turn 2/5 • 1/2 steps", chatPanel.turnLabel.getText());
+        assertEquals("Turn 2/5 • 1/2 steps", chatPanel.telemetryBar.turnLabel.getText());
         assertContainsAll(String.valueOf(chatPanel.inputArea.getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT)),
                 "Turn 2/5 • 1/2 steps");
 
@@ -487,11 +489,12 @@ class ChatControllerTest extends ChatTestFixture {
         taskPanel.controller.onTokenUsage(qaEvent);
         flushEdt();
 
-        assertEquals("Ctx: 10.0k / 1.0M (1%)", qaPanel.ctxLabel.getText());
-        assertEquals("Cache: 80%", qaPanel.cacheLabel.getText());
-        assertEquals("Context window usage: 10.0k / 1.0M tokens (1%)", qaPanel.ctxLabel.getToolTipText());
-        assertEquals("Implicit cache hit: 8.0k / 10.0k input tokens (80%)", qaPanel.cacheLabel.getToolTipText());
-        assertEquals("Ctx: 0 / 1.0M (0%)", taskPanel.ctxLabel.getText());
+        assertEquals("Ctx: 10.0k / 1.0M (1%)", qaPanel.telemetryBar.ctxLabel.getText());
+        assertEquals("Cache: 80%", qaPanel.telemetryBar.cacheLabel.getText());
+        assertEquals("Context window usage: 10.0k / 1.0M tokens (1%)", qaPanel.telemetryBar.ctxLabel.getToolTipText());
+        assertEquals("Implicit cache hit: 8.0k / 10.0k input tokens (80%)",
+                qaPanel.telemetryBar.cacheLabel.getToolTipText());
+        assertEquals("Ctx: 0 / 1.0M (0%)", taskPanel.telemetryBar.ctxLabel.getText());
 
         // 2. task:default event updates taskPanel
         TokenUsageEvent taskEvent = new TokenUsageEvent("task:default", "gemini-1.5-pro", 1_000_000, 20_000, 10_000,
@@ -499,21 +502,22 @@ class ChatControllerTest extends ChatTestFixture {
         taskPanel.controller.onTokenUsage(taskEvent);
         flushEdt();
 
-        assertEquals("Ctx: 20.0k / 1.0M (2%)", taskPanel.ctxLabel.getText());
-        assertEquals("Cache: 50%", taskPanel.cacheLabel.getText());
-        assertEquals("Implicit cache hit: 10.0k / 20.0k input tokens (50%)", taskPanel.cacheLabel.getToolTipText());
+        assertEquals("Ctx: 20.0k / 1.0M (2%)", taskPanel.telemetryBar.ctxLabel.getText());
+        assertEquals("Cache: 50%", taskPanel.telemetryBar.cacheLabel.getText());
+        assertEquals("Implicit cache hit: 10.0k / 20.0k input tokens (50%)",
+                taskPanel.telemetryBar.cacheLabel.getToolTipText());
 
         // 3. Reset session resets telemetry for that panel
         taskPanel.controller.performResetSession();
         flushEdt();
-        assertEquals("Ctx: 0 / 1.0M (0%)", taskPanel.ctxLabel.getText());
-        assertEquals("Cache: 0%", taskPanel.cacheLabel.getText());
-        assertEquals("Ctx: 10.0k / 1.0M (1%)", qaPanel.ctxLabel.getText()); // Still there
+        assertEquals("Ctx: 0 / 1.0M (0%)", taskPanel.telemetryBar.ctxLabel.getText());
+        assertEquals("Cache: 0%", taskPanel.telemetryBar.cacheLabel.getText());
+        assertEquals("Ctx: 10.0k / 1.0M (1%)", qaPanel.telemetryBar.ctxLabel.getText()); // Still there
 
         // 4. Project change resets telemetry
         qaPanel.controller.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/new-project")));
         flushEdt();
-        assertEquals("Ctx: 0 / 1.0M (0%)", qaPanel.ctxLabel.getText());
+        assertEquals("Ctx: 0 / 1.0M (0%)", qaPanel.telemetryBar.ctxLabel.getText());
     }
 
     @Test
@@ -553,7 +557,7 @@ class ChatControllerTest extends ChatTestFixture {
         assertTrue(Files.exists(projectASessionFile));
         assertEquals(2, realMemory.get("task:default").size());
         assertEquals(3, taskPanel.exportMessages().size());
-        assertEquals("Ctx: 25.0k / 1.0M (3%)", taskPanel.ctxLabel.getText());
+        assertEquals("Ctx: 25.0k / 1.0M (3%)", taskPanel.telemetryBar.ctxLabel.getText());
 
         // Switch to Project B: clears transcript, ChatMemory, and telemetry without deleting Project A's session file
         activeDataDir.set(projectBData);
@@ -564,7 +568,7 @@ class ChatControllerTest extends ChatTestFixture {
         assertTrue(Files.exists(projectASessionFile));
         assertTrue(realMemory.get("task:default").isEmpty());
         assertTrue(taskPanel.exportMessages().isEmpty());
-        assertEquals("Ctx: 0 / 1.0M (0%)", taskPanel.ctxLabel.getText());
+        assertEquals("Ctx: 0 / 1.0M (0%)", taskPanel.telemetryBar.ctxLabel.getText());
         assertFalse(taskPanel.inlineActionPanel.isVisible());
 
         // Switch back to Project A with pending approval: restores transcript, tool card, ChatMemory, telemetry &
@@ -581,8 +585,8 @@ class ChatControllerTest extends ChatTestFixture {
         assertEquals(3, taskPanel.exportMessages().size());
         assertTrue(taskPanel.exportMessages().get(1).isTool());
         assertContainsAll(taskPanel.outputArea.getText(), "Create plan", "Plan submitted.", "submitPlan");
-        assertEquals("Ctx: 25.0k / 1.0M (3%)", taskPanel.ctxLabel.getText());
-        assertEquals("Cache: 80%", taskPanel.cacheLabel.getText());
+        assertEquals("Ctx: 25.0k / 1.0M (3%)", taskPanel.telemetryBar.ctxLabel.getText());
+        assertEquals("Cache: 80%", taskPanel.telemetryBar.cacheLabel.getText());
         assertTrue(taskPanel.inlineActionPanel.isVisible());
         assertEquals(PlanService.APPROVAL_PLAN_TO_CODE, taskPanel.transitionLabel.getText());
 

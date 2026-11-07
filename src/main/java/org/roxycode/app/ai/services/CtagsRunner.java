@@ -3,14 +3,17 @@ package org.roxycode.app.ai.services;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Stream;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.service.ProcessRunner;
@@ -113,5 +116,61 @@ public interface CtagsRunner {
             return files.get(0);
         }
         return null;
+    }
+
+    static List<SymbolInfo> finalizeSymbolsForFile(List<CtagsEntry> entries, String relPath, Path filePath,
+            int knownTotalLines) {
+        List<CtagsEntry> sorted = new ArrayList<>(entries);
+        sorted.sort(Comparator.comparingInt(CtagsEntry::line).thenComparing(CtagsEntry::name));
+        int totalLines = knownTotalLines;
+        List<SymbolInfo> finalized = new ArrayList<>(sorted.size());
+        for (int i = 0; i < sorted.size(); i++) {
+            CtagsEntry current = sorted.get(i);
+            if (current.end() < current.line() && totalLines < 0 && !hasSubsequentLineSymbol(sorted, i)) {
+                totalLines = countLinesSafely(filePath);
+            }
+            int resolvedEnd = resolveEndLine(sorted, i, totalLines);
+            finalized.add(new SymbolInfo(current.name(), current.kind(), relPath, current.line(), resolvedEnd,
+                    current.scope(), current.signature()));
+        }
+        return finalized;
+    }
+
+    static boolean hasSubsequentLineSymbol(List<CtagsEntry> sorted, int index) {
+        int currentLine = sorted.get(index).line();
+        for (int j = index + 1; j < sorted.size(); j++) {
+            if (sorted.get(j).line() > currentLine) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static int resolveEndLine(List<CtagsEntry> sorted, int index, int totalLines) {
+        CtagsEntry current = sorted.get(index);
+        if (current.end() >= current.line()) {
+            if (totalLines > 0) {
+                return Math.min(current.end(), Math.max(current.line(), totalLines));
+            }
+            return current.end();
+        }
+        for (int j = index + 1; j < sorted.size(); j++) {
+            int nextStart = sorted.get(j).line();
+            if (nextStart > current.line()) {
+                return nextStart - 1;
+            }
+        }
+        if (totalLines >= current.line()) {
+            return totalLines;
+        }
+        return current.line();
+    }
+
+    static int countLinesSafely(Path filePath) {
+        try (Stream<String> lines = Files.lines(filePath)) {
+            return (int) lines.count();
+        } catch (Exception e) {
+            return 0;
+        }
     }
 }

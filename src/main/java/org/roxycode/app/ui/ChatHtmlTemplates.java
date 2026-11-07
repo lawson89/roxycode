@@ -8,12 +8,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringEscapeUtils;
+import org.roxycode.app.model.ChatTranscriptEntry;
 
 public final class ChatHtmlTemplates {
 
-    public static final String ROLE_AI = "ai";
-    public static final String ROLE_USER = "user";
-    public static final String ROLE_SYSTEM = "system";
+    public static final String ROLE_AI = ChatTranscriptEntry.ROLE_AI;
+    public static final String ROLE_USER = ChatTranscriptEntry.ROLE_USER;
+    public static final String ROLE_SYSTEM = ChatTranscriptEntry.ROLE_SYSTEM;
     private static final String CAT_EARS = "/\\_/\\";
     public static final String COPY_CELL_ID_PREFIX = "copy-cell-";
     public static final String TOOL_BODY_CELL_ID_PREFIX = "tool-body-cell-";

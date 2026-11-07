@@ -14,6 +14,7 @@ import javax.swing.text.StyleConstants;
 import javax.swing.text.html.HTML;
 import javax.swing.text.html.HTMLDocument;
 import org.apache.commons.lang3.StringUtils;
+import org.roxycode.app.model.ChatTranscriptEntry;
 
 /**
  * Swing {@link JTextPane} component that renders chat transcripts and collapsible JEXL tool execution logs as
@@ -35,9 +36,6 @@ public final class MarkdownPane extends JTextPane {
     Timer copyFeedbackTimer;
     String lastCopiedMarkdown;
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");
-
-    public record ChatTranscriptEntry(String role, String content, String timestamp) {
-    }
 
     public record PersistedChatEntry(String role, String content, String timestamp, boolean isTool, boolean success,
             String error, boolean toolExpanded) {

@@ -8,15 +8,18 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiConsumer;
+import java.util.function.Function;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AiConfig;
+import org.roxycode.app.events.ContextChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ThinkingLevel;
-import org.roxycode.app.service.PromptService.ProjectContextConfig;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,18 +34,29 @@ public class ProjectService {
     private static final String DEFAULT_REF_ALIAS = "ref";
     private static final String CONTEXT_SEPARATOR = "--";
     static final String PROJECT_CONFIG_FILE = "project.toml";
+    static final String PROJECT_CONTEXT_CONFIG_FILE = "context.toml";
     static final String ROXYCODE_TMP_DIR = ".roxycode/tmp";
     private static final String ROXYCODE_TMP_PREFIX = ".roxycode/tmp/";
     private static final String DATA_TMP_DIR = "tmp";
     private static final String NO_PROJECT_ROOT_MSG = "Project root is not set.";
 
-    @com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public record ProjectConfig(String geminiModel, String thinkingLevel, boolean buildConfirmed) {
         public static final ProjectConfig DEFAULT = new ProjectConfig("", "", false);
 
         public ProjectConfig {
             geminiModel = StringUtils.trimToEmpty(geminiModel);
             thinkingLevel = normalizeProjectThinkingLevel(thinkingLevel);
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public record ProjectContextConfig(List<String> folders, List<String> referenceFolders) {
+        public static final ProjectContextConfig EMPTY = new ProjectContextConfig(List.of(), List.of());
+
+        public ProjectContextConfig {
+            folders = List.copyOf(Objects.requireNonNullElse(folders, List.of()));
+            referenceFolders = List.copyOf(Objects.requireNonNullElse(referenceFolders, List.of()));
         }
     }
 
@@ -282,23 +296,92 @@ public class ProjectService {
         return projectService.getCurrentProjectRoot().toAbsolutePath().normalize().toString();
     }
 
+    static List<String> normalizeFolderList(List<String> folders) {
+        if (folders == null) {
+            return List.of();
+        }
+        return folders.stream().filter(f -> f != null && !f.isBlank()).map(String::trim).distinct().toList();
+    }
+
+    static List<String> getGlobalFolderList(SettingsService settingsService,
+            Function<AppSettings, List<String>> getter) {
+        if (settingsService == null || settingsService.getSettings() == null) {
+            return List.of();
+        }
+        return normalizeFolderList(getter.apply(settingsService.getSettings()));
+    }
+
+    static void setGlobalFolderList(SettingsService settingsService, ApplicationEventPublisher eventPublisher,
+            List<String> folders, BiConsumer<AppSettings, List<String>> setter) {
+        if (settingsService == null) {
+            return;
+        }
+        AppSettings settings = settingsService.getSettings();
+        if (settings != null) {
+            setter.accept(settings, normalizeFolderList(folders));
+            settingsService.saveSettings();
+            if (eventPublisher != null) {
+                eventPublisher.publishEvent(new ContextChangedEvent(true));
+            }
+        }
+    }
+
+    private ProjectContextConfig readProjectContextConfig() {
+        if (!hasActiveProject()) {
+            return ProjectContextConfig.EMPTY;
+        }
+        return PathUtils.readTomlOrDefault(resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE),
+                ProjectContextConfig.class, ProjectContextConfig.EMPTY, AiConfig.SHARED_TOML_MAPPER);
+    }
+
+    private void writeProjectContextConfig(ProjectContextConfig config) {
+        if (!hasActiveProject()) {
+            throw new IllegalStateException("No active project");
+        }
+        Path configFile = resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE);
+        try {
+            PathUtils.writeToml(configFile, config, AiConfig.SHARED_TOML_MAPPER);
+            if (eventPublisher != null) {
+                eventPublisher.publishEvent(new ContextChangedEvent(false));
+            }
+        } catch (IOException e) {
+            log.error("Failed to save project context config {}: {}", configFile, e.getMessage());
+            throw new UncheckedIOException("Failed to save project context config", e);
+        }
+    }
+
+    public List<String> getGlobalContextFolders() {
+        return getGlobalFolderList(settingsService, AppSettings::getGlobalContextFolders);
+    }
+
+    public void setGlobalContextFolders(List<String> folders) {
+        setGlobalFolderList(settingsService, eventPublisher, folders, AppSettings::setGlobalContextFolders);
+    }
+
+    public List<String> getProjectContextFolders() {
+        return normalizeFolderList(readProjectContextConfig().folders());
+    }
+
+    public void setProjectContextFolders(List<String> folders) {
+        ProjectContextConfig existing = readProjectContextConfig();
+        writeProjectContextConfig(new ProjectContextConfig(normalizeFolderList(folders), existing.referenceFolders()));
+    }
+
     public List<String> getGlobalReferenceFolders() {
-        return PromptService.getGlobalFolderList(settingsService, AppSettings::getGlobalReferenceFolders);
+        return getGlobalFolderList(settingsService, AppSettings::getGlobalReferenceFolders);
     }
 
     public void setGlobalReferenceFolders(List<String> folders) {
-        PromptService.setGlobalFolderList(settingsService, eventPublisher, folders,
-                AppSettings::setGlobalReferenceFolders);
+        setGlobalFolderList(settingsService, eventPublisher, folders, AppSettings::setGlobalReferenceFolders);
     }
 
     public List<String> getProjectReferenceFolders() {
-        return PromptService.normalizeFolderList(PromptService.readProjectContextConfig(this).referenceFolders());
+        return normalizeFolderList(readProjectContextConfig().referenceFolders());
     }
 
     public void setProjectReferenceFolders(List<String> folders) {
-        ProjectContextConfig existing = PromptService.readProjectContextConfig(this);
-        PromptService.writeProjectContextConfig(this, eventPublisher,
-                new ProjectContextConfig(existing.folders(), PromptService.normalizeFolderList(folders)));
+        ProjectContextConfig existing = readProjectContextConfig();
+        writeProjectContextConfig(new ProjectContextConfig(existing.folders(), normalizeFolderList(folders)));
     }
 
     public List<ReferenceFolderMount> getReferenceFolderMounts() {
