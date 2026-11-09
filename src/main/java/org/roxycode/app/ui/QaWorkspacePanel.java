@@ -3,6 +3,9 @@ package org.roxycode.app.ui;
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Cursor;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.List;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -25,8 +28,7 @@ import org.springframework.stereotype.Component;
 public final class QaWorkspacePanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final String LAYOUT_CENTER = "center";
-    static final String MENTOR_MODE_TITLE = "MENTOR MODE";
-    static final String MENTOR_MODE_SUBTITLE = "Explore & Ask Questions (read-only)";
+    static final String MENTOR_MODE_BADGE_TEXT = "MENTOR MODE • Read-Only Q&A";
     static final String PAST_TOPICS_TAB_TITLE = "Past Topics";
     static final String MENTOR_MODE_TOOLTIP_HTML = """
             <html><div style='width: 330px;'>
@@ -40,10 +42,7 @@ public final class QaWorkspacePanel extends JPanel {
     final ChatPanel qaChatPanel;
     final ArchiveBrowserPanel pastTopicsPanel;
     final JPanel qaHeaderBar;
-    final JPanel mentorBanner;
     final JLabel mentorModeLabel;
-    final JLabel mentorSubtitleLabel;
-    final JLabel mentorInfoIcon;
 
     public QaWorkspacePanel(@Qualifier("exploreChatPanel") ChatPanel exploreChatPanel, MemoryService memoryService) {
         super(new BorderLayout());
@@ -51,21 +50,18 @@ public final class QaWorkspacePanel extends JPanel {
         qaHeaderBar = new JPanel(new MigLayout("insets 0 12 0 16, fill", "[right, grow]", LAYOUT_CENTER));
         qaHeaderBar.setOpaque(false);
 
-        mentorBanner = new JPanel(new MigLayout("insets 0, gapx 6", "[][]", LAYOUT_CENTER));
-        mentorModeLabel = new JLabel(MENTOR_MODE_TITLE);
-        mentorModeLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
-        mentorSubtitleLabel = new JLabel("•  " + MENTOR_MODE_SUBTITLE);
-        mentorSubtitleLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
-        mentorInfoIcon = UiComponents.createInfoIcon(MENTOR_MODE_TOOLTIP_HTML);
-        mentorBanner.setToolTipText(MENTOR_MODE_TOOLTIP_HTML);
+        mentorModeLabel = new JLabel(MENTOR_MODE_BADGE_TEXT);
+        mentorModeLabel.setIconTextGap(6);
         mentorModeLabel.setToolTipText(MENTOR_MODE_TOOLTIP_HTML);
-        mentorSubtitleLabel.setToolTipText(MENTOR_MODE_TOOLTIP_HTML);
-
-        mentorBanner.add(mentorModeLabel);
-        mentorBanner.add(mentorSubtitleLabel);
+        mentorModeLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        mentorModeLabel.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                UiComponents.showInfoTooltipImmediately(mentorModeLabel, e);
+            }
+        });
         applyBannerStyling();
-        qaHeaderBar.add(mentorBanner, "split 2, right, center");
-        qaHeaderBar.add(mentorInfoIcon, "gapleft 8, center");
+        qaHeaderBar.add(mentorModeLabel, "right, center");
 
         this.qaTabs = UiComponents.createUnderlinedTabbedPane(qaHeaderBar);
         this.qaChatPanel = exploreChatPanel;
@@ -101,19 +97,19 @@ public final class QaWorkspacePanel extends JPanel {
     @Override
     public void updateUI() {
         super.updateUI();
-        if (mentorBanner != null) {
+        if (mentorModeLabel != null) {
             applyBannerStyling();
         }
     }
 
     void applyBannerStyling() {
         Color accent = SwingHtmlUtils.getAccentColor();
-        SwingHtmlUtils.applyTintedBannerStyle(mentorBanner, accent, 4, 10, 10);
-        mentorModeLabel.setIcon(FontIcon.of(Codicons.SEARCH, 15, accent));
+        String bgHex = SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(accent, 0.12));
+        mentorModeLabel.setIcon(FontIcon.of(Codicons.SEARCH, 14, accent));
         mentorModeLabel.setForeground(accent);
+        mentorModeLabel.putClientProperty(FlatClientProperties.STYLE,
+                "font: bold -1; background: " + bgHex + "; arc: 999; border: 4,12,4,12");
         Color muted = SwingHtmlUtils.getMutedForegroundColor();
-        mentorSubtitleLabel.setForeground(muted);
-        UiComponents.updateInfoIconTheme(mentorInfoIcon);
         UiComponents.updateTabIcons(qaTabs, List.of(Codicons.COMMENT_DISCUSSION, Codicons.HISTORY),
                 List.of(accent, muted));
     }

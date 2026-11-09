@@ -47,9 +47,26 @@ public final class ChatHtmlTemplates {
         return moveAction + renderCopyActionHtml(messageIndex, copied);
     }
 
+    private static String unwrapSingleParagraph(String html) {
+        String trimmed = StringUtils.defaultString(html).trim();
+        if (trimmed.startsWith("<p>") && trimmed.endsWith("</p>") && trimmed.indexOf("<p>", 3) < 0) {
+            return trimmed.substring(3, trimmed.length() - 4).trim();
+        }
+        return trimmed;
+    }
+
     public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,
             boolean copied, boolean showMoveAction) {
         String normalizedRole = StringUtils.defaultString(role);
+        if (ROLE_SYSTEM.equalsIgnoreCase(normalizedRole)) {
+            String inlineContent = unwrapSingleParagraph(content);
+            String safeTime = SwingHtmlUtils.escapeHtml(StringUtils.defaultString(timestamp));
+            String timeSpan = "";
+            if (!safeTime.isBlank()) {
+                timeSpan = "&nbsp;&nbsp;<span class='timestamp'>" + safeTime + "</span>";
+            }
+            return "<div class='system-notice'>" + inlineContent + timeSpan + "</div>";
+        }
         String safeRole = SwingHtmlUtils.escapeHtml(normalizedRole);
         String indicator = switch (normalizedRole) {
             case ROLE_AI -> "<span class='role-ai'>ROXY " + CAT_EARS + "</span>";

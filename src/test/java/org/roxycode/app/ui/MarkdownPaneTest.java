@@ -78,6 +78,10 @@ class MarkdownPaneTest {
         assertEquals(-1, pane.copiedMessageIndex);
         assertContainsAll(pane.getText(), "copy:3", "copy:5", "feature:3", "feature:5");
 
+        pane.appendMessage(ChatHtmlTemplates.ROLE_SYSTEM, "Started a new topic.");
+        assertContainsAll(pane.getText(), "system-notice", "Started a new topic.");
+        assertFalse(pane.getText().contains("system-entry"));
+
         pane.clear();
         assertTrue(pane.getConversationMessages().isEmpty());
     }

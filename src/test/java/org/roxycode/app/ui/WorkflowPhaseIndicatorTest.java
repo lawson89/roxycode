@@ -44,23 +44,24 @@ class WorkflowPhaseIndicatorTest {
         assertEquals(1, taskWorkspace.taskTabs.getSelectedIndex());
 
         QaWorkspacePanel qaWorkspace = SwingTestUtils.callOnEdt(() -> new QaWorkspacePanel(null, null));
-        assertNotNull(qaWorkspace.mentorInfoIcon);
+        assertNotNull(qaWorkspace.mentorModeLabel);
+        assertEquals(QaWorkspacePanel.MENTOR_MODE_BADGE_TEXT, qaWorkspace.mentorModeLabel.getText());
 
-        FontIcon infoFontIcon = (FontIcon) qaWorkspace.mentorInfoIcon.getIcon();
-        assertNotNull(infoFontIcon);
-        assertEquals(UiComponents.resolveInfoIconColor(), infoFontIcon.getIconColor());
+        FontIcon searchFontIcon = (FontIcon) qaWorkspace.mentorModeLabel.getIcon();
+        assertNotNull(searchFontIcon);
+        assertEquals(org.kordamp.ikonli.codicons.Codicons.SEARCH, searchFontIcon.getIkon());
 
         ToolTipManager toolTipManager = ToolTipManager.sharedInstance();
         int customInitialDelay = 4321;
         SwingTestUtils.runOnEdt(() -> {
             toolTipManager.setInitialDelay(customInitialDelay);
-            MouseEvent pressEvent = new MouseEvent(qaWorkspace.mentorInfoIcon, MouseEvent.MOUSE_PRESSED,
+            MouseEvent pressEvent = new MouseEvent(qaWorkspace.mentorModeLabel, MouseEvent.MOUSE_PRESSED,
                     System.currentTimeMillis(), 0, 4, 4, 1, false);
-            for (MouseListener listener : qaWorkspace.mentorInfoIcon.getMouseListeners()) {
+            for (MouseListener listener : qaWorkspace.mentorModeLabel.getMouseListeners()) {
                 listener.mousePressed(pressEvent);
             }
             assertEquals(customInitialDelay, toolTipManager.getInitialDelay());
-            UiComponents.showInfoTooltipImmediately(qaWorkspace.mentorInfoIcon, null);
+            UiComponents.showInfoTooltipImmediately(qaWorkspace.mentorModeLabel, null);
             assertEquals(customInitialDelay, toolTipManager.getInitialDelay());
         });
     }

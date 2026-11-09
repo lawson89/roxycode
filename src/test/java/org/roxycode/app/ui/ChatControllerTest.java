@@ -584,10 +584,14 @@ class ChatControllerTest extends ChatTestFixture {
 
         assertEquals("Ctx: 10.0k / 1.0M (1%)", qaPanel.telemetryBar.ctxLabel.getText());
         assertEquals("Cache: 80%", qaPanel.telemetryBar.cacheLabel.getText());
+        assertTrue(qaPanel.telemetryBar.cacheLabel.isVisible());
+        assertTrue(qaPanel.telemetryBar.turnLabel.isVisible());
         assertEquals("Context window usage: 10.0k / 1.0M tokens (1%)", qaPanel.telemetryBar.ctxLabel.getToolTipText());
         assertEquals("Implicit cache hit: 8.0k / 10.0k input tokens (80%)",
                 qaPanel.telemetryBar.cacheLabel.getToolTipText());
         assertEquals("Ctx: 0 / 1.0M (0%)", taskPanel.telemetryBar.ctxLabel.getText());
+        assertFalse(taskPanel.telemetryBar.cacheLabel.isVisible());
+        assertFalse(taskPanel.telemetryBar.turnLabel.isVisible());
 
         // 2. task:default event updates taskPanel
         TokenUsageEvent taskEvent = new TokenUsageEvent("task:default", "gemini-1.5-pro", 1_000_000, 20_000, 10_000,

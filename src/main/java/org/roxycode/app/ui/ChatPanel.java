@@ -263,8 +263,10 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         inputArea = new JTextArea(8, 0);
         inputArea.setLineWrap(true);
         inputArea.setWrapStyleWord(true);
+        inputArea.setOpaque(false);
         inputArea.setMargin(new Insets(8, 12, 4, 12));
         inputArea.setBorder(BorderFactory.createEmptyBorder(8, 12, 4, 12));
+        inputArea.putClientProperty(FlatClientProperties.STYLE, "border: null; background: null");
         inputArea.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, DEFAULT_PLACEHOLDER_TEXT);
         inputArea.addFocusListener(new FocusAdapter() {
             @Override
@@ -278,7 +280,10 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
             }
         });
         JScrollPane inputScrollPane = new JScrollPane(inputArea);
+        inputScrollPane.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
+        inputScrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         inputScrollPane.setBorder(BorderFactory.createEmptyBorder());
+        inputScrollPane.putClientProperty(FlatClientProperties.STYLE, "border: null; background: null");
         inputScrollPane.setOpaque(false);
         inputScrollPane.getViewport().setOpaque(false);
         fileMentionPopup = new FileMentionPopup(inputArea, inputScrollPane);

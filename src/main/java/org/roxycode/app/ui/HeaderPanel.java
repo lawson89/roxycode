@@ -33,8 +33,7 @@ public final class HeaderPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(HeaderPanel.class);
     private static final String LAYOUT_CENTER = "center";
-    static final String SELECT_PROJECT_TEXT = "Select Project...";
-    static final String CHANGE_PROJECT_TEXT = "Change Project...";
+    static final String OPEN_PROJECT_TEXT = "Open Project...";
     static final String NO_PROJECT_NOTICE_TEXT = "Select a project folder to get started";
     private static final Color BRANCH_ACCENT_LIGHT = new Color(0x0d, 0x94, 0x88);
     private static final Color BRANCH_ACCENT_DARK = new Color(0x2d, 0xd4, 0xbf);
@@ -48,8 +47,7 @@ public final class HeaderPanel extends JPanel {
     private final transient SettingsService settingsService;
     private transient Consumer<String> onNavigateToCard;
 
-    final JLabel projectLabel;
-    final JButton changeProjectButton;
+    final JButton projectSwitcherButton;
     final JLabel noProjectNoticeLabel;
     final JLabel branchLabel;
     final JLabel modelLabel;
@@ -65,22 +63,11 @@ public final class HeaderPanel extends JPanel {
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
         updateBorder();
 
-        JPanel leftPanel = new JPanel(new MigLayout("insets 0, hidemode 3", "[]8[]8[]12[]", LAYOUT_CENTER));
+        JPanel leftPanel = new JPanel(new MigLayout("insets 0, hidemode 3", "[]8[]12[]", LAYOUT_CENTER));
         leftPanel.setOpaque(false);
 
-        projectLabel = new JLabel(projectService.getProjectName());
-        projectLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +1");
-        projectLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        projectLabel.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                chooseProject();
-            }
-        });
-        leftPanel.add(projectLabel);
-
-        changeProjectButton = createChangeProjectButton(e -> chooseProject());
-        leftPanel.add(changeProjectButton);
+        projectSwitcherButton = createProjectSwitcherButton(e -> chooseProject());
+        leftPanel.add(projectSwitcherButton);
 
         noProjectNoticeLabel = new JLabel(NO_PROJECT_NOTICE_TEXT);
         leftPanel.add(noProjectNoticeLabel);
@@ -129,20 +116,23 @@ public final class HeaderPanel extends JPanel {
 
     void updateProjectStateDisplay() {
         boolean hasProject = projectService != null && projectService.hasActiveProject();
+        Color accent = SwingHtmlUtils.getAccentColor();
         if (hasProject) {
-            changeProjectButton.setText(CHANGE_PROJECT_TEXT);
+            projectSwitcherButton.setText(projectService.getProjectName());
+            projectSwitcherButton.setIcon(FontIcon.of(Codicons.REPO, 15, accent));
             noProjectNoticeLabel.setVisible(false);
         } else {
-            changeProjectButton.setText(SELECT_PROJECT_TEXT);
+            projectSwitcherButton.setText(OPEN_PROJECT_TEXT);
+            projectSwitcherButton.setIcon(FontIcon.of(Codicons.FOLDER_OPENED, 15, accent));
             noProjectNoticeLabel.setVisible(true);
         }
     }
 
     private void updateProjectTooltip(Path root) {
         if (root != null) {
-            projectLabel.setToolTipText(root.toAbsolutePath().toString());
+            projectSwitcherButton.setToolTipText(root.toAbsolutePath().toString());
         } else {
-            projectLabel.setToolTipText("No project selected");
+            projectSwitcherButton.setToolTipText("No project selected — Click to open a project directory");
         }
     }
 
@@ -150,8 +140,9 @@ public final class HeaderPanel extends JPanel {
     public void updateUI() {
         super.updateUI();
         updateBorder();
-        if (projectLabel != null) {
+        if (projectSwitcherButton != null) {
             applyHeaderStyling();
+            updateProjectStateDisplay();
         }
     }
 
@@ -185,13 +176,10 @@ public final class HeaderPanel extends JPanel {
         String branchBgHex = SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(branchAccent, 0.12));
         String modelBgHex = SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(modelAccent, 0.12));
 
-        projectLabel.setIcon(FontIcon.of(Codicons.REPO, 16, accent));
-
-        changeProjectButton.setIcon(FontIcon.of(Codicons.FOLDER_OPENED, 14, accent));
-        changeProjectButton.putClientProperty(FlatClientProperties.STYLE,
-                "arc: 10; font: -1; margin: 2,8,2,8; background: fade(" + accentHex + ", 10%); hoverBackground: fade("
-                        + accentHex + ", 20%); pressedBackground: fade(" + accentHex + ", 28%); borderColor: fade("
-                        + accentHex + ", 35%)");
+        projectSwitcherButton.putClientProperty(FlatClientProperties.STYLE,
+                "arc: 10; font: bold; margin: 3,10,3,10; background: fade(" + accentHex
+                        + ", 10%); hoverBackground: fade(" + accentHex + ", 20%); pressedBackground: fade(" + accentHex
+                        + ", 28%); borderColor: fade(" + accentHex + ", 35%)");
 
         Color warnColor = SwingHtmlUtils.getWarningColor();
         String warnBgHex = SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(warnColor, 0.14));
@@ -221,7 +209,6 @@ public final class HeaderPanel extends JPanel {
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
         Edt.run(() -> {
-            projectLabel.setText(projectService.getProjectName());
             updateProjectStateDisplay();
             updateProjectTooltip(event.projectRoot());
             updateModelDisplay();
@@ -254,9 +241,9 @@ public final class HeaderPanel extends JPanel {
         settingsService.saveSettings();
     }
 
-    private JButton createChangeProjectButton(java.awt.event.ActionListener listener) {
-        JButton button = new JButton(CHANGE_PROJECT_TEXT);
-        button.setToolTipText("Open Project");
+    private JButton createProjectSwitcherButton(java.awt.event.ActionListener listener) {
+        JButton button = new JButton(OPEN_PROJECT_TEXT);
+        button.setIconTextGap(6);
         button.setFocusable(false);
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         button.addActionListener(listener);

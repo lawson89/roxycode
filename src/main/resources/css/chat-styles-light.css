@@ -1,4 +1,4 @@
-body { font-family: sans-serif; font-size: 13px; color: #333333; margin: 10px; background-color: transparent; }
+body { font-family: sans-serif; font-size: 13px; color: #333333; margin: 14px 18px; background-color: transparent; }
 .user-entry { background-color: #f0f7ff; border-color: #dbeafe; border-style: solid; border-width: 1px; }
 .user-accent { background-color: #007acc; }
 .ai-entry { background-color: #f8fafc; border-color: #e2e8f0; border-style: solid; border-width: 1px; }
@@ -62,3 +62,4 @@ code { font-family: monospace; background-color: #e2e8f0; color: #0f172a; }
 .plan-log-user { color: #005fb8; }
 .diagram-container { background-color: #ffffff; border-color: #cbd5e1; border-style: solid; border-width: 1px; margin-top: 6px; margin-bottom: 6px; padding: 8px; }
 .pruning-notice { background-color: #f5f5f5; border-color: #e2e8f0; border-style: solid; border-width: 1px; color: #666666; font-style: italic; padding: 8px; margin-bottom: 10px; }
+.system-notice { font-size: 11px; color: #64748b; font-style: italic; padding: 4px 2px; margin-bottom: 8px; }

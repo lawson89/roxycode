@@ -19,8 +19,11 @@ import org.roxycode.app.model.AppSettings;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.JFrame;
 import javax.swing.JPanel;
+import javax.swing.JTabbedPane;
 import javax.swing.Timer;
 import net.miginfocom.swing.MigLayout;
+import org.kordamp.ikonli.codicons.Codicons;
+import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
@@ -59,6 +62,9 @@ public final class MainFrame extends JPanel {
     static final String MEMORY_VIEW = "MEMORY";
     static final int MIN_WINDOW_WIDTH = 800;
     static final int MIN_WINDOW_HEIGHT = 600;
+    private static final int TAB_INDEX_FIRST = 0;
+    private static final int TAB_INDEX_SECOND = 1;
+    private static final int TAB_INDEX_THIRD = 2;
 
     private final transient SettingsService settingsService;
     private final transient ProjectService projectService;
@@ -72,6 +78,9 @@ public final class MainFrame extends JPanel {
     private final CodebaseCachePanel codebaseCachePanel;
     private final AgentMemoryPanel agentMemoryPanel;
     private final transient PlanService planService;
+    private final transient UiComponents.UiGuard hubTabGuard = new UiComponents.UiGuard();
+    JTabbedPane contextHubTabs;
+    JTabbedPane settingsHubTabs;
     SidebarPanel sidebar;
     String currentCard = QA_VIEW;
     private boolean initialToolsCheckComplete;
@@ -502,14 +511,62 @@ public final class MainFrame extends JPanel {
 
         JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));
 
+        contextHubTabs = UiComponents.createUnderlinedTabbedPane(null);
+        if (contextManagerPanel != null) {
+            contextHubTabs.addTab("Context Folders", FontIcon.of(Codicons.FILE, 15, SwingHtmlUtils.getAccentColor()),
+                    contextManagerPanel);
+        }
+        if (codebaseCachePanel != null) {
+            contextHubTabs.addTab("Repo Map & Prompt",
+                    FontIcon.of(Codicons.DATABASE, 15, SwingHtmlUtils.getMutedForegroundColor()), codebaseCachePanel);
+        }
+        if (jexlApiPanel != null) {
+            contextHubTabs.addTab("Agent Tools API",
+                    FontIcon.of(Codicons.CODE, 15, SwingHtmlUtils.getMutedForegroundColor()), jexlApiPanel);
+        }
+        contextHubTabs.addChangeListener(e -> {
+            if (hubTabGuard.isActive()) {
+                return;
+            }
+            java.awt.Component selected = contextHubTabs.getSelectedComponent();
+            if (codebaseCachePanel != null && codebaseCachePanel.equals(selected)) {
+                currentCard = CACHE_VIEW;
+                codebaseCachePanel.refreshStatus();
+            } else if (jexlApiPanel != null && jexlApiPanel.equals(selected)) {
+                currentCard = API_VIEW;
+            } else {
+                currentCard = CONTEXT_MGR_VIEW;
+            }
+            refreshHubTabIcons();
+        });
+
+        settingsHubTabs = UiComponents.createUnderlinedTabbedPane(null);
+        if (settingsPanel != null) {
+            settingsHubTabs.addTab("General & AI",
+                    FontIcon.of(Codicons.SETTINGS_GEAR, 15, SwingHtmlUtils.getAccentColor()), settingsPanel);
+        }
+        if (systemToolsPanel != null) {
+            settingsHubTabs.addTab("System Tools",
+                    FontIcon.of(Codicons.TOOLS, 15, SwingHtmlUtils.getMutedForegroundColor()), systemToolsPanel);
+        }
+        settingsHubTabs.addChangeListener(e -> {
+            if (hubTabGuard.isActive()) {
+                return;
+            }
+            java.awt.Component selected = settingsHubTabs.getSelectedComponent();
+            if (systemToolsPanel != null && systemToolsPanel.equals(selected)) {
+                currentCard = TOOLS_VIEW;
+            } else {
+                currentCard = SETTINGS_VIEW;
+            }
+            refreshHubTabIcons();
+        });
+
         contentArea.add(qaWorkspacePanel, QA_VIEW);
         contentArea.add(taskWorkspacePanel, TASK_VIEW);
-        contentArea.add(codebaseCachePanel, CACHE_VIEW);
-        contentArea.add(jexlApiPanel, API_VIEW);
-        contentArea.add(systemToolsPanel, TOOLS_VIEW);
-        contentArea.add(settingsPanel, SETTINGS_VIEW);
+        contentArea.add(contextHubTabs, CONTEXT_MGR_VIEW);
+        contentArea.add(settingsHubTabs, SETTINGS_VIEW);
         contentArea.add(buildConfigPanel, BUILD_CONFIG_VIEW);
-        contentArea.add(contextManagerPanel, CONTEXT_MGR_VIEW);
         if (memoryPanel != null) {
             contentArea.add(memoryPanel, MEMORY_VIEW);
         }
@@ -586,12 +643,43 @@ public final class MainFrame extends JPanel {
         }
     }
 
+    @Override
+    public void updateUI() {
+        super.updateUI();
+        refreshHubTabIcons();
+    }
+
+    private void refreshHubTabIcons() {
+        updateSingleHubTabIcons(contextHubTabs, List.of(Codicons.FILE, Codicons.DATABASE, Codicons.CODE));
+        updateSingleHubTabIcons(settingsHubTabs, List.of(Codicons.SETTINGS_GEAR, Codicons.TOOLS));
+    }
+
+    private static void updateSingleHubTabIcons(JTabbedPane tabs, List<Codicons> icons) {
+        if (tabs == null || tabs.getTabCount() != icons.size()) {
+            return;
+        }
+        java.awt.Color accent = SwingHtmlUtils.getAccentColor();
+        java.awt.Color muted = SwingHtmlUtils.getMutedForegroundColor();
+        int selectedIndex = tabs.getSelectedIndex();
+        List<java.awt.Color> colors = new ArrayList<>(icons.size());
+        for (int i = 0; i < icons.size(); i++) {
+            if (i == selectedIndex) {
+                colors.add(accent);
+            } else {
+                colors.add(muted);
+            }
+        }
+        UiComponents.updateTabIcons(tabs, icons, colors);
+    }
+
     void showCard(String cardName) {
         this.currentCard = cardName;
         if (sidebar != null) {
             sidebar.selectCard(cardName);
         }
-        cardLayout.show(contentArea, cardName);
+        String layoutCard = resolveHubLayoutCard(cardName);
+        selectHubSubTab(cardName);
+        cardLayout.show(contentArea, layoutCard);
         updateTitle();
         if (QA_VIEW.equals(cardName) && qaWorkspacePanel != null) {
             qaWorkspacePanel.focusChatInput();
@@ -602,6 +690,38 @@ public final class MainFrame extends JPanel {
         } else if (MEMORY_VIEW.equals(cardName) && agentMemoryPanel != null) {
             agentMemoryPanel.refresh();
         }
+    }
+
+    private static String resolveHubLayoutCard(String cardName) {
+        if (CACHE_VIEW.equals(cardName) || API_VIEW.equals(cardName) || CONTEXT_MGR_VIEW.equals(cardName)) {
+            return CONTEXT_MGR_VIEW;
+        }
+        if (TOOLS_VIEW.equals(cardName) || SETTINGS_VIEW.equals(cardName)) {
+            return SETTINGS_VIEW;
+        }
+        return cardName;
+    }
+
+    private void selectHubSubTab(String cardName) {
+        hubTabGuard.run(() -> {
+            if (contextHubTabs != null) {
+                if (CONTEXT_MGR_VIEW.equals(cardName) && contextHubTabs.getTabCount() > TAB_INDEX_FIRST) {
+                    contextHubTabs.setSelectedIndex(TAB_INDEX_FIRST);
+                } else if (CACHE_VIEW.equals(cardName) && contextHubTabs.getTabCount() > TAB_INDEX_SECOND) {
+                    contextHubTabs.setSelectedIndex(TAB_INDEX_SECOND);
+                } else if (API_VIEW.equals(cardName) && contextHubTabs.getTabCount() > TAB_INDEX_THIRD) {
+                    contextHubTabs.setSelectedIndex(TAB_INDEX_THIRD);
+                }
+            }
+            if (settingsHubTabs != null) {
+                if (SETTINGS_VIEW.equals(cardName) && settingsHubTabs.getTabCount() > TAB_INDEX_FIRST) {
+                    settingsHubTabs.setSelectedIndex(TAB_INDEX_FIRST);
+                } else if (TOOLS_VIEW.equals(cardName) && settingsHubTabs.getTabCount() > TAB_INDEX_SECOND) {
+                    settingsHubTabs.setSelectedIndex(TAB_INDEX_SECOND);
+                }
+            }
+        });
+        refreshHubTabIcons();
     }
 
     void updateWorkspaceState() {

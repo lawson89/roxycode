@@ -15,6 +15,7 @@ final class ChatTelemetryBar {
 
     private static final int CTX_USAGE_CRITICAL_PCT = 90;
     private static final int CTX_USAGE_WARNING_PCT = 75;
+    private static final String HIDEMODE_3 = "hidemode 3";
 
     final JLabel ctxLabel;
     final JProgressBar ctxProgressBar;
@@ -48,9 +49,9 @@ final class ChatTelemetryBar {
     void addToToolbar(JPanel toolbar) {
         toolbar.add(ctxLabel);
         toolbar.add(ctxProgressBar, "w 48!, h 6!");
-        toolbar.add(cacheLabel);
-        toolbar.add(cacheProgressBar, "w 44!, h 6!");
-        toolbar.add(turnLabel);
+        toolbar.add(cacheLabel, HIDEMODE_3);
+        toolbar.add(cacheProgressBar, "w 44!, h 6!, " + HIDEMODE_3);
+        toolbar.add(turnLabel, HIDEMODE_3);
     }
 
     void update(ChatModel model, String turnStatusText) {
@@ -61,6 +62,11 @@ final class ChatTelemetryBar {
         int contextWindow = Math.max(1, model.getLastContextWindowTokens());
         int ctxPct = (int) Math.min(100L, Math.max(0L, Math.round((lastPromptTokens * 100.0) / contextWindow)));
         int lastCacheHitPct = TokenUtils.computeCacheHitPercent(lastCachedInputTokens, lastPromptTokens);
+
+        boolean hasTelemetryActivity = lastPromptTokens > 0 || model.getCurrentTurn() > 0;
+        cacheLabel.setVisible(hasTelemetryActivity);
+        cacheProgressBar.setVisible(hasTelemetryActivity);
+        turnLabel.setVisible(hasTelemetryActivity);
 
         String formattedPrompt;
         if (lastPromptTokens > 0) {

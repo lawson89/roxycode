@@ -218,6 +218,7 @@ class MainFrameTest {
         try {
             SwingTestUtils.flushEdt();
             assertEquals(MainFrame.TOOLS_VIEW, frame.currentCard);
+            assertEquals(1, frame.settingsHubTabs.getSelectedIndex());
             assertTrue(systemToolsPanel.warningBanner.isVisible());
             assertTrue(systemToolsPanel.warningBanner.messageLabel.getText().contains("Universal Ctags"));
             assertTrue(frame.sidebar.isToolsAttentionNeeded());
@@ -257,7 +258,10 @@ class MainFrameTest {
 
             clearInvocations(repoMapPackerService);
             frame.showCard(MainFrame.CACHE_VIEW);
+            assertEquals(1, frame.contextHubTabs.getSelectedIndex());
             verify(repoMapPackerService, timeout(2000).atLeastOnce()).getCachedSnapshot();
+            frame.showCard(MainFrame.API_VIEW);
+            assertEquals(2, frame.contextHubTabs.getSelectedIndex());
 
             when(jexlServiceRegistry.getDocumentation(null)).thenReturn("// updated git doc");
             jexlApiPanel.onSystemToolsUpdated(new SystemToolsUpdatedEvent(allDetectedTools, false));

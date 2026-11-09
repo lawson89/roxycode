@@ -35,7 +35,7 @@ class HeaderPanelTest {
         AtomicReference<String> navigatedCard = new AtomicReference<>();
         header.setOnNavigateToCard(navigatedCard::set);
 
-        assertEquals(Cursor.HAND_CURSOR, header.projectLabel.getCursor().getType());
+        assertEquals(Cursor.HAND_CURSOR, header.projectSwitcherButton.getCursor().getType());
         assertEquals(Cursor.HAND_CURSOR, header.modelLabel.getCursor().getType());
         assertEquals(Cursor.HAND_CURSOR, header.groundingLabel.getCursor().getType());
 
@@ -51,7 +51,7 @@ class HeaderPanelTest {
 
         assertTrue(header.noProjectNoticeLabel.isVisible());
         assertEquals(HeaderPanel.NO_PROJECT_NOTICE_TEXT, header.noProjectNoticeLabel.getText());
-        assertEquals(HeaderPanel.SELECT_PROJECT_TEXT, header.changeProjectButton.getText());
+        assertEquals(HeaderPanel.OPEN_PROJECT_TEXT, header.projectSwitcherButton.getText());
         SwingTestUtils.awaitFuture(header.refreshGitBranch());
         assertEquals("feature/async-branch", header.branchLabel.getText());
         assertTrue(header.branchLabel.isVisible());
@@ -70,9 +70,9 @@ class HeaderPanelTest {
         bg.join(5000);
         SwingTestUtils.flushEdt();
 
-        assertEquals("updated-proj", header.projectLabel.getText());
+        assertEquals("updated-proj", header.projectSwitcherButton.getText());
+        assertEquals(newRoot.toAbsolutePath().toString(), header.projectSwitcherButton.getToolTipText());
         assertFalse(header.noProjectNoticeLabel.isVisible());
-        assertEquals(HeaderPanel.CHANGE_PROJECT_TEXT, header.changeProjectButton.getText());
         assertEquals("gemini-4-argon", header.modelLabel.getText());
         assertEquals(
                 "Active Gemini model: gemini-4-argon (Thinking: Model Default) — Click to configure AI model & thinking level",

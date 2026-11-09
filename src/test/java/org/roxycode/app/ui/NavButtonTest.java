@@ -37,6 +37,14 @@ class NavButtonTest {
 
             SidebarPanel sidebar = new SidebarPanel(card -> {
             });
+            assertEquals(SidebarPanel.ASK_ROXY_LABEL, sidebar.getCardButton(MainFrame.QA_VIEW).getText());
+            assertEquals(SidebarPanel.BUILD_FEATURE_LABEL, sidebar.getCardButton(MainFrame.TASK_VIEW).getText());
+            assertEquals(SidebarPanel.CONTEXT_PROMPTS_LABEL,
+                    sidebar.getCardButton(MainFrame.CONTEXT_MGR_VIEW).getText());
+            assertSame(sidebar.getCardButton(MainFrame.CONTEXT_MGR_VIEW), sidebar.getCardButton(MainFrame.CACHE_VIEW));
+            assertSame(sidebar.getCardButton(MainFrame.CONTEXT_MGR_VIEW), sidebar.getCardButton(MainFrame.API_VIEW));
+            assertSame(sidebar.getCardButton(MainFrame.SETTINGS_VIEW), sidebar.getCardButton(MainFrame.TOOLS_VIEW));
+
             sidebar.updateNavigationAccess(false, false, false);
             assertTrue(sidebar.getCardButton(MainFrame.SETTINGS_VIEW).isEnabled());
             assertTrue(sidebar.getCardButton(MainFrame.TOOLS_VIEW).isEnabled());
@@ -54,9 +62,9 @@ class NavButtonTest {
             assertTrue(sidebar.getCardButton(MainFrame.TOOLS_VIEW).isEnabled());
             assertTrue(sidebar.getCardButton(MainFrame.API_VIEW).isEnabled());
             assertTrue(sidebar.getCardButton(MainFrame.CONTEXT_MGR_VIEW).isEnabled());
+            assertTrue(sidebar.getCardButton(MainFrame.CACHE_VIEW).isEnabled());
             assertFalse(sidebar.getCardButton(MainFrame.QA_VIEW).isEnabled());
             assertFalse(sidebar.getCardButton(MainFrame.TASK_VIEW).isEnabled());
-            assertFalse(sidebar.getCardButton(MainFrame.CACHE_VIEW).isEnabled());
             assertFalse(sidebar.getCardButton(MainFrame.BUILD_CONFIG_VIEW).isEnabled());
             assertEquals(SidebarPanel.MISSING_PROJECT_TOOLTIP,
                     sidebar.getCardButton(MainFrame.BUILD_CONFIG_VIEW).getToolTipText());
