@@ -28,6 +28,8 @@ public final class MarkdownPane extends JTextPane {
     private static final int COPY_FEEDBACK_DELAY_MS = 1500;
     private static final int INITIAL_MESSAGE_COUNT = 1;
     private static final String ERROR_RENDERING_HTML = "<div>Error rendering message</div>";
+    private static final int MAX_UI_MESSAGES = 200;
+    private boolean pruned = false;
 
     private final List<Message> messages = new ArrayList<>();
     private final boolean taskMode;
@@ -113,21 +115,38 @@ public final class MarkdownPane extends JTextPane {
     public void appendMessage(String role, String content) {
         String safeContent = StringUtils.defaultString(content);
         String timestamp = LocalDateTime.now().format(TIME_FORMATTER);
-        int index = messages.size();
         Message msg = new Message(role, safeContent, timestamp, false, true, null,
                 renderMarkdownBodySafely(safeContent), true);
         messages.add(msg);
-        appendRenderedEntry(formatMessageEntryHtml(msg, index));
+        if (pruneMessagesIfNeeded()) {
+            renderAll(true);
+        } else {
+            appendRenderedEntry(formatMessageEntryHtml(msg, messages.size() - 1));
+        }
     }
 
     public void appendToolLog(String output, boolean success, String error) {
         String safeOutput = StringUtils.defaultString(output);
         String timestamp = LocalDateTime.now().format(TIME_FORMATTER);
-        int index = messages.size();
         boolean expanded = ChatHtmlTemplates.shouldDefaultToolExpanded(safeOutput, success);
         Message msg = new Message(null, safeOutput, timestamp, true, success, error, null, expanded);
         messages.add(msg);
-        appendRenderedEntry(formatMessageEntryHtml(msg, index));
+        if (pruneMessagesIfNeeded()) {
+            renderAll(true);
+        } else {
+            appendRenderedEntry(formatMessageEntryHtml(msg, messages.size() - 1));
+        }
+    }
+
+    private boolean pruneMessagesIfNeeded() {
+        if (messages.size() <= MAX_UI_MESSAGES) {
+            return false;
+        }
+        while (messages.size() > MAX_UI_MESSAGES) {
+            messages.remove(0);
+        }
+        pruned = true;
+        return true;
     }
 
     public void toggleToolLog(int index) {
@@ -301,6 +320,10 @@ public final class MarkdownPane extends JTextPane {
         if (messages.isEmpty()) {
             fullHtml.append(ChatHtmlTemplates.renderWelcomeCard(taskMode));
         } else {
+            if (pruned) {
+                fullHtml.append(ChatHtmlTemplates.renderSystemNotice(
+                        "Older messages pruned from UI to save memory. Full history is available in archived plans."));
+            }
             for (int i = 0; i < messages.size(); i++) {
                 fullHtml.append(formatMessageEntryHtml(messages.get(i), i));
             }
@@ -340,6 +363,7 @@ public final class MarkdownPane extends JTextPane {
         }
         copiedMessageIndex = -1;
         messages.clear();
+        pruned = false;
         if (entries != null) {
             for (PersistedChatEntry entry : entries) {
                 if (entry == null) {
@@ -357,6 +381,7 @@ public final class MarkdownPane extends JTextPane {
                 }
             }
         }
+        pruneMessagesIfNeeded();
         renderAll(true);
     }
 
@@ -366,6 +391,7 @@ public final class MarkdownPane extends JTextPane {
         }
         copiedMessageIndex = -1;
         messages.clear();
+        pruned = false;
         renderAll(true);
     }
 }

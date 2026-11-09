@@ -135,4 +135,39 @@ class MarkdownPaneTest {
         assertContainsAll(restoredPane.getText(), "[Show 5 lines]", "line5_failed", "Compilation failed",
                 "Verify persistence", "Persistence verified.");
     }
+
+    @Test
+    void testUiMessagePruning() {
+        MarkdownPane pane = new MarkdownPane(false);
+        // Append 205 messages (MAX_UI_MESSAGES is 200)
+        for (int i = 0; i < 205; i++) {
+            pane.appendMessage("user", "Message " + i);
+        }
+
+        List<MarkdownPane.PersistedChatEntry> exported = pane.exportMessages();
+        assertEquals(200, exported.size());
+        assertEquals("Message 5", exported.get(0).content());
+        assertEquals("Message 204", exported.get(199).content());
+
+        String html = pane.getText();
+        assertTrue(html.contains("Older messages pruned from UI to save memory"));
+
+        pane.clear();
+        assertFalse(pane.getText().contains("Older messages pruned from UI to save memory"));
+        assertEquals(0, pane.exportMessages().size());
+    }
+
+    @Test
+    void testPruningOnRestore() {
+        MarkdownPane pane = new MarkdownPane(false);
+        List<MarkdownPane.PersistedChatEntry> entries = new java.util.ArrayList<>();
+        for (int i = 0; i < 250; i++) {
+            entries.add(new MarkdownPane.PersistedChatEntry("user", "Old " + i, "time", false, true, null, false));
+        }
+
+        pane.restoreMessages(entries);
+        assertEquals(200, pane.exportMessages().size());
+        assertEquals("Old 50", pane.exportMessages().get(0).content());
+        assertTrue(pane.getText().contains("Older messages pruned from UI to save memory"));
+    }
 }

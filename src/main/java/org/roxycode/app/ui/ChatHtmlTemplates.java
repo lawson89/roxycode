@@ -287,4 +287,8 @@ public final class ChatHtmlTemplates {
                 """
                 .formatted(CAT_EARS);
     }
+
+    public static String renderSystemNotice(String message) {
+        return "<div class='pruning-notice'>" + SwingHtmlUtils.escapeHtml(message) + "</div>";
+    }
 }
