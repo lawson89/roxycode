@@ -85,6 +85,8 @@ class BuildConfigPanelTest {
         BuildConfigPanel panel = createPanelOnEdt();
         assertFalse(loadCalledOnEdt.get());
         assertEquals(BuildConfigPanel.TITLE_TEXT, panel.titleLabel.getText());
+        assertNotNull(panel.buildCardPanel);
+        assertSame(panel.saveButton.getParent(), panel.statusLabel.getParent());
         assertTrue(panel.textArea.getText().contains("./mvnw test-compile"));
         assertTrue(panel.unconfirmedBanner.isVisible());
         assertEquals(BuildConfigPanel.UNCONFIRMED_BUILD_NOTICE_TEXT, panel.unconfirmedBanner.messageLabel.getText());

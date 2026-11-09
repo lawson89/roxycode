@@ -206,6 +206,7 @@ public final class CodebaseCachePanel extends JPanel {
 
     void updateTheme() {
         UiComponents.styleCardPanel(summaryCardPanel);
+        UiComponents.refreshActionButtonIcons(this);
         repoMapTokensLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
         stableTokensLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
         sessionTokensLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());

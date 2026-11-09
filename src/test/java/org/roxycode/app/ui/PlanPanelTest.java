@@ -31,6 +31,7 @@ class PlanPanelTest {
         PlanService planService = mock(PlanService.class);
         PlanPanel panel = new PlanPanel(planService);
         SwingTestUtils.flushEdt();
+        assertNotNull(panel.toolbar.getBorder());
         assertFalse(panel.copyMarkdownButton.isEnabled());
 
         when(planService.getCurrentPlan()).thenReturn(plan);

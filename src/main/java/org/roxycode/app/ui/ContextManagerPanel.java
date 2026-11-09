@@ -23,6 +23,7 @@ import javax.swing.JSplitPane;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
 import javax.swing.Timer;
+import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.events.ProjectChangedEvent;
@@ -118,7 +119,7 @@ public final class ContextManagerPanel extends JPanel {
         final DefaultListModel<String> folderListModel = new DefaultListModel<>();
         final JList<String> folderList = new JList<>(folderListModel);
         final JButton btnAddFolder = new JButton("Add Folder...");
-        final JButton btnRemoveFolder = new JButton("Remove Folder");
+        final JButton btnRemoveFolder = new JButton("Remove");
 
         final DefaultListModel<ContextFileItem> fileListModel = new DefaultListModel<>();
         final JList<ContextFileItem> fileList = new JList<>(fileListModel);
@@ -142,7 +143,7 @@ public final class ContextManagerPanel extends JPanel {
             this.globalScope = globalScope;
             this.errorReporter = errorReporter;
 
-            setLayout(new BorderLayout(0, 8));
+            setLayout(new MigLayout("fill, insets 10, gapy 8", "[grow, fill]", "[][grow, fill]"));
 
             headerLabel = new JLabel(sectionTitle);
             headerLabel.setFont(headerLabel.getFont().deriveFont(Font.BOLD, 14f));
@@ -160,7 +161,7 @@ public final class ContextManagerPanel extends JPanel {
             headerBanner = new JPanel(new BorderLayout(8, 0));
             headerBanner.add(headerLabel, BorderLayout.WEST);
             headerBanner.add(subtitleLabel, BorderLayout.EAST);
-            add(headerBanner, BorderLayout.NORTH);
+            add(headerBanner, "growx, wmin 0, wrap");
 
             folderList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
             folderList.setCellRenderer(createCellRenderer(Codicons.FOLDER));
@@ -170,6 +171,7 @@ public final class ContextManagerPanel extends JPanel {
             btnRemoveFolder.setEnabled(false);
 
             JPanel folderButtons = new JPanel(new GridLayout(1, 2, 5, 5));
+            folderButtons.setOpaque(false);
             folderButtons.add(btnAddFolder);
             folderButtons.add(btnRemoveFolder);
 
@@ -177,6 +179,7 @@ public final class ContextManagerPanel extends JPanel {
             foldersSectionLabel.setIconTextGap(6);
 
             JPanel foldersPanel = new JPanel(new BorderLayout(0, 5));
+            foldersPanel.setOpaque(false);
             foldersPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
             foldersPanel.add(foldersSectionLabel, BorderLayout.NORTH);
             foldersPanel.add(new JScrollPane(folderList), BorderLayout.CENTER);
@@ -189,6 +192,7 @@ public final class ContextManagerPanel extends JPanel {
             filesSectionLabel.setIconTextGap(6);
 
             JPanel filesPanel = new JPanel(new BorderLayout(0, 5));
+            filesPanel.setOpaque(false);
             filesPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
             filesPanel.add(filesSectionLabel, BorderLayout.NORTH);
             filesPanel.add(new JScrollPane(fileList), BorderLayout.CENTER);
@@ -201,6 +205,7 @@ public final class ContextManagerPanel extends JPanel {
             btnRemoveReferenceFolder.setEnabled(false);
 
             JPanel referenceFolderButtons = new JPanel(new GridLayout(1, 2, 5, 5));
+            referenceFolderButtons.setOpaque(false);
             referenceFolderButtons.add(btnAddReferenceFolder);
             referenceFolderButtons.add(btnRemoveReferenceFolder);
 
@@ -208,6 +213,7 @@ public final class ContextManagerPanel extends JPanel {
             referenceFoldersSectionLabel.setIconTextGap(6);
 
             JPanel referenceFoldersPanel = new JPanel(new BorderLayout(0, 5));
+            referenceFoldersPanel.setOpaque(false);
             referenceFoldersPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
             referenceFoldersPanel.add(referenceFoldersSectionLabel, BorderLayout.NORTH);
             referenceFoldersPanel.add(new JScrollPane(referenceFolderList), BorderLayout.CENTER);
@@ -216,12 +222,16 @@ public final class ContextManagerPanel extends JPanel {
             JSplitPane contextSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, foldersPanel, filesPanel);
             contextSplitPane.setDividerLocation(180);
             contextSplitPane.setResizeWeight(0.5);
+            contextSplitPane.setBorder(null);
+            contextSplitPane.setOpaque(false);
 
             JSplitPane mainSplitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, contextSplitPane,
                     referenceFoldersPanel);
             mainSplitPane.setDividerLocation(360);
             mainSplitPane.setResizeWeight(0.65);
-            add(mainSplitPane, BorderLayout.CENTER);
+            mainSplitPane.setBorder(null);
+            mainSplitPane.setOpaque(false);
+            add(mainSplitPane, "grow, push, wmin 0");
 
             applyScopeStyling();
             setupListeners();
@@ -283,14 +293,10 @@ public final class ContextManagerPanel extends JPanel {
 
         void applyScopeStyling() {
             Color accent = resolveAccentColor();
-            Color borderColor = SwingHtmlUtils.getUiColor(new Color(0xcc, 0xcc, 0xcc), "Component.borderColor");
             Color buttonFg = SwingHtmlUtils.getUiColor(new Color(0x33, 0x33, 0x33), "Button.foreground",
                     "Label.foreground");
 
-            setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(3, 0, 0, 0, accent),
-                            BorderFactory.createMatteBorder(0, 1, 1, 1, borderColor)),
-                    BorderFactory.createEmptyBorder(8, 8, 8, 8)));
+            UiComponents.styleCardPanel(this);
 
             SwingHtmlUtils.applyTintedBannerStyle(headerBanner, accent, 6, 10, 10);
             Codicons headerIcon;

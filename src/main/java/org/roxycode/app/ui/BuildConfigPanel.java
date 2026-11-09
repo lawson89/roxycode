@@ -45,6 +45,7 @@ public final class BuildConfigPanel extends JPanel {
     static final String APPLY_TEMPLATE_TEXT = "Apply Template";
     static final String SAVE_BUTTON_TEXT = "Confirm & Save Settings";
     private static final String DEFAULT_TEMPLATE_ID = "default";
+    private static final String HEADER_FONT_STYLE = "font: bold +2";
     static final String UNCONFIRMED_BUILD_NOTICE_TEXT = "Build configuration was initialized from the auto-detected template. Please review the commands below and click 'Confirm & Save Settings'. Need help customizing build.toml or regexes for your stack? Ask Roxy in Codebase Q&A!";
     static final String BUILD_TOML_GUIDE_TOOLTIP_HTML = """
             <html><div style='width: 390px;'>
@@ -62,6 +63,7 @@ public final class BuildConfigPanel extends JPanel {
     final JLabel titleLabel;
     final JLabel subtitleLabel;
     final JPanel modelCardPanel;
+    final JPanel buildCardPanel;
     final JLabel modelSectionHeaderLabel;
     final JComboBox<GeminiModelConfig> modelCombo;
     final JComboBox<ThinkingLevelOption> thinkingLevelCombo;
@@ -90,19 +92,32 @@ public final class BuildConfigPanel extends JPanel {
         this.buildToolService = buildToolService;
         this.settingsService = settingsService;
         this.projectService = projectService;
-        setLayout(new MigLayout("fill, insets 20, hidemode 3", "[grow, fill]", "[][][][][][grow][]"));
+        setLayout(new MigLayout("fill, insets 20, hidemode 3", "[grow, fill]", "[]12[]14[grow, fill]"));
         setOpaque(true);
 
         titleLabel = new JLabel(TITLE_TEXT);
         subtitleLabel = new JLabel(SUBTITLE_TEXT);
-        add(UiComponents.createPageHeader(titleLabel, subtitleLabel, null), "growx, wmin 0, wrap, gapbottom 10");
+        statusLabel = new JLabel("");
+        statusLabel.setFont(statusLabel.getFont().deriveFont(Font.BOLD, 11.5f));
 
-        modelCardPanel = new JPanel(new MigLayout("fillx, wrap 1, insets 14 18 14 18, gapy 8", "[grow, fill]", ""));
+        saveButton = UiComponents.createActionButton(SAVE_BUTTON_TEXT, Codicons.SAVE, new Insets(6, 14, 6, 14), false,
+                "arc: 8; font: bold; " + UiComponents.ACCENT_BUTTON_STYLE, e -> saveConfig());
+        saveButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        saveButton.setIconTextGap(6);
+
+        JPanel headerActions = new JPanel(new MigLayout("insets 0, gapx 12", "[][]", "[center]"));
+        headerActions.setOpaque(false);
+        headerActions.add(statusLabel);
+        headerActions.add(saveButton);
+
+        add(UiComponents.createPageHeader(titleLabel, subtitleLabel, headerActions), "growx, wmin 0, wrap");
+
+        modelCardPanel = new JPanel(new MigLayout("fillx, wrap 1, insets 16 18 16 18, gapy 8", "[grow, fill]", ""));
         UiComponents.styleCardPanel(modelCardPanel);
 
         modelSectionHeaderLabel = UiComponents.createSectionHeader(SECTION_AI_MODEL_TITLE, Codicons.HUBOT,
-                "font: bold +1");
-        modelCardPanel.add(modelSectionHeaderLabel, "growx, wmin 0");
+                HEADER_FONT_STYLE);
+        modelCardPanel.add(modelSectionHeaderLabel, "growx, wmin 0, gapbottom 2");
 
         modelCombo = new JComboBox<>();
         modelApiBadgeLabel = new JLabel();
@@ -127,23 +142,27 @@ public final class BuildConfigPanel extends JPanel {
                 "Override the default Global Settings thinking level specifically for the active project.", null),
                 thinkingLevelCombo, "w 240:280:340"), "growx, wmin 0");
 
-        add(modelCardPanel, "growx, wrap, gapbottom 14");
+        add(modelCardPanel, "growx, wmin 0, wrap");
 
         loadModelOptions();
         loadThinkingLevelOptions();
         modelCombo.addActionListener(e -> updateSelectedModelDetails());
         updateSelectedModelDetails();
 
+        buildCardPanel = new JPanel(
+                new MigLayout("fill, insets 16 18 16 18, hidemode 3", "[grow, fill]", "[][][][grow, fill]"));
+        UiComponents.styleCardPanel(buildCardPanel);
+
         buildSectionHeaderLabel = UiComponents.createSectionHeader(SECTION_BUILD_CONFIG_TITLE, Codicons.PACKAGE,
-                "font: bold +1");
+                HEADER_FONT_STYLE);
         buildConfigInfoIcon = UiComponents.createInfoIcon(BUILD_TOML_GUIDE_TOOLTIP_HTML);
         JPanel buildHeaderRow = new JPanel(new MigLayout("insets 0, gapx 8", "[][][grow]", "[center]"));
         buildHeaderRow.setOpaque(false);
         buildHeaderRow.add(buildSectionHeaderLabel);
         buildHeaderRow.add(buildConfigInfoIcon);
-        add(buildHeaderRow, "growx, wrap, gapbottom 6");
+        buildCardPanel.add(buildHeaderRow, "growx, wmin 0, wrap, gapbottom 8");
 
-        JPanel templateToolbar = new JPanel(new MigLayout("fillx, insets 0, hidemode 3", "[][grow][][]", "[]"));
+        JPanel templateToolbar = new JPanel(new MigLayout("fillx, insets 0, hidemode 3", "[][][][grow]", "[]"));
         templateToolbar.setOpaque(false);
         JLabel templateLabel = new JLabel("Build Template:");
         templateCombo = new JComboBox<>();
@@ -169,29 +188,20 @@ public final class BuildConfigPanel extends JPanel {
         templateToolbar.add(templateCombo, "w 220:280:360, gapright 8");
         templateToolbar.add(applyTemplateButton, "gapright 8");
         templateToolbar.add(templateConfirmBar);
-        add(templateToolbar, "growx, wrap, gapbottom 8");
+        buildCardPanel.add(templateToolbar, "growx, wmin 0, wrap, gapbottom 8");
 
         loadTemplateOptions();
 
         unconfirmedBanner = new UiComponents.WarningBanner(UNCONFIRMED_BUILD_NOTICE_TEXT);
-        add(unconfirmedBanner, "growx, wrap, gapbottom 8, hidemode 3");
+        buildCardPanel.add(unconfirmedBanner, "growx, wmin 0, wrap, gapbottom 8, hidemode 3");
 
         textArea = new RSyntaxTextArea();
         UiComponents.configureSyntaxTextArea(textArea, SyntaxConstants.SYNTAX_STYLE_INI, true, false);
         SwingHtmlUtils.addChangeListener(textArea, this::onTomlTextEdited);
         updateTextAreaTheme();
 
-        add(new RTextScrollPane(textArea), "grow, wrap");
-
-        JPanel buttonPanel = new JPanel(new MigLayout("insets 0", "[]10push[]"));
-        buttonPanel.setOpaque(false);
-        saveButton = new JButton(SAVE_BUTTON_TEXT);
-        saveButton.addActionListener(e -> saveConfig());
-        buttonPanel.add(saveButton);
-
-        statusLabel = new JLabel("");
-        buttonPanel.add(statusLabel);
-        add(buttonPanel, "growx, gaptop 15");
+        buildCardPanel.add(new RTextScrollPane(textArea), "grow, push");
+        add(buildCardPanel, "grow, push, wmin 0");
 
         statusTimer = UiComponents.createStatusTimer(statusLabel, 3000);
 
@@ -318,9 +328,13 @@ public final class BuildConfigPanel extends JPanel {
     private void applySectionStyling() {
         Color accentColor = SwingHtmlUtils.getAccentColor();
 
+        UiComponents.styleCardPanel(modelCardPanel);
+        UiComponents.styleCardPanel(buildCardPanel);
+        UiComponents.styleCodePillBadge(modelApiBadgeLabel);
         modelSectionHeaderLabel.setIcon(FontIcon.of(Codicons.HUBOT, 18, accentColor));
         buildSectionHeaderLabel.setIcon(FontIcon.of(Codicons.PACKAGE, 18, accentColor));
         UiComponents.updateInfoIconTheme(buildConfigInfoIcon);
+        UiComponents.refreshActionButtonIcons(this);
 
         statusLabel.setForeground(SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green"));
     }
@@ -360,7 +374,7 @@ public final class BuildConfigPanel extends JPanel {
     @Override
     public void updateUI() {
         super.updateUI();
-        if (modelCardPanel != null) {
+        if (modelCardPanel != null && buildCardPanel != null) {
             applySectionStyling();
         }
         if (unconfirmedBanner != null) {

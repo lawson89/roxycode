@@ -27,6 +27,7 @@ import javax.imageio.ImageIO;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
+import javax.swing.JPanel;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
@@ -862,5 +863,51 @@ class ChatControllerTest extends ChatTestFixture {
         flushEdt();
         assertTrue(resetFuture.isCancelled());
         assertFalse(taskPanel.userInputPromptPanel.isVisible());
+    }
+
+    @Test
+    void testSendAndStopButtonsStayPinnedToRightEdgeAcrossTelemetryStates() {
+        ChatPanel taskPanel = createFeatureChatPanel(directExecutor);
+        ChatPanel qaPanel = createExploreChatPanel(directExecutor);
+
+        for (ChatPanel panel : List.of(taskPanel, qaPanel)) {
+            JPanel actionToolbar = (JPanel) panel.sendButton.getParent();
+            assertSame(actionToolbar, panel.telemetryBar.telemetryPanel.getParent());
+
+            SwingTestUtils.runOnEdt(() -> {
+                actionToolbar.setSize(800, 36);
+                panel.telemetryBar.telemetryPanel.doLayout();
+                actionToolbar.doLayout();
+            });
+            assertFalse(panel.telemetryBar.cacheLabel.isVisible());
+            assertFalse(panel.telemetryBar.turnLabel.isVisible());
+            int idleRightEdge = panel.sendButton.getX() + panel.sendButton.getWidth();
+            assertTrue(idleRightEdge >= 785,
+                    "Send button right edge should be pinned near toolbar right edge (800px), got " + idleRightEdge);
+
+            panel.controller.onTokenUsage(new TokenUsageEvent(panel.model.getConversationId(), "gemini-3.5-pro",
+                    1_000_000, 25_000, 20_000, 5_000, 0, 500, 25_500, 0.01));
+            flushEdt();
+            SwingTestUtils.runOnEdt(() -> {
+                panel.telemetryBar.telemetryPanel.invalidate();
+                actionToolbar.invalidate();
+                actionToolbar.doLayout();
+                panel.telemetryBar.telemetryPanel.doLayout();
+            });
+            assertTrue(panel.telemetryBar.cacheLabel.isVisible());
+            assertTrue(panel.telemetryBar.turnLabel.isVisible());
+            int activeRightEdge = panel.sendButton.getX() + panel.sendButton.getWidth();
+            assertEquals(idleRightEdge, activeRightEdge,
+                    "Send button right edge should not shift when telemetry indicators become visible");
+
+            SwingTestUtils.runOnEdt(() -> {
+                panel.setLoading(true);
+                actionToolbar.doLayout();
+            });
+            assertFalse(panel.sendButton.isVisible());
+            assertTrue(panel.stopButton.isVisible());
+            int stopRightEdge = panel.stopButton.getX() + panel.stopButton.getWidth();
+            assertEquals(idleRightEdge, stopRightEdge, "Stop button right edge should match Send button right edge");
+        }
     }
 }

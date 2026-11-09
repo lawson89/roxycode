@@ -326,9 +326,9 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
         String toolbarCols;
         if (isTaskMode) {
-            toolbarCols = "[]4[]4[]8[]push[]4[]10[]4[]push[]8[]";
+            toolbarCols = "[]4[]4[]8[]push[]push[right]";
         } else {
-            toolbarCols = "[]4[]4[]push[]4[]10[]4[]push[]8[]";
+            toolbarCols = "[]4[]4[]push[]push[right]";
         }
         JPanel actionToolbar = new JPanel(new MigLayout("insets 4 8 6 8, fillx", toolbarCols, "center"));
         actionToolbar.setOpaque(false);
@@ -344,8 +344,8 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
             actionToolbar.add(autoApprovePlanCheckBox);
         }
         telemetryBar.addToToolbar(actionToolbar);
-        actionToolbar.add(sendButton, HIDEMODE_3);
-        actionToolbar.add(stopButton, HIDEMODE_3);
+        actionToolbar.add(sendButton, "split 2, alignx right, " + HIDEMODE_3);
+        actionToolbar.add(stopButton, "alignx right, " + HIDEMODE_3);
 
         composerCard.add(attachmentPanel, BorderLayout.NORTH);
         composerCard.add(inputScrollPane, BorderLayout.CENTER);
@@ -524,7 +524,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         if (transitionLabel != null && transitionLabel.getIcon() instanceof FontIcon fontIcon) {
             transitionLabel.setIcon(FontIcon.of(fontIcon.getIkon(), fontIcon.getIconSize(), accent));
         }
-        UiComponents.refreshActionButtonIcons(inlineActionPanel);
+        UiComponents.refreshActionButtonIcons(this);
         userInputPromptPanel.applyThemeStyling();
         if (activityStripPanel != null) {
             applyActivityStripStyling(activityStripPanel);

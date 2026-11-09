@@ -1,7 +1,13 @@
 package org.roxycode.app.ui;
 
-import java.awt.*;
-import javax.swing.*;
+import java.awt.FlowLayout;
+import javax.swing.JButton;
+import javax.swing.JEditorPane;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.Timer;
+import net.miginfocom.swing.MigLayout;
+import org.kordamp.ikonli.codicons.Codicons;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
@@ -15,29 +21,36 @@ import org.springframework.stereotype.Component;
 public final class JexlApiPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     static final int COPY_FEEDBACK_DELAY_MS = 1500;
+    static final String PAGE_TITLE = "Agent Tools API";
+    static final String PAGE_SUBTITLE = "Auto-generated JEXL @AgentService methods and TypeScript-style signatures available in executeJexl.";
     static final String COPY_BUTTON_TEXT = "Copy";
+    static final String REFRESH_BUTTON_TEXT = "Refresh";
 
     private final transient JexlServiceRegistry registry;
+    final JLabel titleLabel = new JLabel(PAGE_TITLE);
+    final JLabel subtitleLabel = new JLabel(PAGE_SUBTITLE);
     final JEditorPane textPane = SwingHtmlUtils.createHtmlEditorPane();
-    private final JButton copyBtn;
+    final JButton copyBtn;
+    final JButton refreshBtn;
     private Timer copyFeedbackTimer;
 
     public JexlApiPanel(JexlServiceRegistry registry) {
         this.registry = registry;
-        setLayout(new BorderLayout());
+        setLayout(new MigLayout("fill, insets 20, hidemode 3", "[grow, fill]", "[]12[grow, fill]"));
 
         copyBtn = UiComponents.createCopyButton(COPY_BUTTON_TEXT, true, this::copyDocumentation);
+        refreshBtn = UiComponents.createActionButton(REFRESH_BUTTON_TEXT, Codicons.REFRESH, null, false, null,
+                e -> refresh());
+
+        JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        actionPanel.setOpaque(false);
+        actionPanel.add(copyBtn);
+        actionPanel.add(refreshBtn);
+
+        add(UiComponents.createPageHeader(titleLabel, subtitleLabel, actionPanel), "growx, wmin 0, wrap");
+        add(UiComponents.createHtmlScrollPane(textPane), "grow, push");
+
         updateTheme();
-        add(UiComponents.createHtmlScrollPane(textPane), BorderLayout.CENTER);
-
-        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        toolbar.setOpaque(false);
-        JButton refreshBtn = new JButton("Refresh");
-        refreshBtn.addActionListener(e -> refresh());
-
-        toolbar.add(copyBtn);
-        toolbar.add(refreshBtn);
-        add(toolbar, BorderLayout.NORTH);
     }
 
     @EventListener
@@ -66,6 +79,7 @@ public final class JexlApiPanel extends JPanel {
 
     public void updateTheme() {
         SwingHtmlUtils.applyTheme(textPane, 10);
+        UiComponents.refreshActionButtonIcons(this);
         refresh();
     }
 

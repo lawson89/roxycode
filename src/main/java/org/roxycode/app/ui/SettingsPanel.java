@@ -105,10 +105,10 @@ public final class SettingsPanel extends JPanel {
         statusLabel = new JLabel("");
         statusLabel.setFont(statusLabel.getFont().deriveFont(Font.BOLD, 11.5f));
 
-        saveButton = new JButton("Save Settings");
+        saveButton = UiComponents.createActionButton("Save Settings", Codicons.SAVE, new Insets(6, 14, 6, 14), false,
+                "arc: 8; font: bold; " + UiComponents.ACCENT_BUTTON_STYLE, e -> saveSettings());
         saveButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         saveButton.setIconTextGap(6);
-        saveButton.addActionListener(e -> saveSettings());
 
         JPanel headerActions = new JPanel(new MigLayout("insets 0, gapx 12", "[][]", "[center]"));
         headerActions.setOpaque(false);
@@ -321,12 +321,7 @@ public final class SettingsPanel extends JPanel {
         UiComponents.styleCodePillBadge(modelApiBadgeLabel);
 
         String accentHex = SwingHtmlUtils.toHex(accentColor);
-        saveButton.setIcon(FontIcon.of(Codicons.SAVE, 14, Color.WHITE));
-        saveButton.setForeground(Color.WHITE);
-        saveButton.putClientProperty(FlatClientProperties.STYLE,
-                "font: bold; arc: 8; margin: 6,14,6,14; borderWidth: 0; focusWidth: 0; background: " + accentHex
-                        + "; hoverBackground: darken(" + accentHex + ", 8%); pressedBackground: darken(" + accentHex
-                        + ", 14%)");
+        UiComponents.refreshActionButtonIcons(this);
 
         geminiApiKeyField.putClientProperty(FlatClientProperties.STYLE, "showRevealButton: true; arc: 8");
 

@@ -172,7 +172,7 @@ final class UiComponents {
      * Creates a copy button with the standard clippy icon.
      */
     static JButton createCopyButton(String text, boolean enabled, Runnable onCopy) {
-        JButton button = new JButton(text, FontIcon.of(Codicons.CLIPPY, 14));
+        JButton button = new JButton(text, FontIcon.of(Codicons.CLIPPY, 14, resolveActionButtonIconColor(null)));
         button.setEnabled(enabled);
         button.addActionListener(e -> onCopy.run());
         return button;
@@ -203,8 +203,10 @@ final class UiComponents {
     static Timer copyWithFeedback(JButton button, @Nullable Timer existingTimer, String content, String originalText,
             int delayMs) {
         SwingHtmlUtils.copyToClipboard(content);
-        return SwingHtmlUtils.showCopyButtonFeedback(button, existingTimer, "Copied!", FontIcon.of(Codicons.CHECK, 14),
-                originalText, FontIcon.of(Codicons.CLIPPY, 14), delayMs);
+        Color iconColor = resolveActionButtonIconColor(null);
+        return SwingHtmlUtils.showCopyButtonFeedback(button, existingTimer, "Copied!",
+                FontIcon.of(Codicons.CHECK, 14, iconColor), originalText, FontIcon.of(Codicons.CLIPPY, 14, iconColor),
+                delayMs);
     }
 
     /**

@@ -244,9 +244,12 @@ public final class AgentMemoryPanel extends JPanel {
             memoryCounterLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
             toolbar.add(memoryCounterLabel, GROWX);
 
-            revertMemoryButton.setIcon(FontIcon.of(Codicons.DISCARD, 14));
+            revertMemoryButton
+                    .setIcon(FontIcon.of(Codicons.DISCARD, 14, UiComponents.resolveActionButtonIconColor(null)));
             revertMemoryButton.setEnabled(false);
-            saveMemoryButton.setIcon(FontIcon.of(Codicons.SAVE, 14));
+            saveMemoryButton.putClientProperty(FlatClientProperties.STYLE, UiComponents.ACCENT_BUTTON_STYLE);
+            saveMemoryButton.setIcon(FontIcon.of(Codicons.SAVE, 14,
+                    UiComponents.resolveActionButtonIconColor(UiComponents.ACCENT_BUTTON_STYLE)));
             saveMemoryButton.setEnabled(false);
             toolbar.add(revertMemoryButton);
             toolbar.add(saveMemoryButton);
@@ -261,10 +264,10 @@ public final class AgentMemoryPanel extends JPanel {
         }
 
         private JPanel buildTopicNotesCard() {
-            JPanel card = new JPanel(new BorderLayout(0, 6));
-            card.setBorder(BorderFactory.createEmptyBorder(8, 12, 10, 12));
+            JPanel card = new JPanel(
+                    new MigLayout("fill, insets 8 12 10 12, gapy 6", "[grow, fill]", "[][grow, fill]"));
             UiComponents.styleCardPanel(card);
-            card.add(notesHeaderLabel, BorderLayout.NORTH);
+            card.add(notesHeaderLabel, GROWX_WRAP);
             JPanel leftPane = new JPanel(new BorderLayout(0, 6));
             leftPane.setOpaque(false);
 
@@ -273,9 +276,9 @@ public final class AgentMemoryPanel extends JPanel {
             searchField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT,
                     "Filter notes by title, slug, or tag...");
             searchField.putClientProperty(FlatClientProperties.TEXT_FIELD_LEADING_ICON,
-                    FontIcon.of(Codicons.SEARCH, 14));
+                    FontIcon.of(Codicons.SEARCH, 14, SwingHtmlUtils.getMutedForegroundColor()));
             searchField.putClientProperty(FlatClientProperties.TEXT_FIELD_SHOW_CLEAR_BUTTON, true);
-            newNoteButton.setIcon(FontIcon.of(Codicons.ADD, 14));
+            newNoteButton.setIcon(FontIcon.of(Codicons.ADD, 14, UiComponents.resolveActionButtonIconColor(null)));
             filterBar.add(searchField, GROWX);
             filterBar.add(newNoteButton);
             leftPane.add(filterBar, BorderLayout.NORTH);
@@ -306,8 +309,12 @@ public final class AgentMemoryPanel extends JPanel {
 
             JPanel noteButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
             noteButtons.setOpaque(false);
-            saveNoteButton.setIcon(FontIcon.of(Codicons.SAVE, 14));
-            deleteNoteButton.setIcon(FontIcon.of(Codicons.TRASH, 14));
+            saveNoteButton.putClientProperty(FlatClientProperties.STYLE, UiComponents.ACCENT_BUTTON_STYLE);
+            saveNoteButton.setIcon(FontIcon.of(Codicons.SAVE, 14,
+                    UiComponents.resolveActionButtonIconColor(UiComponents.ACCENT_BUTTON_STYLE)));
+            deleteNoteButton.putClientProperty(FlatClientProperties.STYLE, UiComponents.SUBTLE_RED_BUTTON_STYLE);
+            deleteNoteButton.setIcon(FontIcon.of(Codicons.TRASH, 14,
+                    UiComponents.resolveActionButtonIconColor(UiComponents.SUBTLE_RED_BUTTON_STYLE)));
             deleteNoteButton.setEnabled(false);
             noteButtons.add(saveNoteButton);
             noteButtons.add(deleteNoteButton);
@@ -320,7 +327,7 @@ public final class AgentMemoryPanel extends JPanel {
             splitPane.setResizeWeight(0.32);
             splitPane.setBorder(null);
             splitPane.setOpaque(false);
-            card.add(splitPane, BorderLayout.CENTER);
+            card.add(splitPane, "grow, push");
             return card;
         }
 
@@ -684,10 +691,14 @@ public final class AgentMemoryPanel extends JPanel {
                 UiComponents.styleCardPanel(emptyProjectPanel);
             }
             Color warnColor = SwingHtmlUtils.getWarningColor();
+            Color mutedColor = SwingHtmlUtils.getMutedForegroundColor();
             memoryWarningLabel.setForeground(warnColor);
             memoryWarningLabel.setIcon(FontIcon.of(Codicons.WARNING, 14, warnColor));
-            memoryCounterLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
-            statusLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
+            memoryCounterLabel.setForeground(mutedColor);
+            statusLabel.setForeground(mutedColor);
+            searchField.putClientProperty(FlatClientProperties.TEXT_FIELD_LEADING_ICON,
+                    FontIcon.of(Codicons.SEARCH, 14, mutedColor));
+            UiComponents.refreshActionButtonIcons(this);
             SwingHtmlUtils.applyRSyntaxTheme(memoryEditor, settingsService);
             SwingHtmlUtils.applyRSyntaxTheme(noteBodyEditor, settingsService);
             noteList.repaint();

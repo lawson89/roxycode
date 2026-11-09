@@ -6,6 +6,7 @@ import java.util.Locale;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
+import net.miginfocom.swing.MigLayout;
 import org.roxycode.app.util.TokenUtils;
 
 /**
@@ -17,6 +18,7 @@ final class ChatTelemetryBar {
     private static final int CTX_USAGE_WARNING_PCT = 75;
     private static final String HIDEMODE_3 = "hidemode 3";
 
+    final JPanel telemetryPanel;
     final JLabel ctxLabel;
     final JProgressBar ctxProgressBar;
     final JLabel cacheLabel;
@@ -44,14 +46,18 @@ final class ChatTelemetryBar {
         turnLabel = new JLabel();
         turnLabel.putClientProperty(FlatClientProperties.STYLE,
                 "font: $small.font; foreground: $Label.disabledForeground; background: darken($TextArea.background, 4%); arc: 8; border: 2,8,2,8");
+
+        telemetryPanel = new JPanel(new MigLayout("insets 0, hidemode 3", "[]4[]10[]4[]8[]", "center"));
+        telemetryPanel.setOpaque(false);
+        telemetryPanel.add(ctxLabel);
+        telemetryPanel.add(ctxProgressBar, "w 48!, h 6!");
+        telemetryPanel.add(cacheLabel, HIDEMODE_3);
+        telemetryPanel.add(cacheProgressBar, "w 44!, h 6!, " + HIDEMODE_3);
+        telemetryPanel.add(turnLabel, HIDEMODE_3);
     }
 
     void addToToolbar(JPanel toolbar) {
-        toolbar.add(ctxLabel);
-        toolbar.add(ctxProgressBar, "w 48!, h 6!");
-        toolbar.add(cacheLabel, HIDEMODE_3);
-        toolbar.add(cacheProgressBar, "w 44!, h 6!, " + HIDEMODE_3);
-        toolbar.add(turnLabel, HIDEMODE_3);
+        toolbar.add(telemetryPanel, "wmin 0");
     }
 
     void update(ChatModel model, String turnStatusText) {

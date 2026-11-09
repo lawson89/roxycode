@@ -46,6 +46,12 @@ class ContextManagerPanelTest {
         SwingTestUtils.awaitFuture(globalCol.lastRefreshFuture);
         SwingTestUtils.awaitFuture(projCol.lastRefreshFuture);
 
+        assertEquals("Remove", globalCol.btnRemoveFolder.getText());
+        assertEquals("Remove", globalCol.btnRemoveReferenceFolder.getText());
+        assertEquals("Remove", projCol.btnRemoveFolder.getText());
+        assertEquals("Remove", projCol.btnRemoveReferenceFolder.getText());
+        assertNotNull(globalCol.getClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE));
+        assertNotNull(projCol.getClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE));
         assertEquals("/global", globalCol.folderListModel.getElementAt(0));
         assertEquals("rules.yaml", globalCol.fileListModel.getElementAt(0).fileName());
         assertEquals(globalMount, globalCol.referenceFolderListModel.getElementAt(0));

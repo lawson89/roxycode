@@ -2,6 +2,7 @@ package org.roxycode.app.ui;
 
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
+import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JEditorPane;
 import javax.swing.JPanel;
@@ -26,6 +27,7 @@ public final class PlanPanel extends JPanel {
     static final String COPY_COMMIT_MSG_TEXT = "Copy Commit Msg";
 
     private final transient PlanService planManagerService;
+    final JPanel toolbar;
     final JEditorPane displayArea;
     final JButton copyCommitMessageButton;
     final JButton copyMarkdownButton;
@@ -38,8 +40,9 @@ public final class PlanPanel extends JPanel {
         this.planManagerService = planManagerService;
         setLayout(new BorderLayout());
 
-        JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT));
-        toolbar.setOpaque(false);
+        toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        toolbar.setBorder(BorderFactory.createCompoundBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0),
+                BorderFactory.createEmptyBorder(8, 12, 8, 12)));
         copyCommitMessageButton = UiComponents.createCopyButton(COPY_COMMIT_MSG_TEXT, false, this::copyCommitMessage);
         copyCommitMessageButton.setVisible(false);
         toolbar.add(copyCommitMessageButton);
@@ -107,6 +110,11 @@ public final class PlanPanel extends JPanel {
     }
 
     private void updateTheme() {
+        if (toolbar != null) {
+            toolbar.setBorder(BorderFactory.createCompoundBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0),
+                    BorderFactory.createEmptyBorder(8, 12, 8, 12)));
+        }
+        UiComponents.refreshActionButtonIcons(this);
         SwingHtmlUtils.applyTheme(displayArea, 15);
     }
 

@@ -376,6 +376,7 @@ public final class ArchiveBrowserPanel extends JPanel {
 
     private void updateTheme() {
         SwingHtmlUtils.applyTheme(displayArea, 16);
+        UiComponents.refreshActionButtonIcons(this);
         if (countLabel != null) {
             countLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
         }
