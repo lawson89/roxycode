@@ -290,16 +290,18 @@ class MainFrameTest {
 
             // Test BUSY state in QA mode
             frame.showCard(MainFrame.QA_VIEW);
-            frame.sidebar.setQaBusy(true);
+            SwingTestUtils.runOnEdt(() -> frame.qaChatPanel().setLoading(true));
             assertEquals(AppIconRenderer.AgentStatus.BUSY, frame.resolveCurrentStatus());
             frame.updateWorkspaceState();
             assertEquals(AppIconRenderer.AgentStatus.BUSY, frame.currentStatus);
             assertEquals("test-project — RoxyCode", frame.getTitle());
 
             // Test BUSY state in Task mode with plan phase
-            frame.sidebar.setQaBusy(false);
-            frame.showCard(MainFrame.TASK_VIEW);
-            frame.sidebar.setTaskBusy(true);
+            SwingTestUtils.runOnEdt(() -> {
+                frame.qaChatPanel().setLoading(false);
+                frame.showCard(MainFrame.TASK_VIEW);
+                frame.taskChatPanel().setLoading(true);
+            });
             assertEquals(AppIconRenderer.AgentStatus.BUSY, frame.resolveCurrentStatus());
             frame.updateWorkspaceState();
             assertEquals(AppIconRenderer.AgentStatus.BUSY, frame.currentStatus);
@@ -314,7 +316,7 @@ class MainFrameTest {
 
             // Test returning to IDLE
             frame.sidebar.setTaskWaitingApproval(false);
-            frame.sidebar.setTaskBusy(false);
+            SwingTestUtils.runOnEdt(() -> frame.taskChatPanel().setLoading(false));
             assertEquals(AppIconRenderer.AgentStatus.IDLE, frame.resolveCurrentStatus());
             frame.updateWorkspaceState();
             assertEquals(AppIconRenderer.AgentStatus.IDLE, frame.currentStatus);

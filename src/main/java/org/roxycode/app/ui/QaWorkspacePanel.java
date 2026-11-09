@@ -118,12 +118,6 @@ public final class QaWorkspacePanel extends JPanel {
                 List.of(accent, muted));
     }
 
-    public void bindSidebar(SidebarPanel sidebar) {
-        if (sidebar != null && qaChatPanel != null) {
-            qaChatPanel.addLoadingListener(sidebar::setQaBusy);
-        }
-    }
-
     public void setOnMoveToFeatureListener(java.util.function.Consumer<String> listener) {
         if (qaChatPanel != null) {
             qaChatPanel.setOnMoveToFeatureListener(listener);

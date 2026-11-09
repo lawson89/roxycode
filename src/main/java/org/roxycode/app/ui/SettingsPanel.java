@@ -515,6 +515,7 @@ public final class SettingsPanel extends JPanel {
             try {
                 UIManager.put("TabbedPane.tabType", "card");
                 UIManager.put("TabbedPane.showTabSeparators", true);
+                UIManager.put("SplitPaneDivider.style", "grip");
                 String themeToApply = Objects.requireNonNullElse(themeName, "");
                 UIManager.setLookAndFeel(switch (themeToApply) {
                     case "FlatLaf Dark" -> new FlatDarkLaf();

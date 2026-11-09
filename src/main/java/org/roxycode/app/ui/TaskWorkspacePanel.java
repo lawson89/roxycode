@@ -172,7 +172,6 @@ public final class TaskWorkspacePanel extends JPanel {
 
     public void bindSidebar(SidebarPanel sidebar) {
         this.sidebar = sidebar;
-        this.taskChatPanel.addLoadingListener(sidebar::setTaskBusy);
         if (this.planService != null) {
             sidebar.setTaskWaitingApproval(this.planService.getPendingPhase() != null);
         }

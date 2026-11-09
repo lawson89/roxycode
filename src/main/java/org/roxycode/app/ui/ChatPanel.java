@@ -176,8 +176,6 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topComponent, inputSection);
         splitPane.setResizeWeight(1.0);
-        splitPane.setDividerSize(5);
-        splitPane.putClientProperty(FlatClientProperties.STYLE, "style: plain");
         splitPane.setBorder(BorderFactory.createEmptyBorder());
         add(splitPane, BorderLayout.CENTER);
 
@@ -257,12 +255,12 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         attachmentPanel.setVisible(false);
 
         JPanel inputSection = new JPanel(new MigLayout("fill, insets 6 12 4 12", GROW_FILL_COL, GROW_FILL_COL));
-        inputSection.setMinimumSize(new Dimension(0, 110));
+        inputSection.setMinimumSize(new Dimension(0, 150));
 
         JPanel composerCard = new JPanel(new BorderLayout());
         updateComposerCardBorder(composerCard, false);
 
-        inputArea = new JTextArea(4, 0);
+        inputArea = new JTextArea(8, 0);
         inputArea.setLineWrap(true);
         inputArea.setWrapStyleWord(true);
         inputArea.setMargin(new Insets(8, 12, 4, 12));

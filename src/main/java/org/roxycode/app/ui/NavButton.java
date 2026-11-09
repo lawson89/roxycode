@@ -5,7 +5,6 @@ import com.formdev.flatlaf.FlatLaf;
 import java.awt.*;
 import javax.swing.*;
 import org.kordamp.ikonli.codicons.Codicons;
-import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
 import org.kordamp.ikonli.swing.FontIcon;
 
 public final class NavButton extends JButton {
@@ -16,22 +15,14 @@ public final class NavButton extends JButton {
     private static final int ROW_ARC = 8;
     private static final int ACCENT_PILL_WIDTH = 3;
     private static final int BADGE_SIZE = 18;
-    private static final int BUSY_ICON_SIZE = 13;
-    private static final int BUSY_ANIMATION_DELAY_MS = 500;
-    private static final FontAwesomeSolid[] HOURGLASS_FRAMES = {FontAwesomeSolid.HOURGLASS_START,
-            FontAwesomeSolid.HOURGLASS_HALF, FontAwesomeSolid.HOURGLASS_END};
     private static final Color AMBER_TINT_LIGHT = new Color(245, 158, 11, 30);
     private static final Color AMBER_TINT_DARK = new Color(245, 158, 11, 45);
 
-    static final String BUSY_TOOLTIP = "Agent is working in the background...";
     static final String WAITING_APPROVAL_TOOLTIP = "Waiting for your approval to continue";
 
-    private boolean busy;
     private boolean waitingApproval;
     private String attentionTooltip = WAITING_APPROVAL_TOOLTIP;
     transient FontIcon statusIcon;
-    Timer busyTimer;
-    private int busyFrameIndex = 1;
 
     public NavButton(String text, Icon icon) {
         super(text, icon);
@@ -42,17 +33,6 @@ public final class NavButton extends JButton {
         putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
         putClientProperty("JButton.arc", ROW_ARC);
         setIconTextGap(10);
-    }
-
-    public void setBusy(boolean busy) {
-        if (this.busy != busy) {
-            this.busy = busy;
-            updateStatusIcon();
-        }
-    }
-
-    public boolean isBusy() {
-        return busy;
     }
 
     public void setWaitingApproval(boolean waitingApproval) {
@@ -72,51 +52,17 @@ public final class NavButton extends JButton {
         } else {
             this.attentionTooltip = tooltip;
         }
-        if (!busy && waitingApproval) {
+        if (waitingApproval) {
             setToolTipText(this.attentionTooltip);
         }
     }
 
-    void advanceBusyFrame() {
-        if (!busy || statusIcon == null) {
-            stopBusyTimer();
-            return;
-        }
-        busyFrameIndex = (busyFrameIndex + 1) % HOURGLASS_FRAMES.length;
-        statusIcon.setIkon(HOURGLASS_FRAMES[busyFrameIndex]);
-        repaint();
-    }
-
-    private void stopBusyTimer() {
-        if (busyTimer != null && busyTimer.isRunning()) {
-            busyTimer.stop();
-        }
-    }
-
-    @Override
-    public void removeNotify() {
-        stopBusyTimer();
-        super.removeNotify();
-    }
-
     @SuppressWarnings("PMD.NullAssignment")
     private void updateStatusIcon() {
-        if (busy) {
-            busyFrameIndex = 1;
-            statusIcon = FontIcon.of(HOURGLASS_FRAMES[busyFrameIndex], BUSY_ICON_SIZE);
-            if (busyTimer == null) {
-                busyTimer = new Timer(BUSY_ANIMATION_DELAY_MS, e -> advanceBusyFrame());
-            }
-            if (!busyTimer.isRunning()) {
-                busyTimer.start();
-            }
-            setToolTipText(BUSY_TOOLTIP);
-        } else if (waitingApproval) {
-            stopBusyTimer();
+        if (waitingApproval) {
             statusIcon = FontIcon.of(Codicons.BELL_DOT, 14);
             setToolTipText(attentionTooltip);
         } else {
-            stopBusyTimer();
             statusIcon = null;
             if (isEnabled()) {
                 setToolTipText(null);
@@ -149,9 +95,7 @@ public final class NavButton extends JButton {
     }
 
     void restoreStatusTooltip() {
-        if (busy) {
-            setToolTipText(BUSY_TOOLTIP);
-        } else if (waitingApproval) {
+        if (waitingApproval) {
             setToolTipText(attentionTooltip);
         } else {
             setToolTipText(null);
@@ -181,7 +125,7 @@ public final class NavButton extends JButton {
     @Override
     protected void paintComponent(Graphics g) {
         updateIconColor();
-        boolean highlightWaiting = !isSelected() && !busy && waitingApproval;
+        boolean highlightWaiting = !isSelected() && waitingApproval;
         boolean dark = FlatLaf.isLafDark();
         Color amberAccent = UiComponents.resolveInfoIconColor();
         Color amberTint;

@@ -480,7 +480,6 @@ public final class MainFrame extends JPanel {
 
         sidebar = new SidebarPanel(this::showCard);
         header.setOnNavigateToCard(this::showCard);
-        qaWorkspacePanel.bindSidebar(sidebar);
         qaWorkspacePanel.setOnMoveToFeatureListener(content -> {
             showCard(TASK_VIEW);
             ChatPanel taskChat = taskChatPanel();
@@ -645,9 +644,6 @@ public final class MainFrame extends JPanel {
             return AppIconRenderer.AgentStatus.BUSY;
         }
         if (taskChat != null && taskChat.isLoading()) {
-            return AppIconRenderer.AgentStatus.BUSY;
-        }
-        if (sidebar != null && (sidebar.isQaBusy() || sidebar.isTaskBusy())) {
             return AppIconRenderer.AgentStatus.BUSY;
         }
 
