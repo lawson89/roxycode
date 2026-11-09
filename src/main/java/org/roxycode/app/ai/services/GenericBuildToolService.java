@@ -3,7 +3,6 @@ package org.roxycode.app.ai.services;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -460,15 +459,7 @@ public class GenericBuildToolService {
     }
 
     BuildConfig loadConfig() throws IOException {
-        Path configPath = getConfigPath();
-        if (Files.exists(configPath)) {
-            try {
-                return parseConfig(Files.readString(configPath, StandardCharsets.UTF_8));
-            } catch (NoSuchFileException | FileNotFoundException e) {
-                log.warn("Build config file not found at {}, falling back to template", configPath);
-            }
-        }
-        return parseConfig(loadDefaultTemplateContent());
+        return parseConfig(getConfigContent());
     }
 
     BuildConfig parseConfig(String rawToml) throws IOException {

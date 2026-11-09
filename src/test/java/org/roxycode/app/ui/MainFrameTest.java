@@ -88,7 +88,7 @@ class MainFrameTest {
         GenericBuildToolService buildToolService = mock(GenericBuildToolService.class);
         when(buildToolService.getConfigContent()).thenReturn("");
         buildConfigPanel = new BuildConfigPanel(buildToolService, settingsService, projectService);
-        ContextManagerPanel contextManagerPanel = new ContextManagerPanel(mock(PromptService.class));
+        ContextManagerPanel contextManagerPanel = new ContextManagerPanel(mock(PromptService.class), projectService);
         AgentMemoryPanel agentMemoryPanel = new AgentMemoryPanel(mock(MemoryService.class), projectService,
                 settingsService);
 

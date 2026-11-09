@@ -105,8 +105,7 @@ class AgentMemoryPanelTest {
         assertEquals("# Unsaved Draft Memory", panel.projectScopeView.memoryEditor.getText());
         assertTrue(panel.projectScopeView.isMemoryDirty());
         assertEquals(1, panel.projectScopeView.noteListModel.size());
-        assertEquals("Always use HTML tables for layout.",
-                memoryService.readProjectNoteDetail("swing-html-3-2-rules").body());
+        assertEquals("Always use HTML tables for layout.", memoryService.listProjectNoteDetails().get(0).body());
 
         memoryService.saveProjectNote("caffeine-cache", "Caffeine Async Cache", "cache, async", "Use AsyncCache.");
         panel.onMemoryChanged(new MemoryChangedEvent(false));

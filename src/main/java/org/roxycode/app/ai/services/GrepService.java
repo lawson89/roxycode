@@ -50,10 +50,6 @@ public class GrepService {
         return projectService.hasActiveProject() || ProjectService.isReferencePath(relativePath);
     }
 
-    private ResolvedSearchTarget resolveTarget(String relativePath) {
-        return projectService.resolveSearchTarget(relativePath);
-    }
-
     @AgentDoc(value = "Searches for a regex pattern in the project files using RipGrep.", examples = "grepService.grep('TODO')")
     public EditorResult grep(@AgentDoc(DOC_REGEX_PATTERN) String pattern) {
         return grep(pattern, CURRENT_DIR, null);
@@ -113,7 +109,7 @@ public class GrepService {
         if (!canExecuteSearch(relativePath) || pattern == null || pattern.isEmpty()) {
             return new ArrayList<>();
         }
-        ResolvedSearchTarget target = resolveTarget(relativePath);
+        ResolvedSearchTarget target = projectService.resolveSearchTarget(relativePath);
 
         List<String> command = new ArrayList<>(List.of(RG_CMD, "-l", COLOR_NEVER_ARG));
         if (filePattern != null && !filePattern.isBlank()) {
@@ -155,7 +151,7 @@ public class GrepService {
         if (!canExecuteSearch(relativePath) || wordOrPattern == null || wordOrPattern.isEmpty()) {
             return new ArrayList<>();
         }
-        ResolvedSearchTarget target = resolveTarget(relativePath);
+        ResolvedSearchTarget target = projectService.resolveSearchTarget(relativePath);
 
         List<String> command = new ArrayList<>(List.of(RG_CMD, "--vimgrep", "--no-heading", COLOR_NEVER_ARG));
         if (fixedWord) {
@@ -184,7 +180,7 @@ public class GrepService {
             return new EditorResult(false, "", "Search pattern must not be empty");
         }
 
-        ResolvedSearchTarget target = resolveTarget(relativePath);
+        ResolvedSearchTarget target = projectService.resolveSearchTarget(relativePath);
         int clampedContext = Math.max(0, Math.min(contextLines, MAX_CONTEXT_LINES));
 
         List<String> command = new ArrayList<>();
@@ -272,7 +268,7 @@ public class GrepService {
         if (!canExecuteSearch(relativePath)) {
             return new ArrayList<>();
         }
-        ResolvedSearchTarget target = resolveTarget(relativePath);
+        ResolvedSearchTarget target = projectService.resolveSearchTarget(relativePath);
 
         List<String> command = new ArrayList<>(List.of(RG_CMD, "--files", COLOR_NEVER_ARG));
         if (!CURRENT_DIR.equals(target.relativeTarget())) {

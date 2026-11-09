@@ -32,11 +32,6 @@ public enum ThinkingLevel {
         return displayName;
     }
 
-    @Nullable
-    public GoogleGenAiThinkingLevel getGenAiThinkingLevel() {
-        return genAiThinkingLevel;
-    }
-
     public void applyTo(GoogleGenAiChatOptions.Builder builder) {
         if (builder == null) {
             return;

@@ -17,7 +17,6 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 
 /**
@@ -81,15 +80,8 @@ final class AutoNudgeAdvisor implements CallAdvisor {
     }
 
     private static boolean hasGenerationOutput(ChatResponse chatResponse) {
-        if (chatResponse == null || chatResponse.getResults() == null || chatResponse.getResults().isEmpty()) {
-            return false;
-        }
-        for (Generation generation : chatResponse.getResults()) {
-            if (generation != null && generation.getOutput() != null) {
-                return true;
-            }
-        }
-        return false;
+        return chatResponse != null && chatResponse.getResults() != null
+                && chatResponse.getResults().stream().anyMatch(g -> g != null && g.getOutput() != null);
     }
 
     private static ChatClientRequest buildNudgeRequest(ChatClientRequest originalRequest) {

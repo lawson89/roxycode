@@ -82,20 +82,18 @@ class MemoryServiceTest {
         assertEquals("java, style", globalDetail.tags());
         assertEquals("Use immutable records.", globalDetail.body());
         assertFalse(globalDetail.updated().isEmpty());
-        assertNotNull(memoryService.readGlobalNoteDetail("java-style"));
-        assertNull(memoryService.readGlobalNoteDetail("non-existent"));
 
         assertTrue(memoryService.saveProjectNote("swing-tables", "Swing Tables", "ui, swing", "Use HTML tables.")
                 .success());
         assertContainsAll(memoryService.readProjectNote("swing-tables.md"), "swing-tables", "Swing Tables");
         assertEquals(1, memoryService.listProjectNotes().size());
 
-        NoteDetail projectDetail = memoryService.readProjectNoteDetail("swing-tables");
-        assertNotNull(projectDetail);
+        List<NoteDetail> projectDetails = memoryService.listProjectNoteDetails();
+        assertEquals(1, projectDetails.size());
+        NoteDetail projectDetail = projectDetails.get(0);
         assertEquals("Swing Tables", projectDetail.title());
         assertEquals("ui, swing", projectDetail.tags());
         assertEquals("Use HTML tables.", projectDetail.body());
-        assertEquals(1, memoryService.listProjectNoteDetails().size());
 
         assertTrue(memoryService.deleteGlobalNote("java-style").success());
         assertEquals("", memoryService.readGlobalNote("java-style"));

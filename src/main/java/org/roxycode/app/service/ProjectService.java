@@ -61,23 +61,12 @@ public class ProjectService {
     }
 
     public record ReferenceFolderMount(String alias, String configuredPath, Path rootPath, boolean globalScope) {
-        public ReferenceFolderMount(String alias, Path rootPath, boolean globalScope) {
-            this(alias, rootPathToString(rootPath), rootPath, globalScope);
-        }
-
         public ReferenceFolderMount {
             alias = StringUtils.removeStart(StringUtils.trimToEmpty(alias), "@");
             configuredPath = StringUtils.trimToEmpty(configuredPath);
             if (rootPath != null) {
                 rootPath = rootPath.toAbsolutePath().normalize();
             }
-        }
-
-        private static String rootPathToString(Path rootPath) {
-            if (rootPath == null) {
-                return "";
-            }
-            return rootPath.toString();
         }
 
         public String aliasPrefix() {
@@ -387,6 +376,23 @@ public class ProjectService {
     public List<ReferenceFolderMount> getReferenceFolderMounts() {
         return resolveReferenceFolderMounts(getProjectReferenceFolders(), getGlobalReferenceFolders(),
                 getCurrentProjectRoot());
+    }
+
+    public List<ReferenceFolderMount> listGlobalReferenceFolderMounts() {
+        Path activeRoot = null;
+        if (hasActiveProject()) {
+            activeRoot = getCurrentProjectRoot();
+        }
+        List<ReferenceFolderMount> allMounts = resolveReferenceFolderMountsInternal(getProjectReferenceFolders(),
+                getGlobalReferenceFolders(), activeRoot, false);
+        return allMounts.stream().filter(ReferenceFolderMount::globalScope).toList();
+    }
+
+    public List<ReferenceFolderMount> listProjectReferenceFolderMounts() {
+        if (!hasActiveProject()) {
+            return List.of();
+        }
+        return resolveReferenceFolderMounts(getProjectReferenceFolders(), List.of(), getCurrentProjectRoot());
     }
 
     public ReferenceFolderMount findReferenceFolderMount(String alias) {

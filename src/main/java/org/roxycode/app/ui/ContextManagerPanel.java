@@ -27,6 +27,7 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
+import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.ProjectService.ReferenceFolderMount;
 import org.roxycode.app.service.PromptService;
 import org.roxycode.app.service.PromptService.ContextFileItem;
@@ -56,7 +57,7 @@ public final class ContextManagerPanel extends JPanel {
     final JLabel statusLabel;
     private final Timer statusTimer;
 
-    public ContextManagerPanel(PromptService promptService) {
+    public ContextManagerPanel(PromptService promptService, ProjectService projectService) {
         setLayout(new BorderLayout(0, 12));
         setBorder(BorderFactory.createEmptyBorder(20, 20, 20, 20));
 
@@ -67,8 +68,10 @@ public final class ContextManagerPanel extends JPanel {
         this.statusLabel = new JLabel("");
         this.statusTimer = UiComponents.createStatusTimer(statusLabel, 4000);
 
-        this.globalColumn = new ContextScopeColumn(promptService, "Global Context", true, this::showError);
-        this.projectColumn = new ContextScopeColumn(promptService, "Project Context", false, this::showError);
+        this.globalColumn = new ContextScopeColumn(promptService, projectService, "Global Context", true,
+                this::showError);
+        this.projectColumn = new ContextScopeColumn(promptService, projectService, "Project Context", false,
+                this::showError);
 
         JPanel columnsPanel = new JPanel(new GridLayout(1, 2, 12, 0));
         columnsPanel.setOpaque(false);
@@ -101,6 +104,7 @@ public final class ContextManagerPanel extends JPanel {
         private static final Logger log = LoggerFactory.getLogger(ContextScopeColumn.class);
 
         private final transient PromptService promptService;
+        private final transient ProjectService projectService;
         private final boolean globalScope;
         private final transient Consumer<String> errorReporter;
 
@@ -131,9 +135,10 @@ public final class ContextManagerPanel extends JPanel {
                 List<ReferenceFolderMount> referenceFolders) {
         }
 
-        ContextScopeColumn(PromptService promptService, String sectionTitle, boolean globalScope,
-                Consumer<String> errorReporter) {
+        ContextScopeColumn(PromptService promptService, ProjectService projectService, String sectionTitle,
+                boolean globalScope, Consumer<String> errorReporter) {
             this.promptService = promptService;
+            this.projectService = projectService;
             this.globalScope = globalScope;
             this.errorReporter = errorReporter;
 
@@ -454,16 +459,16 @@ public final class ContextManagerPanel extends JPanel {
 
         private List<String> loadConfiguredFolders() {
             if (globalScope) {
-                return promptService.getGlobalContextFolders();
+                return projectService.getGlobalContextFolders();
             }
-            return promptService.getProjectContextFolders();
+            return projectService.getProjectContextFolders();
         }
 
         private void saveConfiguredFolders(List<String> folders) {
             if (globalScope) {
-                promptService.setGlobalContextFolders(folders);
+                projectService.setGlobalContextFolders(folders);
             } else {
-                promptService.setProjectContextFolders(folders);
+                projectService.setProjectContextFolders(folders);
             }
         }
 
@@ -476,24 +481,24 @@ public final class ContextManagerPanel extends JPanel {
 
         private List<String> loadConfiguredReferenceFolders() {
             if (globalScope) {
-                return promptService.getGlobalReferenceFolders();
+                return projectService.getGlobalReferenceFolders();
             }
-            return promptService.getProjectReferenceFolders();
+            return projectService.getProjectReferenceFolders();
         }
 
         private void saveConfiguredReferenceFolders(List<String> folders) {
             if (globalScope) {
-                promptService.setGlobalReferenceFolders(folders);
+                projectService.setGlobalReferenceFolders(folders);
             } else {
-                promptService.setProjectReferenceFolders(folders);
+                projectService.setProjectReferenceFolders(folders);
             }
         }
 
         private List<ReferenceFolderMount> loadReferenceFolderMounts() {
             if (globalScope) {
-                return promptService.listGlobalReferenceFolderMounts();
+                return projectService.listGlobalReferenceFolderMounts();
             }
-            return promptService.listProjectReferenceFolderMounts();
+            return projectService.listProjectReferenceFolderMounts();
         }
     }
 }

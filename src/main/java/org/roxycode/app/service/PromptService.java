@@ -28,8 +28,6 @@ import org.roxycode.app.service.ProjectService.ReferenceFolderMount;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -71,7 +69,6 @@ public class PromptService {
     private final RepoMapPackerService repoMapPackerService;
     private final MemoryService memoryService;
 
-    @Autowired
     public PromptService(ProjectService projectService, SettingsService settingsService, PlanService planService,
             JexlServiceRegistry jexlServiceRegistry, GitService gitService,
             ProjectAnalysisService projectAnalysisService, RepoMapPackerService repoMapPackerService,
@@ -86,14 +83,6 @@ public class PromptService {
         this.memoryService = memoryService;
     }
 
-    public PromptService(ProjectService projectService, SettingsService settingsService, PlanService planService,
-            JexlServiceRegistry jexlServiceRegistry, GitService gitService,
-            ProjectAnalysisService projectAnalysisService, RepoMapPackerService repoMapPackerService,
-            MemoryService memoryService, ApplicationEventPublisher eventPublisher) {
-        this(projectService, settingsService, planService, jexlServiceRegistry, gitService, projectAnalysisService,
-                repoMapPackerService, memoryService);
-    }
-
     public String getStableContext() {
         return readClasspathResource(CLASSPATH_PROMPT) + HEADER_JEXL_CONTEXT + loadJexlContext()
                 + HEADER_USER_GUIDE_CONTEXT + loadUserGuideContext() + NEWLINE_DOUBLE + loadGlobalContext()
@@ -101,7 +90,7 @@ public class PromptService {
     }
 
     public String loadReferenceFoldersContext() {
-        List<ReferenceFolderMount> mounts = getReferenceFolderMounts();
+        List<ReferenceFolderMount> mounts = projectService.getReferenceFolderMounts();
         if (mounts.isEmpty()) {
             return "";
         }
@@ -261,65 +250,15 @@ public class PromptService {
         return readClasspathResource(USER_GUIDE_DOC_PATH);
     }
 
-    public List<String> getGlobalContextFolders() {
-        return projectService.getGlobalContextFolders();
-    }
-
-    public void setGlobalContextFolders(List<String> folders) {
-        projectService.setGlobalContextFolders(folders);
-    }
-
-    public List<String> getProjectContextFolders() {
-        return projectService.getProjectContextFolders();
-    }
-
-    public void setProjectContextFolders(List<String> folders) {
-        projectService.setProjectContextFolders(folders);
-    }
-
-    public List<String> getGlobalReferenceFolders() {
-        return projectService.getGlobalReferenceFolders();
-    }
-
-    public void setGlobalReferenceFolders(List<String> folders) {
-        projectService.setGlobalReferenceFolders(folders);
-    }
-
-    public List<String> getProjectReferenceFolders() {
-        return projectService.getProjectReferenceFolders();
-    }
-
-    public void setProjectReferenceFolders(List<String> folders) {
-        projectService.setProjectReferenceFolders(folders);
-    }
-
-    public List<ReferenceFolderMount> getReferenceFolderMounts() {
-        return projectService.getReferenceFolderMounts();
-    }
-
-    public List<ReferenceFolderMount> listGlobalReferenceFolderMounts() {
-        List<ReferenceFolderMount> allMounts = ProjectService.resolveReferenceFolderMountsInternal(
-                getProjectReferenceFolders(), getGlobalReferenceFolders(), resolveActiveProjectRoot(), false);
-        return allMounts.stream().filter(ReferenceFolderMount::globalScope).toList();
-    }
-
-    public List<ReferenceFolderMount> listProjectReferenceFolderMounts() {
-        if (!hasActiveProject()) {
-            return List.of();
-        }
-        return ProjectService.resolveReferenceFolderMounts(getProjectReferenceFolders(), List.of(),
-                projectService.getCurrentProjectRoot());
-    }
-
     public List<ContextFileItem> listGlobalContextFiles() {
-        return listContextFilesInFolders(getGlobalContextFolders(), false);
+        return listContextFilesInFolders(projectService.getGlobalContextFolders(), false);
     }
 
     public List<ContextFileItem> listProjectContextFiles() {
         if (!hasActiveProject()) {
             return List.of();
         }
-        return listContextFilesInFolders(getProjectContextFolders(), true);
+        return listContextFilesInFolders(projectService.getProjectContextFolders(), true);
     }
 
     List<ContextFileItem> listContextFilesInFolders(List<String> folders, boolean resolveRelativeToProject) {
@@ -332,7 +271,8 @@ public class PromptService {
                 continue;
             }
             String folderStr = rawFolder.trim();
-            Path dir = resolveFolderPath(folderStr, resolveRelativeToProject);
+            Path dir = ProjectService.resolveMountFolderPath(folderStr, resolveRelativeToProject,
+                    resolveActiveProjectRoot());
             if (dir == null || !Files.isDirectory(dir)) {
                 continue;
             }
@@ -402,10 +342,6 @@ public class PromptService {
             }
         }
         return sb.toString();
-    }
-
-    private Path resolveFolderPath(String folderStr, boolean resolveRelativeToProject) {
-        return ProjectService.resolveMountFolderPath(folderStr, resolveRelativeToProject, resolveActiveProjectRoot());
     }
 
     private Path resolveActiveProjectRoot() {

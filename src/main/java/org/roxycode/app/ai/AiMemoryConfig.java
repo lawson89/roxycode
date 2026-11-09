@@ -96,12 +96,7 @@ public class AiMemoryConfig {
     }
 
     private static boolean containsUserMessage(List<Message> messages) {
-        for (Message message : messages) {
-            if (message instanceof UserMessage) {
-                return true;
-            }
-        }
-        return false;
+        return messages.stream().anyMatch(UserMessage.class::isInstance);
     }
 
     static int resolveMaxMessages(SettingsService settingsService) {

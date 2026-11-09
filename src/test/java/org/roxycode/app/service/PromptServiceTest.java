@@ -58,7 +58,7 @@ class PromptServiceTest {
         projectService = spy(new ProjectService(settingsService, eventPublisher));
         lenient().when(jexlServiceRegistry.isGitAvailable()).thenReturn(true);
         promptService = new PromptService(projectService, settingsService, planService, jexlServiceRegistry, gitService,
-                projectAnalysisService, repoMapPackerService, null, eventPublisher);
+                projectAnalysisService, repoMapPackerService, null);
     }
 
     @Test
@@ -82,10 +82,10 @@ class PromptServiceTest {
         Files.writeString(Files.createDirectories(globalDir.resolve("nested")).resolve("sub.md"),
                 "Nested should be ignored");
 
-        promptService.setGlobalContextFolders(List.of("  " + globalDir + "  ", globalDir.toString()));
+        projectService.setGlobalContextFolders(List.of("  " + globalDir + "  ", globalDir.toString()));
         verify(settingsService).saveSettings();
         verify(eventPublisher).publishEvent(new ContextChangedEvent(true));
-        assertEquals(List.of(globalDir.toString()), promptService.getGlobalContextFolders());
+        assertEquals(List.of(globalDir.toString()), projectService.getGlobalContextFolders());
 
         List<ContextFileItem> globalFiles = promptService.listGlobalContextFiles();
         assertEquals(List.of("a_global.md", "b_global.txt"),
@@ -96,9 +96,9 @@ class PromptServiceTest {
         Files.writeString(projDocsDir.resolve("a_architecture.md"), "Architecture guidelines");
         Files.write(projDocsDir.resolve("image.png"), new byte[]{(byte) 0x89, 0x50, 0x00, 0x47});
 
-        promptService.setProjectContextFolders(List.of("docs", "docs"));
+        projectService.setProjectContextFolders(List.of("docs", "docs"));
         verify(eventPublisher).publishEvent(new ContextChangedEvent(false));
-        assertEquals(List.of("docs"), promptService.getProjectContextFolders());
+        assertEquals(List.of("docs"), projectService.getProjectContextFolders());
 
         String globalContext = promptService.loadGlobalContext();
         SwingTestUtils.assertContainsAll(globalContext, "## Global Context: a_global.md\nGlobal A markdown",
@@ -116,20 +116,20 @@ class PromptServiceTest {
         Path globalRef = Files.createDirectories(tempDir.resolve("global-auth-lib"));
         clearInvocations(eventPublisher, settingsService);
 
-        promptService.setGlobalReferenceFolders(List.of("  " + globalRef + "  ", globalRef.toString()));
+        projectService.setGlobalReferenceFolders(List.of("  " + globalRef + "  ", globalRef.toString()));
         verify(settingsService).saveSettings();
         verify(eventPublisher).publishEvent(new ContextChangedEvent(true));
-        assertEquals(List.of(globalRef.toString()), promptService.getGlobalReferenceFolders());
+        assertEquals(List.of(globalRef.toString()), projectService.getGlobalReferenceFolders());
 
-        promptService.setProjectReferenceFolders(List.of(projRef.toString()));
+        projectService.setProjectReferenceFolders(List.of(projRef.toString()));
         verify(eventPublisher).publishEvent(new ContextChangedEvent(false));
-        assertEquals(List.of(projRef.toString()), promptService.getProjectReferenceFolders());
-        assertEquals(List.of("docs"), promptService.getProjectContextFolders());
+        assertEquals(List.of(projRef.toString()), projectService.getProjectReferenceFolders());
+        assertEquals(List.of("docs"), projectService.getProjectContextFolders());
 
-        assertEquals(1, promptService.listGlobalReferenceFolderMounts().size());
-        assertEquals("global-auth-lib", promptService.listGlobalReferenceFolderMounts().get(0).alias());
-        assertEquals(1, promptService.listProjectReferenceFolderMounts().size());
-        assertEquals("proj-billing-service", promptService.listProjectReferenceFolderMounts().get(0).alias());
+        assertEquals(1, projectService.listGlobalReferenceFolderMounts().size());
+        assertEquals("global-auth-lib", projectService.listGlobalReferenceFolderMounts().get(0).alias());
+        assertEquals(1, projectService.listProjectReferenceFolderMounts().size());
+        assertEquals("proj-billing-service", projectService.listProjectReferenceFolderMounts().get(0).alias());
 
         String refCatalog = promptService.loadReferenceFoldersContext();
         SwingTestUtils.assertContainsAll(refCatalog, "## READ-ONLY REFERENCE FOLDERS", "@proj-billing-service",
@@ -152,7 +152,7 @@ class PromptServiceTest {
         when(projectService.hasActiveProject()).thenReturn(true);
         doAnswer(inv -> projectDataDir.resolve(inv.getArgument(0, String.class))).when(projectService)
                 .resolveProjectDataPath(anyString());
-        promptService.setProjectContextFolders(List.of(projectRulesDir.toString()));
+        projectService.setProjectContextFolders(List.of(projectRulesDir.toString()));
 
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
         when(jexlServiceRegistry.getDocumentation(WorkflowPhase.CODE)).thenReturn("JEXL DOCS");
@@ -234,8 +234,7 @@ class PromptServiceTest {
     void testAgentMemoryContextInjectionAndEmptyState() {
         MemoryService memoryService = mock(MemoryService.class);
         PromptService psWithMemory = new PromptService(projectService, settingsService, planService,
-                jexlServiceRegistry, gitService, projectAnalysisService, repoMapPackerService, memoryService,
-                eventPublisher);
+                jexlServiceRegistry, gitService, projectAnalysisService, repoMapPackerService, memoryService);
 
         when(memoryService.readGlobalMemory()).thenReturn("");
         when(memoryService.listGlobalNotes()).thenReturn(List.of());

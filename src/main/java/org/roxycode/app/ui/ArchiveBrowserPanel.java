@@ -276,7 +276,7 @@ public final class ArchiveBrowserPanel extends JPanel {
             return "<html><body></body></html>";
         }
         String renderedBody = SwingHtmlUtils.renderMarkdownToHtml(FrontmatterUtils.stripFrontmatter(rawMarkdown));
-        String formattedDate = formatTimestampDisplay(entry.timestamp());
+        String formattedDate = PathUtils.formatTimestampDisplay(entry.timestamp(), TIMESTAMP_PREFIX_LEN, "");
         String author = StringUtils.defaultIfBlank(entry.createdBy(), "User");
 
         String dateDisplay = StringUtils.defaultIfEmpty(formattedDate, entry.filename());
@@ -360,10 +360,6 @@ public final class ArchiveBrowserPanel extends JPanel {
         return count + " " + mode.pluralNoun;
     }
 
-    static String formatTimestampDisplay(String rawTimestamp) {
-        return PathUtils.formatTimestampDisplay(rawTimestamp, TIMESTAMP_PREFIX_LEN, "");
-    }
-
     @Override
     public void updateUI() {
         super.updateUI();
@@ -418,7 +414,7 @@ public final class ArchiveBrowserPanel extends JPanel {
                 titleLabel.setForeground(colors.foreground());
                 titleLabel.setIcon(FontIcon.of(mode.getIcon(), 14, colors.iconColor()));
 
-                String dateStr = formatTimestampDisplay(value.timestamp());
+                String dateStr = PathUtils.formatTimestampDisplay(value.timestamp(), TIMESTAMP_PREFIX_LEN, "");
                 String author = StringUtils.defaultIfBlank(value.createdBy(), "User");
                 StringBuilder sub = new StringBuilder();
                 if (!dateStr.isEmpty()) {

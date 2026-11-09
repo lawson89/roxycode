@@ -722,14 +722,8 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
                 () -> inputArea.insert("\t", inputArea.getCaretPosition()));
         bindPopupKey(im, am, KeyEvent.VK_UP, "autocomplete-or-up", fileMentionPopup::selectPrevious, null);
         bindPopupKey(im, am, KeyEvent.VK_DOWN, "autocomplete-or-down", fileMentionPopup::selectNext, null);
-        bindPopupKey(im, am, KeyEvent.VK_ESCAPE, "dismiss-autocomplete", fileMentionPopup::hidePopup, () -> {
-            if (!loading && cancelActivePrompt()) {
-                return;
-            }
-            if (loading) {
-                controller.stopTurn();
-            }
-        });
+        bindPopupKey(im, am, KeyEvent.VK_ESCAPE, "dismiss-autocomplete", fileMentionPopup::hidePopup,
+                this::handleEscapeKey);
 
         InputMap panelIm = getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
         ActionMap panelAm = getActionMap();
@@ -739,12 +733,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
                 fileMentionPopup.hidePopup();
                 return;
             }
-            if (!loading && cancelActivePrompt()) {
-                return;
-            }
-            if (loading) {
-                controller.stopTurn();
-            }
+            handleEscapeKey();
         }));
 
         im.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.SHIFT_DOWN_MASK), "insert-newline");
@@ -756,6 +745,15 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         }));
 
         installClipboardPasteAction();
+    }
+
+    private void handleEscapeKey() {
+        if (!loading && cancelActivePrompt()) {
+            return;
+        }
+        if (loading) {
+            controller.stopTurn();
+        }
     }
 
     private void installClipboardPasteAction() {

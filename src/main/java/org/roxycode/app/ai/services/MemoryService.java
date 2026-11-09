@@ -173,14 +173,6 @@ public class MemoryService {
         return listNoteDetails(resolveProjectSubdir(MEMORY_DIR));
     }
 
-    public NoteDetail readGlobalNoteDetail(String slug) {
-        return readNoteDetail(getGlobalMemoryDir(), slug);
-    }
-
-    public NoteDetail readProjectNoteDetail(String slug) {
-        return readNoteDetail(resolveProjectSubdir(MEMORY_DIR), slug);
-    }
-
     @AgentDoc(value = "Lists archived completed implementation plans from <projectDataDir>/archive/plans/*.md (most recent first).", examples = "memoryService.listArchivedPlans()")
     public List<String> listArchivedPlans() {
         return listArchivedPlanSummaries().stream().map(entry -> entry.filename() + ": " + entry.title()).toList();
@@ -231,18 +223,6 @@ public class MemoryService {
             return "";
         }
         return readFileIfExists(resolveNotePath(dir, sanitized));
-    }
-
-    private static NoteDetail readNoteDetail(Path dir, String slug) {
-        String sanitized = sanitizeSlug(slug);
-        if (dir == null) {
-            return null;
-        }
-        Path notePath = resolveNotePath(dir, sanitized);
-        if (!Files.isRegularFile(notePath)) {
-            return null;
-        }
-        return buildNoteDetail(notePath);
     }
 
     private static NoteDetail buildNoteDetail(Path file) {

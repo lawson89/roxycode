@@ -1,6 +1,7 @@
 package org.roxycode.app.ai;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -9,6 +10,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 import org.apache.commons.jexl3.JexlArithmetic;
 import org.apache.commons.jexl3.JexlContext;
 import org.apache.commons.jexl3.JexlEngine;
@@ -18,6 +20,7 @@ import org.apache.commons.jexl3.introspection.JexlMethod;
 import org.apache.commons.jexl3.introspection.JexlPropertyGet;
 import org.apache.commons.jexl3.introspection.JexlPropertySet;
 import org.apache.commons.jexl3.introspection.JexlUberspect;
+import org.apache.commons.lang3.StringUtils;
 
 /**
  * Custom {@link JexlUberspect} wrapper that delegates standard Java property and method lookup first, then falls back
@@ -26,7 +29,6 @@ import org.apache.commons.jexl3.introspection.JexlUberspect;
  */
 public final class JsPolyfillUberspect implements JexlUberspect {
 
-    public static final JsJsonGlobal JSON_GLOBAL = new JsJsonGlobal();
     public static final JsObjectGlobal OBJECT_GLOBAL = new JsObjectGlobal();
 
     private static final String PROP_LENGTH = "length";
@@ -56,10 +58,6 @@ public final class JsPolyfillUberspect implements JexlUberspect {
 
     private final JexlUberspect delegate;
     private final JexlContext context;
-
-    public JsPolyfillUberspect(JexlUberspect delegate) {
-        this(delegate, null);
-    }
 
     public JsPolyfillUberspect(JexlUberspect delegate, JexlContext context) {
         this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
@@ -102,26 +100,12 @@ public final class JsPolyfillUberspect implements JexlUberspect {
 
     @Override
     public JexlPropertyGet getPropertyGet(Object obj, Object identifier) {
-        if (isMapLengthLookup(obj, identifier)) {
-            return LENGTH_PROPERTY_GET;
-        }
-        JexlPropertyGet resolved = delegate.getPropertyGet(obj, identifier);
-        if (resolved != null) {
-            return resolved;
-        }
-        return resolvePolyfillPropertyGet(obj, identifier);
+        return resolvePropertyGet(obj, identifier, null);
     }
 
     @Override
     public JexlPropertyGet getPropertyGet(List<PropertyResolver> resolvers, Object obj, Object identifier) {
-        if (isMapLengthLookup(obj, identifier)) {
-            return LENGTH_PROPERTY_GET;
-        }
-        JexlPropertyGet resolved = delegate.getPropertyGet(resolvers, obj, identifier);
-        if (resolved != null) {
-            return resolved;
-        }
-        return resolvePolyfillPropertyGet(obj, identifier);
+        return resolvePropertyGet(obj, identifier, resolvers);
     }
 
     @Override
@@ -144,6 +128,25 @@ public final class JsPolyfillUberspect implements JexlUberspect {
         return delegate.getArithmetic(arithmetic);
     }
 
+    private JexlPropertyGet resolvePropertyGet(Object obj, Object identifier, List<PropertyResolver> resolvers) {
+        if (isMapLengthLookup(obj, identifier)) {
+            return LENGTH_PROPERTY_GET;
+        }
+        JexlPropertyGet resolved;
+        if (resolvers == null) {
+            resolved = delegate.getPropertyGet(obj, identifier);
+        } else {
+            resolved = delegate.getPropertyGet(resolvers, obj, identifier);
+        }
+        if (resolved != null) {
+            return resolved;
+        }
+        if (PROP_LENGTH.equals(identifier) && resolveLength(obj) >= 0) {
+            return LENGTH_PROPERTY_GET;
+        }
+        return null;
+    }
+
     private static boolean isMapLengthLookup(Object obj, Object identifier) {
         if (!PROP_LENGTH.equals(identifier)) {
             return false;
@@ -154,15 +157,20 @@ public final class JsPolyfillUberspect implements JexlUberspect {
         return false;
     }
 
-    private static JexlPropertyGet resolvePolyfillPropertyGet(Object obj, Object identifier) {
-        if (!PROP_LENGTH.equals(identifier) || obj == null) {
-            return null;
+    private static int resolveLength(Object obj) {
+        if (obj instanceof CharSequence cs) {
+            return cs.length();
         }
-        if (obj instanceof CharSequence || obj instanceof Collection<?> || obj instanceof Map<?, ?>
-                || obj.getClass().isArray()) {
-            return LENGTH_PROPERTY_GET;
+        if (obj instanceof Collection<?> col) {
+            return col.size();
         }
-        return null;
+        if (obj instanceof Map<?, ?> map) {
+            return map.size();
+        }
+        if (obj != null && obj.getClass().isArray()) {
+            return Array.getLength(obj);
+        }
+        return -1;
     }
 
     private JexlMethod resolvePolyfillMethod(Object obj, String method, Object... args) {
@@ -360,30 +368,29 @@ public final class JsPolyfillUberspect implements JexlUberspect {
         return Collections.emptyList();
     }
 
-    private static String sliceString(String str, Object... params) {
-        int len = str.length();
-        int from = normalizeSliceIndex(toInt(params[0], 0), len);
-        int to = len;
+    private static int[] resolveSliceBounds(int length, Object... params) {
+        int from = normalizeSliceIndex(toInt(params[0], 0), length);
+        int to = length;
         if (params.length > SINGLE_ARG && params[1] != null) {
-            to = normalizeSliceIndex(toInt(params[1], len), len);
+            to = normalizeSliceIndex(toInt(params[1], length), length);
         }
-        if (to <= from) {
+        return new int[]{from, to};
+    }
+
+    private static String sliceString(String str, Object... params) {
+        int[] bounds = resolveSliceBounds(str.length(), params);
+        if (bounds[1] <= bounds[0]) {
             return "";
         }
-        return str.substring(from, to);
+        return str.substring(bounds[0], bounds[1]);
     }
 
     private static List<Object> sliceList(List<Object> elements, Object... params) {
-        int len = elements.size();
-        int from = normalizeSliceIndex(toInt(params[0], 0), len);
-        int to = len;
-        if (params.length > SINGLE_ARG && params[1] != null) {
-            to = normalizeSliceIndex(toInt(params[1], len), len);
-        }
-        if (to <= from) {
+        int[] bounds = resolveSliceBounds(elements.size(), params);
+        if (bounds[1] <= bounds[0]) {
             return new ArrayList<>();
         }
-        return new ArrayList<>(elements.subList(from, to));
+        return new ArrayList<>(elements.subList(bounds[0], bounds[1]));
     }
 
     private static int normalizeSliceIndex(int index, int length) {
@@ -402,9 +409,6 @@ public final class JsPolyfillUberspect implements JexlUberspect {
 
     private static String padString(String str, boolean padStart, Object... params) {
         int targetLen = toInt(params[0], 0);
-        if (str.length() >= targetLen) {
-            return str;
-        }
         String fill = " ";
         if (params.length > SINGLE_ARG && params[1] != null) {
             fill = String.valueOf(params[1]);
@@ -412,16 +416,10 @@ public final class JsPolyfillUberspect implements JexlUberspect {
         if (fill.isEmpty()) {
             return str;
         }
-        int needed = targetLen - str.length();
-        StringBuilder padding = new StringBuilder(needed);
-        while (padding.length() < needed) {
-            padding.append(fill);
-        }
-        String padPrefixOrSuffix = padding.substring(0, needed);
         if (padStart) {
-            return padPrefixOrSuffix + str;
+            return StringUtils.leftPad(str, targetLen, fill);
         }
-        return str + padPrefixOrSuffix;
+        return StringUtils.rightPad(str, targetLen, fill);
     }
 
     private static String joinElements(List<Object> elements, Object... params) {
@@ -429,14 +427,7 @@ public final class JsPolyfillUberspect implements JexlUberspect {
         if (params.length > NO_ARGS && params[0] != null) {
             separator = String.valueOf(params[0]);
         }
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < elements.size(); i++) {
-            if (i > 0) {
-                sb.append(separator);
-            }
-            sb.append(String.valueOf(elements.get(i)));
-        }
-        return sb.toString();
+        return elements.stream().map(String::valueOf).collect(Collectors.joining(separator));
     }
 
     private static List<Object> mapElements(List<Object> elements, JexlScript fn, JexlContext context) {
@@ -535,37 +526,21 @@ public final class JsPolyfillUberspect implements JexlUberspect {
 
         @Override
         public Object invoke(Object obj) {
-            if (obj instanceof CharSequence cs) {
-                return cs.length();
-            }
-            if (obj instanceof Collection<?> col) {
-                return col.size();
-            }
-            if (obj instanceof Map<?, ?> map) {
-                return map.size();
-            }
-            if (obj != null && obj.getClass().isArray()) {
-                return Array.getLength(obj);
+            int length = resolveLength(obj);
+            if (length >= 0) {
+                return length;
             }
             throw new IllegalArgumentException("Unsupported .length target: " + obj);
         }
 
         @Override
         public Object tryInvoke(Object obj, Object key) {
-            if (!PROP_LENGTH.equals(key) || obj == null) {
+            if (!PROP_LENGTH.equals(key) || (obj instanceof Map<?, ?> map && map.containsKey(PROP_LENGTH))) {
                 return JexlEngine.TRY_FAILED;
             }
-            if (obj instanceof CharSequence cs) {
-                return cs.length();
-            }
-            if (obj instanceof Collection<?> col) {
-                return col.size();
-            }
-            if (obj instanceof Map<?, ?> map && !map.containsKey(PROP_LENGTH)) {
-                return map.size();
-            }
-            if (obj.getClass().isArray()) {
-                return Array.getLength(obj);
+            int length = resolveLength(obj);
+            if (length >= 0) {
+                return length;
             }
             return JexlEngine.TRY_FAILED;
         }
@@ -652,26 +627,32 @@ public final class JsPolyfillUberspect implements JexlUberspect {
      */
     public static final class JsJsonGlobal {
 
+        private final ObjectMapper mapper;
+
+        public JsJsonGlobal(ObjectMapper mapper) {
+            this.mapper = Objects.requireNonNullElse(mapper, AiConfig.SHARED_OBJECT_MAPPER);
+        }
+
         public String stringify(Object obj) throws JsonProcessingException {
-            return AiConfig.SHARED_OBJECT_MAPPER.writeValueAsString(obj);
+            return mapper.writeValueAsString(obj);
         }
 
         public String stringify(Object obj, Object replacer) throws JsonProcessingException {
-            return AiConfig.SHARED_OBJECT_MAPPER.writeValueAsString(obj);
+            return mapper.writeValueAsString(obj);
         }
 
         public String stringify(Object obj, Object replacer, Object indent) throws JsonProcessingException {
             if (shouldPrettyPrint(indent)) {
-                return AiConfig.SHARED_OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(obj);
+                return mapper.writerWithDefaultPrettyPrinter().writeValueAsString(obj);
             }
-            return AiConfig.SHARED_OBJECT_MAPPER.writeValueAsString(obj);
+            return mapper.writeValueAsString(obj);
         }
 
         public Object parse(String json) throws JsonProcessingException {
             if (json == null) {
                 return null;
             }
-            return AiConfig.SHARED_OBJECT_MAPPER.readValue(json, Object.class);
+            return mapper.readValue(json, Object.class);
         }
 
         private static boolean shouldPrettyPrint(Object indent) {

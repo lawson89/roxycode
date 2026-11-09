@@ -40,6 +40,7 @@ public class JexlTool {
     private final SettingsService settingsService;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper mapper;
+    private final JsPolyfillUberspect.JsJsonGlobal jsonGlobal;
 
     public JexlTool(JexlServiceRegistry registry, @Nullable ApplicationEventPublisher eventPublisher,
             @Nullable ObjectMapper objectMapper, @Nullable SettingsService settingsService) {
@@ -49,6 +50,7 @@ public class JexlTool {
         this.registry = registry;
         this.eventPublisher = eventPublisher;
         this.mapper = Objects.requireNonNullElse(objectMapper, AiConfig.SHARED_OBJECT_MAPPER);
+        this.jsonGlobal = new JsPolyfillUberspect.JsJsonGlobal(this.mapper);
         this.settingsService = settingsService;
     }
 
@@ -80,7 +82,7 @@ public class JexlTool {
         log.info("Executing JEXL script in phase {} (turn {}/{}): {}", phase, currentTurn, maxTurns, script);
 
         Map<String, Object> bindings = new HashMap<>(registry.getServices(phase, conversationId));
-        bindings.put("JSON", JsPolyfillUberspect.JSON_GLOBAL);
+        bindings.put("JSON", jsonGlobal);
         bindings.put("Object", JsPolyfillUberspect.OBJECT_GLOBAL);
         JexlContext context = new MapContext(bindings);
         JexlEngine jexl = createEngine(context);

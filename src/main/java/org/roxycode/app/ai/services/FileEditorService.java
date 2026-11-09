@@ -44,14 +44,10 @@ public class FileEditorService {
         this.eventPublisher = eventPublisher;
     }
 
-    private Path resolveWriteTarget(String relativePath) {
-        return projectService.resolvePath(relativePath);
-    }
-
     @AgentDoc(value = "Writes content to a file, overwriting it if it exists.", examples = "fileEditorService.writeFile('src/main/resources/config.properties', 'key=value')")
     public EditorResult writeFile(@AgentDoc("The file path relative to the project root") String relativePath,
             @AgentDoc("The full content to write to the file") String content) throws IOException {
-        Path path = resolveWriteTarget(relativePath);
+        Path path = projectService.resolvePath(relativePath);
         boolean existed = Files.exists(path);
         if (existed && Files.isDirectory(path)) {
             return new EditorResult(false, "", "Path is a directory: " + relativePath);
@@ -66,7 +62,7 @@ public class FileEditorService {
     public EditorResult replaceBlock(@AgentDoc("The file path relative to the project root") String relativePath,
             @AgentDoc("The existing text block to find and replace") String targetBlock,
             @AgentDoc("The replacement text block") String replacementBlock) throws IOException {
-        Path path = resolveWriteTarget(relativePath);
+        Path path = projectService.resolvePath(relativePath);
         EditorResult validationError = validateRegularFile(path, relativePath);
         if (validationError != null) {
             return validationError;
@@ -100,7 +96,7 @@ public class FileEditorService {
     }
 
     private EditorResult replaceBlocksInternal(String relativePath, List<?> edits) throws IOException {
-        Path path = resolveWriteTarget(relativePath);
+        Path path = projectService.resolvePath(relativePath);
         EditorResult validationError = validateRegularFile(path, relativePath);
         if (validationError != null) {
             return validationError;
@@ -272,7 +268,7 @@ public class FileEditorService {
 
     private EditorResult mutateLines(String relativePath, String inputContent, boolean fallbackTrailingToInputWhenEmpty,
             LineMutator mutator, String successMessage) throws IOException {
-        Path path = resolveWriteTarget(relativePath);
+        Path path = projectService.resolvePath(relativePath);
         EditorResult validationError = validateRegularFile(path, relativePath);
         if (validationError != null) {
             return validationError;
@@ -298,7 +294,7 @@ public class FileEditorService {
     @AgentDoc(value = "Deletes a file at the given path relative to the project root.", examples = "fileEditorService.deleteFile('src/main/java/OldClass.java')")
     public EditorResult deleteFile(@AgentDoc("The file path relative to the project root") String relativePath)
             throws IOException {
-        Path path = resolveWriteTarget(relativePath);
+        Path path = projectService.resolvePath(relativePath);
         EditorResult validationError = validateRegularFile(path, relativePath, "Cannot delete directory: ");
         if (validationError != null) {
             return validationError;
@@ -312,8 +308,8 @@ public class FileEditorService {
     @AgentDoc(value = "Moves or renames a file within the project sandbox.", examples = "fileEditorService.moveFile('src/main/java/OldName.java', 'src/main/java/NewName.java')")
     public EditorResult moveFile(@AgentDoc("The source path relative to the project root") String sourcePath,
             @AgentDoc("The target path relative to the project root") String targetPath) throws IOException {
-        Path source = resolveWriteTarget(sourcePath);
-        Path target = resolveWriteTarget(targetPath);
+        Path source = projectService.resolvePath(sourcePath);
+        Path target = projectService.resolvePath(targetPath);
         if (!Files.exists(source)) {
             return new EditorResult(false, "", "File does not exist: " + sourcePath);
         }
@@ -330,8 +326,8 @@ public class FileEditorService {
     @AgentDoc(value = "Copies a file to a target path within the project sandbox.", examples = "fileEditorService.copyFile('src/main/resources/template.toml', 'src/main/resources/custom.toml')")
     public EditorResult copyFile(@AgentDoc("The source file path relative to the project root") String sourcePath,
             @AgentDoc("The target file path relative to the project root") String targetPath) throws IOException {
-        Path source = resolveWriteTarget(sourcePath);
-        Path target = resolveWriteTarget(targetPath);
+        Path source = projectService.resolvePath(sourcePath);
+        Path target = projectService.resolvePath(targetPath);
         EditorResult validationError = validateRegularFile(source, sourcePath, "Cannot copy directory: ");
         if (validationError != null) {
             return validationError;
@@ -348,7 +344,7 @@ public class FileEditorService {
     @AgentDoc(value = "Creates a directory and any nonexistent parent directories within the project sandbox.", examples = "fileEditorService.mkdirs('src/main/java/org/roxycode/newpkg')")
     public EditorResult mkdirs(@AgentDoc("The directory path relative to the project root") String relativePath)
             throws IOException {
-        Path path = resolveWriteTarget(relativePath);
+        Path path = projectService.resolvePath(relativePath);
         boolean existed = Files.exists(path);
         if (existed && !Files.isDirectory(path)) {
             return new EditorResult(false, "", "A regular file already exists at path: " + relativePath);
@@ -385,7 +381,7 @@ public class FileEditorService {
     }
 
     private static String formatNonUniqueMatchError(String relativePath, String content, List<Integer> matchOffsets) {
-        List<Integer> matchLines = offsetsToLineNumbers(content, matchOffsets);
+        List<Integer> matchLines = matchOffsets.stream().map(offset -> lineNumberAtOffset(content, offset)).toList();
         return "TargetBlock is not unique in file: " + relativePath + " (found " + matchLines.size()
                 + " matches at lines: " + matchLines + ")";
     }
@@ -400,10 +396,6 @@ public class FileEditorService {
             offsets.add(index);
         }
         return offsets;
-    }
-
-    private static List<Integer> offsetsToLineNumbers(String content, List<Integer> offsets) {
-        return offsets.stream().map(offset -> lineNumberAtOffset(content, offset)).toList();
     }
 
     private static int lineNumberAtOffset(String content, int offset) {

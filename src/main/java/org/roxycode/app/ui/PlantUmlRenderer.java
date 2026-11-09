@@ -297,7 +297,7 @@ public final class PlantUmlRenderer {
             } else {
                 themeSuffix = "light";
             }
-            String fileName = computeSha256Hex(key.normalizedCode()) + "-" + themeSuffix + ".png";
+            String fileName = PathUtils.computeSha256Hex(key.normalizedCode(), 16) + "-" + themeSuffix + ".png";
             Path pngFile = outputDir.resolve(fileName);
             Files.write(pngFile, pngBytes);
             pngFile.toFile().deleteOnExit();
@@ -433,10 +433,6 @@ public final class PlantUmlRenderer {
         created.toFile().deleteOnExit();
         tempDiagramDir = created;
         return created;
-    }
-
-    private static String computeSha256Hex(String input) {
-        return PathUtils.computeSha256Hex(input, 16);
     }
 
     static void clearCacheForTesting() {
