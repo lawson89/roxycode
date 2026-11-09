@@ -194,6 +194,17 @@ public final class ChatController implements AutoCloseable {
             }
             return;
         }
+        if (model.isTaskMode() && planService != null && planService.getPendingPhase() != null) {
+            WorkflowPhase currentPhase = planService.getCurrentPhase();
+            WorkflowPhase pendingPhase = planService.getPendingPhase();
+            if (currentPhase == WorkflowPhase.PLAN && pendingPhase == WorkflowPhase.CODE) {
+                planService.rejectTransition();
+                view.hideTransitionBanner();
+            } else if (currentPhase == WorkflowPhase.REVIEW && pendingPhase == WorkflowPhase.PLAN) {
+                planService.rejectCompletionAndReturnToCode(text);
+                view.hideTransitionBanner();
+            }
+        }
         view.hideUserInputPrompt();
         view.appendMessage(ROLE_USER, text);
         persistActiveChatSession();
@@ -271,16 +282,28 @@ public final class ChatController implements AutoCloseable {
     }
 
     public void rejectPhase() {
+        WorkflowPhase current = planService.getCurrentPhase();
         WorkflowPhase requested = planService.getPendingPhase();
         if (requested == null) {
             return;
         }
         cancelActiveTurnState(false);
-        planService.rejectTransition();
-        view.appendMessage(ROLE_SYSTEM, "Transition to **" + requested.getDisplayName() + "** rejected.");
+        view.hideTransitionBanner();
+        if (current == WorkflowPhase.PLAN && requested == WorkflowPhase.CODE) {
+            planService.rejectTransition();
+            view.appendMessage(ROLE_SYSTEM,
+                    "Transition to **Code** rejected. Type your feedback below to revise the plan.");
+            view.setInputPlaceholderText("Describe what to adjust in the plan...");
+        } else if (current == WorkflowPhase.REVIEW && requested == WorkflowPhase.PLAN) {
+            planService.rejectCompletionAndReturnToCode("User rejected completion.");
+            view.appendMessage(ROLE_SYSTEM,
+                    "Completion rejected — returned to **Code** phase. Describe the changes needed below.");
+        } else {
+            planService.rejectTransition();
+            view.appendMessage(ROLE_SYSTEM, "Transition to **" + requested.getDisplayName() + "** rejected.");
+        }
         persistActiveChatSession();
-        triggerTurn("I have rejected the transition to " + requested.getDisplayName()
-                + ". Let's discuss what needs to be fixed or adjusted.");
+        view.focusInput();
     }
 
     public void resetSession() {
@@ -519,6 +542,9 @@ public final class ChatController implements AutoCloseable {
             } else {
                 triggerTurn(buildAutonomousTransitionPrompt(event));
             }
+        } else if (event.from() == WorkflowPhase.PLAN && event.to() == WorkflowPhase.CODE
+                && view.isAutoApprovePlanEnabled()) {
+            approvePhase();
         } else {
             view.showTransitionBanner(PlanService.formatApprovalLabel(event.from(), event.to()));
         }
@@ -810,7 +836,12 @@ public final class ChatController implements AutoCloseable {
     @EventListener
     public void onPlanUpdated(PlanUpdatedEvent event) {
         if (model.isTaskMode()) {
-            Edt.run(view::updateTurnLabel);
+            Edt.run(() -> {
+                view.updateTurnLabel();
+                if (view.inlineActionPanel.isVisible()) {
+                    view.updateCopyCommitMsgButtonState(view.transitionLabel.getText());
+                }
+            });
         }
     }
 

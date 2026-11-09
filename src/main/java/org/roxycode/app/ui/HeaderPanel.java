@@ -274,6 +274,10 @@ public final class HeaderPanel extends JPanel {
         return button;
     }
 
+    public CompletableFuture<String> refreshGitBranch() {
+        return updateBranchLabel();
+    }
+
     CompletableFuture<String> updateBranchLabel() {
         return Edt.supplyAsync(gitService::getCurrentBranch, branch -> {
             boolean valid = branch != null && !branch.isEmpty() && !branch.startsWith("Error")

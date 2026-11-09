@@ -170,17 +170,15 @@ public final class SidebarPanel extends JPanel {
         }
 
         applyButtonAccess(buildConfigBtn, true, null);
+        applyButtonAccess(qaBtn, true, null);
+        applyButtonAccess(cacheBtn, true, null);
 
         if (!buildConfirmed) {
-            applyButtonAccess(qaBtn, false, UNCONFIRMED_BUILD_TOOLTIP);
             applyButtonAccess(taskBtn, false, UNCONFIRMED_BUILD_TOOLTIP);
-            applyButtonAccess(cacheBtn, false, UNCONFIRMED_BUILD_TOOLTIP);
             return;
         }
 
-        applyButtonAccess(qaBtn, true, null);
         applyButtonAccess(taskBtn, true, null);
-        applyButtonAccess(cacheBtn, true, null);
     }
 
     private static void applyButtonAccess(NavButton btn, boolean enabled, String disabledTooltip) {

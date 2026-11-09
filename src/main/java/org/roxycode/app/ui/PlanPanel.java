@@ -6,6 +6,7 @@ import javax.swing.JButton;
 import javax.swing.JEditorPane;
 import javax.swing.JPanel;
 import javax.swing.Timer;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
@@ -22,11 +23,15 @@ public final class PlanPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final int COPY_FEEDBACK_DELAY_MS = 1500;
     private static final String COPY_BUTTON_TEXT = "Copy Plan as Markdown";
+    static final String COPY_COMMIT_MSG_TEXT = "Copy Commit Msg";
 
     private final transient PlanService planManagerService;
     final JEditorPane displayArea;
+    final JButton copyCommitMessageButton;
     final JButton copyMarkdownButton;
+    private Timer copyCommitFeedbackTimer;
     private Timer copyFeedbackTimer;
+    String lastCopiedCommitMessage;
     String lastCopiedMarkdown;
 
     public PlanPanel(PlanService planManagerService) {
@@ -35,6 +40,9 @@ public final class PlanPanel extends JPanel {
 
         JPanel toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT));
         toolbar.setOpaque(false);
+        copyCommitMessageButton = UiComponents.createCopyButton(COPY_COMMIT_MSG_TEXT, false, this::copyCommitMessage);
+        copyCommitMessageButton.setVisible(false);
+        toolbar.add(copyCommitMessageButton);
         copyMarkdownButton = UiComponents.createCopyButton(COPY_BUTTON_TEXT, false, this::copyPlanAsMarkdown);
         toolbar.add(copyMarkdownButton);
         add(toolbar, BorderLayout.NORTH);
@@ -63,6 +71,17 @@ public final class PlanPanel extends JPanel {
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
         refresh();
+    }
+
+    private void copyCommitMessage() {
+        ImplementationPlan plan = planManagerService.getCurrentPlan();
+        if (plan == null || StringUtils.isBlank(plan.commitMessage())) {
+            return;
+        }
+        String commitMsg = plan.commitMessage();
+        this.lastCopiedCommitMessage = commitMsg;
+        copyCommitFeedbackTimer = UiComponents.copyWithFeedback(copyCommitMessageButton, copyCommitFeedbackTimer,
+                commitMsg, COPY_COMMIT_MSG_TEXT, COPY_FEEDBACK_DELAY_MS);
     }
 
     private void copyPlanAsMarkdown() {
@@ -98,6 +117,11 @@ public final class PlanPanel extends JPanel {
     private void applyDisplayOnEdt(ImplementationPlan plan) {
         if (copyMarkdownButton != null) {
             copyMarkdownButton.setEnabled(plan != null);
+        }
+        if (copyCommitMessageButton != null) {
+            boolean hasCommitMsg = plan != null && StringUtils.isNotBlank(plan.commitMessage());
+            copyCommitMessageButton.setEnabled(hasCommitMsg);
+            copyCommitMessageButton.setVisible(hasCommitMsg);
         }
         displayArea.setText(buildPlanHtml(plan));
         displayArea.setCaretPosition(0);

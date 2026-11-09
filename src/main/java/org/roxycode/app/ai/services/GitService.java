@@ -24,6 +24,7 @@ public class GitService {
     private static final String NO_ACTIVE_PROJECT = "No active project";
     private static final String NOT_A_GIT_REPOSITORY = "Not a git repository";
     private static final String GIT_DIFF = "diff";
+    private static final String GIT_HEAD = "HEAD";
     private static final String RENAME_ARROW = " -> ";
     private static final int MIN_PORCELAIN_LINE_LENGTH = 4;
     private static final char NL = '\n';
@@ -34,9 +35,135 @@ public class GitService {
         this.projectService = projectService;
     }
 
+    private static final String ORIGIN_HEAD_REF = "refs/remotes/origin/HEAD";
+    private static final String ORIGIN_REF_PREFIX = "refs/remotes/origin/";
+    private static final String DEFAULT_MAIN_BRANCH = "main";
+    private static final String DEFAULT_MASTER_BRANCH = "master";
+
     @AgentDoc(value = "Returns the name of the current Git branch.", examples = "gitService.getCurrentBranch()")
     public String getCurrentBranch() {
-        return executeGitCommand("rev-parse", "--abbrev-ref", "HEAD");
+        return executeGitCommand("rev-parse", "--abbrev-ref", GIT_HEAD);
+    }
+
+    @AgentDoc(value = "Resolves the repository's default base branch (e.g., 'main' or 'master') by checking origin/HEAD and falling back to local or remote main/master refs.", examples = "gitService.getDefaultBranch()")
+    public String getDefaultBranch() {
+        if (!projectService.hasActiveProject()) {
+            return NO_ACTIVE_PROJECT;
+        }
+        String originHead = executeGitCommand("symbolic-ref", ORIGIN_HEAD_REF);
+        if (NOT_A_GIT_REPOSITORY.equals(originHead) || originHead.startsWith("Error executing git command:")) {
+            return originHead;
+        }
+        if (!isGitError(originHead) && !originHead.isBlank()) {
+            String trimmed = originHead.trim();
+            if (trimmed.startsWith(ORIGIN_REF_PREFIX)) {
+                String branch = trimmed.substring(ORIGIN_REF_PREFIX.length()).trim();
+                if (!branch.isEmpty()) {
+                    return branch;
+                }
+            }
+        }
+        String[] candidateRefs = {"refs/heads/main", "refs/remotes/origin/main", "refs/heads/master",
+                "refs/remotes/origin/master"};
+        String[] candidateNames = {DEFAULT_MAIN_BRANCH, DEFAULT_MAIN_BRANCH, DEFAULT_MASTER_BRANCH,
+                DEFAULT_MASTER_BRANCH};
+        for (int i = 0; i < candidateRefs.length; i++) {
+            String check = executeGitCommand("show-ref", "--verify", candidateRefs[i]);
+            if (NOT_A_GIT_REPOSITORY.equals(check) || check.startsWith("Error executing git command:")) {
+                return check;
+            }
+            if (!isGitError(check) && !check.isBlank()) {
+                return candidateNames[i];
+            }
+        }
+        return DEFAULT_MAIN_BRANCH;
+    }
+
+    @AgentDoc(value = "Returns the one-line commit log on the current branch since its merge-base with the default branch.", examples = "gitService.getBranchLog()")
+    public String getBranchLog() {
+        return getBranchLog(null);
+    }
+
+    @AgentDoc(value = "Returns the one-line commit log on the current branch since its merge-base with the specified base branch.", examples = "gitService.getBranchLog('main')")
+    public String getBranchLog(
+            @AgentDoc("The base branch to compare against (defaults to getDefaultBranch() if blank)") String baseBranch) {
+        String mergeBase = resolveMergeBase(baseBranch);
+        if (isGitError(mergeBase)) {
+            return mergeBase;
+        }
+        return executeGitCommand("log", mergeBase + "..HEAD", "--oneline");
+    }
+
+    @AgentDoc(value = "Returns a deduplicated list of all files changed on the current branch since its merge-base with the default branch, including uncommitted and untracked working-tree changes.", examples = "gitService.getBranchChangedFiles()")
+    public List<String> getBranchChangedFiles() {
+        return getBranchChangedFiles(null);
+    }
+
+    @AgentDoc(value = "Returns a deduplicated list of all files changed on the current branch since its merge-base with the specified base branch, including uncommitted and untracked working-tree changes.", examples = "gitService.getBranchChangedFiles('main')")
+    public List<String> getBranchChangedFiles(
+            @AgentDoc("The base branch to compare against (defaults to getDefaultBranch() if blank)") String baseBranch) {
+        if (!projectService.hasActiveProject()) {
+            return List.of();
+        }
+        Set<String> files = new LinkedHashSet<>();
+        String mergeBase = resolveMergeBase(baseBranch);
+        if (!isGitError(mergeBase) && !mergeBase.isEmpty()) {
+            String diffNames = executeGitCommand(GIT_DIFF, "--name-only", mergeBase + "...HEAD");
+            if (!diffNames.isEmpty() && !isGitError(diffNames)) {
+                for (String line : diffNames.lines().toList()) {
+                    String normalized = line.trim().replace(BACKSLASH, '/');
+                    if (!normalized.isEmpty()) {
+                        files.add(normalized);
+                    }
+                }
+            }
+        }
+        files.addAll(getChangedFiles());
+        return List.copyOf(files);
+    }
+
+    @AgentDoc(value = "Returns the full git diff of all committed, staged, unstaged, and untracked changes on the current branch since its merge-base with the default branch.", examples = "gitService.getBranchDiff()")
+    public String getBranchDiff() {
+        return getBranchDiff(null);
+    }
+
+    @AgentDoc(value = "Returns the full git diff of all committed, staged, unstaged, and untracked changes on the current branch since its merge-base with the specified base branch.", examples = "gitService.getBranchDiff('main')")
+    public String getBranchDiff(
+            @AgentDoc("The base branch to compare against (defaults to getDefaultBranch() if blank)") String baseBranch) {
+        if (!projectService.hasActiveProject()) {
+            return NO_ACTIVE_PROJECT;
+        }
+        String mergeBase = resolveMergeBase(baseBranch);
+        if (isGitError(mergeBase)) {
+            return mergeBase;
+        }
+        String trackedDiff = executeGitCommand(GIT_DIFF, mergeBase);
+        if (isGitError(trackedDiff)) {
+            return trackedDiff;
+        }
+        return combineDiffs(trackedDiff, buildUntrackedDiffs(null));
+    }
+
+    private String resolveMergeBase(String baseBranch) {
+        if (!projectService.hasActiveProject()) {
+            return NO_ACTIVE_PROJECT;
+        }
+        String targetBranch = StringUtils.trimToNull(baseBranch);
+        if (targetBranch == null) {
+            targetBranch = getDefaultBranch();
+            if (isGitError(targetBranch)) {
+                return targetBranch;
+            }
+        }
+        String mergeBase = executeGitCommand("merge-base", targetBranch, GIT_HEAD);
+        if (isGitError(mergeBase) && !NOT_A_GIT_REPOSITORY.equals(mergeBase) && !targetBranch.startsWith("origin/")
+                && !targetBranch.startsWith("refs/")) {
+            String remoteMergeBase = executeGitCommand("merge-base", "origin/" + targetBranch, GIT_HEAD);
+            if (!isGitError(remoteMergeBase) && !remoteMergeBase.isEmpty()) {
+                return remoteMergeBase;
+            }
+        }
+        return mergeBase;
     }
 
     @AgentDoc(value = "Returns the git status (porcelain).", examples = "gitService.getStatus()")
@@ -164,7 +291,7 @@ public class GitService {
         if (!projectService.hasActiveProject()) {
             return NO_ACTIVE_PROJECT;
         }
-        String headOut = executeGitCommandWithPath(normalizedPath, GIT_DIFF, "HEAD");
+        String headOut = executeGitCommandWithPath(normalizedPath, GIT_DIFF, GIT_HEAD);
         if (!isGitError(headOut) || headOut.contains(NOT_A_GIT_REPOSITORY) || headOut.contains("Command timed out")) {
             return headOut;
         }

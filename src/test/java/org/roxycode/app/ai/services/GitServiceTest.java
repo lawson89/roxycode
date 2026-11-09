@@ -147,4 +147,59 @@ class GitServiceTest {
         assertThrows(IllegalArgumentException.class, () -> gitService.getBlame("Tracked.java", 3, 2));
         assertThrows(SecurityException.class, () -> gitService.getBlame("../outside.txt", 1, 2));
     }
+
+    @Test
+    void testGetDefaultBranchAndBranchComparisonMethods() throws IOException {
+        ProjectService inactiveProject = mock(ProjectService.class);
+        when(inactiveProject.hasActiveProject()).thenReturn(false);
+        GitService inactiveGit = new GitService(inactiveProject);
+        assertEquals("No active project", inactiveGit.getDefaultBranch());
+        assertEquals("No active project", inactiveGit.getBranchLog());
+        assertEquals(List.of(), inactiveGit.getBranchChangedFiles());
+        assertEquals("No active project", inactiveGit.getBranchDiff());
+
+        GitService gitService = new GitService(createActiveProjectService());
+        String nl = String.valueOf((char) 10);
+        Files.writeString(Files.createDirectories(tempDir.resolve("src")).resolve("UntrackedBranchFile.java"),
+                "public class UntrackedBranchFile {}" + nl);
+
+        try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
+            // 1. origin/HEAD resolves default branch directly
+            stubGit(runner, 0, "refs/remotes/origin/develop" + nl, "git", "symbolic-ref", "refs/remotes/origin/HEAD");
+            assertEquals("develop", gitService.getDefaultBranch());
+
+            // 2. Fallback when origin/HEAD is missing to show-ref --verify (e.g. master)
+            stubGit(runner, 128, "fatal: ref refs/remotes/origin/HEAD is not a symbolic ref", "git", "symbolic-ref",
+                    "refs/remotes/origin/HEAD");
+            stubGit(runner, 1, "", "git", "show-ref", "--verify", "refs/heads/main");
+            stubGit(runner, 1, "", "git", "show-ref", "--verify", "refs/remotes/origin/main");
+            stubGit(runner, 0, "abcd1234 refs/heads/master", "git", "show-ref", "--verify", "refs/heads/master");
+            assertEquals("master", gitService.getDefaultBranch());
+
+            // 3. Branch log, changed files, and diff using default branch or explicit baseBranch
+            stubGit(runner, 0, "refs/remotes/origin/main" + nl, "git", "symbolic-ref", "refs/remotes/origin/HEAD");
+            stubGit(runner, 0, "base1234" + nl, "git", "merge-base", "main", "HEAD");
+            stubGit(runner, 0, String.join(nl, "c222222 feat: second", "c111111 feat: first"), "git", "log",
+                    "base1234..HEAD", "--oneline");
+            stubGit(runner, 0, String.join(nl, "src/CommittedA.java", "src/Shared.java") + nl, "git", "diff",
+                    "--name-only", "base1234...HEAD");
+            stubGit(runner, 0, String.join(nl, " M src/Shared.java", "?? src/UntrackedBranchFile.java"), "git", "-c",
+                    "core.quotePath=false", "status", "--porcelain=v1", "-uall");
+            stubGit(runner, 0,
+                    String.join(nl, "diff --git a/src/CommittedA.java b/src/CommittedA.java", "+committed line"), "git",
+                    "diff", "base1234");
+            stubGit(runner, 0, "src/UntrackedBranchFile.java", "git", "ls-files", "--others", "--exclude-standard");
+            stubGit(runner, 1, String.join(nl, "diff --git a//dev/null b/src/UntrackedBranchFile.java", "--- /dev/null",
+                    "+++ b/src/UntrackedBranchFile.java", "@@ -0,0 +1,1 @@", "+public class UntrackedBranchFile {}"),
+                    "git", "diff", "--no-index", "--src-prefix=a/", "--dst-prefix=b/", "--", "/dev/null",
+                    "src/UntrackedBranchFile.java");
+
+            assertEquals(String.join(nl, "c222222 feat: second", "c111111 feat: first"), gitService.getBranchLog());
+            assertEquals(List.of("src/CommittedA.java", "src/Shared.java", "src/UntrackedBranchFile.java"),
+                    gitService.getBranchChangedFiles());
+            SwingTestUtils.assertContainsAll(gitService.getBranchDiff(), "+committed line",
+                    "diff --git a/src/UntrackedBranchFile.java b/src/UntrackedBranchFile.java",
+                    "+public class UntrackedBranchFile {}");
+        }
+    }
 }

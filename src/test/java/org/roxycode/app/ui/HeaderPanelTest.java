@@ -52,7 +52,7 @@ class HeaderPanelTest {
         assertTrue(header.noProjectNoticeLabel.isVisible());
         assertEquals(HeaderPanel.NO_PROJECT_NOTICE_TEXT, header.noProjectNoticeLabel.getText());
         assertEquals(HeaderPanel.SELECT_PROJECT_TEXT, header.changeProjectButton.getText());
-        SwingTestUtils.awaitFuture(header.updateBranchLabel());
+        SwingTestUtils.awaitFuture(header.refreshGitBranch());
         assertEquals("feature/async-branch", header.branchLabel.getText());
         assertTrue(header.branchLabel.isVisible());
 

@@ -13,8 +13,11 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -31,9 +34,11 @@ import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerExecResult;
 import org.roxycode.app.ai.services.BuildContainerService.SandboxConfig;
 import org.roxycode.app.ai.services.BuildContainerService.SandboxMode;
+import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.events.AgentActivityEvent;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
@@ -169,21 +174,33 @@ public class GenericBuildToolService {
         }
     }
 
+    static final String NO_RELATED_TESTS_OUTPUT = "No related tests found for changed files.";
+
     private final ProjectService projectService;
     private final TomlMapper tomlMapper;
     private final BuildContainerService buildContainerService;
     private final ApplicationEventPublisher eventPublisher;
     private final PlanService planService;
+    private final GitService gitService;
+    private final SymbolService symbolService;
+
+    public GenericBuildToolService(ProjectService projectService, TomlMapper tomlMapper,
+            BuildContainerService buildContainerService, @Nullable ApplicationEventPublisher eventPublisher,
+            @Nullable PlanService planService) {
+        this(projectService, tomlMapper, buildContainerService, eventPublisher, planService, null, null);
+    }
 
     @Autowired
     public GenericBuildToolService(ProjectService projectService, TomlMapper tomlMapper,
             BuildContainerService buildContainerService, @Nullable ApplicationEventPublisher eventPublisher,
-            @Nullable PlanService planService) {
+            @Nullable PlanService planService, @Nullable GitService gitService, @Nullable SymbolService symbolService) {
         this.projectService = projectService;
         this.tomlMapper = tomlMapper;
         this.buildContainerService = buildContainerService;
         this.eventPublisher = eventPublisher;
         this.planService = planService;
+        this.gitService = gitService;
+        this.symbolService = symbolService;
         if (this.projectService.hasActiveProject()) {
             ensureConfig();
         }
@@ -256,6 +273,97 @@ public class GenericBuildToolService {
             @AgentDoc("The name of the test class or method (e.g., MyTest or MyTest#myMethod)") String testName) {
         return runCommand("commands.test_single", config -> config.commands().testSingle(),
                 Map.of("testName", StringUtils.defaultString(testName)));
+    }
+
+    @AgentDoc(value = "Discovers and runs unit tests related to currently modified and untracked files in Git using test_single for fast intermediate verification.", examples = "buildToolService.runRelatedTests()")
+    public BuildResult runRelatedTests() {
+        if (!projectService.hasActiveProject()) {
+            return new BuildResult(false, -1, "", List.of("No active project"), List.of());
+        }
+        if (gitService == null) {
+            return new BuildResult(true, 0, NO_RELATED_TESTS_OUTPUT, List.of(), List.of());
+        }
+        return runRelatedTests(gitService.getChangedFiles());
+    }
+
+    @AgentDoc(value = "Discovers and runs unit tests related to the specified file paths using test_single for fast intermediate verification.", examples = "buildToolService.runRelatedTests(['src/main/java/App.java'])")
+    public BuildResult runRelatedTests(@AgentDoc("File paths relative to the project root") String... relativePaths) {
+        if (relativePaths == null || relativePaths.length == 0) {
+            return runRelatedTests(List.of());
+        }
+        return runRelatedTests(Arrays.asList(relativePaths));
+    }
+
+    @AgentDoc(value = "Discovers and runs unit tests related to the specified list of file paths using test_single for fast intermediate verification.", examples = "buildToolService.runRelatedTests(gitService.getChangedFiles())")
+    public BuildResult runRelatedTests(
+            @AgentDoc("List of file paths relative to the project root") List<String> relativePaths) {
+        if (!projectService.hasActiveProject()) {
+            return new BuildResult(false, -1, "", List.of("No active project"), List.of());
+        }
+        Set<String> testNames = collectRelatedTestNames(relativePaths);
+        if (testNames.isEmpty()) {
+            return new BuildResult(true, 0, NO_RELATED_TESTS_OUTPUT, List.of(), List.of());
+        }
+        StringBuilder combinedOutput = new StringBuilder();
+        for (String testName : testNames) {
+            BuildResult singleResult = runSingleTest(testName);
+            if (StringUtils.isNotEmpty(singleResult.output())) {
+                if (!combinedOutput.isEmpty()) {
+                    combinedOutput.append(StringUtils.LF);
+                }
+                combinedOutput.append(singleResult.output());
+            }
+            if (!singleResult.success()) {
+                if (planService != null) {
+                    planService.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, false);
+                }
+                return new BuildResult(false, singleResult.exitCode(), combinedOutput.toString(), singleResult.errors(),
+                        singleResult.failedTests());
+            }
+        }
+        return new BuildResult(true, 0, combinedOutput.toString(), List.of(), List.of());
+    }
+
+    private Set<String> collectRelatedTestNames(List<String> relativePaths) {
+        Set<String> testNames = new LinkedHashSet<>();
+        if (relativePaths == null || relativePaths.isEmpty()) {
+            return testNames;
+        }
+        for (String rawPath : relativePaths) {
+            String normalized = PathUtils.normalizeRelativePath(rawPath);
+            if (StringUtils.isBlank(normalized)) {
+                continue;
+            }
+            if (RepoMapPackerService.isTestFile(normalized)) {
+                String stem = extractTestStem(normalized);
+                if (!stem.isEmpty()) {
+                    testNames.add(stem);
+                }
+            } else if (symbolService != null) {
+                List<String> relatedFiles = symbolService.findRelatedTests(normalized);
+                if (relatedFiles != null) {
+                    for (String relatedFile : relatedFiles) {
+                        String stem = extractTestStem(relatedFile);
+                        if (!stem.isEmpty()) {
+                            testNames.add(stem);
+                        }
+                    }
+                }
+            }
+        }
+        return testNames;
+    }
+
+    static String extractTestStem(String filePath) {
+        String fileName = PathUtils.getFileName(filePath);
+        if (fileName.isEmpty()) {
+            return "";
+        }
+        int dotIndex = fileName.lastIndexOf('.');
+        if (dotIndex > 0) {
+            return fileName.substring(0, dotIndex);
+        }
+        return fileName;
     }
 
     @AgentDoc(value = "Runs the project linter or static analysis checks using the configured lint command.", examples = "buildToolService.lint()")
@@ -438,15 +546,22 @@ public class GenericBuildToolService {
     }
 
     private void ensureConfig() {
+        String templateId = detectTemplate();
         Path configPath = getConfigPath();
-        if (Files.exists(configPath)) {
-            return;
+        if (!Files.exists(configPath)) {
+            try {
+                PathUtils.createParentDirectories(configPath);
+                Files.writeString(configPath, loadTemplateContent(templateId), StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                log.error("Failed to initialize build config", e);
+                return;
+            }
         }
-        try {
-            PathUtils.createParentDirectories(configPath);
-            Files.writeString(configPath, loadDefaultTemplateContent(), StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            log.error("Failed to initialize build config", e);
+        if (projectService.hasActiveProject() && !projectService.isBuildConfirmed() && !"default".equals(templateId)) {
+            projectService.setBuildConfirmed(true);
+            if (eventPublisher != null) {
+                eventPublisher.publishEvent(new SettingsChangedEvent(null));
+            }
         }
     }
 
@@ -582,9 +697,7 @@ public class GenericBuildToolService {
             return "";
         }
         Path configPath = getConfigPath();
-        if (!Files.exists(configPath)) {
-            ensureConfig();
-        }
+        ensureConfig();
         if (Files.exists(configPath)) {
             try {
                 return Files.readString(configPath, StandardCharsets.UTF_8);

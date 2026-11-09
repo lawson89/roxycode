@@ -40,9 +40,22 @@ class PlanPanelTest {
         assertTrue(panel.copyMarkdownButton.isEnabled());
         assertContainsAll(panel.displayArea.getText(), "MODIFIED src/Main.java");
 
+        assertFalse(panel.copyCommitMessageButton.isVisible());
         SwingTestUtils.clickOnEdt(panel.copyMarkdownButton);
         assertEquals("Copied!", panel.copyMarkdownButton.getText());
         assertContainsAll(panel.lastCopiedMarkdown, "# Implementation Plan: Test Plan", "MODIFIED src/Main.java");
+
+        String commitMsg = String.join(String.valueOf((char) 10), "feat: add commit copy", "",
+                "- Support 1-click copy");
+        ImplementationPlan planWithCommit = plan.withCommitMessage(commitMsg);
+        when(planService.getCurrentPlan()).thenReturn(planWithCommit);
+        panel.onPlanUpdated(new PlanUpdatedEvent(planWithCommit));
+        SwingTestUtils.flushEdt();
+        assertTrue(panel.copyCommitMessageButton.isVisible());
+        assertTrue(panel.copyCommitMessageButton.isEnabled());
+        SwingTestUtils.clickOnEdt(panel.copyCommitMessageButton);
+        assertEquals("Copied!", panel.copyCommitMessageButton.getText());
+        assertEquals(commitMsg, panel.lastCopiedCommitMessage);
 
         panel.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/other")));
         SwingTestUtils.flushEdt();

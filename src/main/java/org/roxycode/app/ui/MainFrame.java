@@ -186,7 +186,7 @@ public final class MainFrame extends JPanel {
         }
         if (!hasApiKey) {
             showCard(SETTINGS_VIEW);
-        } else if (hasProject && !buildConfirmed) {
+        } else if (hasProject && !buildConfirmed && TASK_VIEW.equals(currentCard)) {
             showCard(BUILD_CONFIG_VIEW);
         } else if (!hasProject && isProjectDependentCard(currentCard)) {
             showCard(SETTINGS_VIEW);
@@ -290,8 +290,7 @@ public final class MainFrame extends JPanel {
         hostFrame.addWindowFocusListener(new WindowFocusListener() {
             @Override
             public void windowGainedFocus(WindowEvent e) {
-                stopBlinkTimer();
-                applyIconImages(currentStatus, false);
+                onWindowGainedFocus();
             }
 
             @Override
@@ -420,6 +419,14 @@ public final class MainFrame extends JPanel {
         }
         settings.setWindowMaximized(maximized);
         settingsService.saveSettingsSync();
+    }
+
+    void onWindowGainedFocus() {
+        stopBlinkTimer();
+        applyIconImages(currentStatus, false);
+        if (header != null) {
+            header.refreshGitBranch();
+        }
     }
 
     void onWindowOpened() {

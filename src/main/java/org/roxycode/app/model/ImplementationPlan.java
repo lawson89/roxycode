@@ -20,7 +20,7 @@ import org.roxycode.app.util.TokenUtils;
 @SuppressWarnings("PMD.AvoidDuplicateLiterals")
 public record ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
         boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
-        List<LogEntry> handoffLog, List<FileChange> fileChanges, UsageSummary usageSummary) {
+        List<LogEntry> handoffLog, List<FileChange> fileChanges, UsageSummary usageSummary, String commitMessage) {
 
     public static final String NO_FILES_CHANGED = "No files changed";
     public static final String STEP_COMPILE = "Code compiles successfully";
@@ -186,13 +186,21 @@ public record ImplementationPlan(String title, String goal, List<String> require
         handoffLog = List.copyOf(Objects.requireNonNullElse(handoffLog, List.of()));
         fileChanges = List.copyOf(Objects.requireNonNullElse(fileChanges, List.of()));
         usageSummary = Objects.requireNonNullElse(usageSummary, UsageSummary.EMPTY);
+        commitMessage = StringUtils.trimToNull(commitMessage);
+    }
+
+    public ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
+            boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
+            List<LogEntry> handoffLog, List<FileChange> fileChanges, UsageSummary usageSummary) {
+        this(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp, approvedBy, completedBy,
+                completedOn, handoffLog, fileChanges, usageSummary, null);
     }
 
     public ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
             boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
             List<LogEntry> handoffLog) {
         this(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp, approvedBy, completedBy,
-                completedOn, handoffLog, List.of(), UsageSummary.EMPTY);
+                completedOn, handoffLog, List.of(), UsageSummary.EMPTY, null);
     }
 
     public static String normalizeStepDescription(String description) {
@@ -270,8 +278,12 @@ public record ImplementationPlan(String title, String goal, List<String> require
             steps.add(new TechStep(STEP_CODE_REVIEW, false));
         }
 
+        String preservedCommitMsg = commitMessage;
+        if (preservedCommitMsg == null && previousPlan != null) {
+            preservedCommitMsg = previousPlan.commitMessage();
+        }
         return withTechnicalSteps(steps).withHandoffLog(preservedLog).withFileChanges(preservedChanges)
-                .withUsageSummary(preservedUsage);
+                .withUsageSummary(preservedUsage).withCommitMessage(preservedCommitMsg);
     }
 
     public List<String> collectIncompleteSteps(boolean excludeCodeReviewStep) {
@@ -295,7 +307,7 @@ public record ImplementationPlan(String title, String goal, List<String> require
 
     public ImplementationPlan withTechnicalSteps(List<TechStep> newSteps) {
         return new ImplementationPlan(title, goal, requirements, newSteps, userApproved, approvalTimestamp, approvedBy,
-                completedBy, completedOn, handoffLog, fileChanges, usageSummary);
+                completedBy, completedOn, handoffLog, fileChanges, usageSummary, commitMessage);
     }
 
     public ImplementationPlan withVerificationStepCompleted(String stepDescription, boolean completed) {
@@ -325,17 +337,17 @@ public record ImplementationPlan(String title, String goal, List<String> require
 
     public ImplementationPlan withApproval(String user, String timestamp) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, true, timestamp, user, completedBy,
-                completedOn, handoffLog, fileChanges, usageSummary);
+                completedOn, handoffLog, fileChanges, usageSummary, commitMessage);
     }
 
     public ImplementationPlan withCompletion(String user, String timestamp) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
-                approvedBy, user, timestamp, handoffLog, fileChanges, usageSummary);
+                approvedBy, user, timestamp, handoffLog, fileChanges, usageSummary, commitMessage);
     }
 
     public ImplementationPlan withHandoffLog(List<LogEntry> newLog) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
-                approvedBy, completedBy, completedOn, newLog, fileChanges, usageSummary);
+                approvedBy, completedBy, completedOn, newLog, fileChanges, usageSummary, commitMessage);
     }
 
     public ImplementationPlan withAddedHandoffLogEntry(String timestamp, String user, String message) {
@@ -346,12 +358,17 @@ public record ImplementationPlan(String title, String goal, List<String> require
 
     public ImplementationPlan withFileChanges(List<FileChange> newChanges) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
-                approvedBy, completedBy, completedOn, handoffLog, newChanges, usageSummary);
+                approvedBy, completedBy, completedOn, handoffLog, newChanges, usageSummary, commitMessage);
     }
 
     public ImplementationPlan withUsageSummary(UsageSummary newUsage) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
-                approvedBy, completedBy, completedOn, handoffLog, fileChanges, newUsage);
+                approvedBy, completedBy, completedOn, handoffLog, fileChanges, newUsage, commitMessage);
+    }
+
+    public ImplementationPlan withCommitMessage(String newCommitMessage) {
+        return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
+                approvedBy, completedBy, completedOn, handoffLog, fileChanges, usageSummary, newCommitMessage);
     }
 
     public ImplementationPlan withRecordedTokenUsage(TokenUsageEvent event, WorkflowPhase fallbackPhase) {
@@ -424,6 +441,12 @@ public record ImplementationPlan(String title, String goal, List<String> require
             md.append("- ").append(req).append('\n');
         }
         md.append("\n## Technical Steps\n").append(formatStepsMarkdown());
+
+        if (StringUtils.isNotBlank(commitMessage)) {
+            md.append(StringUtils.LF).append("## Proposed Commit Message").append(StringUtils.LF).append(CODE_FENCE)
+                    .append("text").append(StringUtils.LF).append(commitMessage).append(StringUtils.LF)
+                    .append(CODE_FENCE).append(StringUtils.LF);
+        }
 
         if (usageSummary.hasUsage()) {
             appendUsageMarkdown(md);

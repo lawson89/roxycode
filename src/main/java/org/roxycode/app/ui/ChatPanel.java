@@ -1,5 +1,6 @@
 package org.roxycode.app.ui;
 
+import org.apache.commons.lang3.StringUtils;
 import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.util.SystemFileChooser;
 import java.awt.*;
@@ -60,6 +61,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     static final String NO_PROJECT_PLACEHOLDER_TEXT = "Select a project folder in the top bar (Change Project...) to start chatting...";
     private static final String TOOLBAR_BUTTON_STYLE = "arc: 8; font: -1; foreground: $Label.disabledForeground";
     private static final String GROW_FILL_COL = "[grow, fill]";
+    private static final String HIDEMODE_3 = "hidemode 3";
     static final int THUMBNAIL_SIZE = 64;
     private static final int ACTIVITY_ANIMATION_DELAY_MS = 500;
     private static final int ACTIVITY_ELAPSED_DELAY_MS = 1000;
@@ -78,9 +80,14 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     JButton attachImageButton;
     JButton mentionButton;
     JButton viewPlanButton;
+    JButton copyCommitMsgButton;
     JButton approveButton;
     JButton rejectButton;
+    private Timer copyCommitMsgTimer;
+    String lastCopiedCommitMessage;
+    private final transient PlanService planService;
     JButton resetSessionButton;
+    JCheckBox autoApprovePlanCheckBox;
     final JPanel inlineActionPanel;
     final ChatPromptBanner userInputPromptPanel;
     final JPanel activityStripPanel;
@@ -154,6 +161,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     public ChatPanel(AiService aiService, PlanService planService, ApplicationEventPublisher eventPublisher,
             ChatMemory chatMemory, String sessionPrefix, WorkflowPhase lockedPhase, boolean isTaskMode,
             SettingsService settingsService, Executor turnExecutor) {
+        this.planService = planService;
         this.model = new ChatModel(sessionPrefix, lockedPhase, isTaskMode);
         this.controller = new ChatController(this.model, this, aiService, planService, eventPublisher, chatMemory,
                 settingsService, turnExecutor);
@@ -198,13 +206,17 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         });
         viewPlanButton.setVisible(false);
 
+        copyCommitMsgButton = UiComponents.createCopyButton("Copy Commit Msg", true, this::copyPendingCommitMessage);
+        copyCommitMsgButton.setVisible(false);
+
         rejectButton = UiComponents.createActionButton("Reject", Codicons.CLOSE, null, false,
                 UiComponents.SUBTLE_RED_BUTTON_STYLE, e -> controller.rejectPhase());
         rejectButton.setEnabled(false);
 
         panel.add(transitionLabel);
         panel.add(Box.createHorizontalStrut(10));
-        panel.add(viewPlanButton, "hidemode 3");
+        panel.add(viewPlanButton, HIDEMODE_3);
+        panel.add(copyCommitMsgButton, HIDEMODE_3);
         panel.add(approveButton);
         panel.add(rejectButton);
         return panel;
@@ -308,15 +320,28 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
         updateTurnLabel();
 
-        JPanel actionToolbar = new JPanel(
-                new MigLayout("insets 4 8 6 8, fillx", "[]4[]4[]push[]4[]10[]4[]push[]8[]", "center"));
+        String toolbarCols;
+        if (isTaskMode) {
+            toolbarCols = "[]4[]4[]8[]push[]4[]10[]4[]push[]8[]";
+        } else {
+            toolbarCols = "[]4[]4[]push[]4[]10[]4[]push[]8[]";
+        }
+        JPanel actionToolbar = new JPanel(new MigLayout("insets 4 8 6 8, fillx", toolbarCols, "center"));
         actionToolbar.setOpaque(false);
         actionToolbar.add(attachImageButton);
         actionToolbar.add(resetSessionButton);
         actionToolbar.add(mentionButton);
+        if (isTaskMode) {
+            autoApprovePlanCheckBox = new JCheckBox("Auto-approve Plan");
+            autoApprovePlanCheckBox.setOpaque(false);
+            autoApprovePlanCheckBox.setToolTipText(
+                    "Automatically approve PLAN → CODE transitions so Roxy starts coding immediately after submitting the plan");
+            autoApprovePlanCheckBox.putClientProperty(FlatClientProperties.STYLE, "font: -1");
+            actionToolbar.add(autoApprovePlanCheckBox);
+        }
         telemetryBar.addToToolbar(actionToolbar);
-        actionToolbar.add(sendButton, "hidemode 3");
-        actionToolbar.add(stopButton, "hidemode 3");
+        actionToolbar.add(sendButton, HIDEMODE_3);
+        actionToolbar.add(stopButton, HIDEMODE_3);
 
         composerCard.add(attachmentPanel, BorderLayout.NORTH);
         composerCard.add(inputScrollPane, BorderLayout.CENTER);
@@ -533,10 +558,10 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
     void updateProjectComposerState() {
         boolean projectReady = isProjectReady();
-        if (projectReady) {
-            defaultPlaceholderText = DEFAULT_PLACEHOLDER_TEXT;
-        } else {
+        if (!projectReady) {
             defaultPlaceholderText = NO_PROJECT_PLACEHOLDER_TEXT;
+        } else if (NO_PROJECT_PLACEHOLDER_TEXT.equals(defaultPlaceholderText)) {
+            defaultPlaceholderText = DEFAULT_PLACEHOLDER_TEXT;
         }
         updateInputPlaceholderText();
         boolean enableComposer = !loading && projectReady;
@@ -544,6 +569,9 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         sendButton.setEnabled(enableComposer);
         attachImageButton.setEnabled(enableComposer);
         mentionButton.setEnabled(enableComposer);
+        if (autoApprovePlanCheckBox != null) {
+            autoApprovePlanCheckBox.setEnabled(projectReady);
+        }
     }
 
     private void updateInputPlaceholderText() {
@@ -578,6 +606,27 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
             inputArea.setText(text);
             inputArea.requestFocusInWindow();
         }
+    }
+
+    public boolean isAutoApprovePlanEnabled() {
+        return autoApprovePlanCheckBox != null && autoApprovePlanCheckBox.isSelected();
+    }
+
+    public void setAutoApprovePlanEnabled(boolean enabled) {
+        if (autoApprovePlanCheckBox != null) {
+            autoApprovePlanCheckBox.setSelected(enabled);
+        }
+    }
+
+    void setInputPlaceholderText(String placeholder) {
+        if (StringUtils.isNotBlank(placeholder)) {
+            this.defaultPlaceholderText = placeholder;
+        } else if (isProjectReady()) {
+            this.defaultPlaceholderText = DEFAULT_PLACEHOLDER_TEXT;
+        } else {
+            this.defaultPlaceholderText = NO_PROJECT_PLACEHOLDER_TEXT;
+        }
+        updateInputPlaceholderText();
     }
 
     void triggerMentionPopup() {
@@ -626,6 +675,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     void clearInputText() {
         fileMentionPopup.hidePopup();
         inputArea.setText("");
+        setInputPlaceholderText(null);
     }
 
     void clearAttachments() {
@@ -633,17 +683,50 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         attachmentPanel.setVisible(false);
     }
 
+    private void copyPendingCommitMessage() {
+        if (planService == null || planService.getCurrentPlan() == null) {
+            return;
+        }
+        String commitMsg = PlanService.formatCommitMessage(planService.getCurrentPlan());
+        if (StringUtils.isBlank(commitMsg)) {
+            return;
+        }
+        this.lastCopiedCommitMessage = commitMsg;
+        copyCommitMsgTimer = UiComponents.copyWithFeedback(copyCommitMsgButton, copyCommitMsgTimer, commitMsg,
+                "Copy Commit Msg", 1500);
+    }
+
+    void updateCopyCommitMsgButtonState(String bannerText) {
+        if (copyCommitMsgButton == null) {
+            return;
+        }
+        boolean isReviewToPlan = (planService != null && planService.getCurrentPhase() == WorkflowPhase.REVIEW
+                && planService.getPendingPhase() == WorkflowPhase.PLAN)
+                || PlanService.formatApprovalLabel(WorkflowPhase.REVIEW, WorkflowPhase.PLAN).equals(bannerText);
+        String commitMsg = null;
+        if (planService != null && planService.getCurrentPlan() != null) {
+            commitMsg = PlanService.formatCommitMessage(planService.getCurrentPlan());
+        }
+        boolean showCopyCommit = isReviewToPlan && StringUtils.isNotBlank(commitMsg);
+        copyCommitMsgButton.setEnabled(showCopyCommit);
+        copyCommitMsgButton.setVisible(showCopyCommit);
+    }
+
     void showTransitionBanner(String path) {
         transitionLabel.setText(path);
         approveButton.setText("Approve");
         approveButton.setEnabled(true);
         rejectButton.setEnabled(true);
+        updateCopyCommitMsgButtonState(path);
         inlineActionPanel.setVisible(true);
     }
 
     void hideTransitionBanner() {
         approveButton.setEnabled(false);
         rejectButton.setEnabled(false);
+        if (copyCommitMsgButton != null) {
+            copyCommitMsgButton.setVisible(false);
+        }
         inlineActionPanel.setVisible(false);
     }
 

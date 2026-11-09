@@ -203,13 +203,22 @@ class PlanServiceTest {
         assertEquals(6, archivingService.getCurrentPlan().technicalSteps().size());
         assertFalse(archivingService.getCurrentPlan().technicalSteps().get(2).completed());
 
+        assertIllegalState(() -> archivingService.requestCompletion("Wrong phase", "feat: x"),
+                "Method 'requestCompletion' is only allowed in phase(s) [REVIEW]. Current phase: CODE");
         archivingService.markStepCompleted(2);
         archivingService.requestReview("Fixed null-input test");
         assertIllegalState(() -> archivingService.requestCompletion("All verified"), "5: Automated code review passes");
 
         archivingService.markStepCompleted(5);
-        assertTrue(archivingService.requestCompletion("All checks passed")
-                .contains("Approve Feature Request as complete"));
+        clearInvocations(eventPublisher);
+        String commitMsg = String.join(String.valueOf((char) 10), "feat: archive plans", "",
+                "- Persist completed plans to disk");
+        String completionMsg = archivingService.requestCompletion("All checks passed", commitMsg);
+        assertContainsAll(completionMsg, "Approve Feature Request as complete", "## Proposed Commit Message",
+                "feat: archive plans");
+        assertEquals(commitMsg, archivingService.getCurrentPlan().commitMessage());
+        verify(eventPublisher).publishEvent(
+                new WorkflowTransitionEvent(WorkflowPhase.REVIEW, WorkflowPhase.PLAN, "All checks passed", false));
 
         assertTrue(Files.exists(projectAWorkflowFile));
         when(envService.getCurrentUser()).thenReturn("bob");
@@ -230,7 +239,7 @@ class PlanServiceTest {
                 "codeCostUsd: ", "0.0071", "estimatedCostUsd: ", "0.0122", "## Token Usage & Cost",
                 "### Cost by Token Category", "| **Total (2 calls)** | **52.5k (52500)** | — | **$0.01** |",
                 "### Cost by Workflow Phase", "| Plan | 1 | 21.0k | $0.0051 |", "| Code | 1 | 31.5k | $0.0071 |",
-                "MODIFIED src/Main.java");
+                "## Proposed Commit Message", "feat: archive plans", "MODIFIED src/Main.java");
         verify(eventPublisher).publishEvent(argThat((Object ev) -> ev instanceof ArchiveUpdatedEvent));
 
         archivingService.submitPlan("Temp Plan", "Goal", new String[0], new String[]{"Step"});
@@ -273,5 +282,36 @@ class PlanServiceTest {
         assertNull(restartedService.getCurrentPlan());
         assertNull(restartedService.getPendingPhase());
         assertFalse(Files.exists(projectAWorkflowFile));
+        // Verify formatCommitMessage fallback vs explicit commitMessage and rejectCompletionAndReturnToCode
+        assertEquals("", PlanService.formatCommitMessage(null));
+        ImplementationPlan fallbackPlan = new ImplementationPlan("Add Fast Tests", "Run only related unit tests",
+                List.of("Req 1"),
+                List.of(new ImplementationPlan.TechStep("Implement runRelatedTests", true),
+                        new ImplementationPlan.TechStep("Update prompt", false),
+                        new ImplementationPlan.TechStep(ImplementationPlan.STEP_COMPILE, true)),
+                true, null, null, null, null, List.of());
+        assertEquals("Add Fast Tests\n\nRun only related unit tests\n\n- Implement runRelatedTests",
+                PlanService.formatCommitMessage(fallbackPlan));
+        assertEquals("feat: custom commit",
+                PlanService.formatCommitMessage(fallbackPlan.withCommitMessage("  feat: custom commit  ")));
+
+        archivingService.submitPlan("Reject Completion Plan", "Goal", new String[]{"Req"}, new String[]{"Step 1"});
+        archivingService.requestDevelopment("Start");
+        archivingService.approveTransition();
+        archivingService.markStepCompleted(0);
+        archivingService.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true);
+        archivingService.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, true);
+        archivingService.requestReview("Review");
+        archivingService.markStepCompleted(3);
+        archivingService.requestCompletion("Done");
+        assertEquals(WorkflowPhase.REVIEW, archivingService.getCurrentPhase());
+        assertEquals(WorkflowPhase.PLAN, archivingService.getPendingPhase());
+
+        archivingService.rejectCompletionAndReturnToCode("Handle null input in parser");
+        assertEquals(WorkflowPhase.CODE, archivingService.getCurrentPhase());
+        assertNull(archivingService.getPendingPhase());
+        assertNull(archivingService.getPendingReason());
+        assertTrue(archivingService.getCurrentPlan().technicalSteps().stream()
+                .anyMatch(s -> !s.completed() && s.description().contains("Handle null input in parser")));
     }
 }

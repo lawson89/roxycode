@@ -350,15 +350,76 @@ class ChatControllerTest extends ChatTestFixture {
         assertTrue(chatPanel.inlineActionPanel.isVisible());
         assertEquals("Approve Plan and proceed to Code", chatPanel.transitionLabel.getText());
 
+        // Rejecting PLAN -> CODE does NOT fire an extra AI call; updates placeholder and focuses composer
         clearInvocations(aiService);
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
         when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
-        when(aiService.chat(anyString(), any(), anyString(), any())).thenReturn("Let's revise the plan.");
         chatPanel.controller.rejectPhase();
         flushEdt();
         verify(planService).rejectTransition();
-        verify(aiService).chat(eq("task:default"), eq(WorkflowPhase.PLAN),
-                contains("I have rejected the transition to Code"), any());
+        verify(aiService, never()).chat(anyString(), any(), anyString(), any());
+        assertFalse(chatPanel.inlineActionPanel.isVisible());
+        assertContainsAll(chatPanel.outputArea.getText(), "Transition to", "rejected", "revise the plan");
+        assertEquals("Describe what to adjust in the plan...",
+                chatPanel.inputArea.getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT));
+
+        // Rejecting REVIEW -> PLAN calls rejectCompletionAndReturnToCode without firing an extra AI call
+        clearInvocations(aiService, planService);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.REVIEW);
+        when(planService.getPendingPhase()).thenReturn(WorkflowPhase.PLAN);
+        chatPanel.controller.rejectPhase();
+        flushEdt();
+        verify(planService).rejectCompletionAndReturnToCode("User rejected completion.");
+        verify(aiService, never()).chat(anyString(), any(), anyString(), any());
+        assertTrue(chatPanel.outputArea.getText().contains("Completion rejected"));
+
+        // Implicit feedback: sending a message while PLAN -> CODE is pending auto-rejects transition before turn
+        clearInvocations(aiService, planService);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+        when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
+        when(aiService.chat(anyString(), any(), anyString(), any())).thenReturn("Revised plan.");
+        sendOnEdt(chatPanel, "Split step 1 into two steps");
+        flushEdt();
+        verify(planService).rejectTransition();
+        verify(aiService).chat(eq("task:default"), eq(WorkflowPhase.PLAN), eq("Split step 1 into two steps"), any());
+        assertEquals(ChatPanel.DEFAULT_PLACEHOLDER_TEXT,
+                chatPanel.inputArea.getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT));
+
+        // Implicit feedback: sending a message while REVIEW -> PLAN is pending returns to CODE before turn
+        clearInvocations(aiService, planService);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.REVIEW);
+        when(planService.getPendingPhase()).thenReturn(WorkflowPhase.PLAN);
+        doAnswer(inv -> {
+            when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+            when(planService.getPendingPhase()).thenReturn(null);
+            return null;
+        }).when(planService).rejectCompletionAndReturnToCode("Add missing null check");
+        when(aiService.chat(anyString(), any(), anyString(), any())).thenReturn("Fixed in CODE.");
+        sendOnEdt(chatPanel, "Add missing null check");
+        flushEdt();
+        verify(planService).rejectCompletionAndReturnToCode("Add missing null check");
+        verify(aiService).chat(eq("task:default"), eq(WorkflowPhase.CODE), eq("Add missing null check"), any());
+
+        // Auto-approve Plan toggle: automatically invokes approvePhase() for PLAN -> CODE, but never for REVIEW -> PLAN
+        clearInvocations(aiService, planService);
+        assertFalse(chatPanel.isAutoApprovePlanEnabled());
+        chatPanel.setAutoApprovePlanEnabled(true);
+        assertTrue(chatPanel.isAutoApprovePlanEnabled());
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+        when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
+        doAnswer(inv -> {
+            when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
+            when(planService.getPendingPhase()).thenReturn(null);
+            return null;
+        }).when(planService).approveTransition();
+        when(aiService.chat(anyString(), any(), anyString(), any())).thenReturn("Auto-started coding.");
+        chatPanel.controller
+                .onWorkflowTransition(transitionEvent(WorkflowPhase.PLAN, WorkflowPhase.CODE, "Plan ready", false));
+        flushEdt();
+        verify(planService).approveTransition();
+        verify(aiService).chat(eq("task:default"), eq(WorkflowPhase.CODE), contains("I approve the transition to Code"),
+                any());
+        chatPanel.setAutoApprovePlanEnabled(false);
 
         clearInvocations(aiService, chatMemory);
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.REVIEW);
@@ -621,6 +682,24 @@ class ChatControllerTest extends ChatTestFixture {
         assertEquals("Cache: 80%", taskPanel.telemetryBar.cacheLabel.getText());
         assertTrue(taskPanel.inlineActionPanel.isVisible());
         assertEquals(PlanService.APPROVAL_PLAN_TO_CODE, taskPanel.transitionLabel.getText());
+        assertFalse(taskPanel.copyCommitMsgButton.isVisible());
+
+        // When REVIEW -> PLAN is pending, Copy Commit Msg button is shown even with synthesized fallback commit message
+        ImplementationPlan planWithoutExplicitCommit = samplePlan(new ImplementationPlan.TechStep("Step 1", true));
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.REVIEW);
+        when(planService.getPendingPhase()).thenReturn(WorkflowPhase.PLAN);
+        when(planService.getCurrentPlan()).thenReturn(planWithoutExplicitCommit);
+        taskPanel.controller.onWorkflowTransition(
+                new WorkflowTransitionEvent(WorkflowPhase.REVIEW, WorkflowPhase.PLAN, "All verified", false));
+        flushEdt();
+        assertTrue(taskPanel.copyCommitMsgButton.isVisible());
+        assertTrue(taskPanel.copyCommitMsgButton.isEnabled());
+        SwingTestUtils.clickOnEdt(taskPanel.copyCommitMsgButton);
+        assertEquals("Copied!", taskPanel.copyCommitMsgButton.getText());
+        assertEquals(PlanService.formatCommitMessage(planWithoutExplicitCommit), taskPanel.lastCopiedCommitMessage);
+
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+        when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
 
         // Startup restoration on a newly created ChatPanel (and idempotent second setProjectService call)
         realMemory.clear("task:default");

@@ -23,6 +23,7 @@ import org.roxycode.app.ai.services.BuildContainerService.ContainerExecResult;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerSession;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
@@ -115,11 +116,21 @@ class GenericBuildToolServiceTest {
 
     @Test
     void testEnsureConfigAutoDetectionAndTemplateLoading() throws IOException {
+        // Default template when no marker files exist does not auto-confirm buildConfirmed
+        Path configPath = projectDataDir.resolve("build.toml");
+        when(projectService.isBuildConfirmed()).thenReturn(false);
+        String defaultContent = buildToolService.getConfigContent();
+        assertTrue(Files.exists(configPath));
+        assertContainsAll(defaultContent, "[commands]", "compile = ");
+        verify(projectService, never()).setBuildConfirmed(true);
+
+        // Known template (Maven) auto-confirms buildConfirmed and publishes SettingsChangedEvent
+        Files.deleteIfExists(configPath);
         Files.writeString(projectRoot.resolve("pom.xml"), "<project></project>");
         String mavenContent = buildToolService.getConfigContent();
-        Path configPath = projectDataDir.resolve("build.toml");
         assertTrue(Files.exists(configPath));
         assertContainsAll(mavenContent, "[commands]", "./mvnw test-compile", "[sandbox]", "~/.m2");
+        verify(projectService).setBuildConfirmed(true);
 
         Files.deleteIfExists(configPath);
         Files.deleteIfExists(projectRoot.resolve("pom.xml"));
@@ -484,5 +495,50 @@ class GenericBuildToolServiceTest {
         for (String failure : testResult.getFailedTests()) {
             assertFalse(failure.contains("StaleTest"));
         }
+    }
+
+    @Test
+    void testRunRelatedTestsDiscoversTestStemsAndDoesNotMarkFullTestGateOnSuccess() throws IOException {
+        GitService gitService = mock(GitService.class);
+        SymbolService symbolService = mock(SymbolService.class);
+        GenericBuildToolService serviceWithDeps = new GenericBuildToolService(projectService, new TomlMapper(),
+                buildContainerService, eventPublisher, planService, gitService, symbolService);
+
+        writeBuildToml("""
+                [commands]
+                test_single = "echo 'RAN:{testName}'"
+                """);
+
+        // 1. No changed files -> no-op success
+        when(gitService.getChangedFiles()).thenReturn(List.of());
+        BuildResult emptyResult = serviceWithDeps.runRelatedTests();
+        assertTrue(emptyResult.success());
+        assertEquals(GenericBuildToolService.NO_RELATED_TESTS_OUTPUT, emptyResult.output());
+        verify(planService, never()).updateVerificationStep(anyString(), anyBoolean());
+
+        // 2. Changed source file + direct test file -> deduplicated test stems executed sequentially
+        when(gitService.getChangedFiles()).thenReturn(List.of("src/main/java/com/example/FooService.java",
+                "src/test/java/com/example/FooServiceTest.java", "src/test/java/com/example/BarServiceTest.java"));
+        when(symbolService.findRelatedTests("src/main/java/com/example/FooService.java"))
+                .thenReturn(List.of("src/test/java/com/example/FooServiceTest.java"));
+
+        BuildResult relatedResult = serviceWithDeps.runRelatedTests();
+        assertTrue(relatedResult.success());
+        assertContainsAll(relatedResult.output(), "RAN:FooServiceTest", "RAN:BarServiceTest");
+        assertEquals(relatedResult.output().indexOf("RAN:FooServiceTest"),
+                relatedResult.output().lastIndexOf("RAN:FooServiceTest"));
+        verify(planService, never()).updateVerificationStep(eq(ImplementationPlan.STEP_UNIT_TESTS), eq(true));
+
+        // 3. Failure on a related test stops execution and marks STEP_UNIT_TESTS incomplete
+        writeBuildToml(
+                """
+                        [commands]
+                        test_single = "if [ '{testName}' = 'BarServiceTest' ]; then echo 'FAIL:Bar'; exit 1; else echo 'PASS:{testName}'; fi"
+                        """);
+        BuildResult failedRelated = serviceWithDeps.runRelatedTests("src/test/java/com/example/FooServiceTest.java",
+                "src/test/java/com/example/BarServiceTest.java");
+        assertFalse(failedRelated.success());
+        assertContainsAll(failedRelated.output(), "PASS:FooServiceTest", "FAIL:Bar");
+        verify(planService).updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, false);
     }
 }

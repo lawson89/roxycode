@@ -198,18 +198,35 @@ public class PromptService {
         return sb.toString();
     }
 
+    private static boolean isValidGitOutput(String value) {
+        return StringUtils.isNotBlank(value) && !value.startsWith("Error") && !value.startsWith("Not a git repository")
+                && !value.startsWith("No active project");
+    }
+
     public String getVolatileSessionContext() {
         StringBuilder sb = new StringBuilder();
         if (gitService != null && (jexlServiceRegistry == null || jexlServiceRegistry.isGitAvailable())) {
+            String branch = gitService.getCurrentBranch();
             String gitStatus = gitService.getStatus();
-            if (StringUtils.isNotBlank(gitStatus) && !gitStatus.startsWith("Error")
-                    && !gitStatus.startsWith("Not a git repository")) {
-                sb.append(HEADER_GIT_STATUS).append(gitStatus).append(NEWLINE_DOUBLE);
+            boolean validBranch = isValidGitOutput(branch);
+            boolean validStatus = isValidGitOutput(gitStatus);
+            if (validBranch || validStatus) {
+                sb.append(HEADER_GIT_STATUS);
+                if (validBranch) {
+                    sb.append("Branch: ").append(branch.trim());
+                    if (validStatus) {
+                        sb.append(StringUtils.LF).append(gitStatus);
+                    }
+                } else {
+                    sb.append(gitStatus);
+                }
+                sb.append(NEWLINE_DOUBLE);
             }
         }
         ImplementationPlan currentPlan = planService.getCurrentPlan();
         if (currentPlan != null) {
-            sb.append(HEADER_CURRENT_PLAN_PROGRESS).append(currentPlan.formatPromptContextMarkdown()).append("\n");
+            sb.append(HEADER_CURRENT_PLAN_PROGRESS).append(currentPlan.formatPromptContextMarkdown())
+                    .append(StringUtils.LF);
         }
         return sb.toString();
     }

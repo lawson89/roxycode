@@ -63,6 +63,46 @@ public class PlanService {
     private record TransitionRule(boolean autonomous, boolean requiresApprovedPlan) {
     }
 
+    public static String formatCommitMessage(ImplementationPlan plan) {
+        if (plan == null) {
+            return "";
+        }
+        if (StringUtils.isNotBlank(plan.commitMessage())) {
+            return plan.commitMessage().trim();
+        }
+        StringBuilder sb = new StringBuilder();
+        String title = StringUtils.trimToEmpty(plan.title());
+        if (!title.isEmpty()) {
+            sb.append(title);
+        }
+        String goal = StringUtils.trimToEmpty(plan.goal());
+        if (!goal.isEmpty()) {
+            if (!sb.isEmpty()) {
+                sb.append("\n\n");
+            }
+            sb.append(goal);
+        }
+        List<String> completedSteps = new ArrayList<>();
+        for (ImplementationPlan.TechStep step : plan.technicalSteps()) {
+            if (step != null && step.completed() && StringUtils.isNotBlank(step.description())
+                    && !ImplementationPlan.isMandatoryVerificationStep(step.description())) {
+                completedSteps.add(step.description().trim());
+            }
+        }
+        if (!completedSteps.isEmpty()) {
+            if (!sb.isEmpty()) {
+                sb.append("\n\n");
+            }
+            for (int i = 0; i < completedSteps.size(); i++) {
+                if (i > 0) {
+                    sb.append('\n');
+                }
+                sb.append("- ").append(completedSteps.get(i));
+            }
+        }
+        return sb.toString();
+    }
+
     public static String formatApprovalLabel(WorkflowPhase from, WorkflowPhase to) {
         if (from == WorkflowPhase.PLAN && to == WorkflowPhase.CODE) {
             return APPROVAL_PLAN_TO_CODE;
@@ -371,11 +411,20 @@ public class PlanService {
     }
 
     @AgentDoc(value = "Signals completion of the current cycle and returns to planning.", phases = {
-            "REVIEW"}, examples = {"planService.requestCompletion('All requirements and quality gates verified')"})
+            "REVIEW"}, examples = {
+                    "planService.requestCompletion('All requirements and quality gates verified', 'feat: summary')"})
     public synchronized String requestCompletion(
             @AgentDoc("The reason for completing the current cycle") String reason) {
+        return requestCompletion(reason, null);
+    }
+
+    @AgentDoc(value = "Signals completion of the current cycle with a proposed Conventional Commit message and returns to planning.", phases = {
+            "REVIEW"}, examples = {
+                    "planService.requestCompletion('All requirements and quality gates verified', 'feat: add branch comparison tools')"})
+    public synchronized String requestCompletion(@AgentDoc("The reason for completing the current cycle") String reason,
+            @AgentDoc("The proposed Conventional Commit message") String commitMessage) {
         requirePhase("requestCompletion");
-        return routeToPhase(WorkflowPhase.PLAN, reason);
+        return routeToPhase(WorkflowPhase.PLAN, reason, commitMessage);
     }
 
     @AgentDoc(value = "Requests transition back to the planning phase (PLAN) due to technical blockers or needed revisions.", phases = {
@@ -387,6 +436,10 @@ public class PlanService {
     }
 
     public synchronized String routeToPhase(WorkflowPhase nextPhase, String reason) {
+        return routeToPhase(nextPhase, reason, null);
+    }
+
+    private synchronized String routeToPhase(WorkflowPhase nextPhase, String reason, String commitMessage) {
         if (nextPhase == null) {
             throw new IllegalArgumentException(
                     "Error: Invalid phase name: null. Valid phases are: PLAN, CODE, REVIEW.");
@@ -416,6 +469,10 @@ public class PlanService {
         verifyStepCompletionGates(currentPhase, nextPhase);
         if (currentPhase == WorkflowPhase.REVIEW && nextPhase == WorkflowPhase.CODE) {
             prepareFixesOnCurrentPlan(reason);
+        }
+        if (currentPhase == WorkflowPhase.REVIEW && nextPhase == WorkflowPhase.PLAN && currentPlan != null
+                && StringUtils.isNotBlank(commitMessage)) {
+            setCurrentPlan(currentPlan.withCommitMessage(commitMessage));
         }
 
         if (rule.autonomous()) {
@@ -577,6 +634,25 @@ public class PlanService {
         this.pendingPhase = null;
         this.pendingReason = null;
         persistActiveWorkflowState();
+        publishTransitionRequested();
+    }
+
+    public synchronized void rejectCompletionAndReturnToCode(String reason) {
+        String effectiveReason = StringUtils.defaultIfBlank(reason, "User requested additional changes.");
+        this.pendingPhase = null;
+        this.pendingReason = null;
+        prepareFixesOnCurrentPlan(effectiveReason);
+        String timestamp = OffsetDateTime.now().toString();
+        String user = "User";
+        if (environmentService != null) {
+            user = environmentService.getCurrentUser();
+        }
+        addHandoffLogEntry(timestamp, user,
+                String.format("REVIEW -> CODE (Completion Rejected): %s", effectiveReason.trim()));
+        this.currentPhase = WorkflowPhase.CODE;
+        this.visitedPhases.add(WorkflowPhase.CODE);
+        persistActiveWorkflowState();
+        publishPhaseChanged();
         publishTransitionRequested();
     }
 

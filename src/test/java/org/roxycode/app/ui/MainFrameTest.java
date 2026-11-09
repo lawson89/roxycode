@@ -38,6 +38,7 @@ class MainFrameTest {
     Path tempDir;
 
     private ProjectService projectService;
+    private GitService gitService;
     private PlanService planService;
     private RepoMapPackerService repoMapPackerService;
     private JexlServiceRegistry jexlServiceRegistry;
@@ -56,7 +57,7 @@ class MainFrameTest {
         when(projectService.getProjectName()).thenReturn("test-project");
         when(projectService.getEffectiveGeminiModel()).thenReturn("gemini-3.5-flash");
 
-        GitService gitService = mock(GitService.class);
+        gitService = mock(GitService.class);
         when(gitService.getCurrentBranch()).thenReturn("main");
 
         planService = mock(PlanService.class);
@@ -117,11 +118,15 @@ class MainFrameTest {
 
             NavButton settingsBtn = frame.sidebar.getCardButton(MainFrame.SETTINGS_VIEW);
             NavButton qaBtn = frame.sidebar.getCardButton(MainFrame.QA_VIEW);
+            NavButton taskBtn = frame.sidebar.getCardButton(MainFrame.TASK_VIEW);
+            NavButton cacheBtn = frame.sidebar.getCardButton(MainFrame.CACHE_VIEW);
             NavButton memoryBtn = frame.sidebar.getCardButton(MainFrame.MEMORY_VIEW);
             NavButton buildConfigBtn = frame.sidebar.getCardButton(MainFrame.BUILD_CONFIG_VIEW);
             assertTrue(settingsBtn.isEnabled());
             assertNull(settingsBtn.statusIcon);
             assertFalse(qaBtn.isEnabled());
+            assertFalse(taskBtn.isEnabled());
+            assertFalse(cacheBtn.isEnabled());
             assertFalse(memoryBtn.isEnabled());
             assertFalse(buildConfigBtn.isEnabled());
             assertEquals(SidebarPanel.MISSING_API_KEY_TOOLTIP, qaBtn.getToolTipText());
@@ -136,8 +141,21 @@ class MainFrameTest {
             assertEquals(MainFrame.BUILD_CONFIG_VIEW, frame.currentCard);
             assertTrue(buildConfigBtn.isEnabled());
             assertTrue(memoryBtn.isEnabled());
-            assertFalse(qaBtn.isEnabled());
-            assertEquals(SidebarPanel.UNCONFIRMED_BUILD_TOOLTIP, qaBtn.getToolTipText());
+            assertTrue(qaBtn.isEnabled());
+            assertNull(qaBtn.getToolTipText());
+            assertTrue(cacheBtn.isEnabled());
+            assertNull(cacheBtn.getToolTipText());
+            assertFalse(taskBtn.isEnabled());
+            assertEquals(SidebarPanel.UNCONFIRMED_BUILD_TOOLTIP, taskBtn.getToolTipText());
+
+            // Switching to QA_VIEW is permitted even when buildConfirmed is false; only TASK_VIEW redirects to
+            // BUILD_CONFIG_VIEW
+            frame.showCard(MainFrame.QA_VIEW);
+            frame.updateOnboardingAndNavigationState();
+            assertEquals(MainFrame.QA_VIEW, frame.currentCard);
+            frame.showCard(MainFrame.TASK_VIEW);
+            frame.updateOnboardingAndNavigationState();
+            assertEquals(MainFrame.BUILD_CONFIG_VIEW, frame.currentCard);
 
             doAnswer(inv -> {
                 when(projectService.isBuildConfirmed()).thenReturn(true);
@@ -149,6 +167,8 @@ class MainFrameTest {
             assertEquals(MainFrame.QA_VIEW, frame.currentCard);
             assertTrue(qaBtn.isEnabled());
             assertNull(qaBtn.getToolTipText());
+            assertTrue(taskBtn.isEnabled());
+            assertNull(taskBtn.getToolTipText());
 
             frame.showCard(MainFrame.BUILD_CONFIG_VIEW);
             SwingTestUtils.clickOnEdt(buildConfigPanel.saveButton);
@@ -300,7 +320,10 @@ class MainFrameTest {
             assertEquals(AppIconRenderer.AgentStatus.IDLE, frame.currentStatus);
             assertEquals("test-project — RoxyCode", frame.getTitle());
 
-            // Test with no active project
+            // Test with no active project and window focus branch refresh
+            clearInvocations(gitService);
+            frame.onWindowGainedFocus();
+            verify(gitService, timeout(2000).atLeastOnce()).getCurrentBranch();
             when(projectService.hasActiveProject()).thenReturn(false);
             frame.updateWorkspaceState();
             assertEquals("RoxyCode", frame.getTitle());

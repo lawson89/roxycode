@@ -42,6 +42,14 @@ class ImplementationPlanTest {
         SwingTestUtils.assertContainsAll(withLog, "## Handoff Log", "| 2026-04-06 12:05:30 | Architect | Created plan ",
                 "| verified details |");
 
+        ImplementationPlan withCommit = plan
+                .withCommitMessage("feat: add branch diff" + LF + LF + "- Add getBranchDiff()");
+        assertEquals("feat: add branch diff" + LF + LF + "- Add getBranchDiff()", withCommit.commitMessage());
+        SwingTestUtils.assertContainsAll(withCommit.toMarkdown(false), "## Proposed Commit Message",
+                "feat: add branch diff", "- Add getBranchDiff()");
+        SwingTestUtils.assertContainsAll(withCommit.toArchivedMarkdown("id-1", "roxy", "/roxy"),
+                "## Proposed Commit Message", "feat: add branch diff");
+
         String promptContext = plan.formatPromptContextMarkdown();
         SwingTestUtils.assertContainsAll(promptContext, "**Title:** Feature Plan", "**Goal:** Deliver feature",
                 "### Requirements" + LF + "- Req A",

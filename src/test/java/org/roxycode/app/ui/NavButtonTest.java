@@ -79,11 +79,13 @@ class NavButtonTest {
             sidebar.updateNavigationAccess(true, true, false);
             assertTrue(sidebar.getCardButton(MainFrame.BUILD_CONFIG_VIEW).isEnabled());
             assertNull(sidebar.getCardButton(MainFrame.BUILD_CONFIG_VIEW).getToolTipText());
-            assertFalse(sidebar.getCardButton(MainFrame.QA_VIEW).isEnabled());
+            assertTrue(sidebar.getCardButton(MainFrame.QA_VIEW).isEnabled());
+            assertNull(sidebar.getCardButton(MainFrame.QA_VIEW).getToolTipText());
             assertFalse(sidebar.getCardButton(MainFrame.TASK_VIEW).isEnabled());
-            assertFalse(sidebar.getCardButton(MainFrame.CACHE_VIEW).isEnabled());
+            assertTrue(sidebar.getCardButton(MainFrame.CACHE_VIEW).isEnabled());
+            assertNull(sidebar.getCardButton(MainFrame.CACHE_VIEW).getToolTipText());
             assertEquals(SidebarPanel.UNCONFIRMED_BUILD_TOOLTIP,
-                    sidebar.getCardButton(MainFrame.QA_VIEW).getToolTipText());
+                    sidebar.getCardButton(MainFrame.TASK_VIEW).getToolTipText());
 
             sidebar.updateNavigationAccess(true, true, true);
             assertTrue(sidebar.getCardButton(MainFrame.QA_VIEW).isEnabled());

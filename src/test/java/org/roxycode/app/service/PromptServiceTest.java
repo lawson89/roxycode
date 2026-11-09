@@ -156,6 +156,7 @@ class PromptServiceTest {
 
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
         when(jexlServiceRegistry.getDocumentation(WorkflowPhase.CODE)).thenReturn("JEXL DOCS");
+        when(gitService.getCurrentBranch()).thenReturn("feature/branch-sync");
         when(gitService.getStatus()).thenReturn("M file.java");
         when(projectAnalysisService.getDominantLanguage()).thenReturn("Java");
         when(repoMapPackerService.generateRepoMap()).thenReturn(new EditorResult(true, "REPO MAP CONTENT", null));
@@ -198,8 +199,13 @@ class PromptServiceTest {
         SwingTestUtils.assertContainsNone(staticPhaseContext, "## GIT STATUS", "## CURRENT PLAN PROGRESS");
 
         String volatileContext = promptService.getVolatileSessionContext();
-        SwingTestUtils.assertContainsAll(volatileContext, "## GIT STATUS", "M file.java", "## CURRENT PLAN PROGRESS",
-                "**Title:** Test Plan");
+        SwingTestUtils.assertContainsAll(volatileContext, "## GIT STATUS", "Branch: feature/branch-sync", "M file.java",
+                "## CURRENT PLAN PROGRESS", "**Title:** Test Plan");
+
+        when(gitService.getStatus()).thenReturn("");
+        SwingTestUtils.assertContainsAll(promptService.getVolatileSessionContext(), "## GIT STATUS",
+                "Branch: feature/branch-sync");
+        when(gitService.getStatus()).thenReturn("M file.java");
 
         String promptTurn1 = promptService.buildSystemPrompt(WorkflowPhase.CODE);
         when(gitService.getStatus()).thenReturn("M file.java\nM other.java");
