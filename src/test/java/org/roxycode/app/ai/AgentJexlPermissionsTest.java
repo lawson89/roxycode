@@ -83,6 +83,10 @@ class AgentJexlPermissionsTest {
         assertTrue(permissions.allow(plainMethod));
         assertTrue(permissions.allow(BuildResult.class, buildSuccess));
         assertTrue(permissions.allow(EditorResult.class, editorContent));
+        assertTrue(permissions.allow(JsPolyfillUberspect.JsJsonGlobal.class,
+                JsPolyfillUberspect.JsJsonGlobal.class.getMethod("stringify", Object.class)));
+        assertTrue(permissions.allow(JsPolyfillUberspect.JsObjectGlobal.class,
+                JsPolyfillUberspect.JsObjectGlobal.class.getMethod("keys", Map.class)));
 
         assertTrue(permissions.allow(String.class, String.class.getMethod("trim")));
         assertTrue(permissions.allow(Integer.class, Integer.class.getMethod("intValue")));

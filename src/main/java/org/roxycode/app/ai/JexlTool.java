@@ -1,6 +1,7 @@
 package org.roxycode.app.ai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import org.apache.commons.lang3.StringUtils;
@@ -10,6 +11,7 @@ import org.apache.commons.jexl3.JexlEngine;
 import org.apache.commons.jexl3.JexlFeatures;
 import org.apache.commons.jexl3.JexlScript;
 import org.apache.commons.jexl3.MapContext;
+import org.apache.commons.jexl3.introspection.JexlUberspect;
 import org.jspecify.annotations.Nullable;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
@@ -32,7 +34,8 @@ public class JexlTool {
     private static final String RESULT_KEY = "result";
     public static final String MAX_TURNS_EXCEEDED_PREFIX = "Autonomous execution stopped: Maximum tool turns (";
 
-    private final JexlEngine jexl;
+    private final JexlFeatures jexlFeatures;
+    private final JexlUberspect baseUberspect;
     private final JexlServiceRegistry registry;
     private final SettingsService settingsService;
     private final ApplicationEventPublisher eventPublisher;
@@ -40,9 +43,9 @@ public class JexlTool {
 
     public JexlTool(JexlServiceRegistry registry, @Nullable ApplicationEventPublisher eventPublisher,
             @Nullable ObjectMapper objectMapper, @Nullable SettingsService settingsService) {
-        JexlFeatures features = new JexlFeatures().newInstance(false);
-        this.jexl = new JexlBuilder().features(features).permissions(AgentJexlPermissions.INSTANCE).strict(true)
-                .silent(false).safe(false).create();
+        this.jexlFeatures = new JexlFeatures().newInstance(false).fatArrow(true);
+        this.baseUberspect = new JexlBuilder().features(this.jexlFeatures).permissions(AgentJexlPermissions.INSTANCE)
+                .strict(true).silent(false).safe(false).create().getUberspect();
         this.registry = registry;
         this.eventPublisher = eventPublisher;
         this.mapper = Objects.requireNonNullElse(objectMapper, AiConfig.SHARED_OBJECT_MAPPER);
@@ -76,6 +79,12 @@ public class JexlTool {
 
         log.info("Executing JEXL script in phase {} (turn {}/{}): {}", phase, currentTurn, maxTurns, script);
 
+        Map<String, Object> bindings = new HashMap<>(registry.getServices(phase, conversationId));
+        bindings.put("JSON", JsPolyfillUberspect.JSON_GLOBAL);
+        bindings.put("Object", JsPolyfillUberspect.OBJECT_GLOBAL);
+        JexlContext context = new MapContext(bindings);
+        JexlEngine jexl = createEngine(context);
+
         JexlScript jexlScript;
         try {
             jexlScript = jexl.createScript(script);
@@ -86,7 +95,6 @@ public class JexlTool {
         }
 
         try {
-            JexlContext context = new MapContext(registry.getServices(phase, conversationId));
             Object result = jexlScript.execute(context);
             ExceptionUtils.checkInterrupted("JEXL execution cancelled");
             publishToolEvent(conversationId, script, result, true, null);
@@ -105,6 +113,12 @@ public class JexlTool {
             publishToolEvent(conversationId, script, null, false, error);
             return toJsonError(error);
         }
+    }
+
+    private JexlEngine createEngine(JexlContext context) {
+        return new JexlBuilder().features(jexlFeatures).permissions(AgentJexlPermissions.INSTANCE)
+                .uberspect(new JsPolyfillUberspect(baseUberspect, context)).strict(true).silent(false).safe(false)
+                .create();
     }
 
     private int resolveMaxTurns() {

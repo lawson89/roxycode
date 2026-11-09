@@ -330,4 +330,137 @@ public class JexlToolTest {
         assertTrue(evalJson(tool, "userInputService.forConversation('other')").has("error"));
         assertTrue(evalJson(tool, "userInputService.cancelPendingRequest('qa:default')").has("error"));
     }
+
+    @Test
+    public void testJsPolyfillPropertiesAndMethodsForStringsCollectionsArraysAndMaps() throws Exception {
+        JexlTool tool = createTool(new TestService());
+        JsonNode node = evalJson(tool, """
+                var str = '  hello world  ';
+                var list = ['alpha', 'beta', ...];
+                var pushedLen = list.push('gamma', 'delta');
+                var arr = ['one', 'two', 'three'];
+                var map = { 'a': 1, 'b': 2, 'c': 3 };
+                var deletedB = map.delete('b');
+                var deletedMissing = map.delete('zzz');
+                {
+                  "strLen": str.length,
+                  "listLen": list.length,
+                  "arrLen": arr.length,
+                  "mapLen": map.length,
+                  "pushedLen": pushedLen,
+                  "strIncludes": str.includes('world'),
+                  "strIncludesFalse": str.includes('missing'),
+                  "strSlicePos": 'abcdef'.slice(1, 4),
+                  "strSliceNeg": 'abcdef'.slice(-3, -1),
+                  "strSliceTail": 'abcdef'.slice(-2),
+                  "strTrimStart": str.trimStart(),
+                  "strTrimEnd": str.trimEnd(),
+                  "padStart": '7'.padStart(3, '0'),
+                  "padEnd": '7'.padEnd(4, '.'),
+                  "listIncludes": list.includes('gamma'),
+                  "arrIncludes": arr.includes('two'),
+                  "listJoinDefault": ['a', 'b', 'c'].join(),
+                  "listJoinCustom": list.join(' | '),
+                  "arrJoin": arr.join('-'),
+                  "listIndexOf": list.indexOf('gamma'),
+                  "arrIndexOf": arr.indexOf('three'),
+                  "arrIndexOfMissing": arr.indexOf('nope'),
+                  "listSlice": list.slice(1, -1),
+                  "arrSlice": arr.slice(-2),
+                  "mapHasA": map.has('a'),
+                  "mapHasB": map.has('b'),
+                  "deletedB": deletedB,
+                  "deletedMissing": deletedMissing
+                }
+                """);
+
+        assertEquals(15, node.get("strLen").asInt());
+        assertEquals(4, node.get("listLen").asInt());
+        assertEquals(3, node.get("arrLen").asInt());
+        assertEquals(2, node.get("mapLen").asInt());
+        assertEquals(4, node.get("pushedLen").asInt());
+        assertTrue(node.get("strIncludes").asBoolean());
+        assertFalse(node.get("strIncludesFalse").asBoolean());
+        assertEquals("bcd", node.get("strSlicePos").asText());
+        assertEquals("de", node.get("strSliceNeg").asText());
+        assertEquals("ef", node.get("strSliceTail").asText());
+        assertEquals("hello world  ", node.get("strTrimStart").asText());
+        assertEquals("  hello world", node.get("strTrimEnd").asText());
+        assertEquals("007", node.get("padStart").asText());
+        assertEquals("7...", node.get("padEnd").asText());
+        assertTrue(node.get("listIncludes").asBoolean());
+        assertTrue(node.get("arrIncludes").asBoolean());
+        assertEquals("a,b,c", node.get("listJoinDefault").asText());
+        assertEquals("alpha | beta | gamma | delta", node.get("listJoinCustom").asText());
+        assertEquals("one-two-three", node.get("arrJoin").asText());
+        assertEquals(2, node.get("listIndexOf").asInt());
+        assertEquals(2, node.get("arrIndexOf").asInt());
+        assertEquals(-1, node.get("arrIndexOfMissing").asInt());
+        assertEquals(2, node.get("listSlice").size());
+        assertEquals("beta", node.get("listSlice").get(0).asText());
+        assertEquals("gamma", node.get("listSlice").get(1).asText());
+        assertEquals(2, node.get("arrSlice").size());
+        assertEquals("two", node.get("arrSlice").get(0).asText());
+        assertEquals("three", node.get("arrSlice").get(1).asText());
+        assertTrue(node.get("mapHasA").asBoolean());
+        assertFalse(node.get("mapHasB").asBoolean());
+        assertTrue(node.get("deletedB").asBoolean());
+        assertFalse(node.get("deletedMissing").asBoolean());
+    }
+
+    @Test
+    public void testJsPolyfillHigherOrderLambdaMethodsAndGlobals() throws Exception {
+        JexlTool tool = createTool(new TestService());
+        String raw = tool.executeJexl("""
+                var nums = [1, 2, 3, 4, ...];
+                var arr = ['a', 'b', 'c'];
+                var forEachAcc = [...];
+                nums.forEach(n => forEachAcc.push(n * 10));
+                var serviceMapped = ['Roxy', 'Dev'].map(name => testService.hello(name));
+                var indexed = arr.map((val, idx) => idx + ':' + val);
+                var obj = { 'x': 10, 'y': 20 };
+                var jsonStr = JSON.stringify(obj);
+                var parsed = JSON.parse(jsonStr);
+                {
+                  "mapped": nums.map(x => x * 2),
+                  "filtered": nums.filter(x => x > 2),
+                  "found": nums.find(x => x == 3),
+                  "foundMissing": nums.find(x => x > 99),
+                  "someTrue": nums.some(x => x == 4),
+                  "someFalse": nums.some(x => x < 0),
+                  "everyTrue": nums.every(x => x > 0),
+                  "everyFalse": nums.every(x => x < 3),
+                  "forEachAcc": forEachAcc,
+                  "serviceMapped": serviceMapped,
+                  "indexed": indexed,
+                  "keys": Object.keys(obj),
+                  "values": Object.values(obj),
+                  "entries": Object.entries(obj),
+                  "parsedX": parsed.x,
+                  "prettyJson": JSON.stringify(obj, null, 2).includes('  "x"')
+                }
+                """);
+        JsonNode node = AiConfig.SHARED_OBJECT_MAPPER.readTree(raw);
+        assertEquals(List.of(2, 4, 6, 8), AiConfig.SHARED_OBJECT_MAPPER.convertValue(node.get("mapped"), List.class));
+        assertEquals(List.of(3, 4), AiConfig.SHARED_OBJECT_MAPPER.convertValue(node.get("filtered"), List.class));
+        assertEquals(3, node.get("found").asInt());
+        assertTrue(node.get("foundMissing").isNull());
+        assertTrue(node.get("someTrue").asBoolean());
+        assertFalse(node.get("someFalse").asBoolean());
+        assertTrue(node.get("everyTrue").asBoolean());
+        assertFalse(node.get("everyFalse").asBoolean());
+        assertEquals(List.of(10, 20, 30, 40),
+                AiConfig.SHARED_OBJECT_MAPPER.convertValue(node.get("forEachAcc"), List.class));
+        assertEquals(List.of("Hello, Roxy", "Hello, Dev"),
+                AiConfig.SHARED_OBJECT_MAPPER.convertValue(node.get("serviceMapped"), List.class));
+        assertEquals(List.of("0:a", "1:b", "2:c"),
+                AiConfig.SHARED_OBJECT_MAPPER.convertValue(node.get("indexed"), List.class));
+        assertEquals(List.of("x", "y"), AiConfig.SHARED_OBJECT_MAPPER.convertValue(node.get("keys"), List.class));
+        assertEquals(List.of(10, 20), AiConfig.SHARED_OBJECT_MAPPER.convertValue(node.get("values"), List.class));
+        assertEquals(2, node.get("entries").size());
+        assertEquals("x", node.get("entries").get(0).get(0).asText());
+        assertEquals(10, node.get("entries").get(0).get(1).asInt());
+        assertEquals(10, node.get("parsedX").asInt());
+        assertTrue(node.get("prettyJson").asBoolean());
+    }
 }
