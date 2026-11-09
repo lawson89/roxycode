@@ -666,6 +666,12 @@ public class GenericBuildToolService {
         ParseSection effectiveParse = Objects.requireNonNullElse(parseSection, ParseSection.EMPTY);
         int contextLines = effectiveParse.resolvedContextLines();
         errors.addAll(BuildOutputParser.extractWithRipGrep(effectiveParse.errorRegex(), logFile, contextLines));
+        if (projectService.hasActiveProject() && !errors.isEmpty()) {
+            List<String> enrichedErrors = BuildOutputParser.enrichErrorsWithSourceContext(errors,
+                    projectService.getCurrentProjectRoot());
+            errors.clear();
+            errors.addAll(enrichedErrors);
+        }
         List<String> failedTests = new ArrayList<>(
                 BuildOutputParser.extractWithRipGrep(effectiveParse.testFailureRegex(), logFile, contextLines));
         if (exitCode != 0) {

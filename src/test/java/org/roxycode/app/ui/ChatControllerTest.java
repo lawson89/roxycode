@@ -41,6 +41,7 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.AiMemoryConfig;
 import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.*;
@@ -331,11 +332,28 @@ class ChatControllerTest extends ChatTestFixture {
         flushEdt();
         verify(aiService, never()).chat(anyString(), any(), anyString(), any());
 
+        GitService mockGitService = mock(GitService.class);
+        when(mockGitService.getStatus()).thenReturn("M src/App.java");
+        when(mockGitService.getDiff()).thenReturn("diff --git a/src/App.java b/src/App.java\n+int x = 1;");
+        chatPanel.setGitService(mockGitService);
+
         when(aiService.chat(anyString(), any(), anyString(), any())).thenReturn("Reviewing now");
         chatPanel.controller
                 .onWorkflowTransition(transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Test reason", true));
         flushEdt();
-        verify(aiService, times(1)).chat(eq("task:default"), any(), contains("independent pull-request audit"), any());
+        verify(aiService, times(1)).chat(eq("task:default"), any(),
+                argThat(prompt -> prompt.contains("independent pull-request audit")
+                        && prompt.contains("### Pre-Loaded Working Tree Status & Diff")
+                        && prompt.contains("M src/App.java") && prompt.contains("+int x = 1;")
+                        && prompt.contains("complete the review in a single turn")),
+                any());
+
+        // Verify 30,000-char diff truncation notice in buildAutonomousTransitionPrompt
+        when(mockGitService.getDiff()).thenReturn("a".repeat(30_500));
+        String truncatedReviewPrompt = ChatController.buildAutonomousTransitionPrompt(
+                transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Large diff", true), mockGitService);
+        assertContainsAll(truncatedReviewPrompt, "### Pre-Loaded Working Tree Status & Diff",
+                "[... diff truncated; use gitService.getDiff(relativePath) to inspect remaining files ...]");
 
         clearInvocations(aiService);
         when(aiService.chat(anyString(), any(), anyString(), any())).thenAnswer(inv -> {

@@ -7,20 +7,27 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.events.FileChangedEvent;
+import org.roxycode.app.service.ProcessRunner;
+import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.lang.Nullable;
 
 @AgentService(value = "fileEditorService", phases = {"CODE"})
 @AgentDoc("Provides safe, ergonomic file editing capabilities for the AI agent with phase protection and security sandboxing.")
@@ -29,19 +36,36 @@ public class FileEditorService {
 
     private static final Logger log = LoggerFactory.getLogger(FileEditorService.class);
     private static final int SINGLE_MATCH_COUNT = 1;
+    private static final int MAX_OUTLINE_HINT_SYMBOLS = 25;
+    private static final int NEAREST_CONTEXT_PADDING = 5;
+    private static final int MAX_NEAREST_SNIPPET_LINES = 15;
+    private static final int MIN_TOKEN_LENGTH = 3;
+    private static final int EXACT_LINE_MATCH_WEIGHT = 10;
+    private static final int CONTAINED_LINE_MATCH_WEIGHT = 5;
+    private static final int TOKEN_MATCH_WEIGHT = 2;
+    private static final int MIN_ANCHOR_SCORE = 2;
+    private static final Pattern IDENTIFIER_TOKEN_PATTERN = Pattern.compile("[A-Za-z_][A-Za-z0-9_]{2,}");
     private static final char LF = '\n';
     private static final String NL = "\n";
     private static final String CRLF = "\r\n";
     private static final String CR = "\r";
     private static final String TAB_SPACE = " \t";
-    private static final String WHITESPACE_REGEX = "\\s+";
+    private static final String WHITESPACE_REGEX = "\s+";
 
     private final ProjectService projectService;
     private final ApplicationEventPublisher eventPublisher;
+    private final SymbolService symbolService;
 
     public FileEditorService(ProjectService projectService, ApplicationEventPublisher eventPublisher) {
+        this(projectService, eventPublisher, null);
+    }
+
+    @Autowired
+    public FileEditorService(ProjectService projectService, ApplicationEventPublisher eventPublisher,
+            @Nullable SymbolService symbolService) {
         this.projectService = projectService;
         this.eventPublisher = eventPublisher;
+        this.symbolService = symbolService;
     }
 
     @AgentDoc(value = "Writes content to a file, overwriting it if it exists.", examples = "fileEditorService.writeFile('src/main/resources/config.properties', 'key=value')")
@@ -70,7 +94,7 @@ public class FileEditorService {
 
         String content = Files.readString(path);
         if (targetBlock == null || targetBlock.isBlank()) {
-            return new EditorResult(false, "", buildTargetNotFoundHint(relativePath, content));
+            return new EditorResult(false, "", buildTargetNotFoundHint(relativePath, content, targetBlock));
         }
 
         BlockMatch match = findUniqueBlockMatch(SINGLE_MATCH_COUNT, relativePath, content, targetBlock,
@@ -93,6 +117,153 @@ public class FileEditorService {
             editList = Arrays.asList(edits);
         }
         return replaceBlocksInternal(relativePath, editList);
+    }
+
+    @AgentDoc(value = "Replaces a unique symbol definition (method, function, class, etc.) in a file using Universal Ctags outline boundaries.", examples = {
+            "fileEditorService.replaceSymbol('src/Main.java', 'calculate', '    public int calculate(int x) {\n        return x * 2;\n    }')",
+            "fileEditorService.replaceSymbol('src/Main.java', 'Main.calculate', '    public int calculate(int x) {\n        return x * 2;\n    }')"})
+    public EditorResult replaceSymbol(@AgentDoc("The file path relative to the project root") String relativePath,
+            @AgentDoc("The symbol name to replace (e.g., 'methodName' or 'ClassName.methodName')") String symbolName,
+            @AgentDoc("The replacement symbol implementation") String replacement) throws IOException {
+        Path path = projectService.resolvePath(relativePath);
+        EditorResult validationError = validateRegularFile(path, relativePath);
+        if (validationError != null) {
+            return validationError;
+        }
+        if (symbolName == null || symbolName.isBlank()) {
+            return new EditorResult(false, "", "Symbol name must not be blank in file: " + relativePath);
+        }
+        if (replacement == null) {
+            return new EditorResult(false, "", "Replacement must not be null in file: " + relativePath);
+        }
+        if (symbolService == null) {
+            return new EditorResult(false, "", "SymbolService is not available for file: " + relativePath);
+        }
+
+        List<SymbolInfo> outline = symbolService.getFileOutline(relativePath);
+        List<SymbolInfo> matching = new ArrayList<>();
+        for (SymbolInfo symbol : outline) {
+            if (SymbolService.matchesSymbol(symbol, symbolName)) {
+                matching.add(symbol);
+            }
+        }
+        if (matching.isEmpty()) {
+            return new EditorResult(false, "", formatSymbolNotFoundHint(relativePath, symbolName, outline));
+        }
+        if (matching.size() > SINGLE_MATCH_COUNT) {
+            return new EditorResult(false, "", formatAmbiguousSymbolHint(relativePath, symbolName, matching));
+        }
+
+        SymbolInfo targetSymbol = matching.get(0);
+        return mutateLines(relativePath, replacement, false, lines -> {
+            int startLine = targetSymbol.startLine();
+            if (replacementStartsWithAnnotationOrComment(replacement)) {
+                startLine = SymbolService.adjustStartLineForPrecedingContext(lines, startLine);
+            }
+            int endLine = Math.max(startLine, Math.min(targetSymbol.endLine(), lines.size()));
+            if (startLine < 1 || startLine > lines.size() || endLine < startLine) {
+                return "Invalid symbol line range: " + startLine + " to " + endLine + " in file: " + relativePath;
+            }
+            lines.subList(startLine - 1, endLine).clear();
+            lines.addAll(startLine - 1, splitLines(replacement));
+            return null;
+        }, "Symbol '" + symbolName + "' replaced successfully in: " + relativePath);
+    }
+
+    @AgentDoc(value = "Reverts a file to its git HEAD state if tracked, or deletes it if it is an untracked newly created file.", examples = "fileEditorService.revertFile('src/Main.java')")
+    public EditorResult revertFile(@AgentDoc("The file path relative to the project root") String relativePath)
+            throws IOException {
+        Path path = projectService.resolvePath(relativePath);
+        if (Files.exists(path) && Files.isDirectory(path)) {
+            return new EditorResult(false, "", "Cannot revert directory: " + relativePath);
+        }
+
+        String normalizedPath = PathUtils.normalizeRelativePath(relativePath);
+        Path projectRoot = projectService.getCurrentProjectRoot();
+        if (projectRoot != null && Files.isDirectory(projectRoot)) {
+            ProcessResult lsResult = ProcessRunner.run(List.of("git", "ls-files", "--error-unmatch", normalizedPath),
+                    projectRoot, true);
+            if (lsResult.isSuccess()) {
+                ProcessResult checkoutResult = ProcessRunner
+                        .run(List.of("git", "checkout", "HEAD", "--", normalizedPath), projectRoot, true);
+                if (checkoutResult.isSuccess()) {
+                    log.info("Reverted tracked file to HEAD: {}", relativePath);
+                    eventPublisher
+                            .publishEvent(new FileChangedEvent(relativePath, FileChangedEvent.ChangeType.MODIFIED));
+                    return new EditorResult(true, "File reverted to HEAD: " + relativePath, null);
+                }
+                return new EditorResult(false, "",
+                        "Failed to revert tracked file " + relativePath + ": " + checkoutResult.output().trim());
+            }
+        }
+
+        if (Files.exists(path)) {
+            Files.deleteIfExists(path);
+            log.info("Deleted untracked file on revert: {}", relativePath);
+            eventPublisher.publishEvent(new FileChangedEvent(relativePath, FileChangedEvent.ChangeType.DELETED));
+            return new EditorResult(true, "Untracked file deleted: " + relativePath, null);
+        }
+
+        return new EditorResult(false, "", "File does not exist on disk or in git HEAD: " + relativePath);
+    }
+
+    private static boolean replacementStartsWithAnnotationOrComment(String replacement) {
+        if (replacement == null || replacement.isBlank()) {
+            return false;
+        }
+        for (String line : replacement.lines().toList()) {
+            String trimmed = line.trim();
+            if (!trimmed.isEmpty()) {
+                return SymbolService.isAnnotationOrCommentLine(trimmed);
+            }
+        }
+        return false;
+    }
+
+    private static String formatSymbolNotFoundHint(String relativePath, String symbolName, List<SymbolInfo> outline) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Symbol '").append(symbolName).append("' not found in file: ").append(relativePath);
+        if (outline == null || outline.isEmpty()) {
+            sb.append(" (no symbols detected in file outline)");
+            return sb.toString();
+        }
+        sb.append(". Available symbols in ").append(relativePath).append(": ");
+        int limit = Math.min(outline.size(), MAX_OUTLINE_HINT_SYMBOLS);
+        for (int i = 0; i < limit; i++) {
+            if (i > 0) {
+                sb.append(", ");
+            }
+            SymbolInfo sym = outline.get(i);
+            if (sym.scope() != null && !sym.scope().isEmpty()) {
+                sb.append(sym.scope()).append('.');
+            }
+            sb.append(sym.name()).append(" (").append(sym.kind()).append(" L").append(sym.startLine()).append('-')
+                    .append(sym.endLine()).append(')');
+        }
+        if (outline.size() > limit) {
+            sb.append(", ... (").append(outline.size() - limit).append(" more)");
+        }
+        return sb.toString();
+    }
+
+    private static String formatAmbiguousSymbolHint(String relativePath, String symbolName, List<SymbolInfo> matching) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Symbol '").append(symbolName).append("' is ambiguous in file: ").append(relativePath)
+                .append(" (found ").append(matching.size())
+                .append(" matches). Use replaceBlock or replaceLines for the specific overload: ");
+        for (int i = 0; i < matching.size(); i++) {
+            if (i > 0) {
+                sb.append("; ");
+            }
+            SymbolInfo sym = matching.get(i);
+            sb.append("L").append(sym.startLine()).append('-').append(sym.endLine());
+            if (sym.signature() != null && !sym.signature().isBlank()) {
+                sb.append(' ').append(sym.signature().trim());
+            } else {
+                sb.append(' ').append(sym.name()).append(" (").append(sym.kind()).append(')');
+            }
+        }
+        return sb.toString();
     }
 
     private EditorResult replaceBlocksInternal(String relativePath, List<?> edits) throws IOException {
@@ -137,7 +308,7 @@ public class FileEditorService {
 
         if (targetBlock == null || targetBlock.isBlank()) {
             return new EditorResult(false, "",
-                    "Edit #" + editNum + " failed: " + buildTargetNotFoundHint(relativePath, content));
+                    "Edit #" + editNum + " failed: " + buildTargetNotFoundHint(relativePath, content, targetBlock));
         }
         if (replacementBlock == null) {
             return new EditorResult(false, "",
@@ -180,7 +351,7 @@ public class FileEditorService {
 
         List<int[]> regexMatches = findWhitespaceTolerantMatches(content, normalizedTarget);
         if (regexMatches.isEmpty()) {
-            return new BlockMatch(editIndex, -1, -1, null, buildTargetNotFoundHint(relativePath, content));
+            return new BlockMatch(editIndex, -1, -1, null, buildTargetNotFoundHint(relativePath, content, targetBlock));
         }
         if (regexMatches.size() > SINGLE_MATCH_COUNT) {
             return new BlockMatch(editIndex, -1, -1, null,
@@ -403,12 +574,102 @@ public class FileEditorService {
         return 1 + StringUtils.countMatches(content.subSequence(0, limit), LF);
     }
 
-    private static String buildTargetNotFoundHint(String relativePath, String content) {
-        long lineCount = 0;
+    static String buildTargetNotFoundHint(String relativePath, String content, String targetBlock) {
+        List<String> fileLines = List.of();
         if (!content.isEmpty()) {
-            lineCount = content.lines().count();
+            fileLines = content.lines().toList();
         }
-        return "TargetBlock not found in file: " + relativePath + " (file has " + lineCount + " lines)";
+        long lineCount = fileLines.size();
+        String baseHint = "TargetBlock not found in file: " + relativePath + " (file has " + lineCount + " lines)";
+        if (fileLines.isEmpty() || targetBlock == null || targetBlock.isBlank()) {
+            return baseHint;
+        }
+
+        List<String> targetLines = new ArrayList<>();
+        for (String line : targetBlock.lines().toList()) {
+            String trimmed = line.trim();
+            if (!trimmed.isEmpty()) {
+                targetLines.add(trimmed);
+            }
+        }
+        Set<String> targetTokens = extractIdentifierTokens(targetBlock);
+        int bestLine = findBestMatchAnchorLine(fileLines, targetLines, targetTokens);
+        if (bestLine <= 0) {
+            return baseHint;
+        }
+
+        int snippetStart = Math.max(1, bestLine - NEAREST_CONTEXT_PADDING);
+        int targetSpan = Math.max(0, targetLines.size() - 1);
+        int rawEnd = Math.min(fileLines.size(), bestLine + targetSpan + NEAREST_CONTEXT_PADDING);
+        int snippetEnd = Math.min(rawEnd, snippetStart + MAX_NEAREST_SNIPPET_LINES - 1);
+        String snippet = FileReadService.formatNumberedLines(fileLines, snippetStart, snippetEnd);
+        return baseHint + "\nNearest matching lines in " + relativePath + " (lines " + snippetStart + "-" + snippetEnd
+                + "):\n" + snippet;
+    }
+
+    private static Set<String> extractIdentifierTokens(String text) {
+        Set<String> tokens = new LinkedHashSet<>();
+        Matcher matcher = IDENTIFIER_TOKEN_PATTERN.matcher(text);
+        while (matcher.find()) {
+            String token = matcher.group();
+            if (token.length() >= MIN_TOKEN_LENGTH) {
+                tokens.add(token.toLowerCase(Locale.ROOT));
+            }
+        }
+        return tokens;
+    }
+
+    private static int findBestMatchAnchorLine(List<String> fileLines, List<String> targetLines,
+            Set<String> targetTokens) {
+        if (targetLines.isEmpty() && targetTokens.isEmpty()) {
+            return -1;
+        }
+        int windowSize = Math.max(1, Math.min(targetLines.size(), MAX_NEAREST_SNIPPET_LINES));
+        int bestScore = 0;
+        int bestLineNumber = -1;
+
+        for (int i = 0; i < fileLines.size(); i++) {
+            int score = scoreCandidateWindow(fileLines, i, windowSize, targetLines, targetTokens);
+            if (score > bestScore) {
+                bestScore = score;
+                bestLineNumber = i + 1;
+            }
+        }
+
+        if (bestScore < MIN_ANCHOR_SCORE) {
+            return -1;
+        }
+        return bestLineNumber;
+    }
+
+    private static int scoreCandidateWindow(List<String> fileLines, int startIndex, int windowSize,
+            List<String> targetLines, Set<String> targetTokens) {
+        int endIndex = Math.min(fileLines.size(), startIndex + windowSize);
+        int score = 0;
+        Set<String> matchedTokens = new LinkedHashSet<>();
+
+        for (int j = startIndex; j < endIndex; j++) {
+            String fileLineTrimmed = fileLines.get(j).trim();
+            if (fileLineTrimmed.isEmpty()) {
+                continue;
+            }
+            for (String targetLine : targetLines) {
+                if (fileLineTrimmed.equals(targetLine) && targetLine.length() >= MIN_TOKEN_LENGTH) {
+                    score += EXACT_LINE_MATCH_WEIGHT;
+                } else if (targetLine.length() >= MIN_TOKEN_LENGTH
+                        && (fileLineTrimmed.contains(targetLine) || targetLine.contains(fileLineTrimmed))) {
+                    score += CONTAINED_LINE_MATCH_WEIGHT;
+                }
+            }
+            String lowerLine = fileLineTrimmed.toLowerCase(Locale.ROOT);
+            for (String token : targetTokens) {
+                if (lowerLine.contains(token)) {
+                    matchedTokens.add(token);
+                }
+            }
+        }
+        score += matchedTokens.size() * TOKEN_MATCH_WEIGHT;
+        return score;
     }
 
     private static String normalizeLineEndings(String text, String lineSeparator) {

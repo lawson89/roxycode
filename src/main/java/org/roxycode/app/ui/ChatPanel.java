@@ -28,6 +28,7 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
@@ -542,6 +543,11 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     @Autowired(required = false)
     public void setUserInputService(UserInputService userInputService) {
         controller.setUserInputService(userInputService);
+    }
+
+    @Autowired(required = false)
+    public void setGitService(GitService gitService) {
+        controller.setGitService(gitService);
     }
 
     @Autowired(required = false)

@@ -32,13 +32,15 @@ class FileEditorServiceTest {
 
     private ProjectService projectService;
     private ApplicationEventPublisher eventPublisher;
+    private SymbolService symbolService;
     private FileEditorService fileEditorService;
 
     @BeforeEach
     void setUp() {
         projectService = mock(ProjectService.class);
         eventPublisher = mock(ApplicationEventPublisher.class);
-        fileEditorService = new FileEditorService(projectService, eventPublisher);
+        symbolService = mock(SymbolService.class);
+        fileEditorService = new FileEditorService(projectService, eventPublisher, symbolService);
         when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
         lenient().when(projectService.resolvePath(any())).thenCallRealMethod();
     }
@@ -175,5 +177,94 @@ class FileEditorServiceTest {
                         List.of(Map.of("target", "line 1\nline 2\nline 3", "replacement", "A"),
                                 Map.of("target", "line 2\nline 3\nline 4", "replacement", "B"))),
                 "Edit #2 failed:", "overlaps with Edit #1");
+    }
+
+    @Test
+    void testReplaceSymbolNearestLineHintAndRevertFile() throws Exception {
+        // 1. replaceSymbol: unique match without annotation replacement preserves preceding annotation
+        String source = """
+                public class Service {
+                    // Calculates total
+                    @Deprecated
+                    public int compute(int a) {
+                        return a + 1;
+                    }
+
+                    public int helper() {
+                        return 42;
+                    }
+                }
+                """;
+        Path serviceFile = Files.writeString(tempDir.resolve("Service.java"), source);
+        List<SymbolInfo> outline = List.of(
+                new SymbolInfo("Service", "class", "Service.java", 1, 11, "", "public class Service {"),
+                new SymbolInfo("compute", "method", "Service.java", 4, 6, "Service", "public int compute(int a) {"),
+                new SymbolInfo("helper", "method", "Service.java", 8, 10, "Service", "public int helper() {"));
+        when(symbolService.getFileOutline("Service.java")).thenReturn(outline);
+
+        EditorResult res1 = fileEditorService.replaceSymbol("Service.java", "Service.compute",
+                "    public int compute(int a) {\n        return a * 10;\n    }");
+        assertTrue(res1.success());
+        String afterFirst = Files.readString(serviceFile);
+        SwingTestUtils.assertContainsAll(afterFirst, "// Calculates total", "@Deprecated", "return a * 10;",
+                "public int helper()");
+
+        // When replacement starts with an annotation/comment, preceding context lines are replaced too
+        EditorResult res2 = fileEditorService.replaceSymbol("Service.java", "compute",
+                "    // Updated doc\n    @Override\n    public int compute(int a) {\n        return a * 20;\n    }");
+        assertTrue(res2.success());
+        String afterSecond = Files.readString(serviceFile);
+        assertFalse(afterSecond.contains("@Deprecated"));
+        assertFalse(afterSecond.contains("// Calculates total"));
+        SwingTestUtils.assertContainsAll(afterSecond, "// Updated doc", "@Override", "return a * 20;");
+
+        // 2. replaceSymbol: 0 matches returns outline summary hint
+        EditorResult missingSym = fileEditorService.replaceSymbol("Service.java", "nonExistentMethod", "void x() {}");
+        assertEditFails(missingSym, "Symbol 'nonExistentMethod' not found in file: Service.java",
+                "Available symbols in Service.java", "Service.compute (method L4-6)", "Service.helper (method L8-10)");
+
+        // 3. replaceSymbol: >1 matches (overloads) returns ambiguity hint with signatures & line ranges
+        when(symbolService.getFileOutline("Service.java")).thenReturn(List.of(
+                new SymbolInfo("parse", "method", "Service.java", 10, 14, "Service", "public void parse(String s) {"),
+                new SymbolInfo("parse", "method", "Service.java", 16, 22, "Service",
+                        "public void parse(String s, int radix) {")));
+        EditorResult ambiguousSym = fileEditorService.replaceSymbol("Service.java", "parse", "public void parse() {}");
+        assertEditFails(ambiguousSym, "Symbol 'parse' is ambiguous in file: Service.java (found 2 matches)",
+                "Use replaceBlock or replaceLines", "L10-14 public void parse(String s) {",
+                "L16-22 public void parse(String s, int radix) {");
+
+        // 4. Nearest-line snippet in buildTargetNotFoundHint when replaceBlock fails
+        EditorResult nearMiss = fileEditorService.replaceBlock("Service.java",
+                "    public int helper() {\n        return 999;\n    }", "    public int helper() { return 0; }");
+        assertEditFails(nearMiss, "TargetBlock not found in file: Service.java",
+                "Nearest matching lines in Service.java", "public int helper()", "return 42;");
+
+        // 5. revertFile: untracked file deleted vs tracked file restored from HEAD
+        Path untrackedFile = Files.writeString(tempDir.resolve("Untracked.java"), "class Untracked {}");
+        clearInvocations(eventPublisher);
+        EditorResult revertUntracked = fileEditorService.revertFile("Untracked.java");
+        assertTrue(revertUntracked.success());
+        assertFalse(Files.exists(untrackedFile));
+        verify(eventPublisher)
+                .publishEvent(new FileChangedEvent("Untracked.java", FileChangedEvent.ChangeType.DELETED));
+
+        assertEditFails(fileEditorService.revertFile("DoesNotExist.java"),
+                "File does not exist on disk or in git HEAD: DoesNotExist.java");
+
+        // Initialize a real git repo in tempDir to test tracked file revert
+        org.roxycode.app.service.ProcessRunner.run(List.of("git", "init"), tempDir, true);
+        org.roxycode.app.service.ProcessRunner.run(List.of("git", "config", "user.email", "test@example.com"), tempDir,
+                true);
+        org.roxycode.app.service.ProcessRunner.run(List.of("git", "config", "user.name", "Test User"), tempDir, true);
+        Path trackedFile = Files.writeString(tempDir.resolve("Tracked.txt"), "original head content\n");
+        org.roxycode.app.service.ProcessRunner.run(List.of("git", "add", "Tracked.txt"), tempDir, true);
+        org.roxycode.app.service.ProcessRunner.run(List.of("git", "commit", "-m", "initial"), tempDir, true);
+
+        Files.writeString(trackedFile, "dirty modified content\n");
+        clearInvocations(eventPublisher);
+        EditorResult revertTracked = fileEditorService.revertFile("Tracked.txt");
+        assertTrue(revertTracked.success());
+        assertEquals("original head content\n", Files.readString(trackedFile));
+        verify(eventPublisher).publishEvent(new FileChangedEvent("Tracked.txt", FileChangedEvent.ChangeType.MODIFIED));
     }
 }

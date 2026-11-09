@@ -540,5 +540,24 @@ class GenericBuildToolServiceTest {
         assertFalse(failedRelated.success());
         assertContainsAll(failedRelated.output(), "PASS:FooServiceTest", "FAIL:Bar");
         verify(planService).updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, false);
+
+        // 4. enrichErrorsWithSourceContext appends numbered source snippets (up to 3 distinct locations)
+        Path srcDir = Files.createDirectories(projectRoot.resolve("src/main/java/com/example"));
+        Path brokenJava = srcDir.resolve("Broken.java");
+        Files.writeString(brokenJava,
+                String.join("\n", "package com.example;", "public class Broken {", "    public int calc(int x) {",
+                        "        int a = x + 1;", "        int b = unknownCall(a);", "        return b;", "    }",
+                        "}"));
+        List<String> rawErrors = List.of(
+                "[ERROR] " + brokenJava.toAbsolutePath()
+                        + ":[5,17] cannot find symbol\n  symbol: method unknownCall(int)",
+                "src/main/java/com/example/Broken.java:5: duplicate location should not re-append",
+                "src/main/java/com/example/Missing.java:10: missing file should be ignored gracefully");
+        List<String> enriched = BuildOutputParser.enrichErrorsWithSourceContext(rawErrors, projectRoot);
+        assertEquals(3, enriched.size());
+        assertContainsAll(enriched.get(0), "--- Source Context (src/main/java/com/example/Broken.java:1-8) ---",
+                "5:         int b = unknownCall(a);");
+        assertFalse(enriched.get(1).contains("--- Source Context"));
+        assertFalse(enriched.get(2).contains("--- Source Context"));
     }
 }

@@ -14,9 +14,11 @@ import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.atomic.AtomicLong;
 import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.UserInputService;
+import org.springframework.lang.Nullable;
 import org.roxycode.app.events.AgentActivityEvent;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.AgentTurnEvent;
@@ -82,9 +84,13 @@ public final class ChatController implements AutoCloseable {
     private final SettingsService settingsService;
     private ProjectService projectService;
     private final PlanService planService;
+    private static final int MAX_PRELOADED_REVIEW_DIFF_CHARS = 30_000;
+    private static final String CODE_FENCE = "```";
+    private static final String REVIEW_DIFF_TRUNCATION_NOTICE = "\n[... diff truncated; use gitService.getDiff(relativePath) to inspect remaining files ...]";
     private MemoryService memoryService;
     private EnvironmentService environmentService;
     private UserInputService userInputService;
+    private GitService gitService;
     final boolean turnExecutorOwned;
     volatile Executor turnExecutor;
     private final AtomicLong turnSequence = new AtomicLong();
@@ -129,6 +135,10 @@ public final class ChatController implements AutoCloseable {
 
     void setUserInputService(UserInputService userInputService) {
         this.userInputService = userInputService;
+    }
+
+    void setGitService(@Nullable GitService gitService) {
+        this.gitService = gitService;
     }
 
     synchronized void ensureOwnedExecutorActive() {
@@ -540,7 +550,7 @@ public final class ChatController implements AutoCloseable {
                 view.appendMessage(ROLE_SYSTEM, "Task complete. What is the next feature you would like to work on?");
                 persistActiveChatSession();
             } else {
-                triggerTurn(buildAutonomousTransitionPrompt(event));
+                triggerTurn(buildAutonomousTransitionPrompt(event, gitService));
             }
         } else if (event.from() == WorkflowPhase.PLAN && event.to() == WorkflowPhase.CODE
                 && view.isAutoApprovePlanEnabled()) {
@@ -551,16 +561,23 @@ public final class ChatController implements AutoCloseable {
     }
 
     static String buildAutonomousTransitionPrompt(WorkflowTransitionEvent event) {
+        return buildAutonomousTransitionPrompt(event, null);
+    }
+
+    static String buildAutonomousTransitionPrompt(WorkflowTransitionEvent event, @Nullable GitService gitService) {
         if (event == null || event.to() == null) {
             return "Please proceed with the tasks in the current phase.";
         }
         if (event.to() == WorkflowPhase.REVIEW) {
-            return "Phase changed to REVIEW. Perform an independent pull-request audit of the changes: "
+            String basePrompt = "Phase changed to REVIEW. Perform an independent pull-request audit of the changes: "
                     + "inspect gitService.getDiff() and the changed files in ## CURRENT PLAN PROGRESS first, "
                     + "verify all requirements, edge cases, project coding guidelines, and unit test quality, "
                     + "and either record remediation steps (planService.addTechnicalStep / planService.markStepIncomplete) "
                     + "and call planService.requestFixes(reason), or mark 'Automated code review passes' completed "
-                    + "and call planService.requestCompletion(reason).";
+                    + "and call planService.requestCompletion(reason). "
+                    + "When the pre-loaded diff is complete and all requirements and guidelines are satisfied, "
+                    + "complete the review in a single turn.";
+            return appendPreloadedReviewGitContext(basePrompt, gitService);
         }
         if (event.from() == WorkflowPhase.REVIEW && event.to() == WorkflowPhase.CODE) {
             String reason = StringUtils.defaultIfBlank(event.reason(), "Review findings require remediation.");
@@ -569,6 +586,47 @@ public final class ChatController implements AutoCloseable {
                     + "and call planService.requestReview(reason) when ready.";
         }
         return "Phase changed to " + event.to() + ". Please proceed with the tasks in the new phase.";
+    }
+
+    private static String appendPreloadedReviewGitContext(String basePrompt, @Nullable GitService gitService) {
+        if (gitService == null) {
+            return basePrompt;
+        }
+        String status;
+        String diff;
+        try {
+            status = gitService.getStatus();
+            diff = gitService.getDiff();
+        } catch (Exception e) {
+            log.debug("Failed to pre-load git status/diff for REVIEW transition: {}", e.getMessage());
+            return basePrompt;
+        }
+        boolean validStatus = isValidGitOutput(status);
+        boolean validDiff = isValidGitOutput(diff);
+        if (!validStatus && !validDiff) {
+            return basePrompt;
+        }
+
+        StringBuilder sb = new StringBuilder(basePrompt);
+        sb.append("\n\n### Pre-Loaded Working Tree Status & Diff\n");
+        if (validStatus) {
+            sb.append("#### Git Status\n").append(CODE_FENCE).append('\n').append(status.trim()).append('\n')
+                    .append(CODE_FENCE).append('\n');
+        }
+        if (validDiff) {
+            String trimmedDiff = diff.trim();
+            if (trimmedDiff.length() > MAX_PRELOADED_REVIEW_DIFF_CHARS) {
+                trimmedDiff = trimmedDiff.substring(0, MAX_PRELOADED_REVIEW_DIFF_CHARS) + REVIEW_DIFF_TRUNCATION_NOTICE;
+            }
+            sb.append("#### Git Diff\n").append(CODE_FENCE).append("diff\n").append(trimmedDiff).append('\n')
+                    .append(CODE_FENCE);
+        }
+        return sb.toString();
+    }
+
+    private static boolean isValidGitOutput(String value) {
+        return StringUtils.isNotBlank(value) && !value.startsWith("Error") && !value.startsWith("Not a git repository")
+                && !value.startsWith("No active project");
     }
 
     private int resolveConfiguredContextWindowTokens() {

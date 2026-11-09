@@ -7,10 +7,14 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HexFormat;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+import org.roxycode.app.util.PathUtils;
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -38,6 +42,10 @@ final class BuildOutputParser {
     private static final String RG_BLOCK_SEPARATOR = "--";
     private static final String TAG_FAILURE = "failure";
     private static final String TAG_ERROR = "error";
+    private static final int MAX_ENRICHED_ERROR_LOCATIONS = 3;
+    private static final int ERROR_CONTEXT_PADDING = 5;
+    private static final Pattern ERROR_FILE_LINE_PATTERN = Pattern.compile(
+            "([A-Za-z0-9_./\\\\-]+\\.[A-Za-z0-9_]+)(?::\\[(\\d+)(?:,\\d+)?\\]|:(\\d+)(?::\\d+)?|\\((\\d+)(?:,\\d+)?\\))");
 
     private static final char COMMENT_CHAR = '#';
     private static final char DOUBLE_QUOTE_CHAR = '"';
@@ -290,6 +298,144 @@ final class BuildOutputParser {
         String block = sb.toString();
         if (!block.isEmpty() && !blocks.contains(block)) {
             blocks.add(block);
+        }
+    }
+
+    static List<String> enrichErrorsWithSourceContext(List<String> errors, Path projectRoot) {
+        if (errors == null || errors.isEmpty() || projectRoot == null || !Files.isDirectory(projectRoot)) {
+            if (errors == null) {
+                return List.of();
+            }
+            return errors;
+        }
+        Path normalizedRoot = projectRoot.toAbsolutePath().normalize();
+        Set<String> enrichedLocations = new LinkedHashSet<>();
+        List<String> enriched = new ArrayList<>(errors.size());
+
+        for (String errorBlock : errors) {
+            if (errorBlock == null || errorBlock.isBlank()
+                    || enrichedLocations.size() >= MAX_ENRICHED_ERROR_LOCATIONS) {
+                enriched.add(errorBlock);
+                continue;
+            }
+            enriched.add(enrichSingleErrorBlock(errorBlock, normalizedRoot, enrichedLocations));
+        }
+        return enriched;
+    }
+
+    private static String enrichSingleErrorBlock(String errorBlock, Path normalizedRoot,
+            Set<String> enrichedLocations) {
+        StringBuilder updatedBlock = new StringBuilder(errorBlock);
+        Matcher matcher = ERROR_FILE_LINE_PATTERN.matcher(errorBlock);
+        while (matcher.find() && enrichedLocations.size() < MAX_ENRICHED_ERROR_LOCATIONS) {
+            String rawPath = matcher.group(1);
+            int lineNumber = parseMatchedLineNumber(matcher);
+            if (lineNumber <= 0) {
+                continue;
+            }
+            Path resolvedFile = resolveProjectSourceFile(normalizedRoot, rawPath);
+            if (resolvedFile == null) {
+                continue;
+            }
+            String relPath = PathUtils.normalizeRelativePath(normalizedRoot.relativize(resolvedFile).toString());
+            String locationKey = relPath + ":" + lineNumber;
+            if (enrichedLocations.contains(locationKey)) {
+                continue;
+            }
+            String contextBlock = buildSourceContextAppendBlock(resolvedFile, relPath, lineNumber, updatedBlock);
+            if (contextBlock != null) {
+                updatedBlock.append(contextBlock);
+                enrichedLocations.add(locationKey);
+            }
+        }
+        return updatedBlock.toString();
+    }
+
+    private static int parseMatchedLineNumber(Matcher matcher) {
+        for (int groupIdx = 2; groupIdx <= 4; groupIdx++) {
+            String rawLine = matcher.group(groupIdx);
+            if (rawLine != null && !rawLine.isEmpty()) {
+                try {
+                    return Integer.parseInt(rawLine);
+                } catch (NumberFormatException ignored) {
+                    return -1;
+                }
+            }
+        }
+        return -1;
+    }
+
+    private static Path resolveProjectSourceFile(Path normalizedRoot, String rawPath) {
+        if (rawPath == null || rawPath.isBlank()) {
+            return null;
+        }
+        String cleaned = rawPath.trim().replace(BACKSLASH_CHAR, '/');
+        while (cleaned.startsWith("./")) {
+            cleaned = cleaned.substring(2);
+        }
+        try {
+            Path directCandidate = Path.of(cleaned);
+            if (directCandidate.isAbsolute()) {
+                Path normalizedCandidate = directCandidate.normalize();
+                if (normalizedCandidate.startsWith(normalizedRoot) && isReadableSourceFile(normalizedCandidate)) {
+                    return normalizedCandidate;
+                }
+                return resolveSuffixUnderRoot(normalizedRoot, cleaned);
+            }
+            Path relativeCandidate = normalizedRoot.resolve(cleaned).normalize();
+            if (relativeCandidate.startsWith(normalizedRoot) && isReadableSourceFile(relativeCandidate)) {
+                return relativeCandidate;
+            }
+            return resolveSuffixUnderRoot(normalizedRoot, cleaned);
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static Path resolveSuffixUnderRoot(Path normalizedRoot, String slashPath) {
+        int slashIdx = slashPath.indexOf('/');
+        while (slashIdx >= 0 && slashIdx + 1 < slashPath.length()) {
+            String subPath = slashPath.substring(slashIdx + 1);
+            if (!subPath.isEmpty() && !subPath.startsWith("/")) {
+                try {
+                    Path candidate = normalizedRoot.resolve(subPath).normalize();
+                    if (candidate.startsWith(normalizedRoot) && isReadableSourceFile(candidate)) {
+                        return candidate;
+                    }
+                } catch (Exception ignored) {
+                    // Try next path segment
+                }
+            }
+            slashIdx = slashPath.indexOf('/', slashIdx + 1);
+        }
+        return null;
+    }
+
+    private static boolean isReadableSourceFile(Path file) {
+        try {
+            return Files.isRegularFile(file) && !FileReadService.isBinaryFile(file);
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    private static String buildSourceContextAppendBlock(Path resolvedFile, String relPath, int lineNumber,
+            CharSequence existingErrorBlock) {
+        try {
+            List<String> lines = Files.readAllLines(resolvedFile);
+            if (lines.isEmpty() || lineNumber > lines.size()) {
+                return null;
+            }
+            int startLine = Math.max(1, lineNumber - ERROR_CONTEXT_PADDING);
+            int endLine = Math.min(lines.size(), lineNumber + ERROR_CONTEXT_PADDING);
+            String header = "--- Source Context (" + relPath + ":" + startLine + "-" + endLine + ") ---";
+            if (existingErrorBlock.toString().contains(header)) {
+                return null;
+            }
+            String snippet = FileReadService.formatNumberedLines(lines, startLine, endLine);
+            return "\n" + header + "\n" + snippet;
+        } catch (Exception e) {
+            return null;
         }
     }
 
