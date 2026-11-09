@@ -60,7 +60,10 @@ public final class ExceptionUtils {
     }
 
     public static CancellationException asCancellationException(Throwable t, String defaultMessage) {
-        Thread.currentThread().interrupt();
+        if (findCause(t, InterruptedException.class) != null || findCause(t, ClosedByInterruptException.class) != null
+                || findCause(t, JexlException.Cancel.class) != null) {
+            Thread.currentThread().interrupt();
+        }
         if (t instanceof CancellationException ce) {
             return ce;
         }

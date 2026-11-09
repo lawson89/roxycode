@@ -27,6 +27,7 @@ import org.roxycode.app.ai.services.BuildResult;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.FileReadService;
 import org.roxycode.app.ai.services.UserInputService;
+import org.roxycode.app.events.AgentActivityEvent;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.events.UserInputRequestEvent;
@@ -158,10 +159,13 @@ public class JexlToolTest {
         when(settingsService.getSettings()).thenReturn(settings);
 
         List<AgentTurnEvent> turnEvents = new ArrayList<>();
+        List<AgentActivityEvent> activityEvents = new ArrayList<>();
         List<ToolExecutionEvent> toolEvents = new ArrayList<>();
         JexlTool tool = new JexlTool(new JexlServiceRegistry(null, null), event -> {
             if (event instanceof AgentTurnEvent ate) {
                 turnEvents.add(ate);
+            } else if (event instanceof AgentActivityEvent aae) {
+                activityEvents.add(aae);
             } else if (event instanceof ToolExecutionEvent tee) {
                 toolEvents.add(tee);
             }
@@ -178,8 +182,12 @@ public class JexlToolTest {
         assertEquals(2, turnCounter.get());
         assertEquals(2, turnEvents.size());
         assertEquals(1, turnEvents.get(0).turnNumber());
+        assertEquals("1 + 1 (1 line)", turnEvents.get(0).scriptSummary());
         assertEquals(2, turnEvents.get(1).turnNumber());
+        assertEquals("2 + 2 (1 line)", turnEvents.get(1).scriptSummary());
         assertEquals("CODE", turnEvents.get(0).phase());
+        assertEquals(2, activityEvents.size());
+        assertEquals(new AgentActivityEvent("conv-1", "Analyzing tool output..."), activityEvents.get(0));
         assertEquals(2, toolEvents.size());
 
         String thirdTurnResult = tool.executeJexl("3 + 3", toolContext);

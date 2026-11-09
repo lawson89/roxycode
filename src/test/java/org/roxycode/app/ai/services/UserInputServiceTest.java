@@ -9,6 +9,8 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
@@ -63,68 +65,88 @@ class UserInputServiceTest {
 
     @Test
     void testConcurrentConversationsIsolationReplacementAndCancellation() throws Exception {
-        Map<String, UserInputRequestEvent> eventsByConv = new ConcurrentHashMap<>();
-        CountDownLatch bothPublished = new CountDownLatch(2);
+        try (ExecutorService executor = Executors.newCachedThreadPool();
+                ExecutorService singleThreadExecutor = Executors.newSingleThreadExecutor()) {
+            Map<String, UserInputRequestEvent> eventsByConv = new ConcurrentHashMap<>();
+            CountDownLatch bothPublished = new CountDownLatch(2);
 
-        UserInputService rootService = new UserInputService(event -> {
-            if (event instanceof UserInputRequestEvent uire) {
-                eventsByConv.put(uire.conversationId(), uire);
-                bothPublished.countDown();
-            }
-        });
-
-        UserInputService qaService = rootService.forConversation("qa:default");
-        UserInputService taskService = rootService.forConversation("task:default");
-
-        CompletableFuture<String> qaCall = CompletableFuture
-                .supplyAsync(() -> qaService.askText("QA question", "qa-default"));
-        CompletableFuture<Boolean> taskCall = CompletableFuture.supplyAsync(() -> taskService.confirm("Task question"));
-
-        assertTrue(bothPublished.await(5, TimeUnit.SECONDS));
-        assertNotNull(eventsByConv.get("qa:default"));
-        assertNotNull(eventsByConv.get("task:default"));
-
-        eventsByConv.get("qa:default").responseFuture().complete("qa-answer");
-        assertEquals("qa-answer", qaCall.get(5, TimeUnit.SECONDS));
-        assertFalse(taskCall.isDone());
-
-        assertTrue(rootService.cancelPendingRequest("task:default"));
-        assertFalse(rootService.cancelPendingRequest("task:default"));
-        assertFalse(rootService.cancelPendingRequest("   "));
-
-        ExecutionExceptionWrapper taskFailure = captureFailure(taskCall);
-        assertInstanceOf(CancellationException.class, taskFailure.cause());
-
-        // Starting a new request on the same conversation cancels the previous in-flight future
-        CountDownLatch firstPublished = new CountDownLatch(1);
-        CountDownLatch secondPublished = new CountDownLatch(1);
-        AtomicReference<UserInputRequestEvent> firstEventRef = new AtomicReference<>();
-        AtomicReference<UserInputRequestEvent> secondEventRef = new AtomicReference<>();
-
-        UserInputService replaceRoot = new UserInputService(event -> {
-            if (event instanceof UserInputRequestEvent uire) {
-                if (firstEventRef.compareAndSet(null, uire)) {
-                    firstPublished.countDown();
-                } else {
-                    secondEventRef.set(uire);
-                    secondPublished.countDown();
+            UserInputService rootService = new UserInputService(event -> {
+                if (event instanceof UserInputRequestEvent uire) {
+                    eventsByConv.put(uire.conversationId(), uire);
+                    bothPublished.countDown();
                 }
-            }
-        });
-        UserInputService replaceScoped = replaceRoot.forConversation("conv-1");
-        CompletableFuture<String> firstCall = CompletableFuture
-                .supplyAsync(() -> replaceScoped.askText("First question"));
-        assertTrue(firstPublished.await(5, TimeUnit.SECONDS));
+            });
 
-        CompletableFuture<String> secondCall = CompletableFuture
-                .supplyAsync(() -> replaceScoped.askText("Second question"));
-        assertTrue(secondPublished.await(5, TimeUnit.SECONDS));
+            UserInputService qaService = rootService.forConversation("qa:default");
+            UserInputService taskService = rootService.forConversation("task:default");
 
-        assertTrue(firstEventRef.get().responseFuture().isCancelled());
-        assertInstanceOf(CancellationException.class, captureFailure(firstCall).cause());
+            CompletableFuture<String> qaCall = CompletableFuture
+                    .supplyAsync(() -> qaService.askText("QA question", "qa-default"), executor);
+            CompletableFuture<Boolean> taskCall = CompletableFuture
+                    .supplyAsync(() -> taskService.confirm("Task question"), singleThreadExecutor);
 
-        replaceRoot.cancelAllPendingRequests();
-        assertInstanceOf(CancellationException.class, captureFailure(secondCall).cause());
+            assertTrue(bothPublished.await(5, TimeUnit.SECONDS));
+            assertNotNull(eventsByConv.get("qa:default"));
+            assertNotNull(eventsByConv.get("task:default"));
+
+            eventsByConv.get("qa:default").responseFuture().complete("qa-answer");
+            assertEquals("qa-answer", qaCall.get(5, TimeUnit.SECONDS));
+            assertFalse(taskCall.isDone());
+
+            assertTrue(rootService.cancelPendingRequest("task:default"));
+            assertFalse(rootService.cancelPendingRequest("task:default"));
+            assertFalse(rootService.cancelPendingRequest("   "));
+
+            ExecutionExceptionWrapper taskFailure = captureFailure(taskCall);
+            assertInstanceOf(CancellationException.class, taskFailure.cause());
+
+            // Verify that cancelling a request on singleThreadExecutor did not poison that worker's interrupt flag
+            CountDownLatch reusedThreadPublished = new CountDownLatch(1);
+            AtomicReference<UserInputRequestEvent> reusedThreadEventRef = new AtomicReference<>();
+            UserInputService reuseRoot = new UserInputService(event -> {
+                if (event instanceof UserInputRequestEvent uire) {
+                    reusedThreadEventRef.set(uire);
+                    reusedThreadPublished.countDown();
+                }
+            });
+            UserInputService reuseScoped = reuseRoot.forConversation("task:default");
+            CompletableFuture<String> reusedThreadCall = CompletableFuture
+                    .supplyAsync(() -> reuseScoped.askText("Follow-up after cancel"), singleThreadExecutor);
+            assertTrue(reusedThreadPublished.await(5, TimeUnit.SECONDS));
+            reusedThreadEventRef.get().responseFuture().complete("follow-up-ok");
+            assertEquals("follow-up-ok", reusedThreadCall.get(5, TimeUnit.SECONDS));
+
+            // Starting a new request on the same conversation cancels the previous in-flight future
+            CountDownLatch firstPublished = new CountDownLatch(1);
+            CountDownLatch secondPublished = new CountDownLatch(1);
+            AtomicReference<UserInputRequestEvent> firstEventRef = new AtomicReference<>();
+            AtomicReference<UserInputRequestEvent> secondEventRef = new AtomicReference<>();
+
+            UserInputService replaceRoot = new UserInputService(event -> {
+                if (event instanceof UserInputRequestEvent uire) {
+                    if (firstEventRef.compareAndSet(null, uire)) {
+                        firstPublished.countDown();
+                    } else {
+                        secondEventRef.set(uire);
+                        secondPublished.countDown();
+                    }
+                }
+            });
+            UserInputService replaceScoped = replaceRoot.forConversation("conv-1");
+            CompletableFuture<String> firstCall = CompletableFuture
+                    .supplyAsync(() -> replaceScoped.askText("First question"), executor);
+            assertTrue(firstPublished.await(5, TimeUnit.SECONDS));
+
+            CompletableFuture<String> secondCall = CompletableFuture
+                    .supplyAsync(() -> replaceScoped.askText("Second question"), executor);
+            assertTrue(secondPublished.await(5, TimeUnit.SECONDS));
+
+            assertTrue(firstEventRef.get().responseFuture().isCancelled());
+            assertInstanceOf(CancellationException.class, captureFailure(firstCall).cause());
+
+            replaceRoot.cancelAllPendingRequests();
+            assertInstanceOf(CancellationException.class, captureFailure(secondCall).cause());
+        }
     }
 
     @Test

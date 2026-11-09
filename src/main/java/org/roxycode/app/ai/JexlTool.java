@@ -13,10 +13,12 @@ import org.apache.commons.jexl3.JexlScript;
 import org.apache.commons.jexl3.MapContext;
 import org.apache.commons.jexl3.introspection.JexlUberspect;
 import org.jspecify.annotations.Nullable;
+import org.roxycode.app.events.AgentActivityEvent;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.service.SettingsService;
+import org.roxycode.app.ui.ChatHtmlTemplates;
 import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,8 +77,10 @@ public class JexlTool {
         }
 
         int currentTurn = ctx.turnCounter().incrementAndGet();
+        String scriptSummary = ChatHtmlTemplates.summarizeToolScript(script);
         if (eventPublisher != null) {
-            eventPublisher.publishEvent(new AgentTurnEvent(conversationId, AGENT_NAME, currentTurn, phase.name()));
+            eventPublisher.publishEvent(
+                    new AgentTurnEvent(conversationId, AGENT_NAME, currentTurn, phase.name(), scriptSummary));
         }
 
         log.info("Executing JEXL script in phase {} (turn {}/{}): {}", phase, currentTurn, maxTurns, script);
@@ -87,22 +91,24 @@ public class JexlTool {
         JexlContext context = new MapContext(bindings);
         JexlEngine jexl = createEngine(context);
 
-        JexlScript jexlScript;
+        boolean cancelled = false;
         try {
-            jexlScript = jexl.createScript(script);
-        } catch (Exception e) {
-            log.warn("JEXL Syntax Error intercepted: {}", e.getMessage());
-            publishToolEvent(conversationId, script, null, false, "Syntax Error: " + e.getMessage());
-            return toJsonError("Syntax Error (Script not executed): " + e.getMessage());
-        }
+            JexlScript jexlScript;
+            try {
+                jexlScript = jexl.createScript(script);
+            } catch (Exception e) {
+                log.warn("JEXL Syntax Error intercepted: {}", e.getMessage());
+                publishToolEvent(conversationId, script, null, false, "Syntax Error: " + e.getMessage());
+                return toJsonError("Syntax Error (Script not executed): " + e.getMessage());
+            }
 
-        try {
             Object result = jexlScript.execute(context);
             ExceptionUtils.checkInterrupted("JEXL execution cancelled");
             publishToolEvent(conversationId, script, result, true, null);
             return serializeResult(result);
         } catch (Exception e) {
             if (ExceptionUtils.isCancellation(e)) {
+                cancelled = true;
                 try {
                     publishToolEvent(conversationId, script, null, false, "Execution cancelled");
                 } catch (Exception ignored) {
@@ -114,6 +120,10 @@ public class JexlTool {
             String error = ExceptionUtils.getMessageOrSimpleName(cause);
             publishToolEvent(conversationId, script, null, false, error);
             return toJsonError(error);
+        } finally {
+            if (!cancelled && !Thread.currentThread().isInterrupted() && eventPublisher != null) {
+                eventPublisher.publishEvent(new AgentActivityEvent(conversationId, "Analyzing tool output..."));
+            }
         }
     }
 

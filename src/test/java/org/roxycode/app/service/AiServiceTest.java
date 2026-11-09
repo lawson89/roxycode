@@ -35,6 +35,7 @@ import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.TurnToolContext;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
+import org.roxycode.app.events.AgentActivityEvent;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.TokenUsageEvent;
@@ -408,12 +409,19 @@ class AiServiceTest {
         ArgumentCaptor<Object> publishedEvents = ArgumentCaptor.forClass(Object.class);
         verify(eventPublisher, atLeastOnce()).publishEvent(publishedEvents.capture());
         TokenUsageEvent usageEvent = null;
+        List<AgentActivityEvent> activityEvents = new ArrayList<>();
         for (Object ev : publishedEvents.getAllValues()) {
             if (ev instanceof TokenUsageEvent tue) {
                 usageEvent = tue;
+            } else if (ev instanceof AgentActivityEvent aae) {
+                activityEvents.add(aae);
             }
         }
         assertNotNull(usageEvent);
+        assertTrue(activityEvents.stream()
+                .anyMatch(e -> "qa:default".equals(e.conversationId()) && e.statusText().startsWith("Thinking with ")));
+        assertTrue(activityEvents.stream().anyMatch(e -> "qa:default".equals(e.conversationId())
+                && e.statusText().contains("retrying model call (attempt 2)")));
         assertEquals("qa:default", usageEvent.conversationId());
         assertEquals(10_000, usageEvent.promptTokens());
         assertEquals(8_000, usageEvent.cachedInputTokens());

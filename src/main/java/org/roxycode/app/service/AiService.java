@@ -12,6 +12,7 @@ import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.TurnToolContext;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
+import org.roxycode.app.events.AgentActivityEvent;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.TokenUsageEvent;
@@ -291,16 +292,39 @@ public class AiService implements AutoCloseable {
 
         @Override
         public ChatClientResponse adviseCall(ChatClientRequest chatClientRequest, CallAdvisorChain callAdvisorChain) {
+            String conversationId = resolveConversationId(chatClientRequest);
+            String modelName = resolveRequestModelName(chatClientRequest);
+            AtomicInteger attemptCounter = new AtomicInteger(0);
             ChatClientResponse response = RetryUtils.execute(retryTemplate, () -> {
                 ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
-                return callAdvisorChain.copy(this).nextCall(chatClientRequest);
+                int retryCount = attemptCounter.getAndIncrement();
+                if (retryCount == 0) {
+                    publishActivity(conversationId, "Thinking with " + modelName + "...");
+                } else {
+                    publishActivity(conversationId,
+                            "Transient API error — retrying model call (attempt " + (retryCount + 1) + ")...");
+                }
+                try {
+                    return callAdvisorChain.copy(this).nextCall(chatClientRequest);
+                } catch (RuntimeException ex) {
+                    if (AiConfig.isTransientAiError(ex)) {
+                        publishActivity(conversationId,
+                                "Transient API error — backing off before retry (attempt " + (retryCount + 2) + ")...");
+                    }
+                    throw ex;
+                }
             });
             if (response != null) {
-                publishTokenUsageIfPresent(resolveConversationId(chatClientRequest),
-                        resolveRequestModelName(chatClientRequest), resolveWorkflowPhase(chatClientRequest),
+                publishTokenUsageIfPresent(conversationId, modelName, resolveWorkflowPhase(chatClientRequest),
                         response.chatResponse());
             }
             return response;
+        }
+    }
+
+    private void publishActivity(String conversationId, String statusText) {
+        if (eventPublisher != null && StringUtils.isNotBlank(statusText)) {
+            eventPublisher.publishEvent(new AgentActivityEvent(StringUtils.defaultString(conversationId), statusText));
         }
     }
 

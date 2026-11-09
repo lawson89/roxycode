@@ -17,6 +17,7 @@ import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.UserInputService;
+import org.roxycode.app.events.AgentActivityEvent;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.AgentTurnEvent;
 import org.roxycode.app.events.ArchiveUpdatedEvent;
@@ -63,6 +64,7 @@ public final class ChatController implements AutoCloseable {
     static final String ROLE_USER = ChatHtmlTemplates.ROLE_USER;
     static final String ROLE_AI = ChatHtmlTemplates.ROLE_AI;
     static final String IMAGE_REQUIRES_TEXT_MESSAGE = "Please enter a prompt message to accompany the attached image.";
+    static final String INITIAL_ACTIVITY_STATUS = "Preparing prompt Context & Repo Map...";
     private static final String BT = "`";
     public record PersistedMemoryMessage(String type, String text) {
     }
@@ -386,6 +388,7 @@ public final class ChatController implements AutoCloseable {
         activeTurnId = turnId;
 
         view.setLoading(true);
+        view.updateActivityStatus(INITIAL_ACTIVITY_STATUS);
         model.setCurrentTurn(0);
         view.updateTurnLabel();
 
@@ -744,6 +747,31 @@ public final class ChatController implements AutoCloseable {
             if (!model.isTurnCancelled()) {
                 model.setCurrentTurn(event.turnNumber());
                 view.updateTurnLabel();
+                String summary = StringUtils.trimToEmpty(event.scriptSummary());
+                if (summary.isEmpty()) {
+                    view.updateActivityStatus("Running tool (Turn " + event.turnNumber() + ")...");
+                } else {
+                    view.updateActivityStatus("Running tool (Turn " + event.turnNumber() + "): " + summary);
+                }
+            }
+        });
+    }
+
+    @EventListener
+    public void onAgentActivity(AgentActivityEvent event) {
+        if (event == null || StringUtils.isBlank(event.statusText())) {
+            return;
+        }
+        if ((!isTurnActive() && !view.isLoading()) || model.isTurnCancelled()) {
+            return;
+        }
+        String eventConvId = StringUtils.trimToEmpty(event.conversationId());
+        if (!eventConvId.isEmpty() && !isMatchingActiveTurnEvent(eventConvId)) {
+            return;
+        }
+        Edt.run(() -> {
+            if ((isTurnActive() || view.isLoading()) && !model.isTurnCancelled()) {
+                view.updateActivityStatus(event.statusText());
             }
         });
     }

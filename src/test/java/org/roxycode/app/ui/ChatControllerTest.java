@@ -35,6 +35,7 @@ import javax.swing.border.CompoundBorder;
 import javax.swing.border.MatteBorder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.kordamp.ikonli.Ikon;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.AiConfig;
@@ -412,18 +413,49 @@ class ChatControllerTest extends ChatTestFixture {
                 .valueOf(chatPanel.inputArea.getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT));
         assertContainsAll(workingPlaceholder, "Roxy is working", "Press Esc or click Stop to cancel");
 
+        assertTrue(chatPanel.activityStripPanel.isVisible());
+        assertTrue(chatPanel.activityAnimationTimer.isRunning());
+        assertTrue(chatPanel.activityElapsedTimer.isRunning());
+        assertEquals("0:08", ChatPanel.formatElapsedSeconds(8));
+        assertEquals("1:14", ChatPanel.formatElapsedSeconds(74));
+        Ikon initialIcon = chatPanel.activityIcon.getIkon();
+        chatPanel.advanceActivityIconFrame();
+        assertNotEquals(initialIcon, chatPanel.activityIcon.getIkon());
+        chatPanel.updateElapsedTimeLabel();
+
         ImplementationPlan plan = samplePlan(new ImplementationPlan.TechStep("Step 0", true),
                 new ImplementationPlan.TechStep("Step 1", false));
         when(planService.getCurrentPlan()).thenReturn(plan);
-        chatPanel.controller.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 2, "CODE"));
+        chatPanel.controller.onAgentTurn(
+                new AgentTurnEvent("task:default", "Roxy", 2, "CODE", "fileReadService.readFiles (1 line)"));
         flushEdt();
         assertEquals("Turn 2/5 • 1/2 steps", chatPanel.telemetryBar.turnLabel.getText());
+        assertEquals("Running tool (Turn 2): fileReadService.readFiles (1 line)", chatPanel.getActivityStatusText());
         assertContainsAll(String.valueOf(chatPanel.inputArea.getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT)),
                 "Turn 2/5 • 1/2 steps");
+
+        chatPanel.controller.activeTurnId = 1L;
+        chatPanel.controller
+                .onAgentActivity(new AgentActivityEvent("task:default", "Thinking with gemini-3.1-pro-preview..."));
+        flushEdt();
+        assertEquals("Thinking with gemini-3.1-pro-preview...", chatPanel.getActivityStatusText());
+
+        chatPanel.controller
+                .onAgentActivity(new AgentActivityEvent("", "Running build command (test_all): ./mvnw test"));
+        flushEdt();
+        assertEquals("Running build command (test_all): ./mvnw test", chatPanel.getActivityStatusText());
+
+        chatPanel.controller.onAgentActivity(new AgentActivityEvent("qa:default", "Should be ignored by task panel"));
+        flushEdt();
+        assertEquals("Running build command (test_all): ./mvnw test", chatPanel.getActivityStatusText());
 
         SwingTestUtils.runOnEdt(() -> chatPanel.getActionMap().get("stop-active-turn").actionPerformed(null));
         flushEdt();
         assertFalse(chatPanel.isLoading());
+        assertFalse(chatPanel.activityStripPanel.isVisible());
+        assertFalse(chatPanel.activityAnimationTimer.isRunning());
+        assertFalse(chatPanel.activityElapsedTimer.isRunning());
+        assertEquals("", chatPanel.getActivityStatusText());
         assertTrue(chatPanel.sendButton.isVisible());
         assertTrue(chatPanel.approveButton.isEnabled());
         assertEquals(ChatPanel.DEFAULT_PLACEHOLDER_TEXT,

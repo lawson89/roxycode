@@ -34,7 +34,22 @@ class ExceptionUtilsTest {
 
         assertTrue(ExceptionUtils.isCancellation(new RuntimeException(new InterruptedException("sleep interrupted"))));
 
+        CancellationException directCancel = new CancellationException("Future cancelled");
+        CancellationException wrappedCancel = assertThrows(CancellationException.class,
+                () -> ExceptionUtils.rethrowIfCancelled(new RuntimeException(directCancel), "Fallback message"));
+        assertEquals("Future cancelled", wrappedCancel.getMessage());
+        assertFalse(Thread.currentThread().isInterrupted());
+
+        assertSame(directCancel, ExceptionUtils.asCancellationException(directCancel, "Fallback message"));
+        assertFalse(Thread.currentThread().isInterrupted());
+
         try {
+            CancellationException interruptedEx = ExceptionUtils
+                    .asCancellationException(new InterruptedException("sleep interrupted"), "Interrupted default");
+            assertEquals("Interrupted default", interruptedEx.getMessage());
+            assertTrue(Thread.currentThread().isInterrupted());
+            Thread.interrupted();
+
             CancellationException thrown = assertThrows(CancellationException.class,
                     () -> ExceptionUtils.rethrowIfCancelled(new ClosedByInterruptException(), "Channel cancelled"));
             assertEquals("Channel cancelled", thrown.getMessage());

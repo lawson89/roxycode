@@ -31,6 +31,7 @@ import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerExecResult;
 import org.roxycode.app.ai.services.BuildContainerService.SandboxConfig;
 import org.roxycode.app.ai.services.BuildContainerService.SandboxMode;
+import org.roxycode.app.events.AgentActivityEvent;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.ImplementationPlan;
@@ -366,6 +367,10 @@ public class GenericBuildToolService {
             }
             if (!placeholders.isEmpty()) {
                 command = new StringSubstitutor(placeholders, "{", "}").replace(command);
+            }
+            if (eventPublisher != null) {
+                eventPublisher.publishEvent(new AgentActivityEvent("",
+                        "Running build command (" + commandLabel + "): " + StringUtils.abbreviate(command.trim(), 60)));
             }
             ParseSection parseSection = config.parse();
             Map<String, String> env = config.env();

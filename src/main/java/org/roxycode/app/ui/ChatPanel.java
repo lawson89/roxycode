@@ -24,6 +24,7 @@ import javax.swing.text.DefaultEditorKit;
 import javax.swing.undo.UndoManager;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
+import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.GrepService;
@@ -60,6 +61,10 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     private static final String TOOLBAR_BUTTON_STYLE = "arc: 8; font: -1; foreground: $Label.disabledForeground";
     private static final String GROW_FILL_COL = "[grow, fill]";
     static final int THUMBNAIL_SIZE = 64;
+    private static final int ACTIVITY_ANIMATION_DELAY_MS = 500;
+    private static final int ACTIVITY_ELAPSED_DELAY_MS = 1000;
+    private static final FontAwesomeSolid[] HOURGLASS_FRAMES = {FontAwesomeSolid.HOURGLASS_START,
+            FontAwesomeSolid.HOURGLASS_HALF, FontAwesomeSolid.HOURGLASS_END};
 
     public record NewTopicChoice(boolean proceed, boolean saveTopic, String topicName) {
     }
@@ -78,6 +83,14 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     JButton resetSessionButton;
     final JPanel inlineActionPanel;
     final ChatPromptBanner userInputPromptPanel;
+    final JPanel activityStripPanel;
+    JLabel activityStatusLabel;
+    JLabel activityElapsedLabel;
+    transient FontIcon activityIcon;
+    Timer activityAnimationTimer;
+    Timer activityElapsedTimer;
+    private int activityIconFrameIndex;
+    private long turnStartMillis;
     JLabel transitionLabel;
     final transient ChatTelemetryBar telemetryBar;
     private JScrollPane outputScrollPane;
@@ -148,6 +161,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
         this.inlineActionPanel = createInlineActionPanel();
         this.userInputPromptPanel = new ChatPromptBanner();
+        this.activityStripPanel = createActivityStripPanel();
         this.telemetryBar = new ChatTelemetryBar(getFont());
         Component topComponent = createOutputSection(isTaskMode);
         JPanel inputSection = createInputSection(isTaskMode);
@@ -215,6 +229,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         JPanel southPanel = new JPanel(new BorderLayout());
         southPanel.setOpaque(false);
         southPanel.add(userInputPromptPanel, BorderLayout.NORTH);
+        southPanel.add(activityStripPanel, BorderLayout.CENTER);
         if (isTaskMode) {
             southPanel.add(inlineActionPanel, BorderLayout.SOUTH);
         }
@@ -341,8 +356,112 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         }
     }
 
+    private JPanel createActivityStripPanel() {
+        JPanel panel = new JPanel(new MigLayout("insets 6 14 6 14, fillx", "[]8[grow, fill]12[]", "center"));
+        panel.setVisible(false);
+
+        activityIcon = FontIcon.of(HOURGLASS_FRAMES[0], 13, SwingHtmlUtils.getAccentColor());
+        activityStatusLabel = new JLabel("");
+        activityStatusLabel.setIcon(activityIcon);
+        activityStatusLabel.setIconTextGap(8);
+        activityStatusLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
+
+        activityElapsedLabel = new JLabel("0:00");
+        activityElapsedLabel.putClientProperty(FlatClientProperties.STYLE,
+                "font: -1; foreground: $Label.disabledForeground");
+
+        panel.add(activityStatusLabel, "growx, wmin 0");
+        panel.add(activityElapsedLabel, " right");
+
+        activityAnimationTimer = new Timer(ACTIVITY_ANIMATION_DELAY_MS, e -> advanceActivityIconFrame());
+        activityElapsedTimer = new Timer(ACTIVITY_ELAPSED_DELAY_MS, e -> updateElapsedTimeLabel());
+        applyActivityStripStyling(panel);
+        return panel;
+    }
+
+    private void applyActivityStripStyling(JPanel panel) {
+        Color accent = SwingHtmlUtils.getAccentColor();
+        panel.setOpaque(true);
+        panel.setBackground(SwingHtmlUtils.getTintedBackground(accent, 0.08));
+        panel.setBorder(BorderFactory.createCompoundBorder(SwingHtmlUtils.createThemeMatteBorder(1, 0, 0, 0),
+                BorderFactory.createEmptyBorder(0, 0, 0, 0)));
+        if (activityIcon != null) {
+            activityIcon.setIconColor(accent);
+        }
+    }
+
+    void advanceActivityIconFrame() {
+        if (!loading || activityIcon == null) {
+            stopActivityTimers();
+            return;
+        }
+        activityIconFrameIndex = (activityIconFrameIndex + 1) % HOURGLASS_FRAMES.length;
+        activityIcon.setIkon(HOURGLASS_FRAMES[activityIconFrameIndex]);
+        activityStripPanel.repaint();
+    }
+
+    void updateElapsedTimeLabel() {
+        if (!loading) {
+            return;
+        }
+        long elapsedSeconds = Math.max(0L, (System.currentTimeMillis() - turnStartMillis) / 1000L);
+        activityElapsedLabel.setText(formatElapsedSeconds(elapsedSeconds));
+    }
+
+    static String formatElapsedSeconds(long elapsedSeconds) {
+        long safeSeconds = Math.max(0L, elapsedSeconds);
+        long minutes = safeSeconds / 60L;
+        long seconds = safeSeconds % 60L;
+        return String.format("%d:%02d", minutes, seconds);
+    }
+
+    private void startActivityTimers() {
+        turnStartMillis = System.currentTimeMillis();
+        activityIconFrameIndex = 0;
+        if (activityIcon != null) {
+            activityIcon.setIkon(HOURGLASS_FRAMES[0]);
+        }
+        activityElapsedLabel.setText("0:00");
+        activityStripPanel.setVisible(true);
+        if (activityAnimationTimer != null && !activityAnimationTimer.isRunning()) {
+            activityAnimationTimer.start();
+        }
+        if (activityElapsedTimer != null && !activityElapsedTimer.isRunning()) {
+            activityElapsedTimer.start();
+        }
+    }
+
+    private void stopActivityTimers() {
+        if (activityAnimationTimer != null && activityAnimationTimer.isRunning()) {
+            activityAnimationTimer.stop();
+        }
+        if (activityElapsedTimer != null && activityElapsedTimer.isRunning()) {
+            activityElapsedTimer.stop();
+        }
+    }
+
+    void updateActivityStatus(String statusText) {
+        String text = Objects.requireNonNullElse(statusText, "").trim();
+        activityStatusLabel.setText(text);
+        if (text.isEmpty()) {
+            activityStatusLabel.setToolTipText(null);
+        } else {
+            activityStatusLabel.setToolTipText(text);
+        }
+        if (loading && !text.isEmpty() && !activityStripPanel.isVisible()) {
+            activityStripPanel.setVisible(true);
+        }
+        activityStripPanel.revalidate();
+        activityStripPanel.repaint();
+    }
+
+    String getActivityStatusText() {
+        return activityStatusLabel.getText();
+    }
+
     @Override
     public void removeNotify() {
+        stopActivityTimers();
         if (controller != null) {
             controller.closeOwnedExecutor();
         }
@@ -378,6 +497,9 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         }
         UiComponents.refreshActionButtonIcons(inlineActionPanel);
         userInputPromptPanel.applyThemeStyling();
+        if (activityStripPanel != null) {
+            applyActivityStripStyling(activityStripPanel);
+        }
     }
 
     private void updateOutputScrollPaneBorder() {
@@ -627,7 +749,13 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         }
         if (loading) {
             sendButton.setText("Sending...");
+            startActivityTimers();
         } else {
+            stopActivityTimers();
+            activityStripPanel.setVisible(false);
+            activityStatusLabel.setText("");
+            activityStatusLabel.setToolTipText(null);
+            activityElapsedLabel.setText("0:00");
             SwingUtilities.invokeLater(inputArea::requestFocusInWindow);
             sendButton.setText("Send");
         }
