@@ -14,6 +14,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.atomic.AtomicLong;
 import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
@@ -223,7 +224,61 @@ public final class ChatController implements AutoCloseable {
         view.appendMessage(ROLE_USER, text, thumbnailBase64List);
         persistActiveChatSession();
         view.clearInputText();
+
+        if (text.startsWith("/rem-p ") || text.startsWith("/rem-g ")) {
+            handleMemoryCommand(text, text.startsWith("/rem-g "));
+            return;
+        }
+
         triggerTurn(text, pendingImages);
+    }
+
+    private void handleMemoryCommand(String text, boolean global) {
+        if (memoryService == null) {
+            view.appendMessage(ROLE_SYSTEM, "Memory service is not available.");
+            return;
+        }
+
+        String prefix = "/rem-p ";
+        if (global) {
+            prefix = "/rem-g ";
+        }
+
+        String content = text.substring(prefix.length()).trim();
+        if (content.isEmpty()) {
+            view.appendMessage(ROLE_SYSTEM, "Please provide content to remember. Usage: " + prefix + "<text>");
+            return;
+        }
+
+        String current;
+        if (global) {
+            current = memoryService.readGlobalMemory();
+        } else {
+            current = memoryService.readProjectMemory();
+        }
+
+        String newContent = content;
+        if (!current.isEmpty()) {
+            newContent = current + "\n" + content;
+        }
+
+        EditorResult result;
+        if (global) {
+            result = memoryService.updateGlobalMemory(newContent);
+        } else {
+            result = memoryService.updateProjectMemory(newContent);
+        }
+
+        if (result.success()) {
+            String scope = "Project";
+            if (global) {
+                scope = "Global";
+            }
+            view.appendMessage(ROLE_SYSTEM, scope + " memory updated successfully.");
+            persistActiveChatSession();
+        } else {
+            view.appendMessage(ROLE_SYSTEM, "Failed to update memory: " + result.errorHint());
+        }
     }
 
     private boolean cancelActiveTurnState(boolean markCancelled) {

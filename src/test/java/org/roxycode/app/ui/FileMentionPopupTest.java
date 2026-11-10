@@ -14,22 +14,25 @@ import org.junit.jupiter.api.Test;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.ui.FileMentionPopup.FileCandidate;
+import org.roxycode.app.ui.FileMentionPopup.MentionItem;
 import org.roxycode.app.ui.FileMentionPopup.MentionToken;
 
 class FileMentionPopupTest {
 
     @Test
     void testExtractMentionTokenAndRejectInvalidCases() {
-        assertEquals(new MentionToken(0, 1, ""), FileMentionPopup.extractMentionToken("@", 1));
-        assertEquals(new MentionToken(0, 6, "ChatP"), FileMentionPopup.extractMentionToken("@ChatP", 6));
+        assertEquals(new MentionToken(0, 1, "", '@'), FileMentionPopup.extractMentionToken("@", 1));
+        assertEquals(new MentionToken(0, 6, "ChatP", '@'), FileMentionPopup.extractMentionToken("@ChatP", 6));
+        assertEquals(new MentionToken(0, 1, "", '/'), FileMentionPopup.extractMentionToken("/", 1));
+        assertEquals(new MentionToken(0, 5, "rem-", '/'), FileMentionPopup.extractMentionToken("/rem-", 5));
 
         String sentence = "Please inspect @src/main/ChatPanel.java for details";
         int caretAfterPath = "Please inspect @src/main/ChatPanel.java".length();
-        assertEquals(new MentionToken(15, caretAfterPath, "src/main/ChatPanel.java"),
+        assertEquals(new MentionToken(15, caretAfterPath, "src/main/ChatPanel.java", '@'),
                 FileMentionPopup.extractMentionToken(sentence, caretAfterPath));
 
         String multiLine = "First line\n@Pom";
-        assertEquals(new MentionToken(11, multiLine.length(), "Pom"),
+        assertEquals(new MentionToken(11, multiLine.length(), "Pom", '@'),
                 FileMentionPopup.extractMentionToken(multiLine, multiLine.length()));
 
         assertNull(FileMentionPopup.extractMentionToken("user@example.com", 16));
@@ -61,17 +64,25 @@ class FileMentionPopupTest {
         assertEquals(
                 List.of("src/ui/ChatPanel.java", "src/ui/ChatPanelTest.java", "src/ui/MyChatView.java",
                         "src/ui/WechatHelper.java", "docs/chat_notes/guide.md"),
-                FileMentionPopup.rankCandidates(index, "chat").stream().map(FileCandidate::relativePath).toList());
+                FileMentionPopup.rankCandidates(index, new MentionToken(0, 4, "chat", '@')).stream()
+                        .filter(m -> m instanceof FileCandidate).map(m -> ((FileCandidate) m).relativePath()).toList());
 
         List<FileCandidate> manyFiles = new ArrayList<>();
         for (int i = 25; i >= 1; i--) {
             manyFiles.add(FileCandidate.fromPath(String.format("src/File%02d.java", i)));
         }
-        List<FileCandidate> emptyQueryRanked = FileMentionPopup.rankCandidates(manyFiles, "");
+        List<MentionItem> emptyQueryRanked = FileMentionPopup.rankCandidates(manyFiles,
+                new MentionToken(0, 0, "", '@'));
         assertEquals(FileMentionPopup.MAX_RESULTS, emptyQueryRanked.size());
-        assertEquals("src/File01.java", emptyQueryRanked.get(0).relativePath());
-        assertEquals("src/File15.java", emptyQueryRanked.get(14).relativePath());
-        assertEquals(FileMentionPopup.MAX_RESULTS, FileMentionPopup.rankCandidates(manyFiles, "File").size());
+        assertEquals("src/File01.java", ((FileCandidate) emptyQueryRanked.get(0)).relativePath());
+        assertEquals("src/File15.java", ((FileCandidate) emptyQueryRanked.get(14)).relativePath());
+        assertEquals(FileMentionPopup.MAX_RESULTS,
+                FileMentionPopup.rankCandidates(manyFiles, new MentionToken(0, 4, "File", '@')).size());
+
+        List<MentionItem> commands = FileMentionPopup.rankCandidates(null, new MentionToken(0, 1, "rem", '/'));
+        assertEquals(2, commands.size());
+        assertEquals("/rem-p ", commands.get(0).replacement());
+        assertEquals("/rem-g ", commands.get(1).replacement());
     }
 
     @Test
