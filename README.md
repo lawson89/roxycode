@@ -57,10 +57,10 @@ RoxyCode checks for the following CLI tools on startup (and provides a **System 
 
 - **Java 21+** (JDK 21 is required to build and run RoxyCode)
 - **Ripgrep (`rg`)**: Fast text and file search
-- **Git (`git`)**: Version control inspection and diff auditing
 - **Universal Ctags (`ctags`)**: JSON-capable ctags binary for symbol outlines and repository map generation
 
 ### Optional Tools
+- **Git (`git`)**: Version control inspection, branch status, and diff auditing (`gitService` gracefully disables itself if Git is not installed).
 - **Bubblewrap (`bwrap`)** (Linux) or **Seatbelt (`sandbox-exec`)** (macOS): Used when native OS build sandboxing is enabled (`[sandbox] mode = "native"` in `build.toml`).
 - **Docker**: Required only if you enable Docker container-isolated builds (`[sandbox] mode = "docker"` in `build.toml`).
 
@@ -116,10 +116,12 @@ RoxyCode stores user settings, caches, memory, and per-project metadata under `~
 │   └── notes/                   # Global topic notes (*.md)
 └── projects/
     └── <project-name>-<hash>/
-        ├── project.toml         # Per-project model, thinking level, and build confirmation state
-        ├── build.toml           # Project build/test/lint/format commands and sandbox settings
-        ├── context.toml         # Project-scoped context folder paths
-        ├── tmp/repo_cache.txt   # Cached repository map snapshot
+        ├── project.toml             # Per-project model, thinking level, and build confirmation state
+        ├── build.toml               # Project build/test/lint/format commands and sandbox settings
+        ├── context.toml             # Project-scoped context and reference folder paths
+        ├── active-workflow.json     # Persisted active implementation plan and workflow phase state
+        ├── active-chat-*.json       # Persisted active chat transcripts, memory, and token telemetry
+        ├── tmp/build.log            # Latest build/test command output log for error extraction
         ├── memory/
         │   ├── MEMORY.md        # Pinned project memory cheat-sheet
         │   └── notes/           # Project topic notes (*.md)

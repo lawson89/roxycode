@@ -310,7 +310,7 @@ class ChatControllerTest extends ChatTestFixture {
                 transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Late transition", true));
         chatPanel.controller
                 .onToolExecution(new ToolExecutionEvent("task:default", "lateToolCall()", "ok", true, null));
-        chatPanel.controller.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 99, "CODE"));
+        chatPanel.controller.onAgentTurn(new AgentTurnEvent("task:default", "Roxy", 99, "CODE", ""));
 
         allowExit.countDown();
         SwingTestUtils.awaitCondition(() -> !chatPanel.controller.isTurnActive());
@@ -609,7 +609,7 @@ class ChatControllerTest extends ChatTestFixture {
 
         // 1. Isolation: qa:default event ignored by taskPanel
         TokenUsageEvent qaEvent = new TokenUsageEvent("qa:default", "gemini-1.5-pro", 1_000_000, 10_000, 8_000, 2_000,
-                500, 200, 10_700, 0.005);
+                500, 200, 10_700, null, 0.0, 0.0, 0.0, 0.0, 0.005);
         qaPanel.controller.onTokenUsage(qaEvent);
         taskPanel.controller.onTokenUsage(qaEvent);
         flushEdt();
@@ -627,7 +627,7 @@ class ChatControllerTest extends ChatTestFixture {
 
         // 2. task:default event updates taskPanel
         TokenUsageEvent taskEvent = new TokenUsageEvent("task:default", "gemini-1.5-pro", 1_000_000, 20_000, 10_000,
-                10_000, 1_000, 500, 21_500, 0.012);
+                10_000, 1_000, 500, 21_500, null, 0.0, 0.0, 0.0, 0.0, 0.012);
         taskPanel.controller.onTokenUsage(taskEvent);
         flushEdt();
 
@@ -674,7 +674,7 @@ class ChatControllerTest extends ChatTestFixture {
             taskPanel.controller.onToolExecution(new ToolExecutionEvent("task:default",
                     "planService.submitPlan('Title', 'Goal', [], ['Step 1'])", "ok", true, null));
             taskPanel.controller.onTokenUsage(new TokenUsageEvent("task:default", "gemini-1.5-pro", 1_000_000, 25_000,
-                    20_000, 5_000, 600, 100, 25_700, 0.008));
+                    20_000, 5_000, 600, 100, 25_700, null, 0.0, 0.0, 0.0, 0.0, 0.008));
             return "Plan submitted.";
         });
 
@@ -899,7 +899,7 @@ class ChatControllerTest extends ChatTestFixture {
                     "Send button right edge should be pinned near toolbar right edge (800px), got " + idleRightEdge);
 
             panel.controller.onTokenUsage(new TokenUsageEvent(panel.model.getConversationId(), "gemini-3.5-pro",
-                    1_000_000, 25_000, 20_000, 5_000, 0, 500, 25_500, 0.01));
+                    1_000_000, 25_000, 20_000, 5_000, 0, 500, 25_500, null, 0.0, 0.0, 0.0, 0.0, 0.01));
             flushEdt();
             SwingTestUtils.runOnEdt(() -> {
                 panel.telemetryBar.telemetryPanel.invalidate();

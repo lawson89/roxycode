@@ -16,9 +16,9 @@ class ArchiveBrowserPanelTest {
     void testTopicsAndPlansPopulationSearchCopyAndCodeHighlighting() {
         MemoryService memoryService = mock(MemoryService.class);
         ArchiveEntrySummary topic1 = new ArchiveEntrySummary("20250514-153000-first.md", "topic", "First Topic Title",
-                "Alice", "2025-05-14T15:30:00Z", 4, "");
+                "Alice", "2025-05-14T15:30:00Z", 4, "", 0L, 0L, 0, 0.0);
         ArchiveEntrySummary topic2 = new ArchiveEntrySummary("20250513-100000-second.md", "topic", "Second Topic Title",
-                "Bob", "2025-05-13T10:00:00Z", 2, "Matched line in second topic");
+                "Bob", "2025-05-13T10:00:00Z", 2, "Matched line in second topic", 0L, 0L, 0, 0.0);
 
         String rawMd1 = "---\nid: '20250514-153000-first'\ntitle: 'First Topic Title'\n---\n\n# Topic: First Topic Title\n\nHello world\n";
         String rawMd2 = "---\nid: '20250513-100000-second'\ntitle: 'Second Topic Title'\n---\n\nMatched line in second topic\n";
@@ -52,7 +52,7 @@ class ArchiveBrowserPanelTest {
         assertTrue(panel.displayArea.getText().contains("No matching topics found."));
 
         ArchiveEntrySummary plan1 = new ArchiveEntrySummary("20250514-120000-plan.md", "plan", "Feature Plan Alpha",
-                "Charlie", "2025-05-14T12:00:00Z", 0, "");
+                "Charlie", "2025-05-14T12:00:00Z", 0, "", 0L, 0L, 0, 0.0);
         when(memoryService.listArchivedPlanSummaries()).thenReturn(List.of(plan1));
         when(memoryService.readArchivedPlan("20250514-120000-plan.md")).thenReturn("# Plan\n- [x] 0. First step\n");
 

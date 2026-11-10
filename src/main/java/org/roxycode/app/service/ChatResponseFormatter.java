@@ -124,7 +124,7 @@ final class ChatResponseFormatter {
                 totalTokens);
     }
 
-    private static int safeNonNegativeInt(Integer value) {
+    static int safeNonNegativeInt(Integer value) {
         if (value == null || value < 0) {
             return 0;
         }

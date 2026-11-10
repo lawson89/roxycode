@@ -121,16 +121,7 @@ final class ChatController implements AutoCloseable {
 
     void setProjectService(ProjectService projectService) {
         this.projectService = projectService;
-        Path sessionPath = resolveActiveChatSessionPath();
-        ActiveChatSessionState saved = PathUtils.readJsonOrDefault(sessionPath, ActiveChatSessionState.class, null);
-        if (saved != null) {
-            applyRestoredSession(saved);
-        } else {
-            resetTelemetry();
-            if (model.isTaskMode() && planService != null && planService.getPendingPhase() != null) {
-                Edt.run(this::syncTransitionBannerWithPlanService);
-            }
-        }
+        restoreSessionForCurrentProject();
     }
 
     void setTopicArchiveServices(MemoryService memoryService, EnvironmentService environmentService) {

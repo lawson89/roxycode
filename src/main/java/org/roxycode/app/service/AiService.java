@@ -53,12 +53,6 @@ import org.springframework.util.MimeTypeUtils;
 public class AiService implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(AiService.class);
     private static final String AGENT_NAME = "Roxy";
-    static final String FINISH_REASON_UNKNOWN = "UNKNOWN";
-
-    public static final String TRUNCATED_MARKER = "⚠️ **Response Truncated (finishReason:";
-    public static final String NO_VISIBLE_RESPONSE_MARKER = "⚠️ **No Visible Response (finishReason:";
-    public static final String EMPTY_RESPONSE_MARKER = "⚠️ **Empty Response Returned (finishReason:";
-    public static final String EMPTY_STOP_MESSAGE = "Roxy completed the turn without generating a visible text message.";
 
     public static final int MAX_AUTO_NUDGES = 2;
     public static final int TEST_CONNECTION_TIMEOUT_MS = 15_000;
@@ -237,7 +231,7 @@ public class AiService implements AutoCloseable {
             GoogleGenAiChatModel testModel = AiConfig.createChatModel(testClient, modelName, toolCallingManager);
             ChatResponse response = testModel
                     .call(new Prompt("Reply with OK", GoogleGenAiChatOptions.builder().model(modelName).build()));
-            return StringUtils.defaultIfBlank(extractResponseText(response), "OK");
+            return StringUtils.defaultIfBlank(ChatResponseFormatter.extractResponseText(response), "OK");
         }
     }
 
@@ -295,7 +289,7 @@ public class AiService implements AutoCloseable {
             ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
             ChatResponse chatResponse = executeChatCall(promptSpec, convId, resolvedPhase);
             ExceptionUtils.checkInterrupted("Chat turn interrupted after model call");
-            String content = formatChatResponse(chatResponse, turnContext);
+            String content = ChatResponseFormatter.formatChatResponse(chatResponse, turnContext);
             publishTurnComplete(convId, turnContext.turnCounter().get(), content);
             return content;
         } catch (Exception e) {
@@ -328,7 +322,7 @@ public class AiService implements AutoCloseable {
             ChatResponse chatResponse = chatClient.prompt().system(GROUNDED_SEARCH_SYSTEM_PROMPT).user(trimmedQuery)
                     .options(optionsBuilder).call().chatResponse();
             ExceptionUtils.checkInterrupted("Web search interrupted after model call");
-            return StringUtils.trimToEmpty(extractResponseText(chatResponse));
+            return StringUtils.trimToEmpty(ChatResponseFormatter.extractResponseText(chatResponse));
         } catch (Exception e) {
             ExceptionUtils.rethrowIfCancelled(e, "Web search cancelled");
             if (e instanceof RuntimeException re) {
@@ -465,23 +459,24 @@ public class AiService implements AutoCloseable {
         if (usage == null) {
             return null;
         }
-        int promptTokens = safeNonNegativeInt(usage.getPromptTokens());
-        int candidatesTokens = safeNonNegativeInt(usage.getCompletionTokens());
-        int totalTokens = safeNonNegativeInt(usage.getTotalTokens());
+        int promptTokens = ChatResponseFormatter.safeNonNegativeInt(usage.getPromptTokens());
+        int candidatesTokens = ChatResponseFormatter.safeNonNegativeInt(usage.getCompletionTokens());
+        int totalTokens = ChatResponseFormatter.safeNonNegativeInt(usage.getTotalTokens());
         int cachedTokens = 0;
         int thoughtsTokens = 0;
 
         if (usage.getNativeUsage() instanceof GenerateContentResponseUsageMetadata genAiUsage) {
-            cachedTokens = safeNonNegativeInt(genAiUsage.cachedContentTokenCount().orElse(0));
-            thoughtsTokens = safeNonNegativeInt(genAiUsage.thoughtsTokenCount().orElse(0));
+            cachedTokens = ChatResponseFormatter.safeNonNegativeInt(genAiUsage.cachedContentTokenCount().orElse(0));
+            thoughtsTokens = ChatResponseFormatter.safeNonNegativeInt(genAiUsage.thoughtsTokenCount().orElse(0));
             if (promptTokens == 0) {
-                promptTokens = safeNonNegativeInt(genAiUsage.promptTokenCount().orElse(0));
+                promptTokens = ChatResponseFormatter.safeNonNegativeInt(genAiUsage.promptTokenCount().orElse(0));
             }
             if (candidatesTokens == 0) {
-                candidatesTokens = safeNonNegativeInt(genAiUsage.candidatesTokenCount().orElse(0));
+                candidatesTokens = ChatResponseFormatter
+                        .safeNonNegativeInt(genAiUsage.candidatesTokenCount().orElse(0));
             }
             if (totalTokens == 0) {
-                totalTokens = safeNonNegativeInt(genAiUsage.totalTokenCount().orElse(0));
+                totalTokens = ChatResponseFormatter.safeNonNegativeInt(genAiUsage.totalTokenCount().orElse(0));
             }
         }
 
@@ -495,25 +490,6 @@ public class AiService implements AutoCloseable {
         }
         return new ExtractedTokenCounts(promptTokens, cachedInputTokens, uncachedInputTokens, candidatesTokens,
                 thoughtsTokens, totalTokens);
-    }
-
-    private static int safeNonNegativeInt(@Nullable Integer value) {
-        if (value == null || value < 0) {
-            return 0;
-        }
-        return value;
-    }
-
-    String formatChatResponse(ChatResponse chatResponse, TurnToolContext turnContext) {
-        return ChatResponseFormatter.formatChatResponse(chatResponse, turnContext);
-    }
-
-    static String extractResponseText(ChatResponse chatResponse) {
-        return ChatResponseFormatter.extractResponseText(chatResponse);
-    }
-
-    static String extractFinishReason(ChatResponse chatResponse) {
-        return ChatResponseFormatter.extractFinishReason(chatResponse);
     }
 
     private ChatClient.ChatClientRequestSpec buildPrompt(TurnToolContext turnContext, String message,

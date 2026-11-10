@@ -395,7 +395,7 @@ final class AgentMemoryPanel extends JPanel {
             }
             if (creatingNewNote && !slugManuallyEdited) {
                 String rawTitle = noteTitleField.getText();
-                String autoSlug = PathUtils.sanitizeSlug(rawTitle, 50, "");
+                String autoSlug = PathUtils.sanitizeSlug(rawTitle, MemoryService.MAX_SLUG_LENGTH, "");
                 noteFieldsUpdateGuard.run(() -> noteSlugField.setText(autoSlug));
             }
         }
@@ -491,7 +491,6 @@ final class AgentMemoryPanel extends JPanel {
 
         @SuppressWarnings("PMD.NullAssignment")
         void startNewNote() {
-            deleteConfirmBar.cancel();
             selectedNote = null;
             creatingNewNote = true;
             slugManuallyEdited = false;

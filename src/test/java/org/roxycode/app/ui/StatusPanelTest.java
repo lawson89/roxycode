@@ -28,7 +28,7 @@ class StatusPanelTest {
                 "Total Cost: $0.01");
 
         panel.onTokenUsage(new TokenUsageEvent("qa:default", "gemini-3.5-flash", 1_000_000, 100_000, 75_000, 25_000,
-                2_000, 1_000, 103_000, 0.0206));
+                2_000, 1_000, 103_000, null, 0.0, 0.0, 0.0, 0.0, 0.0206));
         SwingTestUtils.flushEdt();
 
         assertEquals("Session: 155.0k tok ($0.03)", panel.tokenCostLabel.getText());

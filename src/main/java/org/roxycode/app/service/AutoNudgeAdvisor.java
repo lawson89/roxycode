@@ -54,7 +54,7 @@ final class AutoNudgeAdvisor implements CallAdvisor {
             if (response != null) {
                 chatResponse = response.chatResponse();
             }
-            String text = AiService.extractResponseText(chatResponse);
+            String text = ChatResponseFormatter.extractResponseText(chatResponse);
             if (!shouldAutoNudge(text, chatResponse)) {
                 return response;
             }
@@ -62,7 +62,8 @@ final class AutoNudgeAdvisor implements CallAdvisor {
             log.info("Empty response detected after tool use. Auto-nudging (attempt {}/{})", nudgeCount,
                     AiService.MAX_AUTO_NUDGES);
             if (!hasGenerationOutput(chatResponse)) {
-                chatMemory.add(turnContext.conversationId(), new AssistantMessage(AiService.EMPTY_STOP_MESSAGE));
+                chatMemory.add(turnContext.conversationId(),
+                        new AssistantMessage(ChatResponseFormatter.EMPTY_STOP_MESSAGE));
             }
             currentRequest = buildNudgeRequest(chatClientRequest);
         }
@@ -75,12 +76,13 @@ final class AutoNudgeAdvisor implements CallAdvisor {
         if (turnContext.turnCounter().get() <= 0 || nudgeCount >= AiService.MAX_AUTO_NUDGES) {
             return false;
         }
-        String finishReason = AiService.extractFinishReason(chatResponse);
+        String finishReason = ChatResponseFormatter.extractFinishReason(chatResponse);
         return isRecoverableEmptyFinishReason(finishReason);
     }
 
     static boolean isRecoverableEmptyFinishReason(String finishReason) {
-        return "STOP".equalsIgnoreCase(finishReason) || AiService.FINISH_REASON_UNKNOWN.equalsIgnoreCase(finishReason)
+        return "STOP".equalsIgnoreCase(finishReason)
+                || ChatResponseFormatter.FINISH_REASON_UNKNOWN.equalsIgnoreCase(finishReason)
                 || "OTHER".equalsIgnoreCase(finishReason) || "MALFORMED_FUNCTION_CALL".equalsIgnoreCase(finishReason);
     }
 

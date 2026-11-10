@@ -42,11 +42,6 @@ final class MarkdownPane extends JTextPane {
     public record PersistedChatEntry(String role, String content, String timestamp, boolean isTool, boolean success,
             String error, boolean toolExpanded, List<String> thumbnailBase64List) {
 
-        public PersistedChatEntry(String role, String content, String timestamp, boolean isTool, boolean success,
-                String error, boolean toolExpanded) {
-            this(role, content, timestamp, isTool, success, error, toolExpanded, List.of());
-        }
-
         public PersistedChatEntry {
             if (thumbnailBase64List == null || thumbnailBase64List.isEmpty()) {
                 thumbnailBase64List = List.of();

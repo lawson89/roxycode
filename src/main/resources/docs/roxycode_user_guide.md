@@ -18,7 +18,7 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
   - Roxy explores the codebase (read-only) and submits a structured implementation plan (planService.submitPlan) with a title, goal, requirements, and technical steps (plus automatic quality gates: "Code compiles successfully", "Unit tests pass", and "Automated code review passes").
   - Roxy calls planService.requestDevelopment(reason), displaying an **Approval Banner** (Approve / Reject). No files are modified until the user clicks **Approve**.
 - **2. Code (CODE — Senior Developer)**:
-  - Unlocks fileEditorService (writeFile, replaceBlock, replaceBlocks, replaceLines, insertAtLine, deleteFile, moveFile, copyFile, mkdirs).
+  - Unlocks fileEditorService (writeFile, replaceBlock, replaceBlocks, replaceLines, replaceSymbol, insertAtLine, revertFile, deleteFile, moveFile, copyFile, mkdirs).
   - Roxy implements steps, marks technical steps completed in real time (planService.markStepCompleted / markStepsCompleted), and verifies changes with buildToolService.compile(), runTests(), runSingleTest(), format(), lint(), or buildAndTest().
   - Compilation and unit test verification steps are marked automatically by buildToolService (and reset if any file is edited afterward).
   - Once all steps and verification gates pass, Roxy autonomously transitions to REVIEW via planService.requestReview(reason) (or requests plan revision via requestPlanRevision).
@@ -42,7 +42,7 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
 - Two-tier persistent memory (memoryService) shared across all phases:
   - **Global Memory (~/.roxycode/memory/)**: User-wide preferences and coding style (MEMORY.md + notes/<slug>.md).
   - **Project Memory (<projectDataDir>/memory/)**: Project architecture decisions and build/test gotchas (MEMORY.md + notes/<slug>.md).
-- Pinned MEMORY.md files (capped at 4,000 chars each in the prompt) and note catalogs are injected into the stable prompt; full notes and archives are searchable via memoryService.search(pattern).
+- Pinned MEMORY.md files (capped at 8,192 chars / 200 lines each in the prompt) and note catalogs are injected into the stable prompt; full notes and archives are searchable via memoryService.search(pattern).
 
 ### Repo Map & Prompt (Repo Map Sidebar View)
 - Displays the Universal Ctags structural skeleton (RepoMapPackerService) of source files with class/method line numbers, plus live token estimates for the Repo Map, Stable Context, and Session Context to maximize Gemini prefix cache hits.
@@ -73,6 +73,6 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
     - image & workdir: Container image (e.g., "eclipse-temurin:25-jdk") and working directory ("/workspace") when mode = "docker".
 
 ### System Tools, JEXL API & Global Settings
-- **System Tools**: Checks status and install commands for required CLI tools (**Ripgrep**, **Git**, **Universal Ctags**) and optional sandbox runtimes (**Bubblewrap** / **Seatbelt**, **Docker**).
+- **System Tools**: Checks status and install commands for required CLI tools (**Ripgrep**, **Universal Ctags**) and optional tools/sandbox runtimes (**Git**, **Bubblewrap** / **Seatbelt**, **Docker**).
 - **JEXL API**: Interactive reference of all @AgentService methods exposed in executeJexl.
 - **Global Settings**: Configures Light/Dark theme, Gemini API key, default Gemini model & thinking level, max tool turns per request, chat memory window, tool call logging, and Google Search grounding (webSearchService).

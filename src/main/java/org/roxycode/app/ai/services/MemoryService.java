@@ -39,7 +39,7 @@ public class MemoryService {
     public static final String ARCHIVE_TOPICS_SUBDIR = "archive/topics";
     public static final String DEFAULT_TOPIC_TITLE = "Codebase Q&A Topic";
     public static final int MAX_TOPIC_TITLE_LENGTH = 80;
-    static final int MAX_SLUG_LENGTH = 50;
+    public static final int MAX_SLUG_LENGTH = 50;
     public static final int MAX_PINNED_MEMORY_LINES = 200;
     public static final int MAX_PINNED_MEMORY_CHARS = 8192;
     private static final int SEARCH_CONTEXT_LINES = 2;
@@ -369,11 +369,6 @@ public class MemoryService {
     public record ArchiveEntrySummary(String filename, String type, String title, String createdBy, String timestamp,
             int messageCount, String matchSnippet, long totalTokens, long cachedTokens, int cacheHitPercent,
             double estimatedCostUsd) {
-
-        public ArchiveEntrySummary(String filename, String type, String title, String createdBy, String timestamp,
-                int messageCount, String matchSnippet) {
-            this(filename, type, title, createdBy, timestamp, messageCount, matchSnippet, 0L, 0L, 0, 0.0);
-        }
 
         public ArchiveEntrySummary withMatchSnippet(String snippet) {
             return new ArchiveEntrySummary(filename, type, title, createdBy, timestamp, messageCount, snippet,

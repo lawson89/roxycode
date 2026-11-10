@@ -184,7 +184,8 @@ class MarkdownPaneTest {
         MarkdownPane pane = new MarkdownPane(false);
         List<MarkdownPane.PersistedChatEntry> entries = new java.util.ArrayList<>();
         for (int i = 0; i < 250; i++) {
-            entries.add(new MarkdownPane.PersistedChatEntry("user", "Old " + i, "time", false, true, null, false));
+            entries.add(new MarkdownPane.PersistedChatEntry("user", "Old " + i, "time", false, true, null, false,
+                    List.of()));
         }
 
         pane.restoreMessages(entries);

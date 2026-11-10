@@ -114,9 +114,9 @@ class PlanServiceTest {
         assertIllegalState(() -> archivingService.requestDevelopment("Reason"), "Implementation Plan is missing");
 
         archivingService.onTokenUsage(new TokenUsageEvent("qa:default", "gemini-3.5-flash", 1_048_576, 5_000, 4_000,
-                1_000, 200, 50, 5_250, 0.0012));
+                1_000, 200, 50, 5_250, null, 0.0, 0.0, 0.0, 0.0, 0.0012));
         archivingService.onTokenUsage(new TokenUsageEvent(PlanService.TASK_CONVERSATION_ID, "gemini-3.5-flash",
-                1_048_576, 20_000, 15_000, 5_000, 800, 200, 21_000, 0.0051));
+                1_048_576, 20_000, 15_000, 5_000, 800, 200, 21_000, null, 0.0, 0.0, 0.0, 0.0, 0.0051));
 
         archivingService.submitPlan("Archive Feature Plan!", "Persist completed plans",
                 new String[]{"Include frontmatter"}, new String[]{"Implement archiving"});
