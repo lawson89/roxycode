@@ -92,11 +92,11 @@ class GenericBuildToolServiceTest {
         AtomicBoolean closed = new AtomicBoolean(false);
         return new ContainerSession() {
             @Override
-            public ContainerExecResult execInContainer(String... command) {
+            public ContainerExecResult execInContainer(java.time.Duration timeout, String... command) {
                 if (captured != null) {
                     captured.add(command);
                 }
-                return new ContainerExecResult(exitCode, stdout, "");
+                return new ContainerExecResult(exitCode, stdout, "", false);
             }
 
             @Override
@@ -280,7 +280,7 @@ class GenericBuildToolServiceTest {
 
         buildContainerService.setContainerSessionFactory(key -> new ContainerSession() {
             @Override
-            public ContainerExecResult execInContainer(String... command) throws Exception {
+            public ContainerExecResult execInContainer(java.time.Duration timeout, String... command) throws Exception {
                 throw new InterruptedException("Interrupted");
             }
 
@@ -547,6 +547,7 @@ class GenericBuildToolServiceTest {
         Files.writeString(brokenJava,
                 String.join("\n", "package com.example;", "public class Broken {", "    public int calc(int x) {",
                         "        int a = x + 1;", "        int b = unknownCall(a);", "        return b;", "    }",
+
                         "}"));
         List<String> rawErrors = List.of(
                 "[ERROR] " + brokenJava.toAbsolutePath()
@@ -559,5 +560,25 @@ class GenericBuildToolServiceTest {
                 "5:         int b = unknownCall(a);");
         assertFalse(enriched.get(1).contains("--- Source Context"));
         assertFalse(enriched.get(2).contains("--- Source Context"));
+    }
+
+    @Test
+    void testConfigurableBuildTimeout() throws IOException {
+        writeBuildToml("""
+                timeout_seconds = 2
+                [commands]
+                compile = 'sleep 5'
+                """);
+
+        try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
+            runner.when(() -> ProcessRunner.run(anyList(), eq(projectRoot), anyMap(),
+                    eq(java.time.Duration.ofSeconds(2)), eq(true), any()))
+                    .thenReturn(new ProcessResult(-1, "timed out", "", true));
+
+            BuildResult result = buildToolService.compile();
+            assertFalse(result.isSuccess());
+            assertTrue(result.isTimedOut());
+            assertContainsAll(result.getErrors().get(0), "Command timed out after 2 seconds");
+        }
     }
 }

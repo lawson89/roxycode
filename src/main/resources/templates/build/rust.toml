@@ -1,3 +1,5 @@
+timeout_seconds = 600
+
 [commands]
 install = "cargo fetch"
 clean = "cargo clean"

@@ -83,7 +83,7 @@ public class BuildContainerService {
     public record ContainerSessionKey(Path projectRoot, String image, String workdir, Map<String, String> env) {
     }
 
-    public record ContainerExecResult(int exitCode, String stdout, String stderr) {
+    public record ContainerExecResult(int exitCode, String stdout, String stderr, boolean timedOut) {
         public String combinedOutput() {
             StringBuilder sb = new StringBuilder();
             if (StringUtils.isNotEmpty(stdout)) {
@@ -100,7 +100,7 @@ public class BuildContainerService {
     }
 
     public interface ContainerSession extends AutoCloseable {
-        ContainerExecResult execInContainer(String... command) throws Exception;
+        ContainerExecResult execInContainer(java.time.Duration timeout, String... command) throws Exception;
 
         boolean isRunning();
 
@@ -309,11 +309,11 @@ public class BuildContainerService {
     }
 
     public ContainerExecResult executeCommand(Path projectRoot, SandboxConfig sandboxConfig, Map<String, String> env,
-            String command) throws Exception {
+            String command, java.time.Duration timeout) throws Exception {
         ContainerSessionKey sessionKey = new ContainerSessionKey(projectRoot.toAbsolutePath().normalize(),
                 sandboxConfig.image(), sandboxConfig.workdir(), Map.copyOf(env));
         try {
-            return getOrCreateContainerSession(sessionKey).execInContainer("sh", "-c", command);
+            return getOrCreateContainerSession(sessionKey).execInContainer(timeout, "sh", "-c", command);
         } catch (InterruptedException | java.util.concurrent.CancellationException e) {
             stopActiveContainer();
             throw e;
@@ -382,9 +382,29 @@ public class BuildContainerService {
         container.start();
         return new ContainerSession() {
             @Override
-            public ContainerExecResult execInContainer(String... command) throws Exception {
-                Container.ExecResult r = container.execInContainer(StandardCharsets.UTF_8, command);
-                return new ContainerExecResult(r.getExitCode(), r.getStdout(), r.getStderr());
+            @SuppressWarnings("PMD.PreserveStackTrace")
+            public ContainerExecResult execInContainer(java.time.Duration timeout, String... command) throws Exception {
+                CompletableFuture<Container.ExecResult> future = CompletableFuture.supplyAsync(() -> {
+                    try {
+                        return container.execInContainer(StandardCharsets.UTF_8, command);
+                    } catch (Exception e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+
+                try {
+                    Container.ExecResult r = future.get(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
+                    return new ContainerExecResult(r.getExitCode(), r.getStdout(), r.getStderr(), false);
+                } catch (java.util.concurrent.TimeoutException e) {
+                    future.cancel(true);
+                    return new ContainerExecResult(-1, "",
+                            "Command timed out after " + timeout.toSeconds() + " seconds", true);
+                } catch (java.util.concurrent.ExecutionException e) {
+                    if (e.getCause() instanceof Exception ex) {
+                        throw ex;
+                    }
+                    throw e;
+                }
             }
 
             @Override

@@ -109,9 +109,9 @@ class BuildContainerServiceTest {
             sessionClosed.set(false);
             return new ContainerSession() {
                 @Override
-                public ContainerExecResult execInContainer(String... command) {
+                public ContainerExecResult execInContainer(java.time.Duration timeout, String... command) {
                     commands.add(command);
-                    return new ContainerExecResult(0, "out", "err");
+                    return new ContainerExecResult(0, "out", "err", false);
                 }
 
                 @Override
@@ -128,15 +128,17 @@ class BuildContainerServiceTest {
 
         SandboxConfig config = new SandboxConfig("docker", List.of(), "eclipse-temurin:25-jdk", "/workspace");
         ContainerExecResult res1 = buildContainerService.executeCommand(tempDir, config, Map.of("A", "1"),
-                "./mvnw compile");
+                "./mvnw compile", java.time.Duration.ofMinutes(1));
         assertEquals(0, res1.exitCode());
         assertEquals("out\nerr", res1.combinedOutput());
 
-        buildContainerService.executeCommand(tempDir, config, Map.of("A", "1"), "./mvnw test");
+        buildContainerService.executeCommand(tempDir, config, Map.of("A", "1"), "./mvnw test",
+                java.time.Duration.ofMinutes(1));
         assertEquals(1, sessionsCreated.get());
         assertEquals(2, commands.size());
 
-        buildContainerService.executeCommand(tempDir, config, Map.of("A", "2"), "./mvnw test");
+        buildContainerService.executeCommand(tempDir, config, Map.of("A", "2"), "./mvnw test",
+                java.time.Duration.ofMinutes(1));
         assertEquals(2, sessionsCreated.get());
 
         buildContainerService.stopActiveContainer();
@@ -150,9 +152,11 @@ class BuildContainerServiceTest {
         });
 
         SandboxConfig config = new SandboxConfig("docker", List.of(), "eclipse-temurin:25-jdk", "/workspace");
-        assertTrue(assertThrows(IllegalStateException.class,
-                () -> buildContainerService.executeCommand(tempDir, config, Map.of(), "./mvnw compile")).getMessage()
-                .contains("client version 1.32 is too old"));
+        assertTrue(
+                assertThrows(IllegalStateException.class,
+                        () -> buildContainerService.executeCommand(tempDir, config, Map.of(), "./mvnw compile",
+                                java.time.Duration.ofMinutes(1)))
+                        .getMessage().contains("client version 1.32 is too old"));
     }
 
     @Test
@@ -164,7 +168,8 @@ class BuildContainerServiceTest {
             sessionClosed.set(false);
             return new ContainerSession() {
                 @Override
-                public ContainerExecResult execInContainer(String... command) throws Exception {
+                public ContainerExecResult execInContainer(java.time.Duration timeout, String... command)
+                        throws Exception {
                     if (throwInterrupted.get()) {
                         throw new InterruptedException("exec interrupted");
                     }
@@ -184,13 +189,13 @@ class BuildContainerServiceTest {
         });
 
         SandboxConfig config = new SandboxConfig("docker", List.of(), "eclipse-temurin:25-jdk", "/workspace");
-        assertThrows(InterruptedException.class,
-                () -> buildContainerService.executeCommand(tempDir, config, Map.of(), "./mvnw test"));
+        assertThrows(InterruptedException.class, () -> buildContainerService.executeCommand(tempDir, config, Map.of(),
+                "./mvnw test", java.time.Duration.ofMinutes(1)));
         assertTrue(sessionClosed.get(), "Active container session must be stopped when interrupted");
 
         throwInterrupted.set(false);
-        assertThrows(java.util.concurrent.CancellationException.class,
-                () -> buildContainerService.executeCommand(tempDir, config, Map.of(), "./mvnw test"));
+        assertThrows(java.util.concurrent.CancellationException.class, () -> buildContainerService
+                .executeCommand(tempDir, config, Map.of(), "./mvnw test", java.time.Duration.ofMinutes(1)));
         assertTrue(sessionClosed.get(), "Active container session must be stopped when cancelled");
     }
 

@@ -1,3 +1,5 @@
+timeout_seconds = 600
+
 [commands]
 install = "npm install"
 clean = "rm -rf dist/"

@@ -71,6 +71,8 @@ public class GenericBuildToolService {
     static final String LOG_TRUNCATED_PREFIX = "... [Log truncated. Full log saved to .roxycode/tmp/build.log]\n";
     private static final Duration BUILD_TIMEOUT = Duration.ofMinutes(10);
     private static final String DEFAULT_FALLBACK_TOML = """
+            timeout_seconds = 600
+
             [commands]
             install = ""
             clean = ""
@@ -155,7 +157,7 @@ public class GenericBuildToolService {
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record BuildConfig(CommandsSection commands, Map<String, String> env, ParseSection parse,
-            SandboxConfig sandbox) {
+            SandboxConfig sandbox, @JsonProperty("timeout_seconds") Integer timeoutSeconds) {
         public BuildConfig {
             commands = Objects.requireNonNullElse(commands, CommandsSection.EMPTY);
             if (env == null || env.isEmpty()) {
@@ -171,6 +173,7 @@ public class GenericBuildToolService {
             }
             parse = Objects.requireNonNullElse(parse, ParseSection.EMPTY);
             sandbox = Objects.requireNonNullElse(sandbox, SandboxConfig.DEFAULT);
+            timeoutSeconds = Objects.requireNonNullElse(timeoutSeconds, 600);
         }
     }
 
@@ -485,6 +488,7 @@ public class GenericBuildToolService {
             SandboxConfig sandboxConfig = config.sandbox();
             SandboxMode mode = sandboxConfig.resolvedMode();
             Path logFile = prepareBuildLogFile();
+            Duration timeout = Duration.ofSeconds(config.timeoutSeconds());
             if (mode == SandboxMode.DOCKER) {
                 if (!buildContainerService.isDockerAvailable()) {
                     stopActiveContainer();
@@ -492,7 +496,7 @@ public class GenericBuildToolService {
                             + ": Docker is not available, but [sandbox] mode = \"docker\" is configured in build.toml.";
                     return new BuildResult(false, -1, msg, List.of(msg), List.of());
                 }
-                return executeInContainer(command, sandboxConfig, env, logFile, parseSection);
+                return executeInContainer(command, sandboxConfig, env, logFile, parseSection, timeout);
             }
             if (mode == SandboxMode.NATIVE) {
                 stopActiveContainer();
@@ -503,10 +507,10 @@ public class GenericBuildToolService {
                 }
                 List<String> sandboxCmd = buildContainerService
                         .buildNativeSandboxCommand(projectService.getCurrentProjectRoot(), sandboxConfig, command);
-                return executeCommandList(sandboxCmd, env, logFile, parseSection);
+                return executeCommandList(sandboxCmd, env, logFile, parseSection, timeout);
             }
             stopActiveContainer();
-            return execute(command, env, logFile, parseSection);
+            return execute(command, env, logFile, parseSection, timeout);
         } catch (CancellationException e) {
             throw e;
         } catch (Exception e) {
@@ -589,7 +593,7 @@ public class GenericBuildToolService {
 
     @SuppressWarnings("PMD.PreserveStackTrace")
     private BuildResult executeInContainer(String command, SandboxConfig sandboxConfig, Map<String, String> env,
-            Path logFile, ParseSection parseSection) {
+            Path logFile, ParseSection parseSection, Duration timeout) {
         log.info("Executing build command in container ({}): {}", sandboxConfig.image(), command);
         List<String> errors = new ArrayList<>();
         int exitCode = -1;
@@ -598,11 +602,15 @@ public class GenericBuildToolService {
 
         try {
             ContainerExecResult result = buildContainerService.executeCommand(projectService.getCurrentProjectRoot(),
-                    sandboxConfig, env, command);
+                    sandboxConfig, env, command, timeout);
             fullOutput = BuildOutputParser.stripAnsiCodes(result.combinedOutput());
             exitCode = result.exitCode();
             Files.writeString(logFile, fullOutput, StandardCharsets.UTF_8);
-            return buildResultFromExecution(exitCode, fullOutput, logFile, errors, parseSection, startTimeMillis);
+            if (result.timedOut()) {
+                errors.add("Command timed out after " + timeout.toSeconds() + " seconds");
+            }
+            return buildResultFromExecution(exitCode, fullOutput, logFile, errors, parseSection, startTimeMillis,
+                    result.timedOut());
         } catch (CancellationException e) {
             stopActiveContainer();
             throw e;
@@ -617,11 +625,13 @@ public class GenericBuildToolService {
                     .stripAnsiCodes(org.roxycode.app.util.ExceptionUtils.getMessageOrSimpleName(e));
             errors.add("Container execution failed: " + errorMsg);
             fullOutput = errorMsg;
-            return buildResultFromExecution(exitCode, fullOutput, logFile, errors, parseSection, startTimeMillis);
+            return buildResultFromExecution(exitCode, fullOutput, logFile, errors, parseSection, startTimeMillis,
+                    false);
         }
     }
 
-    private BuildResult execute(String command, Map<String, String> env, Path logFile, ParseSection parseSection) {
+    private BuildResult execute(String command, Map<String, String> env, Path logFile, ParseSection parseSection,
+            Duration timeout) {
         log.info("Executing build command: {}", command);
         List<String> shellCommand;
         if (SystemUtils.IS_OS_WINDOWS) {
@@ -629,11 +639,11 @@ public class GenericBuildToolService {
         } else {
             shellCommand = List.of("sh", "-c", command);
         }
-        return executeCommandList(shellCommand, env, logFile, parseSection);
+        return executeCommandList(shellCommand, env, logFile, parseSection, timeout);
     }
 
     private BuildResult executeCommandList(List<String> commandList, Map<String, String> env, Path logFile,
-            ParseSection parseSection) {
+            ParseSection parseSection, Duration timeout) {
         List<String> errors = new ArrayList<>();
         int exitCode = -1;
         String fullOutput = "";
@@ -642,27 +652,29 @@ public class GenericBuildToolService {
         try {
             ProcessResult result;
             try (OutputStream fileOut = Files.newOutputStream(logFile)) {
-                result = ProcessRunner.run(commandList, projectService.getCurrentProjectRoot(), env, BUILD_TIMEOUT,
-                        true, fileOut);
+                result = ProcessRunner.run(commandList, projectService.getCurrentProjectRoot(), env, timeout, true,
+                        fileOut);
             }
             fullOutput = BuildOutputParser.stripAnsiCodes(result.output());
             Files.writeString(logFile, fullOutput, StandardCharsets.UTF_8);
             exitCode = result.exitCode();
             if (result.timedOut()) {
-                errors.add("Command timed out after 10 minutes");
+                errors.add("Command timed out after " + timeout.toSeconds() + " seconds");
             } else if (exitCode < 0 && !result.errorOutput().isBlank()) {
                 errors.add(BuildOutputParser.stripAnsiCodes(result.errorOutput()));
             }
-            return buildResultFromExecution(exitCode, fullOutput, logFile, errors, parseSection, startTimeMillis);
+            return buildResultFromExecution(exitCode, fullOutput, logFile, errors, parseSection, startTimeMillis,
+                    result.timedOut());
         } catch (IOException e) {
             log.error("Process execution failed", e);
             errors.add(ExceptionUtils.getStackTrace(e));
-            return buildResultFromExecution(exitCode, fullOutput, logFile, errors, parseSection, startTimeMillis);
+            return buildResultFromExecution(exitCode, fullOutput, logFile, errors, parseSection, startTimeMillis,
+                    false);
         }
     }
 
     private BuildResult buildResultFromExecution(int exitCode, String fullOutput, Path logFile, List<String> errors,
-            ParseSection parseSection, long startTimeMillis) {
+            ParseSection parseSection, long startTimeMillis, boolean timedOut) {
         ParseSection effectiveParse = Objects.requireNonNullElse(parseSection, ParseSection.EMPTY);
         int contextLines = effectiveParse.resolvedContextLines();
         errors.addAll(BuildOutputParser.extractWithRipGrep(effectiveParse.errorRegex(), logFile, contextLines));
@@ -687,7 +699,7 @@ public class GenericBuildToolService {
         }
         boolean success = exitCode == 0 && errors.isEmpty() && failedTests.isEmpty();
         String tailOutput = BuildOutputParser.getLogTail(fullOutput);
-        return new BuildResult(success, exitCode, tailOutput, errors, failedTests);
+        return new BuildResult(success, exitCode, tailOutput, errors, failedTests, timedOut);
     }
 
     List<String> extractJunitXmlFailures(List<String> configuredPaths, long commandStartTimeMillis) {
