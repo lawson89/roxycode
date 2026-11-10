@@ -142,7 +142,7 @@ public class FileReadService {
             if (totalChars + entryContent.length() > MAX_BATCH_CHARS) {
                 int remainingBudget = MAX_BATCH_CHARS - totalChars;
                 if (remainingBudget > 0) {
-                    results.put(relativePath, entryContent.substring(0, remainingBudget) + '\n'
+                    results.put(relativePath, entryContent.substring(0, remainingBudget) + "\n"
                             + "... [Truncated at batch character limit]");
                 }
                 results.put(TRUNCATED_KEY,
@@ -178,7 +178,7 @@ public class FileReadService {
         StringBuilder sb = new StringBuilder();
         for (int i = startLine; i <= clampedEnd; i++) {
             if (i > startLine) {
-                sb.append('\n');
+                sb.append("\n");
             }
             sb.append(i).append(": ").append(lines.get(i - 1));
         }
@@ -229,6 +229,28 @@ public class FileReadService {
             }
             Collections.sort(entries);
             return entries;
+        }
+    }
+
+    static int getLineCountSafely(Path path) {
+        try {
+            if (path == null || !Files.isRegularFile(path)) {
+                return 0;
+            }
+            return (int) Files.lines(path).count();
+        } catch (IOException e) {
+            return 0;
+        }
+    }
+
+    static List<String> readLinesSafely(Path path) {
+        try {
+            if (path == null || !Files.isRegularFile(path)) {
+                return Collections.emptyList();
+            }
+            return Files.readAllLines(path);
+        } catch (IOException e) {
+            return Collections.emptyList();
         }
     }
 }

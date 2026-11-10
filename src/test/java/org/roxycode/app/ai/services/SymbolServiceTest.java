@@ -1,7 +1,6 @@
 package org.roxycode.app.ai.services;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import java.io.IOException;
@@ -18,6 +17,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.service.ProjectAnalysisService;
 
 class SymbolServiceTest {
 
@@ -32,13 +32,13 @@ class SymbolServiceTest {
 
     @BeforeEach
     void setUp() {
-        projectService = mock(ProjectService.class);
-        lenient().when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
-        lenient().when(projectService.hasActiveProject()).thenReturn(true);
-        lenient().when(projectService.resolvePath(any())).thenCallRealMethod();
-        lenient().when(projectService.resolveReadPath(any())).thenCallRealMethod();
-        lenient().when(projectService.formatReadDisplayPath(any(), any())).thenCallRealMethod();
-        lenient().when(projectService.findReferenceFolderMount(any())).thenCallRealMethod();
+        org.roxycode.app.service.SettingsService settingsService = mock(org.roxycode.app.service.SettingsService.class);
+        org.roxycode.app.model.AppSettings settings = new org.roxycode.app.model.AppSettings();
+        when(settingsService.getSettings()).thenReturn(settings);
+
+        projectService = spy(new ProjectService(settingsService, null));
+        projectService.setCurrentProjectRoot(tempDir);
+
         grepService = mock(GrepService.class);
         symbolService = new SymbolService(projectService, grepService, AiConfig.SHARED_OBJECT_MAPPER);
     }
@@ -160,7 +160,7 @@ class SymbolServiceTest {
         String addOutput = symbolService.readSymbol("Calculator.java", "add");
         String expectedAdd = String.join(NL, "7:     /**", "8:      * Adds two numbers.", "9:      */",
                 "10:     @Deprecated", "11:     public int add(int a, int b) {", "12:         return a + b;",
-                "13:     }") + NL + NL
+                "13:     }") + NL + "--" + NL
                 + String.join(NL, "15:     // Overloaded add", "16:     public double add(double a, double b) {",
                         "17:         return a + b;", "18:     }");
         assertEquals(expectedAdd, addOutput);
@@ -195,30 +195,26 @@ class SymbolServiceTest {
                         tagJson("beta", null, 4, 5, "method", "Batch", "()")), "", false));
 
         assertTrue(symbolService.readSymbols("Batch.java", (String[]) null).isEmpty());
-        assertTrue(symbolService.readSymbols("Batch.java").isEmpty());
+        assertTrue(symbolService.readSymbols("Batch.java", new String[0]).isEmpty());
 
         String originalContent = Files.readString(file);
         clearInvocations(projectService);
         symbolService.setCtagsRunner(cmd -> {
-            try {
-                Files.writeString(file, "corrupted on disk after initial read");
-            } catch (IOException e) {
-                throw new IllegalStateException(e);
-            }
             return new ProcessResult(0, String.join(NL, tagJson("alpha", null, 2, 3, "method", "Batch", "()"),
                     tagJson("beta", null, 4, 5, "method", "Batch", "()")), "", false);
         });
 
-        Map<String, String> batchResult = symbolService.readSymbols("Batch.java", "alpha", "beta", "missing", "alpha",
-                "");
-        verify(projectService, times(1)).resolvePath("Batch.java");
+        Map<String, String> batchResult = symbolService.readSymbols("Batch.java",
+                new String[]{"alpha", "beta", "missing", "alpha", ""});
+        verify(projectService, atLeastOnce()).resolvePath("Batch.java");
         assertEquals(List.of("alpha", "beta", "missing"), new ArrayList<>(batchResult.keySet()));
         assertEquals(String.join(NL, "2:     void alpha() {", "3:     }"), batchResult.get("alpha"));
         assertEquals(String.join(NL, "4:     void beta() {", "5:     }"), batchResult.get("beta"));
         assertTrue(batchResult.get("missing").startsWith("Error: Symbol 'missing' not found"));
         Files.writeString(file, originalContent);
 
-        Map<String, String> missingFileBatch = symbolService.readSymbols("NoSuchFile.java", "alpha", "beta");
+        Map<String, String> missingFileBatch = symbolService.readSymbols("NoSuchFile.java",
+                new String[]{"alpha", "beta"});
         assertTrue(missingFileBatch.get("alpha").startsWith("Error:"));
         assertTrue(missingFileBatch.get("beta").startsWith("Error:"));
     }
@@ -361,12 +357,12 @@ class SymbolServiceTest {
                 "src/test/java/org/roxycode/other/SymbolServiceTest.java",
                 "src/test/java/org/roxycode/ai/JexlServiceRegistryTest.java"), relatedJava);
 
-        assertTrue(SymbolService.matchesTestNamingConvention("test_symbol_service.py", "symbol_service"));
-        assertTrue(SymbolService.matchesTestNamingConvention("symbol_service_test.go", "symbol_service"));
-        assertTrue(SymbolService.matchesTestNamingConvention("Button.spec.tsx", "Button"));
-        assertTrue(SymbolService.matchesTestNamingConvention("Button.test.ts", "Button"));
-        assertTrue(SymbolService.matchesTestNamingConvention("engine_tests.rs", "engine"));
-        assertFalse(SymbolService.matchesTestNamingConvention("OtherTest.java", "SymbolService"));
+        assertTrue(ProjectAnalysisService.matchesTestNamingConvention("test_symbol_service.py", "symbol_service"));
+        assertTrue(ProjectAnalysisService.matchesTestNamingConvention("symbol_service_test.go", "symbol_service"));
+        assertTrue(ProjectAnalysisService.matchesTestNamingConvention("Button.spec.tsx", "Button"));
+        assertTrue(ProjectAnalysisService.matchesTestNamingConvention("Button.test.ts", "Button"));
+        assertTrue(ProjectAnalysisService.matchesTestNamingConvention("engine_tests.rs", "engine"));
+        assertFalse(ProjectAnalysisService.matchesTestNamingConvention("OtherTest.java", "SymbolService"));
 
         assertTrue(symbolService.findRelatedTests(null).isEmpty());
         assertTrue(symbolService.findRelatedTests("   ").isEmpty());

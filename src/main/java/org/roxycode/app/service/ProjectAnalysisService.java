@@ -8,6 +8,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.roxycode.app.ai.services.GrepService;
@@ -73,6 +74,43 @@ public class ProjectAnalysisService {
         }
         String ext = PathUtils.getLowerExtension(relPath, false);
         return !ext.isEmpty() && SOURCE_EXTENSIONS.contains(ext);
+    }
+
+    public static String extractNormalizedSubpath(String normalizedPath, List<String> prefixes) {
+        if (normalizedPath == null || normalizedPath.isBlank()) {
+            return "";
+        }
+        int lastSlash = normalizedPath.lastIndexOf('/');
+        if (lastSlash <= 0) {
+            return "";
+        }
+        String dirPath = normalizedPath.substring(0, lastSlash);
+        for (String prefix : prefixes) {
+            String prefixWithoutTrailing = prefix.substring(0, prefix.length() - 1);
+            if (dirPath.equals(prefixWithoutTrailing)) {
+                return "";
+            }
+            if (dirPath.startsWith(prefix)) {
+                return dirPath.substring(prefix.length());
+            }
+        }
+        return dirPath;
+    }
+
+    public static boolean matchesTestNamingConvention(String candidateFileName, String stem) {
+        if (candidateFileName == null || candidateFileName.isBlank() || stem == null || stem.isBlank()) {
+            return false;
+        }
+        String candidateStem = PathUtils.getBaseName(candidateFileName);
+        if (candidateStem.equals(stem + "Test") || candidateStem.equals(stem + "Tests")
+                || candidateStem.equals(stem + "IT") || candidateStem.equals("Test" + stem)) {
+            return true;
+        }
+        String lowerCandidateStem = candidateStem.toLowerCase(Locale.ROOT);
+        String lowerStem = stem.toLowerCase(Locale.ROOT);
+        return lowerCandidateStem.equals("test_" + lowerStem) || lowerCandidateStem.equals(lowerStem + "_test")
+                || lowerCandidateStem.equals(lowerStem + "_tests") || lowerCandidateStem.equals(lowerStem + ".test")
+                || lowerCandidateStem.equals(lowerStem + ".spec");
     }
 
     private String computeDominantLanguage() {

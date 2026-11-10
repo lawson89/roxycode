@@ -57,6 +57,7 @@ public interface CtagsRunner {
         command.add("-f");
         command.add("-");
         command.add("--output-format=json");
+        command.add("--fields=+neKSs");
         if (extraFlags != null) {
             for (String flag : extraFlags) {
                 if (flag != null && !flag.isBlank()) {

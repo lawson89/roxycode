@@ -1,5 +1,7 @@
 package org.roxycode.app.util;
 
+import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
+import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import com.vladsch.flexmark.ext.yaml.front.matter.YamlFrontMatterBlock;
 import com.vladsch.flexmark.util.ast.Node;
 import java.io.IOException;
@@ -11,7 +13,6 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import org.apache.commons.lang3.StringUtils;
-import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ui.SwingHtmlUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,6 +24,9 @@ public final class FrontmatterUtils {
 
     private static final Logger log = LoggerFactory.getLogger(FrontmatterUtils.class);
     private static final String YAML_DELIMITER = "---";
+
+    public static final YAMLMapper SHARED_YAML_MAPPER = (YAMLMapper) new YAMLMapper()
+            .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER).findAndRegisterModules();
 
     private FrontmatterUtils() {
     }
@@ -99,7 +103,7 @@ public final class FrontmatterUtils {
         }
         try {
             @SuppressWarnings("unchecked")
-            Map<String, Object> obj = AiConfig.SHARED_YAML_MAPPER.readValue(yamlContent, Map.class);
+            Map<String, Object> obj = SHARED_YAML_MAPPER.readValue(yamlContent, Map.class);
             if (obj == null) {
                 return Collections.emptyMap();
             }
@@ -124,7 +128,7 @@ public final class FrontmatterUtils {
             return YAML_DELIMITER + "\n" + YAML_DELIMITER + "\n\n";
         }
         try {
-            String dumped = AiConfig.SHARED_YAML_MAPPER.writeValueAsString(fields).trim();
+            String dumped = SHARED_YAML_MAPPER.writeValueAsString(fields).trim();
             return YAML_DELIMITER + "\n" + dumped + "\n" + YAML_DELIMITER + "\n\n";
         } catch (Exception e) {
             log.warn("Failed to format YAML frontmatter: {}", e.getMessage());

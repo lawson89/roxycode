@@ -181,7 +181,7 @@ public class GrepService {
         return prefixed;
     }
 
-    private EditorResult executeRipGrep(String pattern, String relativePath, String filePattern, int contextLines,
+    EditorResult executeRipGrep(String pattern, String relativePath, String filePattern, int contextLines,
             boolean fixedStrings, boolean ignoreCase) {
         if (!canExecuteSearch(relativePath)) {
             return new EditorResult(false, "", "No active project");

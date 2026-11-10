@@ -637,6 +637,17 @@ public class FileEditorService {
         return tokens;
     }
 
+    /**
+     * Finds the best starting line in the file that matches the target block based on weighted anchor scoring.
+     * 
+     * @param fileLines
+     *            the lines of the file to search
+     * @param targetLines
+     *            the lines of the block being searched for
+     * @param targetTokens
+     *            the identifier tokens extracted from the target block
+     * @return the 1-based line number of the best match, or -1 if no match reaches MIN_ANCHOR_SCORE
+     */
     private static int findBestMatchAnchorLine(List<String> fileLines, List<String> targetLines,
             Set<String> targetTokens) {
         if (targetLines.isEmpty() && targetTokens.isEmpty()) {
@@ -660,6 +671,23 @@ public class FileEditorService {
         return bestLineNumber;
     }
 
+    /**
+     * Scores a candidate window in the file against the target lines and tokens. Heuristics: - Exact line matches are
+     * heavily weighted (EXACT_LINE_MATCH_WEIGHT). - Contained line matches (partial matches) are moderately weighted
+     * (CONTAINED_LINE_MATCH_WEIGHT). - Unique identifier token matches provide a baseline score (TOKEN_MATCH_WEIGHT).
+     * 
+     * @param fileLines
+     *            the lines of the file
+     * @param startIndex
+     *            the starting index (0-based) of the window
+     * @param windowSize
+     *            the size of the window to check
+     * @param targetLines
+     *            the lines to match against
+     * @param targetTokens
+     *            the tokens to match against
+     * @return the total score for this window
+     */
     private static int scoreCandidateWindow(List<String> fileLines, int startIndex, int windowSize,
             List<String> targetLines, Set<String> targetTokens) {
         int endIndex = Math.min(fileLines.size(), startIndex + windowSize);

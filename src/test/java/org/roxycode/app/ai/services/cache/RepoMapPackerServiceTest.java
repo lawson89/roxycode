@@ -108,10 +108,10 @@ class RepoMapPackerServiceTest {
         SwingTestUtils.assertContainsNone(content, "## Project Tree", "--- ", "1: package demo;",
                 "2: import java.util.List;", "secretBodyLine", "Some markdown prose", "testIt");
         assertEquals(1, ctagsCommands.size());
-        assertEquals(7, ctagsCommands.get(0).size());
+        assertEquals(8, ctagsCommands.get(0).size());
         assertTrue(ctagsCommands.get(0).contains("--fields=+n"));
         assertTrue(ctagsCommands.get(0).contains("--pattern-length-limit=0"));
-        assertTrue(ctagsCommands.get(0).get(6).endsWith("SmallService.java"));
+        assertTrue(ctagsCommands.get(0).get(7).endsWith("SmallService.java"));
 
         Optional<RepoMapSnapshot> snapshot = service.getCachedSnapshot();
         assertTrue(snapshot.isPresent());
@@ -241,7 +241,7 @@ class RepoMapPackerServiceTest {
         assertTrue(first.success());
         SwingTestUtils.assertContainsAll(first.content(), "  1: public class LargeA {", "  1: public class LargeB {");
         assertEquals(1, ctagsCommands.size());
-        assertEquals(8, ctagsCommands.get(0).size());
+        assertEquals(9, ctagsCommands.get(0).size());
 
         Files.writeString(largeA, "public class LargeAUpdated {" + nl + padding + "}" + nl);
         service.handleFileChanged(new FileChangedEvent("LargeA.java"));
@@ -252,8 +252,8 @@ class RepoMapPackerServiceTest {
         SwingTestUtils.assertContainsAll(second.content(), "  1: public class LargeAUpdated {",
                 "  1: public class LargeB {");
         assertEquals(2, ctagsCommands.size());
-        assertEquals(7, ctagsCommands.get(1).size());
-        assertTrue(ctagsCommands.get(1).get(6).endsWith("LargeA.java"));
+        assertEquals(8, ctagsCommands.get(1).size());
+        assertTrue(ctagsCommands.get(1).get(7).endsWith("LargeA.java"));
     }
 
     @Test
