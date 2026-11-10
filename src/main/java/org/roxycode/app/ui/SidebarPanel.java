@@ -13,7 +13,7 @@ import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 
-public final class SidebarPanel extends JPanel {
+final class SidebarPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     static final int LOGO_SIZE = 44;
     static final int LOGO_ARC = 12;

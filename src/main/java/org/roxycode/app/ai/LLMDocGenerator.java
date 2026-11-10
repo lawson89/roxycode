@@ -8,7 +8,7 @@ import java.util.*;
 import org.springframework.aop.support.AopUtils;
 import org.springframework.core.annotation.AnnotationUtils;
 
-public class LLMDocGenerator {
+class LLMDocGenerator {
 
     private static final String DOC_END = " */\n";
     private static final String DOC_LINE_START = " * ";

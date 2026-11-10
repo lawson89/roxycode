@@ -26,7 +26,7 @@ import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public final class PlantUmlRenderer {
+final class PlantUmlRenderer {
 
     private static final Logger log = LoggerFactory.getLogger(PlantUmlRenderer.class);
 

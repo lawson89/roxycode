@@ -117,6 +117,27 @@ class ImplementationPlanTest {
     }
 
     @Test
+    void testBehavioralMethods() {
+        ImplementationPlan plan = createPlan(List.of(),
+                List.of(new ImplementationPlan.TechStep("S1", true), new ImplementationPlan.TechStep("S2", false)),
+                List.of());
+        assertEquals(1, plan.completedStepCount());
+
+        ImplementationPlan approved = plan.withApproval("alice", "ts1");
+        assertTrue(approved.userApproved());
+        assertEquals("alice", approved.approvedBy());
+        assertEquals("ts1", approved.approvalTimestamp());
+
+        ImplementationPlan completed = approved.withCompletion("bob", "ts2");
+        assertEquals("bob", completed.completedBy());
+        assertEquals("ts2", completed.completedOn());
+
+        ImplementationPlan withLog = plan.withAddedHandoffLogEntry("ts3", "sys", "msg");
+        assertEquals(1, withLog.handoffLog().size());
+        assertEquals("msg", withLog.handoffLog().get(0).message());
+    }
+
+    @Test
     void testStepNormalizationAndVerificationGateClassification() {
         assertEquals("", ImplementationPlan.normalizeStepDescription(null));
         assertEquals("", ImplementationPlan.normalizeStepDescription("   ..!:;  "));

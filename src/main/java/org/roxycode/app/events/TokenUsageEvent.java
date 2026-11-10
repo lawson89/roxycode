@@ -1,3 +1,6 @@
+/**
+ * Event published when token usage event.
+ */
 package org.roxycode.app.events;
 
 import org.roxycode.app.ai.WorkflowPhase;

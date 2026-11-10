@@ -40,7 +40,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Lazy
-public final class CodebaseCachePanel extends JPanel {
+final class CodebaseCachePanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(CodebaseCachePanel.class);
 

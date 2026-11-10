@@ -15,7 +15,7 @@ import org.springframework.core.annotation.AnnotationUtils;
  * whitelisted JDK value/collection types, application records/enums, and {@link AgentService} methods annotated with
  * {@link AgentDoc}.
  */
-public final class AgentJexlPermissions extends JexlPermissions.Delegate {
+final class AgentJexlPermissions extends JexlPermissions.Delegate {
 
     private static final String APP_PACKAGE_PREFIX = "org.roxycode.app.";
     private static final String APP_WILDCARD_PERMISSION = "org.roxycode.app.*";

@@ -31,6 +31,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 @Service
+/**
+ * Orchestrates the construction of system and session prompts for the AI agent.
+ */
 public class PromptService {
     private static final Logger log = LoggerFactory.getLogger(PromptService.class);
     private static final String CLASSPATH_PROMPT = "prompts/core_workflow.md";
@@ -83,13 +86,19 @@ public class PromptService {
         this.memoryService = memoryService;
     }
 
+    /**
+     * Generates the stable system context including user guide, JEXL documentation, reference folders, and agent
+     * memory.
+     * 
+     * @return the stable context string
+     */
     public String getStableContext() {
         return readClasspathResource(CLASSPATH_PROMPT) + HEADER_JEXL_CONTEXT + loadJexlContext()
                 + HEADER_USER_GUIDE_CONTEXT + loadUserGuideContext() + NEWLINE_DOUBLE + loadGlobalContext()
                 + loadProjectContext() + loadReferenceFoldersContext() + loadAgentMemoryContext();
     }
 
-    public String loadReferenceFoldersContext() {
+    String loadReferenceFoldersContext() {
         List<ReferenceFolderMount> mounts = projectService.getReferenceFolderMounts();
         if (mounts.isEmpty()) {
             return "";
@@ -178,16 +187,21 @@ public class PromptService {
         return true;
     }
 
+    /**
+     * Generates the session context for the current workflow phase.
+     * 
+     * @return the session context string
+     */
     public String getSessionContext() {
         return getSessionContext(planService.getCurrentPhase());
     }
 
-    public String getSessionContext(WorkflowPhase phase) {
+    String getSessionContext(WorkflowPhase phase) {
         WorkflowPhase currentPhase = Objects.requireNonNullElseGet(phase, planService::getCurrentPhase);
         return getStaticPhaseContext(currentPhase) + getVolatileSessionContext();
     }
 
-    public String getStaticPhaseContext(WorkflowPhase phase) {
+    String getStaticPhaseContext(WorkflowPhase phase) {
         WorkflowPhase currentPhase = Objects.requireNonNullElseGet(phase, planService::getCurrentPhase);
         StringBuilder sb = new StringBuilder(HEADER_SESSION_CONTEXT);
         sb.append("DOMINANT LANGUAGE: ").append(projectAnalysisService.getDominantLanguage())
@@ -198,7 +212,7 @@ public class PromptService {
         return sb.toString();
     }
 
-    public String getVolatileSessionContext() {
+    String getVolatileSessionContext() {
         StringBuilder sb = new StringBuilder();
         if (gitService != null && (jexlServiceRegistry == null || jexlServiceRegistry.isGitAvailable())) {
             String branch = gitService.getCurrentBranch();
@@ -239,7 +253,7 @@ public class PromptService {
         return systemPrompt.toString();
     }
 
-    public String loadPhasePrompt(WorkflowPhase phase) {
+    String loadPhasePrompt(WorkflowPhase phase) {
         String path = switch (phase) {
             case EXPLORE -> EXPLORE_PROMPT_PATH;
             case PLAN -> PLAN_PROMPT_PATH;
@@ -254,11 +268,11 @@ public class PromptService {
         return StringSubstitutor.replace(raw, Map.of("maxTurns", maxTurns));
     }
 
-    public String loadJexlContext() {
+    private String loadJexlContext() {
         return readClasspathResource(JEXL_DOC_PATH);
     }
 
-    public String loadUserGuideContext() {
+    private String loadUserGuideContext() {
         return readClasspathResource(USER_GUIDE_DOC_PATH);
     }
 

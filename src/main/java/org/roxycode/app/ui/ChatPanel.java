@@ -51,7 +51,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 
 @SuppressWarnings("PMD.NullAssignment")
-public final class ChatPanel extends JPanel implements AutoCloseable {
+final class ChatPanel extends JPanel implements AutoCloseable {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(ChatPanel.class);
 

@@ -1,6 +1,7 @@
 package org.roxycode.app.util;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -87,6 +88,43 @@ class PathUtilsTest {
         assertEquals("20250514-153000", PathUtils.formatArchiveTimestamp("2025-05-14T15:30:00Z"));
         assertTrue(PathUtils.formatArchiveTimestamp(null).matches("[0-9]{8}-[0-9]{6}"));
         assertTrue(PathUtils.formatArchiveTimestamp("not-a-timestamp").matches("[0-9]{8}-[0-9]{6}"));
+    }
+
+    @Test
+    void testFormatTimestampDisplay() {
+        assertEquals("2025-05-14 15:30:00", PathUtils.formatTimestampDisplay("2025-05-14T15:30:00Z", 19, ""));
+        assertEquals("2025-05-14 15", PathUtils.formatTimestampDisplay("2025-05-14T15:30:00Z", 13, ""));
+        assertEquals("fallback", PathUtils.formatTimestampDisplay(null, 19, "fallback"));
+        assertEquals("fallback", PathUtils.formatTimestampDisplay("   ", 19, "fallback"));
+    }
+
+    @Test
+    void testComputeSha256Hex() {
+        assertEquals("e3b0c442", PathUtils.computeSha256Hex("", 4));
+        assertEquals("2cf24dba5f", PathUtils.computeSha256Hex("hello", 5));
+        assertEquals("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+                PathUtils.computeSha256Hex("hello", 32));
+        assertEquals("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824",
+                PathUtils.computeSha256Hex("hello", 64));
+    }
+
+    @Test
+    void testFileIoOperations() throws IOException {
+        Path file = tempDir.resolve("subdir/test.json");
+        PathUtils.writeJson(file, java.util.Map.of("key", "value"));
+        assertTrue(Files.exists(file));
+        java.util.Map<String, String> read = PathUtils.readJsonOrDefault(file, java.util.Map.class, null);
+        assertEquals("value", read.get("key"));
+
+        Path tomlFile = tempDir.resolve("test.toml");
+        PathUtils.writeToml(tomlFile, java.util.Map.of("key", "value"), null);
+        assertTrue(Files.exists(tomlFile));
+        java.util.Map<String, String> readToml = PathUtils.readTomlOrDefault(tomlFile, java.util.Map.class, null, null);
+        assertEquals("value", readToml.get("key"));
+
+        PathUtils.deleteIfExistsQuietly(tomlFile);
+        assertFalse(Files.exists(tomlFile));
+        PathUtils.deleteIfExistsQuietly(null);
     }
 
     @Test

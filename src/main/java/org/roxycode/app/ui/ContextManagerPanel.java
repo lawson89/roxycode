@@ -42,7 +42,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Lazy
-public final class ContextManagerPanel extends JPanel {
+final class ContextManagerPanel extends JPanel {
     private static final long serialVersionUID = 1L;
 
     static final String PAGE_TITLE = "Context Folders";

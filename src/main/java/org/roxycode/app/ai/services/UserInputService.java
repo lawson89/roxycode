@@ -1,3 +1,6 @@
+/**
+ * User Input Service.
+ */
 package org.roxycode.app.ai.services;
 
 import java.util.ArrayList;
@@ -51,6 +54,13 @@ public class UserInputService {
     }
 
     @AgentDoc(value = "Asks the user a Yes/No confirmation question and returns true if confirmed.", examples = "userInputService.confirm('Proceed with database migration?')")
+    /**
+     * Asks the user a Yes/No confirmation question.
+     * 
+     * @param question
+     *            the question text
+     * @return true if confirmed, false otherwise
+     */
     public boolean confirm(@AgentDoc("The confirmation question to display to the user") String question) {
         return confirm(question, null);
     }

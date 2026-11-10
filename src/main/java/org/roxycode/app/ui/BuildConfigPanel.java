@@ -35,7 +35,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Lazy
-public final class BuildConfigPanel extends JPanel {
+final class BuildConfigPanel extends JPanel {
 
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(BuildConfigPanel.class);

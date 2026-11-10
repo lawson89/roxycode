@@ -108,7 +108,7 @@ public interface CtagsRunner {
         }
     }
 
-    static Path resolveTargetPath(String rawPath, List<Path> files) {
+    private static Path resolveTargetPath(String rawPath, List<Path> files) {
         if (StringUtils.isNotBlank(rawPath)) {
             return Path.of(rawPath).toAbsolutePath().normalize();
         }
@@ -136,7 +136,7 @@ public interface CtagsRunner {
         return finalized;
     }
 
-    static boolean hasSubsequentLineSymbol(List<CtagsEntry> sorted, int index) {
+    private static boolean hasSubsequentLineSymbol(List<CtagsEntry> sorted, int index) {
         int currentLine = sorted.get(index).line();
         for (int j = index + 1; j < sorted.size(); j++) {
             if (sorted.get(j).line() > currentLine) {
@@ -146,7 +146,7 @@ public interface CtagsRunner {
         return false;
     }
 
-    static int resolveEndLine(List<CtagsEntry> sorted, int index, int totalLines) {
+    private static int resolveEndLine(List<CtagsEntry> sorted, int index, int totalLines) {
         CtagsEntry current = sorted.get(index);
         if (current.end() >= current.line()) {
             if (totalLines > 0) {
@@ -166,7 +166,7 @@ public interface CtagsRunner {
         return current.line();
     }
 
-    static int countLinesSafely(Path filePath) {
+    private static int countLinesSafely(Path filePath) {
         try (Stream<String> lines = Files.lines(filePath)) {
             return (int) lines.count();
         } catch (Exception e) {

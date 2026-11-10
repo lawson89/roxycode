@@ -48,6 +48,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.MimeTypeUtils;
 
 @Service
+/**
+ * Orchestrates AI chat interactions, model selection, and tool execution.
+ */
 public class AiService implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(AiService.class);
     private static final String AGENT_NAME = "Roxy";
@@ -64,7 +67,7 @@ public class AiService implements AutoCloseable {
     static final String GROUNDED_SEARCH_SYSTEM_PROMPT = "You are a technical research assistant. Use Google Search to provide accurate, up-to-date facts, synthesis, and source URLs or citations when available.";
 
     @FunctionalInterface
-    public interface ConnectionTester {
+    interface ConnectionTester {
         String verifyConnection(String apiKey, String modelName) throws Exception;
     }
 
@@ -85,6 +88,28 @@ public class AiService implements AutoCloseable {
     private volatile int maxRetryAttempts = AiConfig.DEFAULT_MAX_RETRY_ATTEMPTS;
 
     @Autowired
+    /**
+     * Constructs a new AiService.
+     * 
+     * @param chatClientBuilder
+     *            the chat client builder
+     * @param settingsService
+     *            the settings service
+     * @param projectService
+     *            the project service
+     * @param promptService
+     *            the prompt service
+     * @param jexlTool
+     *            the JEXL tool
+     * @param planService
+     *            the plan service
+     * @param chatMemory
+     *            the chat memory
+     * @param toolCallingManager
+     *            the tool calling manager
+     * @param eventPublisher
+     *            the event publisher
+     */
     public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService,
             @Nullable ProjectService projectService, PromptService promptService, JexlTool jexlTool,
             PlanService planService, ChatMemory chatMemory, ToolCallingManager toolCallingManager,
@@ -135,6 +160,9 @@ public class AiService implements AutoCloseable {
 
     @Override
     @SuppressWarnings({"PMD.NullAssignment", "PMD.CloseResource"})
+    /**
+     * Closes the service and releases any managed resources.
+     */
     public synchronized void close() {
         Client clientToClose = this.managedClient;
         this.managedClient = null;
@@ -142,6 +170,12 @@ public class AiService implements AutoCloseable {
     }
 
     @EventListener
+    /**
+     * Handles settings changed events to reload the AI client if necessary.
+     * 
+     * @param event
+     *            the settings changed event
+     */
     public synchronized void onSettingsChanged(SettingsChangedEvent event) {
         String newApiKey;
         if (event != null && event.settings() != null) {
@@ -168,10 +202,28 @@ public class AiService implements AutoCloseable {
         }
         ChatClient.Builder builder = chatClientBuilderFactory.apply(trimmed);
         this.chatClient = buildChatClient(builder);
+        /**
+         * Tests the connection to the AI provider with the given API key and model.
+         * 
+         * @param apiKey
+         *            the API key to test
+         * @param modelName
+         *            the model name to test
+         * @return a status message or error hint
+         */
         this.activeApiKey = trimmed;
         log.info("Hot-reloaded Gemini ChatClient with updated API key");
     }
 
+    /**
+     * Tests the connection to the Gemini API using the provided API key and model name.
+     *
+     * @param apiKey
+     *            the Gemini API key to test
+     * @param modelName
+     *            the name of the model to test (optional, defaults to configured model)
+     * @return the result of the connection test (typically the model name if successful)
+     */
     public String testConnection(String apiKey, String modelName) {
         String trimmedKey = StringUtils.trimToEmpty(apiKey);
         if (trimmedKey.isEmpty()) {
@@ -225,9 +277,36 @@ public class AiService implements AutoCloseable {
 
     void setRetryTemplate(RetryTemplate retryTemplate, int maxRetryAttempts) {
         this.retryTemplate = Objects.requireNonNull(retryTemplate, "retryTemplate must not be null");
+        /**
+         * Executes a chat interaction with the AI model.
+         * 
+         * @param conversationId
+         *            the unique ID of the conversation
+         * @param phase
+         *            the current workflow phase
+         * @param message
+         *            the user's message
+         * @param images
+         *            optional list of images to include in the prompt
+         * @return the AI's response text
+         */
         this.maxRetryAttempts = Math.max(1, maxRetryAttempts);
     }
 
+    /**
+     * Executes a chat turn with the AI model, including prompt construction, model call, and tool execution
+     * orchestration.
+     *
+     * @param conversationId
+     *            the unique identifier for the conversation
+     * @param phase
+     *            the current workflow phase (defaults to active plan phase if null)
+     * @param message
+     *            the user message to process
+     * @param images
+     *            optional list of images to include in the prompt
+     * @return the formatted AI response content
+     */
     @SuppressWarnings("PMD.PreserveStackTrace")
     public String chat(String conversationId, WorkflowPhase phase, String message, List<byte[]> images) {
         ExceptionUtils.checkInterrupted("Chat turn interrupted before start");
@@ -251,6 +330,13 @@ public class AiService implements AutoCloseable {
         }
     }
 
+    /**
+     * Performs a grounded web search using Google Search retrieval to look up live documentation and facts.
+     *
+     * @param query
+     *            the search query or question
+     * @return the synthesized answer with grounded facts and citations
+     */
     @SuppressWarnings("PMD.PreserveStackTrace")
     public String groundedSearch(String query) {
         String trimmedQuery = StringUtils.trimToEmpty(query);

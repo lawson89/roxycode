@@ -102,7 +102,7 @@ public final class SwingHtmlUtils {
         }
     }
 
-    public static void configureReadOnlyCaret(JTextComponent component) {
+    static void configureReadOnlyCaret(JTextComponent component) {
         if (!(component.getCaret() instanceof NonPaintingCaret)) {
             component.setCaret(new NonPaintingCaret());
         }
@@ -143,7 +143,7 @@ public final class SwingHtmlUtils {
         }
     }
 
-    public static String renderMarkdownToHtml(String markdown) {
+    static String renderMarkdownToHtml(String markdown) {
         if (markdown == null || markdown.isEmpty()) {
             return "";
         }
@@ -154,7 +154,7 @@ public final class SwingHtmlUtils {
         return MARKDOWN_PARSER;
     }
 
-    public static JEditorPane createHtmlEditorPane() {
+    static JEditorPane createHtmlEditorPane() {
         JEditorPane pane = new JEditorPane();
         pane.setEditable(false);
         pane.setContentType("text/html");
@@ -164,7 +164,7 @@ public final class SwingHtmlUtils {
         return pane;
     }
 
-    public static void addChangeListener(JTextComponent component, Runnable onChange) {
+    static void addChangeListener(JTextComponent component, Runnable onChange) {
         component.getDocument().addDocumentListener(new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent e) {
@@ -183,8 +183,7 @@ public final class SwingHtmlUtils {
         });
     }
 
-    public static void applyTintedBannerStyle(JComponent banner, Color accent, int topBottomPad, int leftPad,
-            int rightPad) {
+    static void applyTintedBannerStyle(JComponent banner, Color accent, int topBottomPad, int leftPad, int rightPad) {
         Color tintedBg = getTintedBackground(accent, 0.12);
         banner.setOpaque(true);
         banner.setBackground(tintedBg);
@@ -193,7 +192,7 @@ public final class SwingHtmlUtils {
         banner.putClientProperty(FlatClientProperties.STYLE, "background: " + toHex(tintedBg));
     }
 
-    public static void applyTheme(JEditorPane textPane, int marginPx) {
+    static void applyTheme(JEditorPane textPane, int marginPx) {
         HTMLEditorKit kit = new HTMLEditorKit() {
             private static final long serialVersionUID = 1L;
             private final transient ViewFactory factory = new WrappingHtmlFactory();
@@ -529,7 +528,7 @@ public final class SwingHtmlUtils {
         }
     }
 
-    public static void installTextContextMenu(JTextComponent component) {
+    static void installTextContextMenu(JTextComponent component) {
         component.addMouseListener(new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
@@ -564,11 +563,11 @@ public final class SwingHtmlUtils {
         });
     }
 
-    public static void setTestMode(boolean enabled) {
+    static void setTestMode(boolean enabled) {
         testMode = enabled;
     }
 
-    public static void copyToClipboard(String text) {
+    static void copyToClipboard(String text) {
         if (text == null || testMode) {
             return;
         }
@@ -578,7 +577,7 @@ public final class SwingHtmlUtils {
         }
     }
 
-    public static Timer showCopyButtonFeedback(JButton button, Timer existingTimer, String copiedText, Icon copiedIcon,
+    static Timer showCopyButtonFeedback(JButton button, Timer existingTimer, String copiedText, Icon copiedIcon,
             String originalText, Icon originalIcon, int delayMs) {
         if (existingTimer != null && existingTimer.isRunning()) {
             existingTimer.stop();
@@ -594,12 +593,12 @@ public final class SwingHtmlUtils {
         return timer;
     }
 
-    public static javax.swing.border.Border createThemeMatteBorder(int top, int left, int bottom, int right) {
+    static javax.swing.border.Border createThemeMatteBorder(int top, int left, int bottom, int right) {
         return BorderFactory.createMatteBorder(top, left, bottom, right,
                 getUiColor(Color.GRAY, "Component.borderColor"));
     }
 
-    public static Color getUiColor(Color fallback, String... uiKeys) {
+    static Color getUiColor(Color fallback, String... uiKeys) {
         if (uiKeys != null) {
             for (String key : uiKeys) {
                 Color color = UIManager.getColor(key);
@@ -611,19 +610,19 @@ public final class SwingHtmlUtils {
         return fallback;
     }
 
-    public static Color getAccentColor() {
+    static Color getAccentColor() {
         return getUiColor(new Color(0x00, 0x7a, 0xcc), "Component.accentColor", "Actions.Blue");
     }
 
-    public static Color getWarningColor() {
+    static Color getWarningColor() {
         return getUiColor(new Color(0xd9, 0x77, 0x06), "Component.warning.borderColor", "Actions.Yellow");
     }
 
-    public static Color getMutedForegroundColor() {
+    static Color getMutedForegroundColor() {
         return getUiColor(Color.GRAY, "Label.disabledForeground", "Component.infoForeground");
     }
 
-    public static Color blendColor(Color foreground, Color background, double foregroundRatio) {
+    static Color blendColor(Color foreground, Color background, double foregroundRatio) {
         double clamped = Math.clamp(foregroundRatio, 0.0, 1.0);
         double bgRatio = 1.0 - clamped;
         int r = (int) Math.round(foreground.getRed() * clamped + background.getRed() * bgRatio);
@@ -632,22 +631,22 @@ public final class SwingHtmlUtils {
         return new Color(Math.clamp(r, 0, 255), Math.clamp(g, 0, 255), Math.clamp(b, 0, 255));
     }
 
-    public static Color getTintedBackground(Color tint, double tintRatio) {
+    static Color getTintedBackground(Color tint, double tintRatio) {
         return blendColor(tint, getUiColor(new Color(0xf5, 0xf5, 0xf5), "Panel.background"), tintRatio);
     }
 
-    public static String toHex(Color color) {
+    static String toHex(Color color) {
         return String.format("#%02x%02x%02x", color.getRed(), color.getGreen(), color.getBlue());
     }
 
-    public static String escapeHtml(String text) {
+    static String escapeHtml(String text) {
         if (text == null) {
             return "";
         }
         return StringEscapeUtils.escapeHtml4(text);
     }
 
-    public static boolean isDarkTheme(String themeName) {
+    static boolean isDarkTheme(String themeName) {
         if (themeName != null && !themeName.isBlank()) {
             String lower = themeName.toLowerCase(Locale.ROOT);
             if (lower.contains("dark") || "darcula".equals(lower)) {
@@ -660,7 +659,7 @@ public final class SwingHtmlUtils {
         return FlatLaf.isLafDark();
     }
 
-    public static void applyRSyntaxTheme(RSyntaxTextArea textArea, SettingsService settingsService) {
+    static void applyRSyntaxTheme(RSyntaxTextArea textArea, SettingsService settingsService) {
         String theme = null;
         if (settingsService != null && settingsService.getSettings() != null) {
             theme = settingsService.getSettings().getTheme();
@@ -668,7 +667,7 @@ public final class SwingHtmlUtils {
         applyRSyntaxTheme(textArea, theme);
     }
 
-    public static void applyRSyntaxTheme(RSyntaxTextArea textArea, String themeName) {
+    static void applyRSyntaxTheme(RSyntaxTextArea textArea, String themeName) {
         if (textArea == null) {
             return;
         }

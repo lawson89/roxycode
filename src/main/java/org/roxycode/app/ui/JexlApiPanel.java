@@ -18,7 +18,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Lazy
-public final class JexlApiPanel extends JPanel {
+final class JexlApiPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     static final int COPY_FEEDBACK_DELAY_MS = 1500;
     static final String PAGE_TITLE = "Agent Tools API";

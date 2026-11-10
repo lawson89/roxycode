@@ -1,3 +1,6 @@
+/**
+ * Service for environment service.
+ */
 package org.roxycode.app.service;
 
 import java.awt.Color;
@@ -11,10 +14,20 @@ import org.springframework.stereotype.Service;
 @Service
 public class EnvironmentService {
 
+    /**
+     * Returns the operating system name.
+     * 
+     * @return the OS name
+     */
     public String getOsName() {
         return System.getProperty("os.name");
     }
 
+    /**
+     * Returns the operating system version.
+     * 
+     * @return the OS version
+     */
     public String getOsVersion() {
         return System.getProperty("os.version");
     }

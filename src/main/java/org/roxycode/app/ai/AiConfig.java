@@ -163,7 +163,7 @@ public class AiConfig {
         return createNoOpRetryTemplate();
     }
 
-    public static RetryTemplate createNoOpRetryTemplate() {
+    private static RetryTemplate createNoOpRetryTemplate() {
         RetryPolicy policy = RetryPolicy.builder().maxRetries(0).build();
         return new RetryTemplate(policy);
     }

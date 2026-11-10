@@ -228,7 +228,7 @@ public class GenericBuildToolService {
         }
     }
 
-    public void stopActiveContainer() {
+    private void stopActiveContainer() {
         buildContainerService.stopActiveContainer();
     }
 

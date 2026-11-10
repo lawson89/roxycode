@@ -18,6 +18,36 @@ import org.roxycode.app.util.PathUtils;
 import org.roxycode.app.util.TokenUtils;
 
 @SuppressWarnings("PMD.AvoidDuplicateLiterals")
+/**
+ * Represents a structured implementation plan for a feature or task.
+ *
+ * @param title
+ *            the title of the plan
+ * @param goal
+ *            the high-level goal of the plan
+ * @param requirements
+ *            the list of requirements to be met
+ * @param technicalSteps
+ *            the list of technical implementation steps
+ * @param userApproved
+ *            whether the plan has been approved by the user
+ * @param approvalTimestamp
+ *            the timestamp when the plan was approved
+ * @param approvedBy
+ *            the user who approved the plan
+ * @param completedBy
+ *            the user who completed the plan
+ * @param completedOn
+ *            the timestamp when the plan was completed
+ * @param handoffLog
+ *            the log of handoff entries
+ * @param fileChanges
+ *            the list of files modified during implementation
+ * @param usageSummary
+ *            the summary of token usage and cost
+ * @param commitMessage
+ *            the proposed git commit message
+ */
 public record ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
         boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
         List<LogEntry> handoffLog, List<FileChange> fileChanges, UsageSummary usageSummary, String commitMessage) {
@@ -28,9 +58,25 @@ public record ImplementationPlan(String title, String goal, List<String> require
     public static final String STEP_CODE_REVIEW = "Automated code review passes";
     private static final String CODE_FENCE = "```";
 
+    /**
+     * Represents a single technical implementation step.
+     *
+     * @param description
+     *            the description of the step
+     * @param completed
+     *            whether the step has been completed
+     */
     public record TechStep(String description, boolean completed) {
     }
 
+    /**
+     * Represents a file change recorded during implementation.
+     *
+     * @param path
+     *            the path to the changed file relative to the project root
+     * @param changeType
+     *            the type of change (CREATED, MODIFIED, DELETED)
+     */
     public record FileChange(String path, FileChangedEvent.ChangeType changeType) {
         public FileChange {
             path = PathUtils.normalizeRelativePath(path);
@@ -38,6 +84,16 @@ public record ImplementationPlan(String title, String goal, List<String> require
         }
     }
 
+    /**
+     * Represents an entry in the plan's handoff log.
+     *
+     * @param timestamp
+     *            the ISO-8601 timestamp of the entry
+     * @param user
+     *            the user who created the entry
+     * @param message
+     *            the log message
+     */
     public record LogEntry(String timestamp, String user, String message) {
         private static final int TIMESTAMP_LENGTH = 19;
 
@@ -46,6 +102,16 @@ public record ImplementationPlan(String title, String goal, List<String> require
         }
     }
 
+    /**
+     * Represents AI usage statistics for a specific workflow phase.
+     *
+     * @param modelCalls
+     *            the number of model calls made during the phase
+     * @param totalTokens
+     *            the total number of tokens consumed during the phase
+     * @param estimatedCostUsd
+     *            the estimated cost of the phase in USD
+     */
     public record PhaseUsage(int modelCalls, long totalTokens, double estimatedCostUsd) {
 
         public static final PhaseUsage EMPTY = new PhaseUsage(0, 0L, 0.0);
@@ -77,6 +143,40 @@ public record ImplementationPlan(String title, String goal, List<String> require
         }
     }
 
+    /**
+     * Represents a comprehensive summary of AI token usage and costs across all phases.
+     *
+     * @param modelCalls
+     *            total number of model calls
+     * @param promptTokens
+     *            total prompt tokens
+     * @param cachedInputTokens
+     *            total cached input tokens
+     * @param uncachedInputTokens
+     *            total uncached input tokens
+     * @param outputTokens
+     *            total output tokens
+     * @param thoughtsTokens
+     *            total thinking tokens
+     * @param totalTokens
+     *            overall total tokens
+     * @param uncachedInputCostUsd
+     *            total cost for uncached input
+     * @param cachedInputCostUsd
+     *            total cost for cached input
+     * @param outputCostUsd
+     *            total cost for output
+     * @param thoughtsCostUsd
+     *            total cost for thinking
+     * @param estimatedCostUsd
+     *            overall estimated cost in USD
+     * @param planPhaseUsage
+     *            usage statistics for the PLAN phase
+     * @param codePhaseUsage
+     *            usage statistics for the CODE phase
+     * @param reviewPhaseUsage
+     *            usage statistics for the REVIEW phase
+     */
     public record UsageSummary(int modelCalls, long promptTokens, long cachedInputTokens, long uncachedInputTokens,
             long outputTokens, long thoughtsTokens, long totalTokens, double uncachedInputCostUsd,
             double cachedInputCostUsd, double outputCostUsd, double thoughtsCostUsd, double estimatedCostUsd,
@@ -220,7 +320,7 @@ public record ImplementationPlan(String title, String goal, List<String> require
         return isCompileStep(description) || isUnitTestStep(description) || isCodeReviewStep(description);
     }
 
-    public Set<String> collectCompletedNonVerificationSteps() {
+    Set<String> collectCompletedNonVerificationSteps() {
         if (technicalSteps.isEmpty()) {
             return Set.of();
         }

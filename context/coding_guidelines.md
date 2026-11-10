@@ -7,6 +7,12 @@
 *   **Restrict lambdas and method references:** While Java 21 supports robust functional paradigms, limit lambdas (`->`) and method references (`::`) to very simple, highly readable operations (no more than a few lines). For anything more complex, rely on plain procedural blocks and standard `for` loops.
 *   **Enforce early returns (guard clauses):** Check for invalid conditions and return or throw immediately at the top of a method. This flattens the architecture and completely avoids deeply nested `if/else` blocks.
 *   **Restrict complex pattern matching:** Although Java 21 has powerful pattern matching capabilities, avoid complex `switch` expressions with `when` clauses. Favor straightforward `instanceof` checks or basic `switch` statements to keep branching logic universally understandable.
+
+### Access Modifiers, Javadoc, and Unit Testing
+*   **private:** Use for all fields, constructors, methods, and nested types that are not referenced outside the declaring class and are not directly invoked by unit tests.
+*   **Package-Private (no modifier):** Use for classes, constructors, methods, and fields that are only used within the same package or exposed solely for direct unit testing within the same package.
+*   **protected:** Use only for methods or fields accessed by subclasses (or required when overriding protected superclass methods) and possibly unit tested. Never use protected members in final classes.
+*   **public:** Reserve strictly for the cross-package public API (and framework entry points such as @AgentDoc methods, Jackson/TOML beans, or interface implementations). Every public API type and method must have Javadoc and must be unit tested.
 *   **Always use a full set of brackets on if statements: **
 
 ### Syntax and Typing

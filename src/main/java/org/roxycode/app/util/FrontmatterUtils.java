@@ -42,6 +42,13 @@ public final class FrontmatterUtils {
         return null;
     }
 
+    /**
+     * Removes YAML frontmatter from the given Markdown text.
+     *
+     * @param rawMarkdown
+     *            the raw Markdown content
+     * @return the Markdown content without frontmatter
+     */
     public static String stripFrontmatter(String rawMarkdown) {
         if (rawMarkdown == null || rawMarkdown.isEmpty()) {
             return "";
@@ -53,6 +60,13 @@ public final class FrontmatterUtils {
         return rawMarkdown;
     }
 
+    /**
+     * Parses YAML frontmatter from a file.
+     *
+     * @param file
+     *            the path to the Markdown file
+     * @return a map of frontmatter fields
+     */
     public static Map<String, String> parseFrontmatter(Path file) {
         if (file == null || !Files.isRegularFile(file)) {
             return Collections.emptyMap();
@@ -65,6 +79,13 @@ public final class FrontmatterUtils {
         }
     }
 
+    /**
+     * Parses YAML frontmatter from a string.
+     *
+     * @param content
+     *            the Markdown content
+     * @return a map of frontmatter fields
+     */
     public static Map<String, String> parseFrontmatter(String content) {
         YamlFrontMatterBlock block = findClosedFrontmatterBlock(content);
         if (block == null) {
@@ -91,6 +112,13 @@ public final class FrontmatterUtils {
         }
     }
 
+    /**
+     * Formats the given fields as a YAML frontmatter block.
+     *
+     * @param fields
+     *            the fields to include
+     * @return the formatted YAML frontmatter string
+     */
     public static String formatFrontmatter(Map<String, Object> fields) {
         if (fields == null || fields.isEmpty()) {
             return YAML_DELIMITER + "\n" + YAML_DELIMITER + "\n\n";

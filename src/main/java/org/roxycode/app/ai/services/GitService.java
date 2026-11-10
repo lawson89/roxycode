@@ -1,3 +1,6 @@
+/**
+ * Git Service.
+ */
 package org.roxycode.app.ai.services;
 
 import java.nio.file.Files;
@@ -172,6 +175,11 @@ public class GitService {
     }
 
     @AgentDoc(value = "Returns the git diff including staged, unstaged, and untracked changes in the working tree.", examples = "gitService.getDiff()")
+    /**
+     * Returns the git diff including staged, unstaged, and untracked changes.
+     * 
+     * @return the diff output
+     */
     public String getDiff() {
         return computeDiff(null);
     }

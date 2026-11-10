@@ -36,6 +36,9 @@ import org.springframework.stereotype.Service;
 import org.testcontainers.DockerClientFactory;
 
 @Service
+/**
+ * Probes and manages system tools required by RoxyCode.
+ */
 public class SystemToolService {
     private static final Logger log = LoggerFactory.getLogger(SystemToolService.class);
     static final String SYSTEM_TOOLS_FILE = "system-tools.toml";
@@ -57,7 +60,7 @@ public class SystemToolService {
     private static final int MAX_VERSION_LENGTH = 50;
     private static final List<String> VERSION_NOISE_MARKERS = List.of("features:", ", Copyright");
 
-    public record DockerVersionInfo(String version, String apiVersion) {
+    record DockerVersionInfo(String version, String apiVersion) {
     }
 
     public static class SystemToolsCache {
@@ -179,6 +182,11 @@ public class SystemToolService {
         return ProcessRunner.run(List.of("docker", ARG_VERSION)).isSuccess();
     }
 
+    /**
+     * Returns the cached list of detected system tools.
+     * 
+     * @return the list of system tools
+     */
     public List<SystemTool> getCachedTools() {
         CompletableFuture<List<SystemTool>> future = toolsCache.getIfPresent(CACHE_KEY_ALL);
         if (future != null && future.isDone()) {
@@ -195,6 +203,11 @@ public class SystemToolService {
         return List.of();
     }
 
+    /**
+     * Detects system tools asynchronously.
+     * 
+     * @return a future containing the list of detected tools
+     */
     public CompletableFuture<List<SystemTool>> detectTools() {
         List<SystemTool> cached = getCachedTools();
         if (!cached.isEmpty()) {

@@ -1,3 +1,6 @@
+/**
+ * File Editor Service.
+ */
 package org.roxycode.app.ai.services;
 
 import java.io.IOException;
@@ -69,6 +72,15 @@ public class FileEditorService {
     }
 
     @AgentDoc(value = "Writes content to a file, overwriting it if it exists.", examples = "fileEditorService.writeFile('src/main/resources/config.properties', 'key=value')")
+    /**
+     * Writes the given content to a file. Overwrites the file if it already exists.
+     * 
+     * @param relativePath
+     *            the file path relative to the project root
+     * @param content
+     *            the content to write
+     * @return the editor result
+     */
     public EditorResult writeFile(@AgentDoc("The file path relative to the project root") String relativePath,
             @AgentDoc("The full content to write to the file") String content) throws IOException {
         Path path = projectService.resolvePath(relativePath);
@@ -83,6 +95,17 @@ public class FileEditorService {
     }
 
     @AgentDoc(value = "Replaces a unique block of text with new content.", examples = "fileEditorService.replaceBlock('src/Main.java', '// TODO: implement', 'System.out.println('Hello');')")
+    /**
+     * Replaces a unique block of text in a file.
+     * 
+     * @param relativePath
+     *            the file path relative to the project root
+     * @param targetBlock
+     *            the exact block of text to replace
+     * @param replacementBlock
+     *            the new content
+     * @return the editor result
+     */
     public EditorResult replaceBlock(@AgentDoc("The file path relative to the project root") String relativePath,
             @AgentDoc("The existing text block to find and replace") String targetBlock,
             @AgentDoc("The replacement text block") String replacementBlock) throws IOException {

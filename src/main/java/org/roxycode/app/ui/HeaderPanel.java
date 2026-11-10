@@ -29,7 +29,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Lazy
-public final class HeaderPanel extends JPanel {
+final class HeaderPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(HeaderPanel.class);
     private static final String LAYOUT_CENTER = "center";

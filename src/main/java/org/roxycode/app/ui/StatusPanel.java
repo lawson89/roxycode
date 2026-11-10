@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Lazy
-public final class StatusPanel extends JPanel {
+final class StatusPanel extends JPanel {
     private static final long serialVersionUID = 1L;
 
     private final transient EnvironmentService envService;

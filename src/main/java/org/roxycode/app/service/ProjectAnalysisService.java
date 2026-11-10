@@ -1,3 +1,6 @@
+/**
+ * Service for project analysis service.
+ */
 package org.roxycode.app.service;
 
 import com.github.benmanes.caffeine.cache.Cache;
@@ -38,6 +41,11 @@ public class ProjectAnalysisService {
         dominantLanguageCache.invalidateAll();
     }
 
+    /**
+     * Returns the dominant programming language of the current project.
+     * 
+     * @return the dominant language name
+     */
     public String getDominantLanguage() {
         return dominantLanguageCache.get(Boolean.TRUE, k -> computeDominantLanguage());
     }

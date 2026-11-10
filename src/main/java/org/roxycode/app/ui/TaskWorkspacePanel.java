@@ -34,7 +34,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Lazy
-public final class TaskWorkspacePanel extends JPanel {
+final class TaskWorkspacePanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final String LAYOUT_CENTER = "center";
     static final String PLAN_TAB_BASE_TITLE = "Plan";

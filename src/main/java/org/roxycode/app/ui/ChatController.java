@@ -60,7 +60,7 @@ import org.springframework.context.event.EventListener;
  * transitions, and session persistence between {@link ChatModel}, {@link ChatPanel}, and backend AI services.
  */
 @SuppressWarnings({"PMD.NullAssignment", "PMD.CloseResource"})
-public final class ChatController implements AutoCloseable {
+final class ChatController implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(ChatController.class);
     static final String ROLE_SYSTEM = ChatHtmlTemplates.ROLE_SYSTEM;
     static final String ROLE_USER = ChatHtmlTemplates.ROLE_USER;

@@ -9,6 +9,9 @@ import org.apache.commons.lang3.StringUtils;
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
+/**
+ * Represents the global application settings for RoxyCode.
+ */
 public class AppSettings {
 
     public static final String DEFAULT_THEME = "FlatLaf Light";

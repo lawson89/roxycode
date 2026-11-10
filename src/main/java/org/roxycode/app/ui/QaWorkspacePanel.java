@@ -25,7 +25,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Lazy
-public final class QaWorkspacePanel extends JPanel {
+final class QaWorkspacePanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final String LAYOUT_CENTER = "center";
     static final String MENTOR_MODE_BADGE_TEXT = "MENTOR MODE • Read-Only Q&A";

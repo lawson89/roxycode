@@ -34,7 +34,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Lazy
-public final class SystemToolsPanel extends JPanel {
+final class SystemToolsPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(SystemToolsPanel.class);
     static final String SUBTITLE_TEXT = "External CLI utilities and runtimes used by RoxyCode for search, version control, symbol indexing, and isolated builds.";

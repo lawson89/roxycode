@@ -1,3 +1,6 @@
+/**
+ * Grep Service.
+ */
 package org.roxycode.app.ai.services;
 
 import java.nio.file.Path;
@@ -51,6 +54,13 @@ public class GrepService {
     }
 
     @AgentDoc(value = "Searches for a regex pattern in the project files using RipGrep.", examples = "grepService.grep('TODO')")
+    /**
+     * Searches for a regex pattern in the project files using RipGrep.
+     * 
+     * @param pattern
+     *            the regex pattern to search for
+     * @return the grep results
+     */
     public EditorResult grep(@AgentDoc(DOC_REGEX_PATTERN) String pattern) {
         return grep(pattern, CURRENT_DIR, null);
     }

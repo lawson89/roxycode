@@ -82,7 +82,7 @@ public class JexlServiceRegistry {
         return resolved;
     }
 
-    public synchronized boolean isWebSearchAvailable() {
+    synchronized boolean isWebSearchAvailable() {
         if (settingsService != null && settingsService.getSettings() != null) {
             boolean resolved = settingsService.getSettings().isGoogleGroundingEnabled();
             if (!Objects.equals(webSearchAvailable, resolved)) {
@@ -107,11 +107,11 @@ public class JexlServiceRegistry {
         return true;
     }
 
-    public synchronized Map<String, Object> getServices(WorkflowPhase phase) {
+    synchronized Map<String, Object> getServices(WorkflowPhase phase) {
         return getServices(phase, TurnToolContext.DEFAULT_CONVERSATION_ID);
     }
 
-    public synchronized Map<String, Object> getServices(WorkflowPhase phase, String conversationId) {
+    synchronized Map<String, Object> getServices(WorkflowPhase phase, String conversationId) {
         String resolvedConvId = StringUtils.defaultIfBlank(conversationId, TurnToolContext.DEFAULT_CONVERSATION_ID);
         Map<String, Object> filtered = new LinkedHashMap<>();
         for (Map.Entry<String, Object> entry : services.entrySet()) {

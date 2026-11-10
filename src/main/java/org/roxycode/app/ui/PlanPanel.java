@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Lazy
-public final class PlanPanel extends JPanel {
+final class PlanPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final int COPY_FEEDBACK_DELAY_MS = 1500;
     private static final String COPY_BUTTON_TEXT = "Copy Plan as Markdown";

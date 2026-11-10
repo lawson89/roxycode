@@ -10,7 +10,7 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
 
-public final class WorkflowPhaseIndicator extends JPanel {
+final class WorkflowPhaseIndicator extends JPanel {
     private static final long serialVersionUID = 1L;
     private final WorkflowPhase phase;
     private final JLabel textLabel;

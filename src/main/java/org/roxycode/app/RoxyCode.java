@@ -21,15 +21,26 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.env.ConfigurableEnvironment;
 import org.springframework.core.env.MapPropertySource;
 
+/**
+ * The main entry point for the RoxyCode application. This class initializes the Spring Boot application context,
+ * configures the system theme, and launches the main UI frame.
+ */
 @SpringBootApplication
 public class RoxyCode {
 
     private static final Logger log = LoggerFactory.getLogger(RoxyCode.class);
-    static final String SETTINGS_PROPERTY_SOURCE = "roxycodeSettingsProperties";
-    static final String PROP_GEMINI_API_KEY = "spring.ai.google.genai.api-key";
-    static final String PROP_GEMINI_MODEL = "spring.ai.google.genai.chat.options.model";
-    static final String DEFAULT_GEMINI_MODEL = AppSettings.DEFAULT_GEMINI_MODEL;
 
+    private static final String SETTINGS_PROPERTY_SOURCE = "roxycodeSettingsProperties";
+    private static final String PROP_GEMINI_API_KEY = "spring.ai.google.genai.api-key";
+    private static final String PROP_GEMINI_MODEL = "spring.ai.google.genai.chat.options.model";
+    private static final String DEFAULT_GEMINI_MODEL = AppSettings.DEFAULT_GEMINI_MODEL;
+
+    /**
+     * Main entry point for the application.
+     * 
+     * @param args
+     *            command line arguments
+     */
     public static void main(String[] args) {
         String theme = AppSettings.DEFAULT_THEME;
         AppSettings settings = null;
@@ -90,7 +101,7 @@ public class RoxyCode {
         });
     }
 
-    public static ApplicationContextInitializer<ConfigurableApplicationContext> createSettingsInitializer(
+    private static ApplicationContextInitializer<ConfigurableApplicationContext> createSettingsInitializer(
             AppSettings settings) {
         return applicationContext -> {
             ConfigurableEnvironment env = applicationContext.getEnvironment();

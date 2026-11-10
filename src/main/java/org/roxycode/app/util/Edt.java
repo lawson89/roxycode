@@ -15,12 +15,24 @@ import javax.swing.SwingUtilities;
  */
 public final class Edt {
 
+    /**
+     * An executor that runs tasks on the Swing Event Dispatch Thread (EDT).
+     */
     public static final Executor EXECUTOR = Edt::run;
+    /**
+     * An executor that runs tasks on virtual threads.
+     */
     public static final Executor VIRTUAL_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
     private Edt() {
     }
 
+    /**
+     * Runs the given action on the EDT. If the current thread is the EDT, the action is run immediately.
+     *
+     * @param action
+     *            the action to run
+     */
     public static void run(Runnable action) {
         if (action == null) {
             return;
@@ -32,6 +44,13 @@ public final class Edt {
         }
     }
 
+    /**
+     * Runs the given action on the EDT and waits for it to complete. If the current thread is the EDT, the action is
+     * run immediately.
+     *
+     * @param action
+     *            the action to run
+     */
     @SuppressWarnings("PMD.PreserveStackTrace")
     public static void runAndWait(Runnable action) {
         if (action == null) {
@@ -57,10 +76,34 @@ public final class Edt {
         }
     }
 
+    /**
+     * Runs a background task on a virtual thread and invokes the success callback on the EDT.
+     *
+     * @param <T>
+     *            the result type
+     * @param backgroundTask
+     *            the background task to run
+     * @param onEdtSuccess
+     *            the callback to run on the EDT upon success
+     * @return a CompletableFuture representing the result
+     */
     public static <T> CompletableFuture<T> supplyAsync(Callable<T> backgroundTask, Consumer<T> onEdtSuccess) {
         return supplyAsync(backgroundTask, onEdtSuccess, null);
     }
 
+    /**
+     * Runs a background task on a virtual thread and invokes the corresponding callback on the EDT.
+     *
+     * @param <T>
+     *            the result type
+     * @param backgroundTask
+     *            the background task to run
+     * @param onEdtSuccess
+     *            the callback to run on the EDT upon success
+     * @param onEdtError
+     *            the callback to run on the EDT upon error
+     * @return a CompletableFuture representing the result
+     */
     public static <T> CompletableFuture<T> supplyAsync(Callable<T> backgroundTask, Consumer<T> onEdtSuccess,
             Consumer<Exception> onEdtError) {
         return CompletableFuture.supplyAsync(() -> {
@@ -103,10 +146,30 @@ public final class Edt {
         }, EXECUTOR);
     }
 
+    /**
+     * Runs a background task on a virtual thread and invokes the success callback on the EDT.
+     *
+     * @param backgroundTask
+     *            the background task to run
+     * @param onEdtSuccess
+     *            the callback to run on the EDT upon success
+     * @return a CompletableFuture representing the result
+     */
     public static CompletableFuture<Void> runAsync(Runnable backgroundTask, Runnable onEdtSuccess) {
         return runAsync(backgroundTask, onEdtSuccess, null);
     }
 
+    /**
+     * Runs a background task on a virtual thread and invokes the corresponding callback on the EDT.
+     *
+     * @param backgroundTask
+     *            the background task to run
+     * @param onEdtSuccess
+     *            the callback to run on the EDT upon success
+     * @param onEdtError
+     *            the callback to run on the EDT upon error
+     * @return a CompletableFuture representing the result
+     */
     public static CompletableFuture<Void> runAsync(Runnable backgroundTask, Runnable onEdtSuccess,
             Consumer<Exception> onEdtError) {
         return supplyAsync(() -> {

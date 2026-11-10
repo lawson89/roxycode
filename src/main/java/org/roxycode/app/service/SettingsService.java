@@ -1,3 +1,6 @@
+/**
+ * Service for settings service.
+ */
 package org.roxycode.app.service;
 
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
@@ -55,6 +58,11 @@ public class SettingsService {
         return getDefaultRoxyHomeDir().resolve(SETTINGS_FILE);
     }
 
+    /**
+     * Returns the RoxyCode home directory (usually ~/.roxycode).
+     * 
+     * @return the home directory path
+     */
     public synchronized Path getRoxyHomeDir() {
         if (settingsPathOverride != null && settingsPathOverride.getParent() != null) {
             return settingsPathOverride.getParent();
@@ -70,6 +78,11 @@ public class SettingsService {
         return PathUtils.readTomlOrDefault(path, AppSettings.class, new AppSettings(), mapper);
     }
 
+    /**
+     * Returns the list of available Gemini models.
+     * 
+     * @return the list of model configurations
+     */
     public List<GeminiModelConfig> getAvailableModels() {
         try {
             return availableModelsInitializer.get();
@@ -93,6 +106,13 @@ public class SettingsService {
         }
     }
 
+    /**
+     * Resolves a model configuration by its API name.
+     * 
+     * @param apiName
+     *            the API name of the model
+     * @return the model configuration, or null if not found
+     */
     public GeminiModelConfig resolveModelConfig(String apiName) {
         String target = StringUtils.trimToEmpty(apiName);
         if (target.isEmpty()) {

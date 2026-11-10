@@ -29,6 +29,9 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 @Service
+/**
+ * Manages project configuration, data directories, and reference folder mounts.
+ */
 public class ProjectService {
     private static final Logger log = LoggerFactory.getLogger(ProjectService.class);
     private static final String PROJECTS_SUBDIR = "projects";
@@ -149,14 +152,30 @@ public class ProjectService {
         }
     }
 
+    /**
+     * Returns the current project root path.
+     * 
+     * @return the project root path, or null if no project is active
+     */
     public Path getCurrentProjectRoot() {
         return currentProjectRoot;
     }
 
+    /**
+     * Checks if there is an active project.
+     * 
+     * @return true if an active project exists
+     */
     public boolean hasActiveProject() {
         return currentProjectRoot != null;
     }
 
+    /**
+     * Sets the current project root path and publishes a ProjectChangedEvent.
+     * 
+     * @param newRoot
+     *            the new project root path
+     */
     public void setCurrentProjectRoot(Path newRoot) {
         if (newRoot != null) {
             this.currentProjectRoot = newRoot;
@@ -166,6 +185,11 @@ public class ProjectService {
         }
     }
 
+    /**
+     * Returns the name of the current project derived from the root path.
+     * 
+     * @return the project name, or "No Project" if none active
+     */
     public String getProjectName() {
         Path projectRoot = getCurrentProjectRoot();
         if (projectRoot == null) {
@@ -196,10 +220,21 @@ public class ProjectService {
         }
     }
 
+    /**
+     * Returns the Gemini model configured for the current project.
+     * 
+     * @return the project-specific model name
+     */
     public String getProjectGeminiModel() {
         return readProjectConfig().geminiModel();
     }
 
+    /**
+     * Sets the Gemini model for the current project.
+     * 
+     * @param geminiModel
+     *            the model name
+     */
     public void setProjectGeminiModel(String geminiModel) {
         if (!hasActiveProject()) {
             throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
@@ -210,10 +245,21 @@ public class ProjectService {
         publishSettingsChangedSnapshot();
     }
 
+    /**
+     * Returns the thinking level configured for the current project.
+     * 
+     * @return the project-specific thinking level
+     */
     public String getProjectThinkingLevel() {
         return readProjectConfig().thinkingLevel();
     }
 
+    /**
+     * Sets the thinking level for the current project.
+     * 
+     * @param thinkingLevel
+     *            the thinking level
+     */
     public void setProjectThinkingLevel(String thinkingLevel) {
         if (!hasActiveProject()) {
             throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
@@ -232,10 +278,21 @@ public class ProjectService {
         eventPublisher.publishEvent(new SettingsChangedEvent(currentSettings));
     }
 
+    /**
+     * Checks if the build configuration has been confirmed by the user.
+     * 
+     * @return true if confirmed
+     */
     public boolean isBuildConfirmed() {
         return readProjectConfig().buildConfirmed();
     }
 
+    /**
+     * Sets whether the build configuration is confirmed.
+     * 
+     * @param confirmed
+     *            true if confirmed
+     */
     public void setBuildConfirmed(boolean confirmed) {
         if (!hasActiveProject()) {
             throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
@@ -408,7 +465,7 @@ public class ProjectService {
         return null;
     }
 
-    public static List<ReferenceFolderMount> resolveReferenceFolderMounts(List<String> projectFolders,
+    static List<ReferenceFolderMount> resolveReferenceFolderMounts(List<String> projectFolders,
             List<String> globalFolders, Path projectRoot) {
         return resolveReferenceFolderMountsInternal(projectFolders, globalFolders, projectRoot, true);
     }

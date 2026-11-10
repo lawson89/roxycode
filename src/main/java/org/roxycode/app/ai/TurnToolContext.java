@@ -1,3 +1,7 @@
+/**
+ * Captures the execution context for a single AI tool turn, including conversation state
+ * and workflow phase tracking.
+ */
 package org.roxycode.app.ai;
 
 import java.util.Map;

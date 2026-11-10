@@ -1,3 +1,7 @@
+/**
+ * Orchestrates the execution of JEXL scripts against registered workspace services.
+ * This tool provides the primary interface for the AI agent to interact with the project codebase.
+ */
 package org.roxycode.app.ai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -56,10 +60,26 @@ public class JexlTool {
         this.settingsService = settingsService;
     }
 
+    /**
+     * Executes a JEXL script in the current project context.
+     *
+     * @param script
+     *            the JEXL script to execute
+     * @return the serialized result of the script execution
+     */
     public String executeJexl(String script) {
         return executeJexl(script, null);
     }
 
+    /**
+     * Executes a JEXL script within a specific tool context (turn tracking and conversation state).
+     *
+     * @param script
+     *            the JEXL script to execute
+     * @param toolContext
+     *            the Spring AI tool context providing conversation and turn details
+     * @return the serialized result of the script execution
+     */
     @Tool(description = "Executes a Jexl script and returns the result as a string. Useful for workspace file, search, git, and build operations.")
     public String executeJexl(@ToolParam(description = "The Jexl script to execute.") String script,
             ToolContext toolContext) {

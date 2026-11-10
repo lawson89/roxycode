@@ -53,7 +53,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Lazy
-public final class AgentMemoryPanel extends JPanel {
+final class AgentMemoryPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(AgentMemoryPanel.class);
 

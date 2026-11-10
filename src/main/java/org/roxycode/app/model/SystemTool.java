@@ -4,6 +4,24 @@ import java.util.List;
 import java.util.Map;
 import org.apache.commons.lang3.StringUtils;
 
+/**
+ * Represents a system tool required or used by RoxyCode (e.g., Ripgrep, Git, Docker).
+ *
+ * @param name
+ *            the name of the tool
+ * @param version
+ *            the version of the tool detected on the system
+ * @param status
+ *            the status of the tool (e.g., "Detected", "Not Found")
+ * @param description
+ *            a brief description of the tool's purpose
+ * @param license
+ *            the license under which the tool is distributed
+ * @param websiteUrl
+ *            the URL to the tool's official website
+ * @param required
+ *            whether the tool is strictly required for core functionality
+ */
 public record SystemTool(String name, String version, String status, String description, String license,
         String websiteUrl, boolean required) {
 
@@ -16,7 +34,7 @@ public record SystemTool(String name, String version, String status, String desc
 
     public static final List<String> REQUIRED_TOOL_NAMES = List.of(TOOL_RIPGREP, TOOL_CTAGS);
 
-    public record ToolMetadata(String description, String license, String websiteUrl, boolean required) {
+    private record ToolMetadata(String description, String license, String websiteUrl, boolean required) {
     }
 
     private static final Map<String, ToolMetadata> KNOWN_METADATA = Map.of(TOOL_RIPGREP, new ToolMetadata(

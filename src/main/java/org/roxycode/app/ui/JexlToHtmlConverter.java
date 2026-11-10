@@ -8,7 +8,7 @@ import org.fife.ui.rsyntaxtextarea.TokenMaker;
 import org.fife.ui.rsyntaxtextarea.TokenTypes;
 import org.fife.ui.rsyntaxtextarea.modes.JavaScriptTokenMaker;
 
-public final class JexlToHtmlConverter {
+final class JexlToHtmlConverter {
 
     private JexlToHtmlConverter() {
     }

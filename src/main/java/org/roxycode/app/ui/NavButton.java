@@ -7,7 +7,7 @@ import javax.swing.*;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 
-public final class NavButton extends JButton {
+final class NavButton extends JButton {
     private static final long serialVersionUID = 1L;
     private static final int VERTICAL_PADDING = 8;
     private static final int HORIZONTAL_PADDING = 12;

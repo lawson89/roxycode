@@ -1,3 +1,7 @@
+/**
+ * Defines the distinct phases of the RoxyCode development workflow,
+ * each with specific personas, goals, and tool access permissions.
+ */
 package org.roxycode.app.ai;
 
 public enum WorkflowPhase {

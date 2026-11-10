@@ -208,6 +208,13 @@ public class PlanService {
         }
     }
 
+    /**
+     * Submits a new implementation plan and transitions to the planning approval state.
+     * 
+     * @param plan
+     *            the implementation plan to submit
+     * @return a status message
+     */
     public synchronized String submitPlan(ImplementationPlan plan) {
         requirePhase("submitPlan");
         if (plan == null) {
@@ -280,7 +287,7 @@ public class PlanService {
                 currentPlan.formatRemainingIncompleteSteps());
     }
 
-    public synchronized void updateVerificationStep(String stepDescription, boolean completed) {
+    synchronized void updateVerificationStep(String stepDescription, boolean completed) {
         if (currentPlan == null) {
             return;
         }
@@ -376,13 +383,13 @@ public class PlanService {
         return currentPlan;
     }
 
-    public synchronized void setCurrentPlan(ImplementationPlan plan) {
+    private synchronized void setCurrentPlan(ImplementationPlan plan) {
         this.currentPlan = plan;
         persistActiveWorkflowState();
         publishPlanUpdated();
     }
 
-    public synchronized void clearPlan() {
+    private synchronized void clearPlan() {
         this.unassignedTaskUsage = ImplementationPlan.UsageSummary.EMPTY;
         setCurrentPlan(null);
     }
@@ -436,7 +443,7 @@ public class PlanService {
         return routeToPhase(WorkflowPhase.PLAN, reason);
     }
 
-    public synchronized String routeToPhase(WorkflowPhase nextPhase, String reason) {
+    synchronized String routeToPhase(WorkflowPhase nextPhase, String reason) {
         return routeToPhase(nextPhase, reason, null);
     }
 
@@ -791,7 +798,7 @@ public class PlanService {
                 + ". Current phase: " + current);
     }
 
-    public synchronized void addHandoffLogEntry(String timestamp, String user, String message) {
+    private synchronized void addHandoffLogEntry(String timestamp, String user, String message) {
         if (currentPlan != null) {
             setCurrentPlan(currentPlan.withAddedHandoffLogEntry(timestamp, user, message));
         }

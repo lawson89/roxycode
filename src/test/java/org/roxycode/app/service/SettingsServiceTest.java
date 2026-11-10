@@ -180,6 +180,14 @@ class SettingsServiceTest {
     }
 
     @Test
+    void testResolveModelConfig() {
+        SettingsService service = new SettingsService(null, null);
+        assertNotNull(service.resolveModelConfig("gemini-3.5-flash"));
+        // The global model defaults to the first model in models.toml if AppSettings is blank
+        assertEquals("gemini-4-argon", SettingsService.resolveGlobalGeminiModel(service));
+    }
+
+    @Test
     void testRapidEdtSaveSettingsSnapshotsAndSerializesWritesInOrder() throws Exception {
         List<String> writtenThemes = java.util.Collections.synchronizedList(new ArrayList<>());
         CountDownLatch firstWriteEntered = new CountDownLatch(1);

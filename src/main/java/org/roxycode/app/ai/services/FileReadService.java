@@ -64,6 +64,15 @@ public class FileReadService {
     }
 
     @AgentDoc(value = "Reads the content of a file at the given path relative to the project root.", examples = "fileReadService.readFile('pom.xml')")
+    /**
+     * Reads the entire content of a file.
+     * 
+     * @param relativePath
+     *            the file path relative to the project root
+     * @return the file content
+     * @throws IOException
+     *             if an I/O error occurs
+     */
     public String readFile(@AgentDoc(DOC_FILE_PATH) String relativePath) throws IOException {
         return truncateSingleFileContent(readRawTextFile(relativePath));
     }
@@ -94,7 +103,7 @@ public class FileReadService {
         return readBatch(Arrays.asList(ArrayUtils.nullToEmpty(relativePaths)), false);
     }
 
-    public Map<String, String> readFiles(List<String> relativePaths) {
+    Map<String, String> readFiles(List<String> relativePaths) {
         return readBatch(relativePaths, false);
     }
 
@@ -103,7 +112,7 @@ public class FileReadService {
         return readBatch(Arrays.asList(ArrayUtils.nullToEmpty(relativePaths)), true);
     }
 
-    public Map<String, String> readFilesNumbered(List<String> relativePaths) {
+    Map<String, String> readFilesNumbered(List<String> relativePaths) {
         return readBatch(relativePaths, true);
     }
 
@@ -157,7 +166,7 @@ public class FileReadService {
         }
     }
 
-    public static String formatNumberedLines(List<String> lines, int startLine, int endLine) {
+    static String formatNumberedLines(List<String> lines, int startLine, int endLine) {
         if (startLine < 1 || endLine < startLine) {
             throw new IllegalArgumentException("Error: Invalid line range: " + startLine + " to " + endLine
                     + " (startLine must be >= 1 and endLine >= startLine)");

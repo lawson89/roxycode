@@ -27,7 +27,7 @@ import org.testcontainers.utility.DockerImageName;
 
 @Service
 @SuppressWarnings({"PMD.NullAssignment", "PMD.CloseResource"})
-public class BuildContainerService {
+class BuildContainerService {
 
     private static final Logger log = LoggerFactory.getLogger(BuildContainerService.class);
     private static final ExecutorService DOCKER_EXEC_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
@@ -102,7 +102,7 @@ public class BuildContainerService {
         }
     }
 
-    public interface ContainerSession extends AutoCloseable {
+    interface ContainerSession extends AutoCloseable {
         ContainerExecResult execInContainer(java.time.Duration timeout, String... command) throws Exception;
 
         boolean isRunning();
@@ -112,7 +112,7 @@ public class BuildContainerService {
     }
 
     @FunctionalInterface
-    public interface ContainerSessionFactory {
+    interface ContainerSessionFactory {
         ContainerSession create(ContainerSessionKey key) throws Exception;
     }
 

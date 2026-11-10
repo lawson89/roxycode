@@ -15,7 +15,7 @@ import org.roxycode.app.model.ImplementationPlan;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public final class ChatModel {
+final class ChatModel {
     private static final Logger log = LoggerFactory.getLogger(ChatModel.class);
     public static final String QA_SESSION_PREFIX = "qa";
     public static final String TASK_SESSION_PREFIX = "task";

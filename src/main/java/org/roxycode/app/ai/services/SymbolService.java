@@ -1,3 +1,6 @@
+/**
+ * Symbol Service.
+ */
 package org.roxycode.app.ai.services;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -85,6 +88,13 @@ public class SymbolService {
     }
 
     @AgentDoc(value = "Returns a structural outline of symbols in a file (works on both source and test files), sorted by startLine.", examples = "symbolService.getFileOutline('src/main/java/App.java')")
+    /**
+     * Returns a structural outline of symbols in a file.
+     * 
+     * @param relativePath
+     *            the file path relative to the project root
+     * @return the list of symbols
+     */
     public List<SymbolInfo> getFileOutline(@AgentDoc(DOC_FILE_PATH) String relativePath) {
         ExceptionUtils.checkInterrupted(CANCELLED_MSG);
         Path filePath = resolveRegularFile(relativePath);

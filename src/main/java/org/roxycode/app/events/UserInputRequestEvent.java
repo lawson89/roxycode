@@ -1,3 +1,6 @@
+/**
+ * Event published when user input request event.
+ */
 package org.roxycode.app.events;
 
 import java.util.List;

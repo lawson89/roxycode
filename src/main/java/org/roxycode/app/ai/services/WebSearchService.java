@@ -1,3 +1,6 @@
+/**
+ * Web Search Service.
+ */
 package org.roxycode.app.ai.services;
 
 import org.apache.commons.lang3.StringUtils;
@@ -24,6 +27,13 @@ public class WebSearchService {
 
     @AgentDoc(value = "Performs a live web search using Google Search Grounding and returns a synthesized answer with grounded facts and citations.", examples = {
             "webSearchService.search('Spring AI 2.0 Google GenAI options')"}, phases = {"*"})
+    /**
+     * Performs a grounded web search.
+     * 
+     * @param query
+     *            the search query
+     * @return the search result
+     */
     public EditorResult search(@AgentDoc("The search query or question to look up on the web") String query) {
         if (settingsService == null || settingsService.getSettings() == null
                 || !settingsService.getSettings().isGoogleGroundingEnabled()) {

@@ -17,7 +17,7 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.springframework.lang.Nullable;
 
-public final class AppIconRenderer {
+final class AppIconRenderer {
 
     public enum AgentStatus {
         IDLE, BUSY, WAITING_FEEDBACK
