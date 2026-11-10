@@ -270,9 +270,9 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         inputArea.setLineWrap(true);
         inputArea.setWrapStyleWord(true);
         inputArea.setOpaque(false);
-        inputArea.setMargin(new Insets(8, 12, 4, 12));
-        inputArea.setBorder(BorderFactory.createEmptyBorder(8, 12, 4, 12));
-        inputArea.putClientProperty(FlatClientProperties.STYLE, "border: null; background: null");
+        inputArea.setMargin(new Insets(10, 14, 6, 14));
+        inputArea.setBorder(BorderFactory.createEmptyBorder(10, 14, 6, 14));
+        inputArea.putClientProperty(FlatClientProperties.STYLE, "border: 10,14,6,14; background: null");
         inputArea.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, DEFAULT_PLACEHOLDER_TEXT);
         inputArea.addFocusListener(new FocusAdapter() {
             @Override
