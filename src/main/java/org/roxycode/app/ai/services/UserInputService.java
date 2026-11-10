@@ -1,6 +1,3 @@
-/**
- * User Input Service.
- */
 package org.roxycode.app.ai.services;
 
 import java.util.ArrayList;
@@ -22,6 +19,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.lang.Nullable;
 
+/**
+ * Provides interactive user prompts (confirmation, text input, single-select, and multi-select) rendered inline in the
+ * chat panel.
+ */
 @AgentService(value = "userInputService", phases = {"*"})
 @AgentDoc("Provides interactive user prompts (confirmation, text input, single-select, and multi-select) rendered inline in the chat panel.")
 public class UserInputService {
@@ -53,14 +54,14 @@ public class UserInputService {
         return conversationId;
     }
 
-    @AgentDoc(value = "Asks the user a Yes/No confirmation question and returns true if confirmed.", examples = "userInputService.confirm('Proceed with database migration?')")
     /**
      * Asks the user a Yes/No confirmation question.
-     * 
+     *
      * @param question
      *            the question text
      * @return true if confirmed, false otherwise
      */
+    @AgentDoc(value = "Asks the user a Yes/No confirmation question and returns true if confirmed.", examples = "userInputService.confirm('Proceed with database migration?')")
     public boolean confirm(@AgentDoc("The confirmation question to display to the user") String question) {
         return confirm(question, null);
     }

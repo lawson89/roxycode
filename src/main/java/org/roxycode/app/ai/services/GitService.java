@@ -1,6 +1,3 @@
-/**
- * Git Service.
- */
 package org.roxycode.app.ai.services;
 
 import java.nio.file.Files;
@@ -20,6 +17,9 @@ import org.roxycode.app.service.ProjectService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Provides read-only access to Git repository status, diffs, blame, and commit history for the current project.
+ */
 @AgentService(value = "gitService", phases = {"*"})
 @AgentDoc("Provides read-only access to Git repository information for the current project.")
 public class GitService {
@@ -174,12 +174,12 @@ public class GitService {
         return executeGitCommand(false, "-c", "core.quotePath=false", "status", "--porcelain");
     }
 
-    @AgentDoc(value = "Returns the git diff including staged, unstaged, and untracked changes in the working tree.", examples = "gitService.getDiff()")
     /**
      * Returns the git diff including staged, unstaged, and untracked changes.
-     * 
+     *
      * @return the diff output
      */
+    @AgentDoc(value = "Returns the git diff including staged, unstaged, and untracked changes in the working tree.", examples = "gitService.getDiff()")
     public String getDiff() {
         return computeDiff(null);
     }

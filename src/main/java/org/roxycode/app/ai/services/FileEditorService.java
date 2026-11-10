@@ -1,6 +1,3 @@
-/**
- * File Editor Service.
- */
 package org.roxycode.app.ai.services;
 
 import java.io.IOException;
@@ -32,6 +29,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.lang.Nullable;
 
+/**
+ * Provides safe, ergonomic file editing capabilities for the AI agent with phase protection and security sandboxing.
+ */
 @AgentService(value = "fileEditorService", phases = {"CODE"})
 @AgentDoc("Provides safe, ergonomic file editing capabilities for the AI agent with phase protection and security sandboxing.")
 @SuppressWarnings("PMD.AvoidDuplicateLiterals")
@@ -71,16 +71,16 @@ public class FileEditorService {
         this.symbolService = symbolService;
     }
 
-    @AgentDoc(value = "Writes content to a file, overwriting it if it exists.", examples = "fileEditorService.writeFile('src/main/resources/config.properties', 'key=value')")
     /**
      * Writes the given content to a file. Overwrites the file if it already exists.
-     * 
+     *
      * @param relativePath
      *            the file path relative to the project root
      * @param content
      *            the content to write
      * @return the editor result
      */
+    @AgentDoc(value = "Writes content to a file, overwriting it if it exists.", examples = "fileEditorService.writeFile('src/main/resources/config.properties', 'key=value')")
     public EditorResult writeFile(@AgentDoc("The file path relative to the project root") String relativePath,
             @AgentDoc("The full content to write to the file") String content) throws IOException {
         Path path = projectService.resolvePath(relativePath);
@@ -94,10 +94,9 @@ public class FileEditorService {
                 FileChangedEvent.ChangeType.ofExisted(existed));
     }
 
-    @AgentDoc(value = "Replaces a unique block of text with new content.", examples = "fileEditorService.replaceBlock('src/Main.java', '// TODO: implement', 'System.out.println('Hello');')")
     /**
      * Replaces a unique block of text in a file.
-     * 
+     *
      * @param relativePath
      *            the file path relative to the project root
      * @param targetBlock
@@ -106,6 +105,7 @@ public class FileEditorService {
      *            the new content
      * @return the editor result
      */
+    @AgentDoc(value = "Replaces a unique block of text with new content.", examples = "fileEditorService.replaceBlock('src/Main.java', '// TODO: implement', 'System.out.println('Hello');')")
     public EditorResult replaceBlock(@AgentDoc("The file path relative to the project root") String relativePath,
             @AgentDoc("The existing text block to find and replace") String targetBlock,
             @AgentDoc("The replacement text block") String replacementBlock) throws IOException {
@@ -744,7 +744,14 @@ public class FileEditorService {
     }
 
     static List<String> splitLines(String content) {
-        return org.roxycode.app.util.PathUtils.splitLines(content);
+        if (content == null || content.isEmpty()) {
+            return List.of("");
+        }
+        List<String> lines = content.lines().toList();
+        if (lines.stream().allMatch(String::isEmpty)) {
+            return Arrays.asList(content.split("\\R", -1));
+        }
+        return lines;
     }
 
     private static boolean hasTrailingLineSeparator(String text) {

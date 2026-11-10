@@ -1,7 +1,3 @@
-/**
- * Orchestrates the execution of JEXL scripts against registered workspace services.
- * This tool provides the primary interface for the AI agent to interact with the project codebase.
- */
 package org.roxycode.app.ai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,6 +28,10 @@ import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 
+/**
+ * Orchestrates the execution of JEXL scripts against registered workspace services. This tool provides the primary
+ * interface for the AI agent to interact with the project codebase.
+ */
 @Component
 public class JexlTool {
 

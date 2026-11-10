@@ -1,6 +1,3 @@
-/**
- * Grep Service.
- */
 package org.roxycode.app.ai.services;
 
 import java.nio.file.Path;
@@ -21,6 +18,10 @@ import org.roxycode.app.service.ProjectService.ResolvedSearchTarget;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * Provides RipGrep-based text and file search capabilities across the project and mounted {@code @<alias>} reference
+ * folders.
+ */
 @AgentService(value = "grepService", phases = {"*"})
 @AgentDoc("Provides powerful text searching capabilities using RipGrep across the project and mounted @<alias> reference folders, respecting .gitignore and sandbox boundaries.")
 public class GrepService {
@@ -53,14 +54,14 @@ public class GrepService {
         return projectService.hasActiveProject() || ProjectService.isReferencePath(relativePath);
     }
 
-    @AgentDoc(value = "Searches for a regex pattern in the project files using RipGrep.", examples = "grepService.grep('TODO')")
     /**
      * Searches for a regex pattern in the project files using RipGrep.
-     * 
+     *
      * @param pattern
      *            the regex pattern to search for
      * @return the grep results
      */
+    @AgentDoc(value = "Searches for a regex pattern in the project files using RipGrep.", examples = "grepService.grep('TODO')")
     public EditorResult grep(@AgentDoc(DOC_REGEX_PATTERN) String pattern) {
         return grep(pattern, CURRENT_DIR, null);
     }

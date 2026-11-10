@@ -151,10 +151,6 @@ final class HeaderPanel extends JPanel {
         setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));
     }
 
-    private static Color resolveForegroundColor() {
-        return SwingHtmlUtils.getUiColor(new Color(0x33, 0x33, 0x33), "Label.foreground");
-    }
-
     static Color resolveBranchAccentColor() {
         if (FlatLaf.isLafDark()) {
             return BRANCH_ACCENT_DARK;
@@ -204,7 +200,7 @@ final class HeaderPanel extends JPanel {
                 PILL_STYLE_PREFIX + modelBgHex + PILL_STYLE_SUFFIX);
         groundingLabel.setIcon(FontIcon.of(Codicons.GLOBE, 14, modelAccent));
 
-        themeToggleButton.setIcon(FontIcon.of(Codicons.COLOR_MODE, 16, resolveForegroundColor()));
+        themeToggleButton.setIcon(FontIcon.of(Codicons.COLOR_MODE, 16, UiComponents.resolveForegroundColor()));
     }
 
     @EventListener

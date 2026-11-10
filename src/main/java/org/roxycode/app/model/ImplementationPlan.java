@@ -17,7 +17,6 @@ import org.roxycode.app.util.FrontmatterUtils;
 import org.roxycode.app.util.PathUtils;
 import org.roxycode.app.util.TokenUtils;
 
-@SuppressWarnings("PMD.AvoidDuplicateLiterals")
 /**
  * Represents a structured implementation plan for a feature or task.
  *
@@ -48,6 +47,7 @@ import org.roxycode.app.util.TokenUtils;
  * @param commitMessage
  *            the proposed git commit message
  */
+@SuppressWarnings("PMD.AvoidDuplicateLiterals")
 public record ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
         boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
         List<LogEntry> handoffLog, List<FileChange> fileChanges, UsageSummary usageSummary, String commitMessage) {

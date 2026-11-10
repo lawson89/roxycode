@@ -1,6 +1,3 @@
-/**
- * Repo Map Packer Service.
- */
 package org.roxycode.app.ai.services.cache;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -34,6 +31,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
+/**
+ * Generates and caches the Universal Ctags structural repository map snapshot for the active project.
+ */
 @Service
 public class RepoMapPackerService {
     private static final Logger log = LoggerFactory.getLogger(RepoMapPackerService.class);

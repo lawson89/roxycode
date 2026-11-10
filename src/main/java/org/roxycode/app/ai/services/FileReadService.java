@@ -18,6 +18,9 @@ import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.util.ExceptionUtils;
 
+/**
+ * Provides read-only access to files within the current project and mounted {@code @<alias>} reference folders.
+ */
 @AgentService(value = "fileReadService", phases = {"*"})
 @AgentDoc("Provides read-only access to files within the current project and mounted @<alias> reference folders.")
 public class FileReadService {
@@ -63,16 +66,16 @@ public class FileReadService {
         return Files.exists(projectService.resolveReadPath(relativePath));
     }
 
-    @AgentDoc(value = "Reads the content of a file at the given path relative to the project root.", examples = "fileReadService.readFile('pom.xml')")
     /**
      * Reads the entire content of a file.
-     * 
+     *
      * @param relativePath
      *            the file path relative to the project root
      * @return the file content
      * @throws IOException
      *             if an I/O error occurs
      */
+    @AgentDoc(value = "Reads the content of a file at the given path relative to the project root.", examples = "fileReadService.readFile('pom.xml')")
     public String readFile(@AgentDoc(DOC_FILE_PATH) String relativePath) throws IOException {
         return truncateSingleFileContent(readRawTextFile(relativePath));
     }
@@ -229,28 +232,6 @@ public class FileReadService {
             }
             Collections.sort(entries);
             return entries;
-        }
-    }
-
-    static int getLineCountSafely(Path path) {
-        try {
-            if (path == null || !Files.isRegularFile(path)) {
-                return 0;
-            }
-            return (int) Files.lines(path).count();
-        } catch (IOException e) {
-            return 0;
-        }
-    }
-
-    static List<String> readLinesSafely(Path path) {
-        try {
-            if (path == null || !Files.isRegularFile(path)) {
-                return Collections.emptyList();
-            }
-            return Files.readAllLines(path);
-        } catch (IOException e) {
-            return Collections.emptyList();
         }
     }
 }

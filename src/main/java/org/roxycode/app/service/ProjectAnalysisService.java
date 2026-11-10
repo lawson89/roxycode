@@ -1,6 +1,3 @@
-/**
- * Service for project analysis service.
- */
 package org.roxycode.app.service;
 
 import com.github.benmanes.caffeine.cache.Cache;
@@ -17,6 +14,9 @@ import org.roxycode.app.util.PathUtils;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
+/**
+ * Analyzes project source and test file conventions and determines the dominant programming language.
+ */
 @Service
 public class ProjectAnalysisService {
 
@@ -80,12 +80,11 @@ public class ProjectAnalysisService {
         if (normalizedPath == null || normalizedPath.isBlank()) {
             return "";
         }
-        java.nio.file.Path path = java.nio.file.Paths.get(normalizedPath);
-        java.nio.file.Path parent = path.getParent();
-        if (parent == null) {
+        int lastSlash = normalizedPath.lastIndexOf('/');
+        if (lastSlash <= 0) {
             return "";
         }
-        String dirPath = parent.toString().replace("\\", "/");
+        String dirPath = normalizedPath.substring(0, lastSlash);
         for (String prefix : prefixes) {
             String prefixWithoutTrailing = prefix.substring(0, prefix.length() - 1);
             if (dirPath.equals(prefixWithoutTrailing)) {
@@ -122,7 +121,7 @@ public class ProjectAnalysisService {
 
         Map<String, Integer> extensionCounts = new HashMap<>();
         for (String filePath : files) {
-            String ext = org.roxycode.app.util.PathUtils.getLowerExtension(filePath, false);
+            String ext = PathUtils.getLowerExtension(filePath, false);
             if (!ext.isEmpty()) {
                 extensionCounts.merge("." + ext, 1, Integer::sum);
             }

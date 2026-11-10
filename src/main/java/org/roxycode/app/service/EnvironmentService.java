@@ -1,6 +1,3 @@
-/**
- * Service for environment service.
- */
 package org.roxycode.app.service;
 
 import java.awt.Color;
@@ -11,6 +8,9 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.springframework.stereotype.Service;
 
+/**
+ * Provides operating system, Java runtime, user identity, and JVM memory telemetry.
+ */
 @Service
 public class EnvironmentService {
 

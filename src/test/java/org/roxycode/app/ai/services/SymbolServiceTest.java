@@ -1,6 +1,7 @@
 package org.roxycode.app.ai.services;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 import java.io.IOException;
@@ -16,8 +17,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
-import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.ProjectAnalysisService;
+import org.roxycode.app.service.ProjectService;
 
 class SymbolServiceTest {
 
@@ -32,13 +33,13 @@ class SymbolServiceTest {
 
     @BeforeEach
     void setUp() {
-        org.roxycode.app.service.SettingsService settingsService = mock(org.roxycode.app.service.SettingsService.class);
-        org.roxycode.app.model.AppSettings settings = new org.roxycode.app.model.AppSettings();
-        when(settingsService.getSettings()).thenReturn(settings);
-
-        projectService = spy(new ProjectService(settingsService, null));
-        projectService.setCurrentProjectRoot(tempDir);
-
+        projectService = mock(ProjectService.class);
+        lenient().when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+        lenient().when(projectService.hasActiveProject()).thenReturn(true);
+        lenient().when(projectService.resolvePath(any())).thenCallRealMethod();
+        lenient().when(projectService.resolveReadPath(any())).thenCallRealMethod();
+        lenient().when(projectService.formatReadDisplayPath(any(), any())).thenCallRealMethod();
+        lenient().when(projectService.findReferenceFolderMount(any())).thenCallRealMethod();
         grepService = mock(GrepService.class);
         symbolService = new SymbolService(projectService, grepService, AiConfig.SHARED_OBJECT_MAPPER);
     }
@@ -160,7 +161,7 @@ class SymbolServiceTest {
         String addOutput = symbolService.readSymbol("Calculator.java", "add");
         String expectedAdd = String.join(NL, "7:     /**", "8:      * Adds two numbers.", "9:      */",
                 "10:     @Deprecated", "11:     public int add(int a, int b) {", "12:         return a + b;",
-                "13:     }") + NL + "--" + NL
+                "13:     }") + NL + NL
                 + String.join(NL, "15:     // Overloaded add", "16:     public double add(double a, double b) {",
                         "17:         return a + b;", "18:     }");
         assertEquals(expectedAdd, addOutput);
@@ -195,26 +196,38 @@ class SymbolServiceTest {
                         tagJson("beta", null, 4, 5, "method", "Batch", "()")), "", false));
 
         assertTrue(symbolService.readSymbols("Batch.java", (String[]) null).isEmpty());
-        assertTrue(symbolService.readSymbols("Batch.java", new String[0]).isEmpty());
+        assertTrue(symbolService.readSymbols("Batch.java").isEmpty());
 
         String originalContent = Files.readString(file);
         clearInvocations(projectService);
         symbolService.setCtagsRunner(cmd -> {
+            try {
+                Files.writeString(file, "corrupted on disk after initial read");
+            } catch (IOException e) {
+                throw new IllegalStateException(e);
+            }
             return new ProcessResult(0, String.join(NL, tagJson("alpha", null, 2, 3, "method", "Batch", "()"),
                     tagJson("beta", null, 4, 5, "method", "Batch", "()")), "", false);
         });
 
-        Map<String, String> batchResult = symbolService.readSymbols("Batch.java",
-                new String[]{"alpha", "beta", "missing", "alpha", ""});
-        verify(projectService, atLeastOnce()).resolvePath("Batch.java");
+        Map<String, String> batchResult = symbolService.readSymbols("Batch.java", "alpha", "beta", "missing", "alpha",
+                "");
+        verify(projectService, times(1)).resolveReadPath("Batch.java");
         assertEquals(List.of("alpha", "beta", "missing"), new ArrayList<>(batchResult.keySet()));
         assertEquals(String.join(NL, "2:     void alpha() {", "3:     }"), batchResult.get("alpha"));
         assertEquals(String.join(NL, "4:     void beta() {", "5:     }"), batchResult.get("beta"));
         assertTrue(batchResult.get("missing").startsWith("Error: Symbol 'missing' not found"));
         Files.writeString(file, originalContent);
 
-        Map<String, String> missingFileBatch = symbolService.readSymbols("NoSuchFile.java",
-                new String[]{"alpha", "beta"});
+        Path appFile = tempDir.resolve("App.java");
+        Files.writeString(appFile, String.join(NL, "class App {", "    void main() {", "    }", "}"));
+        symbolService.setCtagsRunner(
+                cmd -> new ProcessResult(0, tagJson("main", null, 2, 3, "method", "App", "()"), "", false));
+        clearInvocations(projectService);
+        assertEquals(String.join(NL, "2:     void main() {", "3:     }"), symbolService.readSymbol("App.java", "main"));
+        verify(projectService, times(1)).resolveReadPath("App.java");
+
+        Map<String, String> missingFileBatch = symbolService.readSymbols("NoSuchFile.java", "alpha", "beta");
         assertTrue(missingFileBatch.get("alpha").startsWith("Error:"));
         assertTrue(missingFileBatch.get("beta").startsWith("Error:"));
     }

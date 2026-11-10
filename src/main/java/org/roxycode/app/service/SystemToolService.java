@@ -35,10 +35,10 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.testcontainers.DockerClientFactory;
 
-@Service
 /**
  * Probes and manages system tools required by RoxyCode.
  */
+@Service
 public class SystemToolService {
     private static final Logger log = LoggerFactory.getLogger(SystemToolService.class);
     static final String SYSTEM_TOOLS_FILE = "system-tools.toml";

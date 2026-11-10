@@ -28,10 +28,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
-@Service
 /**
  * Manages project configuration, data directories, and reference folder mounts.
  */
+@Service
 public class ProjectService {
     private static final Logger log = LoggerFactory.getLogger(ProjectService.class);
     private static final String PROJECTS_SUBDIR = "projects";
@@ -85,8 +85,7 @@ public class ProjectService {
         }
     }
 
-    public record ResolvedSearchTarget(Path workingDir, String relativeTarget, String prefixAlias,
-            ProjectService projectService) {
+    public record ResolvedSearchTarget(Path workingDir, String relativeTarget, String prefixAlias) {
         public ResolvedSearchTarget {
             if (workingDir != null) {
                 workingDir = workingDir.toAbsolutePath().normalize();
@@ -101,20 +100,13 @@ public class ProjectService {
 
         public String formatResultPath(String rawRelativePath) {
             String norm = PathUtils.normalizeRelativePath(StringUtils.trimToEmpty(rawRelativePath));
-            if (projectService != null && workingDir != null) {
-                try {
-                    return projectService.toDisplayPath(workingDir.resolve(norm));
-                } catch (Exception ignored) {
-                    // Fallback to manual prefixing
-                }
-            }
             if (prefixAlias.isEmpty()) {
                 return norm;
             }
             if (norm.isEmpty() || ".".equals(norm)) {
                 return prefixAlias;
             }
-            if (norm.startsWith("@")) {
+            if (norm.equals(prefixAlias) || norm.startsWith(prefixAlias + "/")) {
                 return norm;
             }
             return prefixAlias + "/" + norm;
@@ -769,7 +761,7 @@ public class ProjectService {
             Path resolved = resolveWithinSandbox(root, parsed.subPath());
             String relTarget = StringUtils
                     .defaultIfEmpty(PathUtils.normalizeRelativePath(root.relativize(resolved).toString()), ".");
-            return new ResolvedSearchTarget(root, relTarget, parsed.mount().aliasPrefix(), this);
+            return new ResolvedSearchTarget(root, relTarget, parsed.mount().aliasPrefix());
         }
         Path projectRoot = getCurrentProjectRoot();
         if (projectRoot == null) {
@@ -777,40 +769,7 @@ public class ProjectService {
         }
         Path root = projectRoot.toAbsolutePath().normalize();
         String relTarget = resolveRelativePath(relativePath);
-        return new ResolvedSearchTarget(root, relTarget, "", this);
-    }
-
-    /**
-     * Converts a path to a displayable path string.
-     *
-     * @param resolvedPath
-     *            the resolved path to convert
-     * @return the displayable path string
-     */
-    public String toDisplayPath(Path resolvedPath) {
-        if (resolvedPath == null) {
-            return "";
-        }
-        Path normalizedTarget = resolvedPath.toAbsolutePath().normalize();
-        List<ReferenceFolderMount> mounts = Objects.requireNonNullElse(getReferenceFolderMounts(), List.of());
-        for (ReferenceFolderMount mount : mounts) {
-            if (mount != null && mount.rootPath() != null && normalizedTarget.startsWith(mount.rootPath())) {
-                String rel = PathUtils.normalizeRelativePath(mount.rootPath().relativize(normalizedTarget).toString());
-                if (rel.isEmpty() || ".".equals(rel)) {
-                    return mount.aliasPrefix();
-                }
-                return mount.aliasPrefix() + "/" + rel;
-            }
-        }
-        Path root = getCurrentProjectRoot();
-        if (root != null) {
-            Path normalizedRoot = root.toAbsolutePath().normalize();
-            if (normalizedTarget.startsWith(normalizedRoot)) {
-                String rel = PathUtils.normalizeRelativePath(normalizedRoot.relativize(normalizedTarget).toString());
-                return StringUtils.defaultIfEmpty(rel, ".");
-            }
-        }
-        return normalizedTarget.toString();
+        return new ResolvedSearchTarget(root, relTarget, "");
     }
 
     /**
@@ -823,11 +782,32 @@ public class ProjectService {
      * @return the formatted display path
      */
     public String formatReadDisplayPath(Path resolvedPath, String fallbackRelativePath) {
-        String display = toDisplayPath(resolvedPath);
-        if (display.isEmpty() || display.equals(resolvedPath.toAbsolutePath().normalize().toString())) {
-            return PathUtils.normalizeRelativePath(StringUtils.trimToEmpty(fallbackRelativePath));
+        if (resolvedPath != null) {
+            Path normalizedTarget = resolvedPath.toAbsolutePath().normalize();
+            List<ReferenceFolderMount> mounts = Objects.requireNonNullElse(getReferenceFolderMounts(), List.of());
+            for (ReferenceFolderMount mount : mounts) {
+                if (mount != null && mount.rootPath() != null && normalizedTarget.startsWith(mount.rootPath())) {
+                    String rel = PathUtils
+                            .normalizeRelativePath(mount.rootPath().relativize(normalizedTarget).toString());
+                    if (rel.isEmpty()) {
+                        return mount.aliasPrefix();
+                    }
+                    return mount.aliasPrefix() + "/" + rel;
+                }
+            }
+            Path root = getCurrentProjectRoot();
+            if (root != null) {
+                Path normalizedRoot = root.toAbsolutePath().normalize();
+                if (normalizedTarget.startsWith(normalizedRoot)) {
+                    String rel = PathUtils
+                            .normalizeRelativePath(normalizedRoot.relativize(normalizedTarget).toString());
+                    if (!rel.isEmpty()) {
+                        return rel;
+                    }
+                }
+            }
         }
-        return display;
+        return PathUtils.normalizeRelativePath(StringUtils.trimToEmpty(fallbackRelativePath));
     }
 
     /**

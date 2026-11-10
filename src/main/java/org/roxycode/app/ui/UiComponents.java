@@ -267,9 +267,12 @@ final class UiComponents {
         return button;
     }
 
+    static Color resolveForegroundColor() {
+        return SwingHtmlUtils.getUiColor(new Color(0x33, 0x33, 0x33), "Label.foreground");
+    }
+
     static JButton createIconButton(Codicons icon, String tooltip, java.awt.event.ActionListener listener) {
-        Color foregroundColor = SwingHtmlUtils.getUiColor(new Color(0x33, 0x33, 0x33), "Label.foreground");
-        JButton button = new JButton(FontIcon.of(icon, 16, foregroundColor));
+        JButton button = new JButton(FontIcon.of(icon, 16, resolveForegroundColor()));
         button.setToolTipText(tooltip);
         button.setFocusable(false);
         button.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_TOOLBAR_BUTTON);

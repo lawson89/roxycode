@@ -1,7 +1,3 @@
-/**
- * Captures the execution context for a single AI tool turn, including conversation state
- * and workflow phase tracking.
- */
 package org.roxycode.app.ai;
 
 import java.util.Map;
@@ -9,6 +5,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.ai.chat.model.ToolContext;
 
+/**
+ * Captures the execution context for a single AI tool turn, including conversation state and workflow phase tracking.
+ */
 public record TurnToolContext(String conversationId, WorkflowPhase phase, AtomicInteger turnCounter) {
 
     public static final String CONVERSATION_ID_KEY = "conversationId";

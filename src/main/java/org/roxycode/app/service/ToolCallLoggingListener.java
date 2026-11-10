@@ -9,10 +9,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
-@Component
 /**
  * Listens for tool execution events and logs them if enabled in settings.
  */
+@Component
 public class ToolCallLoggingListener {
     public static final String TOOL_CALLS_LOGGER_NAME = "org.roxycode.toolcalls";
     private static final Logger toolCallLogger = LoggerFactory.getLogger(TOOL_CALLS_LOGGER_NAME);

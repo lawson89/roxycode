@@ -94,6 +94,12 @@ class FileEditorServiceTest {
         Path noTrailingFile = Files.writeString(tempDir.resolve("no_trailing.txt"), "Alpha\nBeta");
         fileEditorService.replaceLines("no_trailing.txt", 2, 2, "BetaUpdated");
         assertEquals("Alpha\nBetaUpdated", Files.readString(noTrailingFile));
+
+        Path blankLineFile = Files.writeString(tempDir.resolve("blank_line.txt"), "First\nSecond\nThird\n");
+        assertTrue(fileEditorService.insertAtLine("blank_line.txt", 2, "").success());
+        assertEquals("First\n\nSecond\nThird\n", Files.readString(blankLineFile));
+        assertTrue(fileEditorService.replaceLines("blank_line.txt", 3, 3, "").success());
+        assertEquals("First\n\n\nThird\n", Files.readString(blankLineFile));
     }
 
     @Test

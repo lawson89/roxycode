@@ -227,7 +227,7 @@ class ProjectServiceTest {
         assertEquals("@billing-service/src/Invoice.java:10:1:" + snippet,
                 rootTarget.formatMatchLine("./src" + bs + "Invoice.java:10:1:" + snippet));
         assertEquals("src/Invoice.java-11-    // https://a.com/../b " + bs + "n",
-                new ProjectService.ResolvedSearchTarget(tempDir, ".", "", null)
+                new ProjectService.ResolvedSearchTarget(tempDir, ".", "")
                         .formatMatchLine("./src" + bs + "Invoice.java-11-    // https://a.com/../b " + bs + "n"));
 
         ProjectService.ResolvedSearchTarget subTarget = projectService.resolveSearchTarget("@billing-service/src/main");

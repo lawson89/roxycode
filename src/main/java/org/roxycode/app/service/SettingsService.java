@@ -1,6 +1,3 @@
-/**
- * Service for settings service.
- */
 package org.roxycode.app.service;
 
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
@@ -28,6 +25,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
+/**
+ * Manages persistence and retrieval of global application settings and Gemini model configurations.
+ */
 @Service
 @SuppressWarnings("PMD.NullAssignment")
 public class SettingsService {

@@ -1,9 +1,9 @@
-/**
- * Defines the distinct phases of the RoxyCode development workflow,
- * each with specific personas, goals, and tool access permissions.
- */
 package org.roxycode.app.ai;
 
+/**
+ * Defines the distinct phases of the RoxyCode development workflow, each with specific personas, goals, and tool access
+ * permissions.
+ */
 public enum WorkflowPhase {
     EXPLORE("Explore", "Technical Mentor", "Your focus is codebase discovery and context gathering.",
             """

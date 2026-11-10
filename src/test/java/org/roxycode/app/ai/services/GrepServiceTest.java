@@ -34,13 +34,14 @@ class GrepServiceTest {
 
     @BeforeEach
     void setUp() {
-        org.roxycode.app.service.SettingsService settingsService = mock(org.roxycode.app.service.SettingsService.class);
-        org.roxycode.app.model.AppSettings settings = new org.roxycode.app.model.AppSettings();
-        when(settingsService.getSettings()).thenReturn(settings);
-
-        projectService = spy(new ProjectService(settingsService, null));
-        projectService.setCurrentProjectRoot(tempDir);
-
+        projectService = mock(ProjectService.class);
+        when(projectService.hasActiveProject()).thenReturn(true);
+        when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
+        lenient().when(projectService.resolvePath(any())).thenCallRealMethod();
+        lenient().when(projectService.resolveReadPath(any())).thenCallRealMethod();
+        lenient().when(projectService.resolveRelativePath(any())).thenCallRealMethod();
+        lenient().when(projectService.resolveSearchTarget(any())).thenCallRealMethod();
+        lenient().when(projectService.findReferenceFolderMount(any())).thenCallRealMethod();
         fileReadService = new FileReadService(projectService);
         grepService = new GrepService(projectService, fileReadService);
     }

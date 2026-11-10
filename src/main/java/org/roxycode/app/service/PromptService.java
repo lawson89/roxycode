@@ -30,10 +30,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-@Service
 /**
  * Orchestrates the construction of system and session prompts for the AI agent.
  */
+@Service
 public class PromptService {
     private static final Logger log = LoggerFactory.getLogger(PromptService.class);
     private static final String CLASSPATH_PROMPT = "prompts/core_workflow.md";
