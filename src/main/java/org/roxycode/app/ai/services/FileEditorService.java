@@ -744,14 +744,7 @@ public class FileEditorService {
     }
 
     static List<String> splitLines(String content) {
-        if (content == null || content.isEmpty()) {
-            return List.of("");
-        }
-        List<String> lines = content.lines().toList();
-        if (lines.stream().allMatch(String::isEmpty)) {
-            return List.of(content.split("\\R", -1));
-        }
-        return lines;
+        return org.roxycode.app.util.PathUtils.splitLines(content);
     }
 
     private static boolean hasTrailingLineSeparator(String text) {

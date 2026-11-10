@@ -33,21 +33,18 @@ public class FileReadServiceTest {
     }
 
     @Test
-    void testReadLinesReadFileNumberedAndGetLineCount() throws IOException {
+    void testReadLinesAndReadFileNumbered() throws IOException {
         String nl = "\n";
         Files.writeString(tempDir.resolve("empty.txt"), "");
-        assertEquals(0, fileReadService.getLineCount("empty.txt"));
         assertEquals("", fileReadService.readFileNumbered("empty.txt"));
         assertEquals("", fileReadService.readLines("empty.txt", 1, 5));
 
         Files.writeString(tempDir.resolve("single.txt"), "only line");
-        assertEquals(1, fileReadService.getLineCount("single.txt"));
         assertEquals("1: only line", fileReadService.readFileNumbered("single.txt"));
         assertEquals("1: only line", fileReadService.readLines("single.txt", 1, 10));
         assertEquals("", fileReadService.readLines("single.txt", 2, 5));
 
         Files.writeString(tempDir.resolve("multi.txt"), String.join(nl, "alpha", "beta", "gamma", "delta") + nl);
-        assertEquals(4, fileReadService.getLineCount("multi.txt"));
         assertEquals(String.join(nl, "1: alpha", "2: beta", "3: gamma", "4: delta"),
                 fileReadService.readFileNumbered("multi.txt"));
         assertEquals(String.join(nl, "2: beta", "3: gamma"), fileReadService.readLines("multi.txt", 2, 3));
@@ -171,7 +168,7 @@ public class FileReadServiceTest {
         assertTrue(binReadEx.getMessage().contains("Error: Binary file cannot be read as text: binary.dat"));
         assertThrows(IllegalArgumentException.class, () -> fileReadService.readFileNumbered("binary.dat"));
         assertThrows(IllegalArgumentException.class, () -> fileReadService.readLines("binary.dat", 1, 5));
-        assertThrows(IllegalArgumentException.class, () -> fileReadService.getLineCount("binary.dat"));
+
     }
 
     @Test
@@ -200,7 +197,6 @@ public class FileReadServiceTest {
         assertTrue(truncatedNumbered.startsWith("1: L1:"));
         assertTrue(truncatedNumbered.endsWith(FileReadService.SINGLE_FILE_TRUNCATED_SUFFIX));
 
-        assertEquals(totalLines, fileReadService.getLineCount("huge.txt"));
         String tailLines = fileReadService.readLines("huge.txt", 1199, 1200);
         assertEquals("1199: L1199:" + linePayload + nl + "1200: L1200:" + linePayload, tailLines);
     }
@@ -228,7 +224,6 @@ public class FileReadServiceTest {
                 fileReadService.readFileNumbered("@billing-service/src/main/Invoice.java"));
         assertEquals("2: public class Invoice {}",
                 fileReadService.readLines("@billing-service/src/main/Invoice.java", 2, 2));
-        assertEquals(2, fileReadService.getLineCount("@billing-service/src/main/Invoice.java"));
 
         Map<String, String> batch = fileReadService.readFiles("@billing-service/src/main/Invoice.java",
                 "@billing-service/../../etc/passwd");

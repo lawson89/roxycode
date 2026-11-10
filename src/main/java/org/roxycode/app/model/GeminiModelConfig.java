@@ -2,6 +2,24 @@ package org.roxycode.app.model;
 
 import java.util.Locale;
 
+/**
+ * Configuration for a Gemini AI model, including pricing and context window information.
+ *
+ * @param apiName
+ *            the API name of the model
+ * @param name
+ *            the display name of the model
+ * @param description
+ *            a brief description of the model
+ * @param contextWindowTokens
+ *            the maximum context window size in tokens
+ * @param inputPricePerMillion
+ *            the price per million input tokens
+ * @param cachedInputPricePerMillion
+ *            the price per million cached input tokens
+ * @param outputPricePerMillion
+ *            the price per million output tokens
+ */
 public record GeminiModelConfig(String apiName, String name, String description, int contextWindowTokens,
         double inputPricePerMillion, double cachedInputPricePerMillion, double outputPricePerMillion) {
 
@@ -23,11 +41,28 @@ public record GeminiModelConfig(String apiName, String name, String description,
         outputPricePerMillion = Math.max(0.0, outputPricePerMillion);
     }
 
+    /**
+     * Constructs a GeminiModelConfig with default pricing based on the model name.
+     *
+     * @param apiName
+     *            the API name of the model
+     * @param name
+     *            the display name of the model
+     * @param description
+     *            a brief description of the model
+     */
     public GeminiModelConfig(String apiName, String name, String description) {
         this(apiName, name, description, DEFAULT_CONTEXT_WINDOW_TOKENS, defaultInputPrice(apiName),
                 defaultCachedInputPrice(apiName), defaultOutputPrice(apiName));
     }
 
+    /**
+     * Creates a default GeminiModelConfig for a given API name.
+     *
+     * @param apiName
+     *            the API name of the model
+     * @return a GeminiModelConfig with default settings
+     */
     public static GeminiModelConfig defaultForApiName(String apiName) {
         String resolvedApiName = "";
         if (apiName != null) {
@@ -36,6 +71,13 @@ public record GeminiModelConfig(String apiName, String name, String description,
         return new GeminiModelConfig(resolvedApiName, resolvedApiName, "");
     }
 
+    /**
+     * Checks if the model is a Pro tier model based on its API name.
+     *
+     * @param apiName
+     *            the API name of the model
+     * @return true if the model is a Pro tier model, false otherwise
+     */
     public static boolean isProTierModel(String apiName) {
         if (apiName == null) {
             return false;
@@ -65,14 +107,35 @@ public record GeminiModelConfig(String apiName, String name, String description,
         return DEFAULT_FLASH_OUTPUT_PRICE;
     }
 
+    /**
+     * Calculates the cost of uncached input tokens in USD.
+     *
+     * @param uncachedInputTokens
+     *            the number of uncached input tokens
+     * @return the calculated cost in USD
+     */
     public double calculateUncachedInputCostUsd(long uncachedInputTokens) {
         return (Math.max(0L, uncachedInputTokens) * inputPricePerMillion) / TOKENS_PER_MILLION;
     }
 
+    /**
+     * Calculates the cost of cached input tokens in USD.
+     *
+     * @param cachedInputTokens
+     *            the number of cached input tokens
+     * @return the calculated cost in USD
+     */
     public double calculateCachedInputCostUsd(long cachedInputTokens) {
         return (Math.max(0L, cachedInputTokens) * cachedInputPricePerMillion) / TOKENS_PER_MILLION;
     }
 
+    /**
+     * Calculates the cost of output tokens in USD.
+     *
+     * @param tokens
+     *            the number of output tokens
+     * @return the calculated cost in USD
+     */
     public double calculateOutputCostUsd(long tokens) {
         return (Math.max(0L, tokens) * outputPricePerMillion) / TOKENS_PER_MILLION;
     }

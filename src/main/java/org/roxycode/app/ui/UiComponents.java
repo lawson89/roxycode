@@ -258,6 +258,27 @@ final class UiComponents {
         return button;
     }
 
+    static JButton createProjectSwitcherButton(String text, java.awt.event.ActionListener listener) {
+        JButton button = new JButton(text);
+        button.setIconTextGap(6);
+        button.setFocusable(false);
+        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        button.addActionListener(listener);
+        return button;
+    }
+
+    static JButton createIconButton(Codicons icon, String tooltip, java.awt.event.ActionListener listener) {
+        Color foregroundColor = SwingHtmlUtils.getUiColor(new Color(0x33, 0x33, 0x33), "Label.foreground");
+        JButton button = new JButton(FontIcon.of(icon, 16, foregroundColor));
+        button.setToolTipText(tooltip);
+        button.setFocusable(false);
+        button.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_TOOLBAR_BUTTON);
+        button.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
+        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        button.addActionListener(listener);
+        return button;
+    }
+
     /**
      * Opens a URL in the system default browser, falling back to copying the URL to the clipboard.
      */

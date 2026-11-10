@@ -80,11 +80,12 @@ public class ProjectAnalysisService {
         if (normalizedPath == null || normalizedPath.isBlank()) {
             return "";
         }
-        int lastSlash = normalizedPath.lastIndexOf('/');
-        if (lastSlash <= 0) {
+        java.nio.file.Path path = java.nio.file.Paths.get(normalizedPath);
+        java.nio.file.Path parent = path.getParent();
+        if (parent == null) {
             return "";
         }
-        String dirPath = normalizedPath.substring(0, lastSlash);
+        String dirPath = parent.toString().replace("\\", "/");
         for (String prefix : prefixes) {
             String prefixWithoutTrailing = prefix.substring(0, prefix.length() - 1);
             if (dirPath.equals(prefixWithoutTrailing)) {
@@ -121,9 +122,9 @@ public class ProjectAnalysisService {
 
         Map<String, Integer> extensionCounts = new HashMap<>();
         for (String filePath : files) {
-            String ext = extractExtension(filePath);
-            if (ext != null) {
-                extensionCounts.merge(ext, 1, Integer::sum);
+            String ext = org.roxycode.app.util.PathUtils.getLowerExtension(filePath, false);
+            if (!ext.isEmpty()) {
+                extensionCounts.merge("." + ext, 1, Integer::sum);
             }
         }
         if (extensionCounts.isEmpty()) {
@@ -150,11 +151,4 @@ public class ProjectAnalysisService {
         };
     }
 
-    static String extractExtension(String filePath) {
-        String ext = PathUtils.getLowerExtension(filePath, false);
-        if (ext.isEmpty()) {
-            return null;
-        }
-        return "." + ext;
-    }
 }

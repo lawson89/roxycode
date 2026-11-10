@@ -404,45 +404,99 @@ public class ProjectService {
         }
     }
 
+    /**
+     * Gets the list of global context folders.
+     *
+     * @return the list of global context folders
+     */
     public List<String> getGlobalContextFolders() {
         return getGlobalFolderList(settingsService, AppSettings::getGlobalContextFolders);
     }
 
+    /**
+     * Sets the list of global context folders.
+     *
+     * @param folders
+     *            the list of global context folders to set
+     */
     public void setGlobalContextFolders(List<String> folders) {
         setGlobalFolderList(settingsService, eventPublisher, folders, AppSettings::setGlobalContextFolders);
     }
 
+    /**
+     * Gets the list of project context folders.
+     *
+     * @return the list of project context folders
+     */
     public List<String> getProjectContextFolders() {
         return normalizeFolderList(readProjectContextConfig().folders());
     }
 
+    /**
+     * Sets the list of project context folders.
+     *
+     * @param folders
+     *            the list of project context folders to set
+     */
     public void setProjectContextFolders(List<String> folders) {
         ProjectContextConfig existing = readProjectContextConfig();
         writeProjectContextConfig(new ProjectContextConfig(normalizeFolderList(folders), existing.referenceFolders()));
     }
 
+    /**
+     * Gets the list of global reference folders.
+     *
+     * @return the list of global reference folders
+     */
     public List<String> getGlobalReferenceFolders() {
         return getGlobalFolderList(settingsService, AppSettings::getGlobalReferenceFolders);
     }
 
+    /**
+     * Sets the list of global reference folders.
+     *
+     * @param folders
+     *            the list of global reference folders to set
+     */
     public void setGlobalReferenceFolders(List<String> folders) {
         setGlobalFolderList(settingsService, eventPublisher, folders, AppSettings::setGlobalReferenceFolders);
     }
 
+    /**
+     * Gets the list of project reference folders.
+     *
+     * @return the list of project reference folders
+     */
     public List<String> getProjectReferenceFolders() {
         return normalizeFolderList(readProjectContextConfig().referenceFolders());
     }
 
+    /**
+     * Sets the list of project reference folders.
+     *
+     * @param folders
+     *            the list of project reference folders to set
+     */
     public void setProjectReferenceFolders(List<String> folders) {
         ProjectContextConfig existing = readProjectContextConfig();
         writeProjectContextConfig(new ProjectContextConfig(existing.folders(), normalizeFolderList(folders)));
     }
 
+    /**
+     * Gets the list of reference folder mounts.
+     *
+     * @return the list of reference folder mounts
+     */
     public List<ReferenceFolderMount> getReferenceFolderMounts() {
         return resolveReferenceFolderMounts(getProjectReferenceFolders(), getGlobalReferenceFolders(),
                 getCurrentProjectRoot());
     }
 
+    /**
+     * Lists the global reference folder mounts.
+     *
+     * @return the list of global reference folder mounts
+     */
     public List<ReferenceFolderMount> listGlobalReferenceFolderMounts() {
         Path activeRoot = null;
         if (hasActiveProject()) {
@@ -453,6 +507,11 @@ public class ProjectService {
         return allMounts.stream().filter(ReferenceFolderMount::globalScope).toList();
     }
 
+    /**
+     * Lists the project reference folder mounts.
+     *
+     * @return the list of project reference folder mounts
+     */
     public List<ReferenceFolderMount> listProjectReferenceFolderMounts() {
         if (!hasActiveProject()) {
             return List.of();
@@ -460,6 +519,13 @@ public class ProjectService {
         return resolveReferenceFolderMounts(getProjectReferenceFolders(), List.of(), getCurrentProjectRoot());
     }
 
+    /**
+     * Finds a reference folder mount by its alias.
+     *
+     * @param alias
+     *            the alias of the reference folder mount
+     * @return the reference folder mount, or null if not found
+     */
     public ReferenceFolderMount findReferenceFolderMount(String alias) {
         String cleanAlias = StringUtils.removeStart(StringUtils.trimToEmpty(alias), "@");
         if (cleanAlias.isEmpty()) {
@@ -554,6 +620,13 @@ public class ProjectService {
         }
     }
 
+    /**
+     * Checks if a path is a reference path (starts with '@').
+     *
+     * @param relativePath
+     *            the relative path to check
+     * @return true if the path is a reference path, false otherwise
+     */
     public static boolean isReferencePath(String relativePath) {
         if (relativePath == null) {
             return false;
@@ -562,6 +635,13 @@ public class ProjectService {
         return stripped.startsWith("@");
     }
 
+    /**
+     * Strips the reference alias prefix from a path.
+     *
+     * @param normalizedPath
+     *            the normalized path
+     * @return the path without the reference alias prefix
+     */
     public static String stripReferenceAliasPrefix(String normalizedPath) {
         if (!isReferencePath(normalizedPath)) {
             return normalizedPath;
@@ -574,6 +654,13 @@ public class ProjectService {
         return stripped.substring(slashIdx + 1);
     }
 
+    /**
+     * Extracts the reference alias prefix from a path.
+     *
+     * @param normalizedPath
+     *            the normalized path
+     * @return the reference alias prefix
+     */
     public static String extractReferenceAliasPrefix(String normalizedPath) {
         if (!isReferencePath(normalizedPath)) {
             return "";
@@ -613,6 +700,13 @@ public class ProjectService {
         return new ParsedReferencePath(mount, subPath);
     }
 
+    /**
+     * Resolves a path relative to the project root.
+     *
+     * @param relativePath
+     *            the relative path to resolve
+     * @return the resolved path
+     */
     public Path resolvePath(String relativePath) {
         if (isReferencePath(relativePath)) {
             throw new SecurityException("Reference folder path is strictly read-only: " + relativePath);
@@ -646,6 +740,13 @@ public class ProjectService {
         return null;
     }
 
+    /**
+     * Resolves a read-only path relative to the project root or a mounted reference folder.
+     *
+     * @param relativePath
+     *            the relative path to resolve
+     * @return the resolved path
+     */
     public Path resolveReadPath(String relativePath) {
         if (isReferencePath(relativePath)) {
             ParsedReferencePath parsed = parseReferencePath(relativePath);
@@ -654,6 +755,13 @@ public class ProjectService {
         return resolvePath(relativePath);
     }
 
+    /**
+     * Resolves a search target path.
+     *
+     * @param relativePath
+     *            the relative path to resolve
+     * @return the resolved search target
+     */
     public ResolvedSearchTarget resolveSearchTarget(String relativePath) {
         if (isReferencePath(relativePath)) {
             ParsedReferencePath parsed = parseReferencePath(relativePath);
@@ -672,6 +780,13 @@ public class ProjectService {
         return new ResolvedSearchTarget(root, relTarget, "", this);
     }
 
+    /**
+     * Converts a path to a displayable path string.
+     *
+     * @param resolvedPath
+     *            the resolved path to convert
+     * @return the displayable path string
+     */
     public String toDisplayPath(Path resolvedPath) {
         if (resolvedPath == null) {
             return "";
@@ -698,6 +813,15 @@ public class ProjectService {
         return normalizedTarget.toString();
     }
 
+    /**
+     * Formats a path for display, falling back to the relative path if necessary.
+     *
+     * @param resolvedPath
+     *            the resolved path
+     * @param fallbackRelativePath
+     *            the fallback relative path
+     * @return the formatted display path
+     */
     public String formatReadDisplayPath(Path resolvedPath, String fallbackRelativePath) {
         String display = toDisplayPath(resolvedPath);
         if (display.isEmpty() || display.equals(resolvedPath.toAbsolutePath().normalize().toString())) {
@@ -706,6 +830,13 @@ public class ProjectService {
         return display;
     }
 
+    /**
+     * Resolves a relative path to a normalized relative string.
+     *
+     * @param relativePath
+     *            the relative path to resolve
+     * @return the normalized relative path
+     */
     public String resolveRelativePath(String relativePath) {
         if (isReferencePath(relativePath)) {
             return resolveSearchTarget(relativePath).relativeTarget();
@@ -720,6 +851,11 @@ public class ProjectService {
         return StringUtils.defaultIfEmpty(PathUtils.normalizeRelativePath(root.relativize(resolved).toString()), ".");
     }
 
+    /**
+     * Gets the project data directory path.
+     *
+     * @return the project data directory path
+     */
     public Path getProjectDataDir() {
         Path projectRoot = getCurrentProjectRoot();
         if (projectRoot == null) {
@@ -732,6 +868,13 @@ public class ProjectService {
         return roxyHome.toAbsolutePath().normalize().resolve(PROJECTS_SUBDIR).resolve(dirName);
     }
 
+    /**
+     * Resolves a path relative to the project data directory.
+     *
+     * @param relativePath
+     *            the relative path to resolve
+     * @return the resolved path
+     */
     public Path resolveProjectDataPath(String relativePath) {
         return resolveWithinSandbox(getProjectDataDir(), relativePath);
     }
@@ -745,6 +888,13 @@ public class ProjectService {
         return resolved;
     }
 
+    /**
+     * Sanitizes a project name for use in file paths.
+     *
+     * @param projectRoot
+     *            the project root path
+     * @return the sanitized project name
+     */
     public static String sanitizeProjectName(Path projectRoot) {
         String rawName = "";
         if (projectRoot != null && projectRoot.getFileName() != null) {

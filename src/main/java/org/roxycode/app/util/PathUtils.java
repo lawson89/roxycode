@@ -16,6 +16,7 @@ import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Locale;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import org.apache.commons.io.FilenameUtils;
@@ -396,5 +397,16 @@ public final class PathUtils {
         try (InputStream is = resource.getInputStream()) {
             return IOUtils.toString(is, StandardCharsets.UTF_8);
         }
+    }
+
+    public static List<String> splitLines(String content) {
+        if (content == null || content.isEmpty()) {
+            return List.of();
+        }
+        List<String> lines = content.lines().toList();
+        if (lines.stream().allMatch(String::isEmpty)) {
+            return List.of(content.split("\\R", -1));
+        }
+        return lines;
     }
 }

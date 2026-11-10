@@ -113,22 +113,18 @@ public class JexlServiceRegistry {
 
     synchronized Map<String, Object> getServices(WorkflowPhase phase, String conversationId) {
         String resolvedConvId = StringUtils.defaultIfBlank(conversationId, TurnToolContext.DEFAULT_CONVERSATION_ID);
-        Map<String, Object> filtered = new LinkedHashMap<>();
-        for (Map.Entry<String, Object> entry : services.entrySet()) {
-            Object service = entry.getValue();
-            if (!isServiceAvailable(entry.getKey(), service)) {
-                continue;
-            }
-            AgentService ann = AnnotationUtils.findAnnotation(AopUtils.getTargetClass(service), AgentService.class);
-            if (ann != null && WorkflowPhase.isAllowed(ann.phases(), phase)) {
-                Object boundService = service;
-                if (service instanceof UserInputService userInputService) {
-                    boundService = userInputService.forConversation(resolvedConvId);
-                }
-                filtered.put(entry.getKey(), boundService);
-            }
-        }
-        return filtered;
+        return services.entrySet().stream().filter(entry -> isServiceAvailable(entry.getKey(), entry.getValue()))
+                .filter(entry -> {
+                    AgentService ann = AnnotationUtils.findAnnotation(AopUtils.getTargetClass(entry.getValue()),
+                            AgentService.class);
+                    return ann != null && WorkflowPhase.isAllowed(ann.phases(), phase);
+                }).collect(java.util.stream.Collectors.toMap(Map.Entry::getKey, entry -> {
+                    Object service = entry.getValue();
+                    if (service instanceof UserInputService userInputService) {
+                        return userInputService.forConversation(resolvedConvId);
+                    }
+                    return service;
+                }, (oldValue, newValue) -> oldValue, LinkedHashMap::new));
     }
 
     public String getDocumentation(WorkflowPhase currentPhase) {

@@ -66,7 +66,7 @@ final class HeaderPanel extends JPanel {
         JPanel leftPanel = new JPanel(new MigLayout("insets 0, hidemode 3", "[]8[]12[]", LAYOUT_CENTER));
         leftPanel.setOpaque(false);
 
-        projectSwitcherButton = createProjectSwitcherButton(e -> chooseProject());
+        projectSwitcherButton = UiComponents.createProjectSwitcherButton(OPEN_PROJECT_TEXT, e -> chooseProject());
         leftPanel.add(projectSwitcherButton);
 
         noProjectNoticeLabel = new JLabel(NO_PROJECT_NOTICE_TEXT);
@@ -101,7 +101,8 @@ final class HeaderPanel extends JPanel {
         });
 
         updateModelDisplay();
-        themeToggleButton = createIconButton(Codicons.COLOR_MODE, "Toggle Light/Dark Theme", e -> toggleTheme());
+        themeToggleButton = UiComponents.createIconButton(Codicons.COLOR_MODE, "Toggle Light/Dark Theme",
+                e -> toggleTheme());
 
         rightPanel.add(modelLabel);
         rightPanel.add(groundingLabel);
@@ -239,26 +240,6 @@ final class HeaderPanel extends JPanel {
         settings.setTheme(newTheme);
         SettingsPanel.applyTheme(newTheme);
         settingsService.saveSettings();
-    }
-
-    private JButton createProjectSwitcherButton(java.awt.event.ActionListener listener) {
-        JButton button = new JButton(OPEN_PROJECT_TEXT);
-        button.setIconTextGap(6);
-        button.setFocusable(false);
-        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        button.addActionListener(listener);
-        return button;
-    }
-
-    private JButton createIconButton(Codicons icon, String tooltip, java.awt.event.ActionListener listener) {
-        JButton button = new JButton(FontIcon.of(icon, 16, resolveForegroundColor()));
-        button.setToolTipText(tooltip);
-        button.setFocusable(false);
-        button.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_TOOLBAR_BUTTON);
-        button.setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
-        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        button.addActionListener(listener);
-        return button;
     }
 
     public CompletableFuture<String> refreshGitBranch() {
