@@ -237,18 +237,31 @@ class BuildContainerServiceTest {
             String rootStr = projectRoot.toAbsolutePath().normalize().toString();
             List<String> bwrapCmd = BuildContainerService.buildBubblewrapCommand(projectRoot, resolved,
                     "./mvnw compile");
-            assertEquals(List.of("bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp",
-                    "--bind", expectedHomeCache.toString(), expectedHomeCache.toString(), "--bind",
-                    existingSubdir.toAbsolutePath().normalize().toString(),
-                    existingSubdir.toAbsolutePath().normalize().toString(), "--bind", rootStr, rootStr, "--chdir",
-                    rootStr, "--die-with-parent", "sh", "-c", "./mvnw compile"), bwrapCmd);
+            assertTrue(bwrapCmd.containsAll(List.of("bwrap", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp")));
+            // System binds (at least /usr and /bin should exist on most systems)
+            if (Files.exists(Path.of("/usr"))) {
+                assertTrue(bwrapCmd.contains("/usr"));
+            }
+            if (Files.exists(Path.of("/bin"))) {
+                assertTrue(bwrapCmd.contains("/bin"));
+            }
+            // Writable binds
+            assertTrue(bwrapCmd.contains(expectedHomeCache.toString()));
+            assertTrue(bwrapCmd.contains(existingSubdir.toAbsolutePath().normalize().toString()));
+            // Project root bind
+            assertTrue(bwrapCmd.contains(rootStr));
+            // Final sh call
+            assertEquals("sh", bwrapCmd.get(bwrapCmd.size() - 3));
+            assertEquals("-c", bwrapCmd.get(bwrapCmd.size() - 2));
+            assertEquals("./mvnw compile", bwrapCmd.get(bwrapCmd.size() - 1));
 
             String dq = "\"";
             String bs = "\\";
             Path pathWithQuote = fakeHome.resolve("dir" + dq + "quote" + bs + "slash");
             String seatbeltProfile = BuildContainerService.buildSeatbeltProfile(projectRoot, List.of(pathWithQuote));
-            SwingTestUtils.assertContainsAll(seatbeltProfile, "(version 1)", "(allow default)", "(deny file-write*)",
-                    "(subpath " + dq + "/private/tmp" + dq + ")", "(subpath " + dq + rootStr + dq + ")",
+            SwingTestUtils.assertContainsAll(seatbeltProfile, "(version 1)", "(deny default)",
+                    "(allow file-read-metadata)", "(subpath " + dq + "/usr" + dq + ")",
+                    "(allow file-read* file-write* (subpath " + dq + rootStr + dq + "))",
                     "dir" + bs + dq + "quote" + bs + bs + "slash");
 
             List<String> seatbeltCmd = BuildContainerService.buildSeatbeltCommand(projectRoot, resolved, "./mvnw test");

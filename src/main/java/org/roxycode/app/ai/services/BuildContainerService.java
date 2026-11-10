@@ -223,7 +223,17 @@ public class BuildContainerService {
     static List<String> buildBubblewrapCommand(Path projectRoot, List<Path> writablePaths, String command) {
         String rootStr = projectRoot.toAbsolutePath().normalize().toString();
         List<String> args = new ArrayList<>();
-        Collections.addAll(args, "bwrap", "--ro-bind", "/", "/", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp");
+        Collections.addAll(args, "bwrap", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp");
+
+        // Essential system directories for binaries and libraries
+        List<String> systemPaths = List.of("/usr", "/bin", "/lib", "/lib64", "/etc/alternatives", "/etc/ssl",
+                "/etc/pki", "/etc/resolv.conf", "/etc/hosts");
+        for (String path : systemPaths) {
+            if (Files.exists(Path.of(path))) {
+                Collections.addAll(args, "--ro-bind", path, path);
+            }
+        }
+
         if (writablePaths != null) {
             for (Path p : writablePaths) {
                 if (p != null) {
@@ -242,8 +252,25 @@ public class BuildContainerService {
         StringBuilder sb = new StringBuilder();
         sb.append("""
                 (version 1)
-                (allow default)
-                (deny file-write*)
+                (deny default)
+                (allow file-read-metadata)
+                (allow process*)
+                (allow signal*)
+                (allow sysctl-read)
+                (allow network-outbound)
+                (allow mach-lookup)
+                (allow file-read*
+                  (subpath "/usr")
+                  (subpath "/bin")
+                  (subpath "/lib")
+                  (subpath "/System")
+                  (subpath "/Library")
+                  (subpath "/etc")
+                  (subpath "/private/etc")
+                  (subpath "/dev")
+                  (subpath "/private/var/folders")
+                  (subpath "/var/folders")
+                )
                 (allow file-write*
                   (subpath "/private/tmp")
                   (subpath "/tmp")
@@ -253,17 +280,22 @@ public class BuildContainerService {
                   (literal "/dev/zero")
                   (literal "/dev/random")
                   (literal "/dev/urandom")
+                )
                 """);
-        sb.append("  (subpath ").append(DQ).append(rootStr).append(DQ).append(")").append(NL);
+
+        // Project root access
+        sb.append("  (allow file-read* file-write* (subpath ").append(DQ).append(rootStr).append(DQ).append("))")
+                .append(NL);
+
         if (writablePaths != null) {
             for (Path p : writablePaths) {
                 if (p != null) {
                     String escaped = escapeSeatbeltPath(p.toAbsolutePath().normalize().toString());
-                    sb.append("  (subpath ").append(DQ).append(escaped).append(DQ).append(")").append(NL);
+                    sb.append("  (allow file-read* file-write* (subpath ").append(DQ).append(escaped).append(DQ)
+                            .append("))").append(NL);
                 }
             }
         }
-        sb.append(")");
         return sb.toString();
     }
 
