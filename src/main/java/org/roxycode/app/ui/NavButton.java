@@ -15,12 +15,15 @@ public final class NavButton extends JButton {
     private static final int ROW_ARC = 8;
     private static final int ACCENT_PILL_WIDTH = 3;
     private static final int BADGE_SIZE = 18;
+    static final int BUSY_DOT_SIZE = 6;
     private static final Color AMBER_TINT_LIGHT = new Color(245, 158, 11, 30);
     private static final Color AMBER_TINT_DARK = new Color(245, 158, 11, 45);
 
     static final String WAITING_APPROVAL_TOOLTIP = "Waiting for your approval to continue";
+    static final String BUSY_TOOLTIP = "Agent is working in the background...";
 
     private boolean waitingApproval;
+    private boolean busy;
     private String attentionTooltip = WAITING_APPROVAL_TOOLTIP;
     transient FontIcon statusIcon;
 
@@ -46,6 +49,17 @@ public final class NavButton extends JButton {
         return waitingApproval;
     }
 
+    public void setBusy(boolean busy) {
+        if (this.busy != busy) {
+            this.busy = busy;
+            updateStatusIcon();
+        }
+    }
+
+    public boolean isBusy() {
+        return busy;
+    }
+
     public void setAttentionTooltip(String tooltip) {
         if (tooltip == null || tooltip.isBlank()) {
             this.attentionTooltip = WAITING_APPROVAL_TOOLTIP;
@@ -65,7 +79,7 @@ public final class NavButton extends JButton {
         } else {
             statusIcon = null;
             if (isEnabled()) {
-                setToolTipText(null);
+                restoreStatusTooltip();
             }
         }
         updatePaddingBorder();
@@ -77,6 +91,8 @@ public final class NavButton extends JButton {
         int rightPadding = HORIZONTAL_PADDING;
         if (statusIcon != null) {
             rightPadding = HORIZONTAL_PADDING + statusIcon.getIconWidth() + STATUS_ICON_GAP;
+        } else if (busy) {
+            rightPadding = HORIZONTAL_PADDING + BUSY_DOT_SIZE + STATUS_ICON_GAP;
         }
         setBorder(
                 BorderFactory.createEmptyBorder(VERTICAL_PADDING, HORIZONTAL_PADDING, VERTICAL_PADDING, rightPadding));
@@ -97,6 +113,8 @@ public final class NavButton extends JButton {
     void restoreStatusTooltip() {
         if (waitingApproval) {
             setToolTipText(attentionTooltip);
+        } else if (busy) {
+            setToolTipText(BUSY_TOOLTIP);
         } else {
             setToolTipText(null);
         }
@@ -173,6 +191,18 @@ public final class NavButton extends JButton {
 
     private void paintStatusBadge(Graphics g, boolean highlightWaiting, Color amberAccent) {
         if (statusIcon == null) {
+            if (busy && g instanceof Graphics2D) {
+                Graphics2D g2 = (Graphics2D) g.create();
+                try {
+                    g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    g2.setColor(SwingHtmlUtils.getAccentColor());
+                    int dotX = getWidth() - BUSY_DOT_SIZE - HORIZONTAL_PADDING;
+                    int dotY = (getHeight() - BUSY_DOT_SIZE) / 2;
+                    g2.fillOval(dotX, dotY, BUSY_DOT_SIZE, BUSY_DOT_SIZE);
+                } finally {
+                    g2.dispose();
+                }
+            }
             return;
         }
         int x = getWidth() - statusIcon.getIconWidth() - HORIZONTAL_PADDING;

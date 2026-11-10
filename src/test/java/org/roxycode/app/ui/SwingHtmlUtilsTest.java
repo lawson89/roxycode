@@ -43,7 +43,8 @@ class SwingHtmlUtilsTest {
                 ~~~
                 """);
         assertContainsAll(rendered, "md-table", "md-th", "md-td", "right",
-                "<table><tr><td>Inline raw HTML table</td></tr></table>", "&lt;table&gt;");
+                "&lt;table&gt;&lt;tr&gt;&lt;td&gt;Inline raw HTML table&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;",
+                "&lt;table&gt;");
     }
 
     @Test

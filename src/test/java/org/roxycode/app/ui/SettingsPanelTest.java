@@ -57,7 +57,7 @@ class SettingsPanelTest {
         }
 
         assertTrue(settingsPanel.onboardingBanner.isVisible());
-        assertEquals(SettingsPanel.ONBOARDING_API_KEY_NOTICE_TEXT,
+        assertEquals(UiComponents.formatWrappingHtml(SettingsPanel.ONBOARDING_API_KEY_NOTICE_TEXT),
                 settingsPanel.onboardingBanner.messageLabel.getText());
         java.util.concurrent.atomic.AtomicInteger initialCallbackCount = new java.util.concurrent.atomic.AtomicInteger();
         settingsPanel.setOnInitialApiKeyConfiguredCallback(initialCallbackCount::incrementAndGet);

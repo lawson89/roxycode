@@ -172,18 +172,23 @@ public final class TaskWorkspacePanel extends JPanel {
 
     public void bindSidebar(SidebarPanel sidebar) {
         this.sidebar = sidebar;
-        if (this.planService != null) {
-            sidebar.setTaskWaitingApproval(this.planService.getPendingPhase() != null);
+        syncSidebarWaitingApproval();
+    }
+
+    private void syncSidebarWaitingApproval() {
+        if (sidebar == null) {
+            return;
         }
+        boolean pendingPhase = planService != null && planService.getPendingPhase() != null;
+        boolean waitingInput = taskChatPanel != null && taskChatPanel.isWaitingUserInput();
+        sidebar.setTaskWaitingApproval(pendingPhase || waitingInput);
     }
 
     @EventListener
     public void onPhaseChanged(PhaseChangedEvent event) {
         Edt.run(() -> {
             updateActivePhase(event.phase());
-            if (sidebar != null) {
-                sidebar.setTaskWaitingApproval(planService.getPendingPhase() != null);
-            }
+            syncSidebarWaitingApproval();
             if (event.phase() == WorkflowPhase.PLAN && pastPlansPanel != null) {
                 pastPlansPanel.refresh();
             }
@@ -198,7 +203,10 @@ public final class TaskWorkspacePanel extends JPanel {
     @EventListener
     public void onWorkflowTransition(WorkflowTransitionEvent event) {
         if (sidebar != null && !event.autonomous()) {
-            Edt.run(() -> sidebar.setTaskWaitingApproval(event.to() != null));
+            Edt.run(() -> {
+                boolean waitingInput = taskChatPanel != null && taskChatPanel.isWaitingUserInput();
+                sidebar.setTaskWaitingApproval(event.to() != null || waitingInput);
+            });
         }
     }
 

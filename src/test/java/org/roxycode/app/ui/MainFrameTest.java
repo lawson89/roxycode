@@ -295,6 +295,8 @@ class MainFrameTest {
             // Test BUSY state in QA mode
             frame.showCard(MainFrame.QA_VIEW);
             SwingTestUtils.runOnEdt(() -> frame.qaChatPanel().setLoading(true));
+            assertTrue(frame.sidebar.isQaBusy());
+            assertFalse(frame.sidebar.isTaskBusy());
             assertEquals(AppIconRenderer.AgentStatus.BUSY, frame.resolveCurrentStatus());
             frame.updateWorkspaceState();
             assertEquals(AppIconRenderer.AgentStatus.BUSY, frame.currentStatus);
@@ -306,6 +308,8 @@ class MainFrameTest {
                 frame.showCard(MainFrame.TASK_VIEW);
                 frame.taskChatPanel().setLoading(true);
             });
+            assertFalse(frame.sidebar.isQaBusy());
+            assertTrue(frame.sidebar.isTaskBusy());
             assertEquals(AppIconRenderer.AgentStatus.BUSY, frame.resolveCurrentStatus());
             frame.updateWorkspaceState();
             assertEquals(AppIconRenderer.AgentStatus.BUSY, frame.currentStatus);
@@ -321,6 +325,7 @@ class MainFrameTest {
             // Test returning to IDLE
             frame.sidebar.setTaskWaitingApproval(false);
             SwingTestUtils.runOnEdt(() -> frame.taskChatPanel().setLoading(false));
+            assertFalse(frame.sidebar.isTaskBusy());
             assertEquals(AppIconRenderer.AgentStatus.IDLE, frame.resolveCurrentStatus());
             frame.updateWorkspaceState();
             assertEquals(AppIconRenderer.AgentStatus.IDLE, frame.currentStatus);

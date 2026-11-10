@@ -232,8 +232,20 @@ final class UiComponents {
     /**
      * Standardizes the 18pt bold title + muted subtitle header block.
      */
+    static String formatWrappingHtml(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+        String trimmed = text.trim();
+        if (trimmed.regionMatches(true, 0, "<html>", 0, 6)) {
+            return text;
+        }
+        return "<html>" + SwingHtmlUtils.escapeHtml(text) + "</html>";
+    }
+
     static JPanel createPageHeader(JLabel titleLabel, JLabel subtitleLabel, @Nullable JComponent rightComponent) {
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 18f));
+        subtitleLabel.setText(formatWrappingHtml(subtitleLabel.getText()));
         subtitleLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Label.disabledForeground");
 
         JPanel titleBlock = new JPanel(new MigLayout("insets 0, wrap 1, gapy 2", "[grow, fill]", "[]"));
@@ -382,7 +394,7 @@ final class UiComponents {
             block.add(titleLbl, GROWX_WMIN_0);
         }
 
-        JLabel descLbl = new JLabel(description);
+        JLabel descLbl = new JLabel(formatWrappingHtml(description));
         descLbl.putClientProperty(FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
         block.add(descLbl, GROWX_WMIN_0);
 
@@ -759,11 +771,11 @@ final class UiComponents {
         }
 
         WarningBanner(String initialMessage) {
-            super(new MigLayout("fillx, insets 0", "[][grow]", "[]"));
+            super(new MigLayout("fillx, insets 0", "[][0:0, grow, fill]", "[]"));
             this.iconLabel = new JLabel();
-            this.messageLabel = new JLabel(initialMessage);
+            this.messageLabel = new JLabel(formatWrappingHtml(initialMessage));
             add(iconLabel, "gapright 8");
-            add(messageLabel, "growx, wmin 100");
+            add(messageLabel, GROWX_WMIN_0);
             setVisible(false);
         }
 
@@ -771,7 +783,7 @@ final class UiComponents {
             if (visible) {
                 Color warnColor = SwingHtmlUtils.getWarningColor();
                 iconLabel.setIcon(FontIcon.of(Codicons.WARNING, 18, warnColor));
-                messageLabel.setText(messageText);
+                messageLabel.setText(formatWrappingHtml(messageText));
                 SwingHtmlUtils.applyTintedBannerStyle(this, warnColor, 10, 14, 14);
             }
             setVisible(visible);

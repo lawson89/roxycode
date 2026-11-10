@@ -70,9 +70,11 @@ public final class SwingHtmlUtils {
 
     private static final Logger log = LoggerFactory.getLogger(SwingHtmlUtils.class);
 
-    private static final DataHolder FLEXMARK_OPTIONS = new MutableDataSet().set(Parser.EXTENSIONS,
-            Arrays.asList(TablesExtension.create(), StrikethroughExtension.create(), YamlFrontMatterExtension.create(),
-                    new MarkdownTableAttributeExtension(), new SyntaxHighlightingExtension()))
+    private static final DataHolder FLEXMARK_OPTIONS = new MutableDataSet().set(HtmlRenderer.ESCAPE_HTML, true)
+            .set(Parser.EXTENSIONS,
+                    Arrays.asList(TablesExtension.create(), StrikethroughExtension.create(),
+                            YamlFrontMatterExtension.create(), new MarkdownTableAttributeExtension(),
+                            new SyntaxHighlightingExtension()))
             .toImmutable();
     private static final Parser MARKDOWN_PARSER = Parser.builder(FLEXMARK_OPTIONS).build();
     private static final HtmlRenderer MARKDOWN_RENDERER = HtmlRenderer.builder(FLEXMARK_OPTIONS).build();

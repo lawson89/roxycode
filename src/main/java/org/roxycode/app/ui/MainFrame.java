@@ -500,13 +500,26 @@ public final class MainFrame extends JPanel {
 
         ChatPanel qaChat = qaChatPanel();
         if (qaChat != null) {
-            qaChat.addLoadingListener(loading -> Edt.run(this::updateWorkspaceState));
-            qaChat.addUserInputListener(waiting -> Edt.run(this::updateWorkspaceState));
+            qaChat.addLoadingListener(loading -> Edt.run(() -> {
+                sidebar.setQaBusy(loading);
+                updateWorkspaceState();
+            }));
+            qaChat.addUserInputListener(waiting -> Edt.run(() -> {
+                sidebar.setQaWaitingApproval(waiting);
+                updateWorkspaceState();
+            }));
         }
         ChatPanel taskChat = taskChatPanel();
         if (taskChat != null) {
-            taskChat.addLoadingListener(loading -> Edt.run(this::updateWorkspaceState));
-            taskChat.addUserInputListener(waiting -> Edt.run(this::updateWorkspaceState));
+            taskChat.addLoadingListener(loading -> Edt.run(() -> {
+                sidebar.setTaskBusy(loading);
+                updateWorkspaceState();
+            }));
+            taskChat.addUserInputListener(waiting -> Edt.run(() -> {
+                boolean pendingPhase = planService != null && planService.getPendingPhase() != null;
+                sidebar.setTaskWaitingApproval(waiting || pendingPhase);
+                updateWorkspaceState();
+            }));
         }
 
         JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));
@@ -748,7 +761,7 @@ public final class MainFrame extends JPanel {
         if (planService != null && planService.getPendingPhase() != null) {
             return AppIconRenderer.AgentStatus.WAITING_FEEDBACK;
         }
-        if (sidebar != null && sidebar.isTaskWaitingApproval()) {
+        if (sidebar != null && (sidebar.isTaskWaitingApproval() || sidebar.isQaWaitingApproval())) {
             return AppIconRenderer.AgentStatus.WAITING_FEEDBACK;
         }
         ChatPanel qaChat = qaChatPanel();

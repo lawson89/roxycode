@@ -18,15 +18,16 @@ class PlanPanelTest {
         assertTrue(PlanPanel.buildPlanHtml(null).contains("No implementation plan submitted yet."));
 
         ImplementationPlan plan = new ImplementationPlan("Test Plan", "Test Goal", List.of("Requirement 1"),
-                List.of(new ImplementationPlan.TechStep("Step 0", false),
+                List.of(new ImplementationPlan.TechStep("Step 0 with wrapping HTML (<html>...</html>)", false),
                         new ImplementationPlan.TechStep("Completed step", true)),
                 true, "2026-04-06T12:00:00", "user", "reviewer", "2026-04-06T13:00:00",
                 List.of(new ImplementationPlan.LogEntry("2026-04-06T12:00:00", "User", "Approved")))
                 .withRecordedFileChange("src/Main.java", FileChangedEvent.ChangeType.MODIFIED);
 
         String html = PlanPanel.buildPlanHtml(plan);
-        assertContainsAll(html, "<h1>Implementation Plan: Test Plan</h1>", "<h2>Approvals</h2>", "[ ] 0. Step 0",
-                "<del>Completed step</del>", "<h2>Handoff Log</h2>", "<h2>Changes</h2>", "MODIFIED src/Main.java");
+        assertContainsAll(html, "<h1>Implementation Plan: Test Plan</h1>", "<h2>Approvals</h2>",
+                "[ ] 0. Step 0 with wrapping HTML (&lt;html&gt;...&lt;/html&gt;)", "<del>Completed step</del>",
+                "<h2>Handoff Log</h2>", "<h2>Changes</h2>", "MODIFIED src/Main.java");
 
         PlanService planService = mock(PlanService.class);
         PlanPanel panel = new PlanPanel(planService);
@@ -40,6 +41,10 @@ class PlanPanelTest {
 
         assertTrue(panel.copyMarkdownButton.isEnabled());
         assertContainsAll(panel.displayArea.getText(), "MODIFIED src/Main.java");
+        String renderedDocText = assertDoesNotThrow(
+                () -> panel.displayArea.getDocument().getText(0, panel.displayArea.getDocument().getLength()));
+        assertContainsAll(renderedDocText, "0. Step 0 with wrapping HTML (<html>...</html>)", "Completed step",
+                "Handoff Log", "MODIFIED src/Main.java");
 
         assertFalse(panel.copyCommitMessageButton.isVisible());
         SwingTestUtils.clickOnEdt(panel.copyMarkdownButton);

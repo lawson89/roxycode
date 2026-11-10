@@ -48,7 +48,7 @@ public final class ArchiveBrowserPanel extends JPanel {
     public enum ArchiveMode {
         TOPICS("Search past topics...", "topic", "topics", Codicons.COMMENT_DISCUSSION, "Archived On",
                 "No archived Q&A topics yet.",
-                "When you start a New Topic in Codebase Q&A, the conversation is archived here automatically."),
+                "When you start a New Topic in Ask Roxy, the conversation is archived here automatically."),
         PLANS("Search past plans...", "plan", "plans", Codicons.PROJECT, "Completed On",
                 "No archived implementation plans yet.",
                 "When a Feature Request is approved as complete in Review, its plan is archived here automatically.");

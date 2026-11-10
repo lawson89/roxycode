@@ -1,5 +1,6 @@
 package org.roxycode.app.ui;
 
+import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.*;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -39,14 +40,15 @@ public final class BuildConfigPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(BuildConfigPanel.class);
     static final String TITLE_TEXT = "Project Settings";
-    static final String SUBTITLE_TEXT = "Configure project-specific Gemini model override and build execution commands (build.toml). Need help customizing build.toml or regexes for your stack? Ask Roxy in Codebase Q&A!";
+    static final String SUBTITLE_TEXT = "Configure project-specific Gemini model override and build execution commands (build.toml).";
     static final String SECTION_AI_MODEL_TITLE = "AI Model Override";
     static final String SECTION_BUILD_CONFIG_TITLE = "Build Configuration (build.toml)";
+    static final String BUILD_CONFIG_HINT_TEXT = "Need help customizing build.toml or regexes for your stack? Ask Roxy!";
     static final String APPLY_TEMPLATE_TEXT = "Apply Template";
     static final String SAVE_BUTTON_TEXT = "Confirm & Save Settings";
     private static final String DEFAULT_TEMPLATE_ID = "default";
     private static final String HEADER_FONT_STYLE = "font: bold +2";
-    static final String UNCONFIRMED_BUILD_NOTICE_TEXT = "Build configuration was initialized from the auto-detected template. Please review the commands below and click 'Confirm & Save Settings'. Need help customizing build.toml or regexes for your stack? Ask Roxy in Codebase Q&A!";
+    static final String UNCONFIRMED_BUILD_NOTICE_TEXT = "Build configuration was initialized from the auto-detected template. Please review the commands below and click 'Confirm & Save Settings'. Need help customizing build.toml or regexes for your stack? Ask Roxy!";
     static final String BUILD_TOML_GUIDE_TOOLTIP_HTML = """
             <html><div style='width: 390px;'>
             <b>build.toml Quick Reference</b><br><br>
@@ -54,7 +56,7 @@ public final class BuildConfigPanel extends JPanel {
             &bull; <b><code>[env]</code></b>: Key-value environment variables passed to all build processes.<br>
             &bull; <b><code>[parse]</code></b>: <code>error_regex</code>, <code>test_failure_regex</code>, <code>context_lines</code>, and optional <code>junit_xml_paths</code> for structured failure extraction.<br>
             &bull; <b><code>[sandbox]</code></b>: <code>mode</code> (<code>"none"</code>, <code>"native"</code> for Linux <code>bwrap</code> / macOS <code>sandbox-exec</code>, or <code>"docker"</code>), <code>writable_paths</code>, <code>image</code>, and <code>workdir</code>.<br><br>
-            <i>Need help customizing build.toml or regexes for your stack? Ask Roxy in <b>Codebase Q&amp;A</b>!</i>
+            <i>Need help customizing build.toml or regexes for your stack? Switch to <b>Ask Roxy</b>!</i>
             </div></html>""";
 
     private final transient GenericBuildToolService buildToolService;
@@ -71,6 +73,7 @@ public final class BuildConfigPanel extends JPanel {
     final JTextArea modelDescriptionArea;
     final JLabel buildSectionHeaderLabel;
     final JLabel buildConfigInfoIcon;
+    final JLabel buildConfigHintLabel;
     final JComboBox<BuildTemplateInfo> templateCombo;
     final JButton applyTemplateButton;
     final UiComponents.InlineConfirmBar templateConfirmBar;
@@ -156,10 +159,14 @@ public final class BuildConfigPanel extends JPanel {
         buildSectionHeaderLabel = UiComponents.createSectionHeader(SECTION_BUILD_CONFIG_TITLE, Codicons.PACKAGE,
                 HEADER_FONT_STYLE);
         buildConfigInfoIcon = UiComponents.createInfoIcon(BUILD_TOML_GUIDE_TOOLTIP_HTML);
-        JPanel buildHeaderRow = new JPanel(new MigLayout("insets 0, gapx 8", "[][][grow]", "[center]"));
+        buildConfigHintLabel = new JLabel(BUILD_CONFIG_HINT_TEXT);
+        buildConfigHintLabel.putClientProperty(FlatClientProperties.STYLE,
+                "font: -1; foreground: $Label.disabledForeground");
+        JPanel buildHeaderRow = new JPanel(new MigLayout("fillx, insets 0, gapx 8", "[][][grow][right]", "[center]"));
         buildHeaderRow.setOpaque(false);
         buildHeaderRow.add(buildSectionHeaderLabel);
         buildHeaderRow.add(buildConfigInfoIcon);
+        buildHeaderRow.add(buildConfigHintLabel, "skip 1");
         buildCardPanel.add(buildHeaderRow, "growx, wmin 0, wrap, gapbottom 8");
 
         JPanel templateToolbar = new JPanel(new MigLayout("fillx, insets 0, hidemode 3", "[][][][grow]", "[]"));

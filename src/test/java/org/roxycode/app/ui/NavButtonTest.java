@@ -2,6 +2,8 @@ package org.roxycode.app.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import javax.swing.UIManager;
 import org.junit.jupiter.api.Test;
 import org.kordamp.ikonli.codicons.Codicons;
@@ -10,7 +12,7 @@ import org.kordamp.ikonli.swing.FontIcon;
 class NavButtonTest {
 
     @Test
-    void testWaitingApprovalBadgeTooltipsNavigationAccessAndSplitPaneGrip() {
+    void testWaitingApprovalBadgeBusyDotTooltipsNavigationAccessAndSplitPaneGrip() {
         SettingsPanel.applyTheme("macOS Dark");
         assertEquals("grip", UIManager.get("SplitPaneDivider.style"));
         SettingsPanel.applyTheme("FlatLaf Light");
@@ -18,11 +20,29 @@ class NavButtonTest {
 
         SwingTestUtils.runOnEdt(() -> {
             NavButton btn = new NavButton("Feature Request", FontIcon.of(Codicons.GIT_PULL_REQUEST, 16));
+            btn.setSize(180, 36);
             assertFalse(btn.isWaitingApproval());
+            assertFalse(btn.isBusy());
             assertNull(btn.statusIcon);
 
+            btn.setBusy(true);
+            assertTrue(btn.isBusy());
+            assertNull(btn.statusIcon);
+            assertEquals(NavButton.BUSY_TOOLTIP, btn.getToolTipText());
+
+            // Painting busy dot should succeed without throwing
+            BufferedImage img = new BufferedImage(180, 36, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g2 = img.createGraphics();
+            try {
+                btn.paint(g2);
+            } finally {
+                g2.dispose();
+            }
+
+            // WaitingApproval takes precedence over busy
             btn.setWaitingApproval(true);
             assertTrue(btn.isWaitingApproval());
+            assertTrue(btn.isBusy());
             assertEquals(Codicons.BELL_DOT, btn.statusIcon.getIkon());
             assertEquals(NavButton.WAITING_APPROVAL_TOOLTIP, btn.getToolTipText());
 
@@ -31,8 +51,14 @@ class NavButtonTest {
             btn.setAttentionTooltip("   ");
             assertEquals(NavButton.WAITING_APPROVAL_TOOLTIP, btn.getToolTipText());
 
+            // Clearing waitingApproval while still busy restores busy tooltip and dot state
             btn.setWaitingApproval(false);
             assertNull(btn.statusIcon);
+            assertTrue(btn.isBusy());
+            assertEquals(NavButton.BUSY_TOOLTIP, btn.getToolTipText());
+
+            btn.setBusy(false);
+            assertFalse(btn.isBusy());
             assertNull(btn.getToolTipText());
 
             SidebarPanel sidebar = new SidebarPanel(card -> {
@@ -44,6 +70,21 @@ class NavButtonTest {
             assertSame(sidebar.getCardButton(MainFrame.CONTEXT_MGR_VIEW), sidebar.getCardButton(MainFrame.CACHE_VIEW));
             assertSame(sidebar.getCardButton(MainFrame.CONTEXT_MGR_VIEW), sidebar.getCardButton(MainFrame.API_VIEW));
             assertSame(sidebar.getCardButton(MainFrame.SETTINGS_VIEW), sidebar.getCardButton(MainFrame.TOOLS_VIEW));
+
+            sidebar.setQaBusy(true);
+            assertTrue(sidebar.isQaBusy());
+            sidebar.setQaBusy(false);
+            assertFalse(sidebar.isQaBusy());
+
+            sidebar.setTaskBusy(true);
+            assertTrue(sidebar.isTaskBusy());
+            sidebar.setTaskBusy(false);
+            assertFalse(sidebar.isTaskBusy());
+
+            sidebar.setQaWaitingApproval(true);
+            assertTrue(sidebar.isQaWaitingApproval());
+            sidebar.setQaWaitingApproval(false);
+            assertFalse(sidebar.isQaWaitingApproval());
 
             sidebar.updateNavigationAccess(false, false, false);
             assertTrue(sidebar.getCardButton(MainFrame.SETTINGS_VIEW).isEnabled());

@@ -216,10 +216,12 @@ public final class SettingsPanel extends JPanel {
         JPanel modelControlBox = UiComponents.createModelControlBox(modelApiBadgeLabel, modelCombo,
                 CONTROL_WIDTH_CONSTRAINTS);
 
-        card.add(UiComponents.createFieldRow(
-                UiComponents.createFieldTextBlock("Gemini Model",
-                        "Default Gemini model used for Codebase Q&A and Feature Mode turns.", null),
-                modelControlBox, ""), GROWX_WMIN_0);
+        card.add(
+                UiComponents.createFieldRow(
+                        UiComponents.createFieldTextBlock("Gemini Model",
+                                "Default Gemini model used for Ask Roxy and Build Feature turns.", null),
+                        modelControlBox, ""),
+                GROWX_WMIN_0);
 
         card.add(modelDescriptionArea, "growx, wmin 0, gaptop 2, hidemode 3");
         card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);

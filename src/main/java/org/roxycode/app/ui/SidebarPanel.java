@@ -113,6 +113,30 @@ public final class SidebarPanel extends JPanel {
         }
     }
 
+    public void setQaBusy(boolean busy) {
+        qaBtn.setBusy(busy);
+    }
+
+    public boolean isQaBusy() {
+        return qaBtn.isBusy();
+    }
+
+    public void setTaskBusy(boolean busy) {
+        taskBtn.setBusy(busy);
+    }
+
+    public boolean isTaskBusy() {
+        return taskBtn.isBusy();
+    }
+
+    public void setQaWaitingApproval(boolean waitingApproval) {
+        qaBtn.setWaitingApproval(waitingApproval);
+    }
+
+    public boolean isQaWaitingApproval() {
+        return qaBtn.isWaitingApproval();
+    }
+
     public void setTaskWaitingApproval(boolean waitingApproval) {
         taskBtn.setWaitingApproval(waitingApproval);
     }
