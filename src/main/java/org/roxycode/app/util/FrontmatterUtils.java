@@ -11,18 +11,18 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import org.apache.commons.lang3.StringUtils;
+import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ui.SwingHtmlUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.yaml.snakeyaml.DumperOptions;
-import org.yaml.snakeyaml.Yaml;
 
 /**
- * Utility for parsing and formatting YAML frontmatter in Markdown files using Flexmark and SnakeYAML.
+ * Utility for parsing and formatting YAML frontmatter in Markdown files using Flexmark and Jackson YAML.
  */
 public final class FrontmatterUtils {
 
     private static final Logger log = LoggerFactory.getLogger(FrontmatterUtils.class);
+    private static final String YAML_DELIMITER = "---";
 
     private FrontmatterUtils() {
     }
@@ -35,20 +35,13 @@ public final class FrontmatterUtils {
         Node firstChild = document.getFirstChild();
         if (firstChild instanceof YamlFrontMatterBlock block) {
             String blockText = content.substring(block.getStartOffset(), block.getEndOffset());
-            if (blockText.trim().endsWith("---")) {
+            if (blockText.trim().endsWith(YAML_DELIMITER)) {
                 return block;
             }
         }
         return null;
     }
 
-    /**
-     * Strips the YAML frontmatter block from the beginning of a Markdown string.
-     *
-     * @param rawMarkdown
-     *            The raw Markdown content
-     * @return The Markdown content without the frontmatter block
-     */
     public static String stripFrontmatter(String rawMarkdown) {
         if (rawMarkdown == null || rawMarkdown.isEmpty()) {
             return "";
@@ -60,13 +53,6 @@ public final class FrontmatterUtils {
         return rawMarkdown;
     }
 
-    /**
-     * Parses the YAML frontmatter from a file.
-     *
-     * @param file
-     *            The path to the Markdown file
-     * @return A map of frontmatter keys to their string representation
-     */
     public static Map<String, String> parseFrontmatter(Path file) {
         if (file == null || !Files.isRegularFile(file)) {
             return Collections.emptyMap();
@@ -79,31 +65,25 @@ public final class FrontmatterUtils {
         }
     }
 
-    /**
-     * Parses the YAML frontmatter from a string.
-     *
-     * @param content
-     *            The Markdown content
-     * @return A map of frontmatter keys to their string representation
-     */
     public static Map<String, String> parseFrontmatter(String content) {
         YamlFrontMatterBlock block = findClosedFrontmatterBlock(content);
         if (block == null) {
             return Collections.emptyMap();
         }
         String yamlBlock = content.substring(block.getStartOffset(), block.getEndOffset());
-        String yamlContent = StringUtils.removeEnd(StringUtils.removeStart(yamlBlock.trim(), "---"), "---").trim();
+        String yamlContent = StringUtils
+                .removeEnd(StringUtils.removeStart(yamlBlock.trim(), YAML_DELIMITER), YAML_DELIMITER).trim();
         if (yamlContent.isEmpty()) {
             return Collections.emptyMap();
         }
         try {
-            Yaml yaml = new Yaml();
-            Map<String, Object> obj = yaml.load(yamlContent);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> obj = AiConfig.SHARED_YAML_MAPPER.readValue(yamlContent, Map.class);
             if (obj == null) {
                 return Collections.emptyMap();
             }
             Map<String, String> result = new LinkedHashMap<>();
-            obj.forEach((k, v) -> result.put(k, Objects.toString(v, "")));
+            obj.forEach((k, v) -> result.put(Objects.toString(k), Objects.toString(v, "")));
             return result;
         } catch (Exception e) {
             log.debug("Failed to parse YAML frontmatter: {}", e.getMessage());
@@ -111,22 +91,23 @@ public final class FrontmatterUtils {
         }
     }
 
-    /**
-     * Formats a map into a YAML frontmatter block.
-     *
-     * @param fields
-     *            The fields to include in the frontmatter
-     * @return The formatted frontmatter block (including delimiters and trailing newlines)
-     */
     public static String formatFrontmatter(Map<String, Object> fields) {
         if (fields == null || fields.isEmpty()) {
+            return YAML_DELIMITER + "\n" + YAML_DELIMITER + "\n\n";
+        }
+        try {
+            String dumped = AiConfig.SHARED_YAML_MAPPER.writeValueAsString(fields);
+            String clean = dumped.trim();
+            while (clean.startsWith(YAML_DELIMITER)) {
+                clean = clean.substring(3).trim();
+            }
+            while (clean.endsWith(YAML_DELIMITER)) {
+                clean = clean.substring(0, clean.length() - 3).trim();
+            }
+            return YAML_DELIMITER + "\n" + clean + "\n" + YAML_DELIMITER + "\n\n";
+        } catch (Exception e) {
+            log.warn("Failed to format YAML frontmatter: {}", e.getMessage());
             return "---\n---\n\n";
         }
-        DumperOptions options = new DumperOptions();
-        options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
-        options.setPrettyFlow(true);
-        Yaml yaml = new Yaml(options);
-        String dumped = yaml.dump(fields);
-        return "---\n" + dumped + "---\n\n";
     }
 }

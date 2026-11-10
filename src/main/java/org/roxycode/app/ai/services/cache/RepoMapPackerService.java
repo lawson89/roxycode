@@ -13,7 +13,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
-import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.CtagsRunner;
@@ -23,9 +22,9 @@ import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.service.ProjectAnalysisService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.util.ExceptionUtils;
-import org.roxycode.app.util.PathUtils;
 import org.roxycode.app.util.TokenUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,12 +42,6 @@ public class RepoMapPackerService {
 
     static final Set<String> EXCLUDED_SKELETON_KINDS = Set.of("field", "constant", "enumconstant", "property",
             "variable", "member", "enumerator");
-    static final Set<String> SOURCE_EXTENSIONS = Set
-            .of("java,py,ts,tsx,js,jsx,go,rs,c,cpp,cc,cxx,h,hpp,cs,rb,php,kt,kts,swift,scala".split(","));
-    private static final List<String> TEST_DIR_MARKERS = List.of("src/test/", "test/", "tests/", "__tests__/");
-    private static final List<String> TEST_FILE_SUFFIXES = List.of(
-            "Test.java,Tests.java,IT.java,_test.py,_test.go,.test.ts,.spec.ts,.test.tsx,.spec.tsx,.test.js,.spec.js,.test.jsx,.spec.jsx"
-                    .split(","));
 
     public record RepoMapSnapshot(String projectName, String content, LocalDateTime lastUpdated, long estimatedTokens) {
     }
@@ -202,25 +195,11 @@ public class RepoMapPackerService {
     }
 
     static boolean isSourceFile(String relPath) {
-        String ext = PathUtils.getLowerExtension(relPath, false);
-        return !ext.isEmpty() && SOURCE_EXTENSIONS.contains(ext);
+        return ProjectAnalysisService.isSourceFile(relPath);
     }
 
     public static boolean isTestFile(String relPath) {
-        if (relPath == null || relPath.isBlank()) {
-            return false;
-        }
-        String normalized = FilenameUtils.separatorsToUnix(relPath);
-        for (String marker : TEST_DIR_MARKERS) {
-            if (normalized.startsWith(marker) || normalized.contains("/" + marker)) {
-                return true;
-            }
-        }
-        String fileName = PathUtils.getFileName(normalized);
-        if (fileName.startsWith("test_") && fileName.endsWith(".py")) {
-            return true;
-        }
-        return TEST_FILE_SUFFIXES.stream().anyMatch(fileName::endsWith);
+        return ProjectAnalysisService.isTestFile(relPath);
     }
 
     static boolean shouldGenerateSkeleton(String relPath) {

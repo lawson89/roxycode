@@ -15,7 +15,8 @@ public final class JexlToHtmlConverter {
 
     private static final Set<String> EXTRA_KEYWORDS = Set.of("and", "or", "not", "mod", "div", "empty", "size",
             "assert", "interface", "record", "String", "List", "Map", "Set", "Optional", "int", "long", "double",
-            "float", "short", "byte", "char", "boolean");
+            "float", "short", "byte", "char", "boolean", "new", "var", "let", "const", "function", "lambda", "return",
+            "continue", "break");
 
     private static final Pattern SERVICE_IDENTIFIER_PATTERN = Pattern
             .compile("[a-zA-Z_][a-zA-Z0-9_]*[sS]ervice[a-zA-Z0-9_]*");

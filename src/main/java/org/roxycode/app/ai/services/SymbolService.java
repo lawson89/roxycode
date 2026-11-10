@@ -25,6 +25,7 @@ import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.services.CtagsRunner.CtagsEntry;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
+import org.roxycode.app.service.ProjectAnalysisService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.ProjectService.ReferenceFolderMount;
 import org.roxycode.app.util.ExceptionUtils;
@@ -46,10 +47,6 @@ public class SymbolService {
     private static final String CANCELLED_MSG = "Symbol operation cancelled";
     private static final String CURRENT_DIR = ".";
     private static final List<String> CTAGS_OUTLINE_FLAGS = List.of("--fields=+neKSs");
-    private static final List<String> SOURCE_DIR_PREFIXES = List.of("src/main/java/", "src/main/kotlin/",
-            "src/main/scala/", "src/main/groovy/", "src/main/", "src/", "lib/", "app/");
-    private static final List<String> TEST_DIR_PREFIXES = List.of("src/test/java/", "src/test/kotlin/",
-            "src/test/scala/", "src/test/groovy/", "src/test/", "tests/", "test/", "__tests__/");
 
     static final int MAX_PRECEDING_CONTEXT_LINES = 5;
     static final int MAX_FIND_SYMBOL_FILES = 25;
@@ -284,7 +281,8 @@ public class SymbolService {
         }
 
         String referencePrefix = extractReferenceAliasPrefix(normalizedPath);
-        String sourceSubpath = extractNormalizedSubpath(stripReferenceAliasPrefix(normalizedPath), SOURCE_DIR_PREFIXES);
+        String sourceSubpath = extractNormalizedSubpath(stripReferenceAliasPrefix(normalizedPath),
+                ProjectAnalysisService.SOURCE_DIR_MARKERS);
         List<String> allFiles = listFilesForScope(referencePrefix);
         List<String> mirroredTier1 = new ArrayList<>();
         List<String> otherTier1 = new ArrayList<>();
@@ -300,7 +298,7 @@ public class SymbolService {
                 String candidateFileName = PathUtils.getFileName(normCandidate);
                 if (matchesTestNamingConvention(candidateFileName, stem)) {
                     String testSubpath = extractNormalizedSubpath(stripReferenceAliasPrefix(normCandidate),
-                            TEST_DIR_PREFIXES);
+                            ProjectAnalysisService.TEST_DIR_MARKERS);
                     if (!sourceSubpath.isEmpty() && sourceSubpath.equals(testSubpath)) {
                         mirroredTier1.add(normCandidate);
                     } else {

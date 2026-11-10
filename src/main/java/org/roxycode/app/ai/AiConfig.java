@@ -2,6 +2,8 @@ package org.roxycode.app.ai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
+import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
+import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
 import com.google.auth.oauth2.GoogleCredentials;
 import com.google.genai.Client;
 import com.google.genai.errors.ApiException;
@@ -77,6 +79,9 @@ public class AiConfig {
 
     public static final TomlMapper SHARED_TOML_MAPPER = (TomlMapper) new TomlMapper().findAndRegisterModules();
 
+    public static final YAMLMapper SHARED_YAML_MAPPER = (YAMLMapper) new YAMLMapper()
+            .disable(YAMLGenerator.Feature.WRITE_DOC_START_MARKER).findAndRegisterModules();
+
     @Bean
     public ObjectMapper objectMapper() {
         return SHARED_OBJECT_MAPPER;
@@ -85,6 +90,11 @@ public class AiConfig {
     @Bean
     public TomlMapper tomlMapper() {
         return SHARED_TOML_MAPPER;
+    }
+
+    @Bean
+    public YAMLMapper yamlMapper() {
+        return SHARED_YAML_MAPPER;
     }
 
     @Bean(destroyMethod = "close")

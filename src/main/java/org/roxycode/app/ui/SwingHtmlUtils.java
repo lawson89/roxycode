@@ -332,6 +332,34 @@ public final class SwingHtmlUtils {
         return defaultSpan;
     }
 
+    private static View wrapWithZeroMinSpan(View view, Element elem) {
+        if (view instanceof InlineView) {
+            return new InlineView(elem) {
+                @Override
+                public float getMinimumSpan(int axis) {
+                    return zeroHorizontalMinimumSpan(axis, super.getMinimumSpan(axis));
+                }
+            };
+        }
+        if (view instanceof ParagraphView) {
+            return new ParagraphView(elem) {
+                @Override
+                public float getMinimumSpan(int axis) {
+                    return zeroHorizontalMinimumSpan(axis, super.getMinimumSpan(axis));
+                }
+            };
+        }
+        if (view instanceof BlockView bv) {
+            return new BlockView(elem, bv.getAxis()) {
+                @Override
+                public float getMinimumSpan(int axis) {
+                    return zeroHorizontalMinimumSpan(axis, super.getMinimumSpan(axis));
+                }
+            };
+        }
+        return view;
+    }
+
     static final class ResponsiveImageView extends ImageView {
 
         ResponsiveImageView(Element elem) {
@@ -493,31 +521,7 @@ public final class SwingHtmlUtils {
             if (isNoWrap(elem)) {
                 return view;
             }
-            if (view.getClass() == InlineView.class) {
-                return new InlineView(elem) {
-                    @Override
-                    public float getMinimumSpan(int axis) {
-                        return zeroHorizontalMinimumSpan(axis, super.getMinimumSpan(axis));
-                    }
-                };
-            }
-            if (view instanceof ParagraphView) {
-                return new ParagraphView(elem) {
-                    @Override
-                    public float getMinimumSpan(int axis) {
-                        return zeroHorizontalMinimumSpan(axis, super.getMinimumSpan(axis));
-                    }
-                };
-            }
-            if (view instanceof BlockView blockView && !"body".equalsIgnoreCase(elem.getName())) {
-                return new BlockView(elem, blockView.getAxis()) {
-                    @Override
-                    public float getMinimumSpan(int axis) {
-                        return zeroHorizontalMinimumSpan(axis, super.getMinimumSpan(axis));
-                    }
-                };
-            }
-            return view;
+            return wrapWithZeroMinSpan(view, elem);
         }
     }
 

@@ -24,6 +24,7 @@ import org.roxycode.app.ai.AiConfig;
 import org.springframework.core.io.ClassPathResource;
 
 public final class PathUtils {
+    private static final String CURRENT_DIR = ".";
 
     private static final String MD_EXTENSION = ".md";
     private static final DateTimeFormatter ARCHIVE_TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss",
@@ -101,11 +102,21 @@ public final class PathUtils {
     }
 
     public static String normalizeRelativePath(String path) {
-        String result = FilenameUtils.separatorsToUnix(StringUtils.defaultString(path));
-        while (result.startsWith("./")) {
-            result = result.substring(2);
+        if (path == null || path.isBlank()) {
+            return "";
         }
-        return result;
+        String unix = FilenameUtils.separatorsToUnix(path.trim());
+        while (unix.startsWith("./")) {
+            unix = unix.substring(2);
+        }
+        if (unix.contains("../") || unix.endsWith("/..") || "..".equals(unix)) {
+            return unix;
+        }
+        String normalized = FilenameUtils.separatorsToUnix(Path.of(unix).normalize().toString());
+        if (CURRENT_DIR.equals(normalized)) {
+            return "";
+        }
+        return normalized;
     }
 
     public static String getFileName(String path) {

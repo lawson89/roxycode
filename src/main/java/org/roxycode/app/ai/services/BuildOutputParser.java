@@ -65,9 +65,14 @@ final class BuildOutputParser {
     }
 
     /**
-     * Escapes unescaped single backslashes inside TOML basic strings (such as regex patterns like {@code \s} or
-     * {@code \d}) while preserving valid TOML escape sequences and literal strings so Jackson's TomlMapper can parse
-     * user-edited {@code build.toml} regexes without syntax errors.
+     * Escapes unescaped single backslashes inside TOML basic strings (such as regex patterns like {@code \d} or
+     * {@code \s} in {@code build.toml}) while preserving valid TOML escape sequences and literal strings.
+     *
+     * <p>
+     * This is necessary because Jackson's {@code TomlMapper} strictly follows the TOML specification, which treats
+     * backslashes in basic strings as the start of an escape sequence. If the character following the backslash is not
+     * a valid escape character (like 'd' in {@code \d}), the parser will fail. By doubling the backslash to {@code \d},
+     * we ensure the regex is parsed correctly as a literal backslash followed by 'd'.
      */
     static String sanitizeTomlEscapes(String toml) {
         if (toml == null || toml.indexOf(BACKSLASH_CHAR) < 0) {

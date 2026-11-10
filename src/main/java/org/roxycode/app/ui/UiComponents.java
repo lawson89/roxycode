@@ -66,6 +66,7 @@ import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
+import net.coobird.thumbnailator.Thumbnails;
 
 /**
  * Shared Swing UI component builders and FlatLaf style helpers to reduce boilerplate.
@@ -116,20 +117,12 @@ final class UiComponents {
         if (source == null) {
             return new BufferedImage(safeMax, safeMax, BufferedImage.TYPE_INT_ARGB);
         }
-        int srcWidth = Math.max(1, source.getWidth());
-        int srcHeight = Math.max(1, source.getHeight());
-        double scale = Math.min(1.0, Math.min((double) safeMax / srcWidth, (double) safeMax / srcHeight));
-        int targetWidth = Math.max(1, (int) Math.round(srcWidth * scale));
-        int targetHeight = Math.max(1, (int) Math.round(srcHeight * scale));
-        BufferedImage thumb = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2 = thumb.createGraphics();
         try {
-            g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-            g2.drawImage(source, 0, 0, targetWidth, targetHeight, null);
-        } finally {
-            g2.dispose();
+            return Thumbnails.of(source).size(safeMax, safeMax).asBufferedImage();
+        } catch (IOException e) {
+            log.warn("Failed to create thumbnail: {}", e.getMessage());
+            return source;
         }
-        return thumb;
     }
 
     /**
