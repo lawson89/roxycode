@@ -16,7 +16,7 @@ import javax.swing.SwingUtilities;
 public final class Edt {
 
     public static final Executor EXECUTOR = Edt::run;
-    private static final Executor VIRTUAL_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
+    public static final Executor VIRTUAL_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
     private Edt() {
     }

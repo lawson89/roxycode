@@ -238,12 +238,15 @@ class GrepServiceTest {
                     "*.java");
             assertEquals(Map.of("@billing-service/src/Invoice.java", "public class Invoice {}"), readMatched);
 
+            String bs = String.valueOf((char) 92);
+            String snippetWithSpecialChars = "public class Invoice { String p = '" + bs + "s+ https://x.io/../y'; }";
             runner.when(() -> ProcessRunner.run(eq(List.of("rg", "--vimgrep", "--no-heading", "--color=never", "-g",
                     "*.java", "--", "Invoice", "src")), eq(refRoot), eq(true)))
-                    .thenReturn(new ProcessResult(0, "src/Invoice.java:1:14:public class Invoice {}" + NL, "", false));
+                    .thenReturn(new ProcessResult(0, "./src" + bs + "Invoice.java:1:14:" + snippetWithSpecialChars + NL,
+                            "", false));
             EditorResult grepRes = grepService.grep("Invoice", "@billing-service/src", "*.java");
             assertTrue(grepRes.success());
-            assertEquals("@billing-service/src/Invoice.java:1:14:public class Invoice {}", grepRes.content());
+            assertEquals("@billing-service/src/Invoice.java:1:14:" + snippetWithSpecialChars, grepRes.content());
 
             runner.when(() -> ProcessRunner.run(
                     eq(List.of("rg", "--vimgrep", "--no-heading", "--color=never", "-w", "--", "Invoice", ".")),

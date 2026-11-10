@@ -18,6 +18,7 @@ import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.model.GeminiModels;
 import org.roxycode.app.model.ThinkingLevel;
+import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -105,6 +106,16 @@ public class SettingsService {
         return GeminiModelConfig.defaultForApiName(target);
     }
 
+    public static GeminiModelConfig resolveModelConfig(SettingsService settingsService, String apiName) {
+        if (settingsService != null) {
+            GeminiModelConfig cfg = settingsService.resolveModelConfig(apiName);
+            if (cfg != null) {
+                return cfg;
+            }
+        }
+        return GeminiModelConfig.defaultForApiName(apiName);
+    }
+
     public static String resolveGlobalGeminiModel(SettingsService settingsService) {
         if (settingsService != null && settingsService.getSettings() != null) {
             return StringUtils
@@ -144,7 +155,7 @@ public class SettingsService {
             snapshot = getSettings().copy();
             path = getSettingsPath();
             lastSaveFuture = lastSaveFuture.handle((v, ex) -> null)
-                    .thenRunAsync(() -> writeSettingsToDisk(path, snapshot));
+                    .thenRunAsync(() -> writeSettingsToDisk(path, snapshot), Edt.VIRTUAL_EXECUTOR);
             saveFuture = lastSaveFuture;
         }
         eventPublisher.publishEvent(new SettingsChangedEvent(snapshot));

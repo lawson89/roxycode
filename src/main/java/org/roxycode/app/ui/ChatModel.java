@@ -162,8 +162,8 @@ public final class ChatModel {
             sb.append("/").append(settings.getMaxAgentToolTurns());
         }
         if (taskMode && plan != null && !plan.technicalSteps().isEmpty()) {
-            long completed = plan.technicalSteps().stream().filter(ImplementationPlan.TechStep::completed).count();
-            sb.append(" • ").append(completed).append("/").append(plan.technicalSteps().size()).append(" steps");
+            sb.append(" • ").append(plan.completedStepCount()).append("/").append(plan.technicalSteps().size())
+                    .append(" steps");
         }
         return sb.toString();
     }

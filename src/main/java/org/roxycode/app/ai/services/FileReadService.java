@@ -70,11 +70,14 @@ public class FileReadService {
 
     private String readRawTextFile(String relativePath) throws IOException {
         Path path = projectService.resolveReadPath(relativePath);
+        if (!Files.exists(path)) {
+            throw new IllegalArgumentException(ERROR_PREFIX + "File does not exist: " + relativePath);
+        }
         if (!Files.isRegularFile(path)) {
-            throw new IllegalArgumentException("Error: Path is not a regular file or does not exist: " + relativePath);
+            throw new IllegalArgumentException(ERROR_PREFIX + "Path is not a regular file: " + relativePath);
         }
         if (isBinaryFile(path)) {
-            throw new IllegalArgumentException("Error: Binary file cannot be read as text: " + relativePath);
+            throw new IllegalArgumentException(ERROR_PREFIX + "Binary file cannot be read as text: " + relativePath);
         }
         return Files.readString(path);
     }
@@ -145,21 +148,10 @@ public class FileReadService {
 
     private String readSingleFileForBatch(String relativePath, boolean numbered) {
         try {
-            Path path = projectService.resolveReadPath(relativePath);
-            if (!Files.exists(path)) {
-                return ERROR_PREFIX + "File does not exist: " + relativePath;
-            }
-            if (!Files.isRegularFile(path)) {
-                return ERROR_PREFIX + "Path is not a regular file: " + relativePath;
-            }
-            if (isBinaryFile(path)) {
-                return ERROR_PREFIX + "Binary file cannot be read as text: " + relativePath;
-            }
-            String content = Files.readString(path);
             if (!numbered) {
-                return content;
+                return readRawTextFile(relativePath);
             }
-            return formatNumberedLines(content.lines().toList(), 1, Integer.MAX_VALUE);
+            return readLines(relativePath, 1, Integer.MAX_VALUE);
         } catch (Exception e) {
             return StringUtils.prependIfMissing(ExceptionUtils.getMessageOrSimpleName(e), ERROR_PREFIX);
         }

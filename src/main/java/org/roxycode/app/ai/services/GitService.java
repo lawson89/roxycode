@@ -54,7 +54,7 @@ public class GitService {
         if (NOT_A_GIT_REPOSITORY.equals(originHead) || originHead.startsWith("Error executing git command:")) {
             return originHead;
         }
-        if (!isGitError(originHead) && !originHead.isBlank()) {
+        if (isValidOutput(originHead)) {
             String trimmed = originHead.trim();
             if (trimmed.startsWith(ORIGIN_REF_PREFIX)) {
                 String branch = trimmed.substring(ORIGIN_REF_PREFIX.length()).trim();
@@ -72,7 +72,7 @@ public class GitService {
             if (NOT_A_GIT_REPOSITORY.equals(check) || check.startsWith("Error executing git command:")) {
                 return check;
             }
-            if (!isGitError(check) && !check.isBlank()) {
+            if (isValidOutput(check)) {
                 return candidateNames[i];
             }
         }
@@ -107,9 +107,9 @@ public class GitService {
         }
         Set<String> files = new LinkedHashSet<>();
         String mergeBase = resolveMergeBase(baseBranch);
-        if (!isGitError(mergeBase) && !mergeBase.isEmpty()) {
+        if (isValidOutput(mergeBase)) {
             String diffNames = executeGitCommand(GIT_DIFF, "--name-only", mergeBase + "...HEAD");
-            if (!diffNames.isEmpty() && !isGitError(diffNames)) {
+            if (isValidOutput(diffNames)) {
                 for (String line : diffNames.lines().toList()) {
                     String normalized = line.trim().replace(BACKSLASH, '/');
                     if (!normalized.isEmpty()) {
@@ -159,7 +159,7 @@ public class GitService {
         if (isGitError(mergeBase) && !NOT_A_GIT_REPOSITORY.equals(mergeBase) && !targetBranch.startsWith("origin/")
                 && !targetBranch.startsWith("refs/")) {
             String remoteMergeBase = executeGitCommand("merge-base", "origin/" + targetBranch, GIT_HEAD);
-            if (!isGitError(remoteMergeBase) && !remoteMergeBase.isEmpty()) {
+            if (isValidOutput(remoteMergeBase)) {
                 return remoteMergeBase;
             }
         }
@@ -223,7 +223,7 @@ public class GitService {
         }
         String statusOutput = executeGitCommand(false, "-c", "core.quotePath=false", "status", "--porcelain=v1",
                 "-uall");
-        if (statusOutput.isEmpty() || isGitError(statusOutput)) {
+        if (!isValidOutput(statusOutput)) {
             return List.of();
         }
         Set<String> files = new LinkedHashSet<>();
@@ -308,7 +308,7 @@ public class GitService {
 
     private String buildUntrackedDiffs(String normalizedPath) {
         String untrackedOut = executeGitCommandWithPath(normalizedPath, "ls-files", "--others", "--exclude-standard");
-        if (untrackedOut.isEmpty() || isGitError(untrackedOut)) {
+        if (!isValidOutput(untrackedOut)) {
             return "";
         }
         StringBuilder sb = new StringBuilder();
@@ -347,17 +347,7 @@ public class GitService {
     }
 
     public static boolean isValidOutput(String output) {
-        if (output == null || output.isBlank()) {
-            return false;
-        }
-        if (NO_ACTIVE_PROJECT.equals(output) || NOT_A_GIT_REPOSITORY.equals(output)) {
-            return false;
-        }
-        if (output.startsWith("Error") || output.startsWith("fatal:") || output.startsWith("error:")
-                || output.startsWith("warning:")) {
-            return false;
-        }
-        return true;
+        return StringUtils.isNotBlank(output) && !isGitError(output);
     }
 
     private static boolean isGitError(String output) {

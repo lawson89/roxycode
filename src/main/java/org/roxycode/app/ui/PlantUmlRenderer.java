@@ -299,8 +299,10 @@ public final class PlantUmlRenderer {
             }
             String fileName = PathUtils.computeSha256Hex(key.normalizedCode(), 16) + "-" + themeSuffix + ".png";
             Path pngFile = outputDir.resolve(fileName);
-            Files.write(pngFile, pngBytes);
-            pngFile.toFile().deleteOnExit();
+            if (!Files.exists(pngFile)) {
+                Files.write(pngFile, pngBytes);
+                pngFile.toFile().deleteOnExit();
+            }
 
             String fileUrl = pngFile.toUri().toURL().toExternalForm();
             String html = ("<table class='diagram-container' width='100%' border='0' cellpadding='8' cellspacing='0'>"

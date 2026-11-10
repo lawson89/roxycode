@@ -13,7 +13,8 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
-import org.apache.commons.io.FilenameUtils;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.ContextChangedEvent;
@@ -34,6 +35,7 @@ public class ProjectService {
     private static final int MAX_PROJECT_NAME_LENGTH = 40;
     private static final String DEFAULT_REF_ALIAS = "ref";
     private static final String CONTEXT_SEPARATOR = "--";
+    private static final Pattern RG_LINE_PREFIX_PATTERN = Pattern.compile("^(.+?)([:-][0-9]+[:-].*)$", Pattern.DOTALL);
     static final String PROJECT_CONFIG_FILE = "project.toml";
     static final String PROJECT_CONTEXT_CONFIG_FILE = "context.toml";
     static final String ROXYCODE_TMP_DIR = ".roxycode/tmp";
@@ -111,18 +113,15 @@ public class ProjectService {
             if (rawLine == null) {
                 return "";
             }
-            if (CONTEXT_SEPARATOR.equals(rawLine.trim())) {
+            String trimmed = rawLine.trim();
+            if (CONTEXT_SEPARATOR.equals(trimmed)) {
                 return CONTEXT_SEPARATOR;
             }
-            String stripped = PathUtils.normalizeRelativePath(rawLine);
-            if (prefixAlias.isEmpty()) {
-                return stripped;
+            Matcher matcher = RG_LINE_PREFIX_PATTERN.matcher(rawLine);
+            if (matcher.matches()) {
+                return formatResultPath(matcher.group(1)) + matcher.group(2);
             }
-            if (stripped.startsWith(prefixAlias + "/") || stripped.startsWith(prefixAlias + ":")
-                    || stripped.startsWith(prefixAlias + "-")) {
-                return stripped;
-            }
-            return prefixAlias + "/" + stripped;
+            return formatResultPath(trimmed);
         }
     }
 
@@ -494,16 +493,16 @@ public class ProjectService {
         if (relativePath == null) {
             return false;
         }
-        String normalized = PathUtils.normalizeRelativePath(relativePath.trim());
-        return normalized.startsWith("@");
+        String stripped = PathUtils.stripLeadingCurrentDir(relativePath);
+        return stripped.startsWith("@");
     }
 
     private ParsedReferencePath parseReferencePath(String relativePath) {
-        String normalized = PathUtils.normalizeRelativePath(StringUtils.trimToEmpty(relativePath));
-        if (!normalized.startsWith("@")) {
+        String stripped = PathUtils.stripLeadingCurrentDir(relativePath);
+        if (!stripped.startsWith("@")) {
             throw new IllegalArgumentException("Not a reference folder path: " + relativePath);
         }
-        String withoutAt = normalized.substring(1);
+        String withoutAt = stripped.substring(1);
         int slashIdx = withoutAt.indexOf('/');
         String alias;
         String subPath;
@@ -514,7 +513,7 @@ public class ProjectService {
             alias = withoutAt.substring(0, slashIdx);
             subPath = StringUtils.defaultIfBlank(withoutAt.substring(slashIdx + 1), ".");
         }
-        if (alias.isBlank()) {
+        if (alias.isBlank() || ".".equals(alias) || "..".equals(alias)) {
             throw new IllegalArgumentException("Invalid reference folder path: " + relativePath);
         }
         ReferenceFolderMount mount = findReferenceFolderMount(alias);
@@ -534,11 +533,7 @@ public class ProjectService {
             throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
         if (relativePath != null) {
-            String trimmed = relativePath.trim();
-            String unix = FilenameUtils.separatorsToUnix(trimmed);
-            while (unix.startsWith("./")) {
-                unix = unix.substring(2);
-            }
+            String unix = PathUtils.stripLeadingCurrentDir(relativePath);
             if (ROXYCODE_TMP_DIR.equals(unix) || unix.startsWith(ROXYCODE_TMP_PREFIX)) {
                 Path tmpRoot = resolveProjectDataPath(DATA_TMP_DIR);
                 String subPath = StringUtils.defaultIfEmpty(StringUtils.removeStart(unix, ROXYCODE_TMP_PREFIX), ".");

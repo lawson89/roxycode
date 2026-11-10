@@ -52,6 +52,14 @@ class PathUtilsTest {
         assertEquals("", PathUtils.getFileName(null));
         assertEquals("", PathUtils.getFileName("   "));
 
+        assertEquals("ChatPanel", PathUtils.getBaseName(winPath));
+        assertEquals(".gitignore", PathUtils.getBaseName(".gitignore"));
+        assertEquals("", PathUtils.getBaseName(null));
+
+        assertEquals("@ref/../pom.xml", PathUtils.stripLeadingCurrentDir(
+                "./" + winPath.replace("src", "@ref").replace("main", "..").replace("ChatPanel.java", "pom.xml")));
+        assertEquals("", PathUtils.stripLeadingCurrentDir("   "));
+
         assertEquals("java", PathUtils.getLowerExtension("src/Main.JAVA", false));
         assertEquals("", PathUtils.getLowerExtension(".gitignore", false));
         assertEquals("gitignore", PathUtils.getLowerExtension(".gitignore", true));

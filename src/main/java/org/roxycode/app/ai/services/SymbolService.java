@@ -17,7 +17,6 @@ import java.util.Set;
 import java.util.Collection;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.roxycode.app.ai.AgentDoc;
@@ -51,8 +50,6 @@ public class SymbolService {
     static final int MAX_FIND_SYMBOL_FILES = 25;
     static final int MAX_USAGES = 100;
     static final int MAX_RELATED_TESTS = 15;
-    private static final int SINGLE_FILE_COUNT = 1;
-    private static final int MIN_LINE_NUMBER = 1;
     private static final int NOT_FOUND_INDEX = -1;
     private static final char DOT_CHAR = '.';
     private static final char COLON_CHAR = ':';
@@ -67,6 +64,9 @@ public class SymbolService {
     }
 
     private record RawUsageHit(String path, int line, int column, String snippet) {
+    }
+
+    private record ResolvedSymbolQuery(String effectivePath, String trimmedQuery, String unqualifiedName) {
     }
 
     private final ProjectService projectService;
@@ -127,11 +127,7 @@ public class SymbolService {
             }
         } catch (Exception e) {
             ExceptionUtils.rethrowIfCancelled(e, CANCELLED_MSG);
-            String msg = ExceptionUtils.getMessageOrSimpleName(e);
-            String errorMsg = ERROR_PREFIX + msg;
-            if (msg.startsWith(ERROR_PREFIX)) {
-                errorMsg = msg;
-            }
+            String errorMsg = StringUtils.prependIfMissing(ExceptionUtils.getMessageOrSimpleName(e), ERROR_PREFIX);
             for (String rawSymbolName : symbolNames) {
                 if (rawSymbolName != null && !rawSymbolName.isBlank()) {
                     results.putIfAbsent(rawSymbolName, errorMsg);
@@ -153,49 +149,22 @@ public class SymbolService {
     public List<SymbolInfo> findSymbol(@AgentDoc(DOC_SYMBOL_NAME) String symbolName,
             @AgentDoc(DOC_SEARCH_PATH) String relativePath) {
         ExceptionUtils.checkInterrupted(CANCELLED_MSG);
-        String effectivePath = CURRENT_DIR;
-        if (relativePath != null && !relativePath.isBlank()) {
-            effectivePath = relativePath.trim();
-        }
-        if (symbolName == null || symbolName.isBlank()
-                || (!projectService.hasActiveProject() && !ProjectService.isReferencePath(effectivePath))) {
+        ResolvedSymbolQuery query = resolveSymbolQuery(symbolName, relativePath);
+        if (query == null) {
             return List.of();
         }
-        String trimmedQuery = symbolName.trim();
-        String unqualifiedName = extractUnqualifiedName(trimmedQuery);
-        if (unqualifiedName.isEmpty()) {
-            return List.of();
+        String searchPattern = Pattern.quote(query.unqualifiedName());
+        if (SIMPLE_IDENTIFIER_PATTERN.matcher(query.unqualifiedName()).matches()) {
+            searchPattern = query.unqualifiedName();
         }
-        String searchPattern = Pattern.quote(unqualifiedName);
-        if (SIMPLE_IDENTIFIER_PATTERN.matcher(unqualifiedName).matches()) {
-            searchPattern = unqualifiedName;
-        }
-        List<String> candidateRelPaths = collectCandidatePathsForFindSymbol(searchPattern, effectivePath);
+        List<String> candidateRelPaths = collectCandidatePathsForFindSymbol(searchPattern, query.effectivePath());
         if (candidateRelPaths.isEmpty()) {
             return List.of();
         }
 
-        Map<Path, String> relPathByAbsPath = resolveCandidateFiles(candidateRelPaths, true);
-        if (relPathByAbsPath.isEmpty()) {
-            return List.of();
-        }
-
-        List<Path> candidatePaths = new ArrayList<>(relPathByAbsPath.keySet());
-        Map<Path, List<CtagsEntry>> entriesByPath = ctagsRunner.runAndParse(candidatePaths, CTAGS_OUTLINE_FLAGS,
-                objectMapper, CANCELLED_MSG);
         List<SymbolInfo> matches = new ArrayList<>();
-        for (Map.Entry<Path, String> fileEntry : relPathByAbsPath.entrySet()) {
-            Path filePath = fileEntry.getKey();
-            List<CtagsEntry> entriesForFile = entriesByPath.get(filePath);
-            if (entriesForFile == null || entriesForFile.isEmpty()) {
-                continue;
-            }
-            String relPath = fileEntry.getValue();
-            for (SymbolInfo symbol : CtagsRunner.finalizeSymbolsForFile(entriesForFile, relPath, filePath, -1)) {
-                if (matchesSymbol(symbol, trimmedQuery)) {
-                    matches.add(symbol);
-                }
-            }
+        for (List<SymbolInfo> outline : resolveBatchOutlines(candidateRelPaths, true).values()) {
+            matches.addAll(filterMatchingSymbols(outline, query.trimmedQuery()));
         }
         matches.sort(Comparator.comparing(SymbolInfo::path).thenComparingInt(SymbolInfo::startLine)
                 .thenComparingInt(SymbolInfo::endLine).thenComparing(SymbolInfo::name));
@@ -212,21 +181,13 @@ public class SymbolService {
     public List<SymbolUsage> findUsages(@AgentDoc(DOC_SYMBOL_NAME) String symbolName,
             @AgentDoc(DOC_SEARCH_PATH) String relativePath) {
         ExceptionUtils.checkInterrupted(CANCELLED_MSG);
-        String effectivePath = CURRENT_DIR;
-        if (relativePath != null && !relativePath.isBlank()) {
-            effectivePath = relativePath.trim();
-        }
-        if (symbolName == null || symbolName.isBlank()
-                || (!projectService.hasActiveProject() && !ProjectService.isReferencePath(effectivePath))) {
+        ResolvedSymbolQuery query = resolveSymbolQuery(symbolName, relativePath);
+        if (query == null) {
             return List.of();
         }
-        String trimmedQuery = symbolName.trim();
-        String unqualifiedName = extractUnqualifiedName(trimmedQuery);
-        if (unqualifiedName.isEmpty()) {
-            return List.of();
-        }
-        boolean fixedWord = SIMPLE_IDENTIFIER_PATTERN.matcher(unqualifiedName).matches();
-        List<String> rawMatches = grepService.grepWordMatches(unqualifiedName, effectivePath, fixedWord);
+        boolean fixedWord = SIMPLE_IDENTIFIER_PATTERN.matcher(query.unqualifiedName()).matches();
+        List<String> rawMatches = grepService.grepWordMatches(query.unqualifiedName(), query.effectivePath(),
+                fixedWord);
         if (rawMatches == null || rawMatches.isEmpty()) {
             return List.of();
         }
@@ -239,7 +200,7 @@ public class SymbolService {
         List<SymbolUsage> usages = new ArrayList<>();
         for (RawUsageHit hit : filteredHits) {
             List<SymbolInfo> outline = outlinesByRelPath.getOrDefault(hit.path(), List.of());
-            if (isDeclarationInOutline(hit.line(), outline, trimmedQuery, unqualifiedName)) {
+            if (isDeclarationInOutline(hit.line(), outline, query.trimmedQuery(), query.unqualifiedName())) {
                 continue;
             }
             String enclosing = findEnclosingSymbolName(outline, hit.line());
@@ -253,6 +214,23 @@ public class SymbolService {
         usages.sort(Comparator.comparing(SymbolUsage::isTestFile).thenComparing(SymbolUsage::path)
                 .thenComparingInt(SymbolUsage::line).thenComparingInt(SymbolUsage::column));
         return usages;
+    }
+
+    private ResolvedSymbolQuery resolveSymbolQuery(String symbolName, String relativePath) {
+        String effectivePath = CURRENT_DIR;
+        if (relativePath != null && !relativePath.isBlank()) {
+            effectivePath = relativePath.trim();
+        }
+        if (symbolName == null || symbolName.isBlank()
+                || (!projectService.hasActiveProject() && !ProjectService.isReferencePath(effectivePath))) {
+            return null;
+        }
+        String trimmedQuery = symbolName.trim();
+        String unqualifiedName = extractUnqualifiedName(trimmedQuery);
+        if (unqualifiedName.isEmpty()) {
+            return null;
+        }
+        return new ResolvedSymbolQuery(effectivePath, trimmedQuery, unqualifiedName);
     }
 
     @AgentDoc(value = "Finds test files related to the given source file path using naming conventions, mirrored directory structure, and symbol reference analysis.", examples = "symbolService.findRelatedTests('src/main/java/org/roxycode/app/ai/services/SymbolService.java')")
@@ -273,8 +251,7 @@ public class SymbolService {
             return List.of();
         }
 
-        String fileName = PathUtils.getFileName(normalizedPath);
-        String stem = stripExtension(fileName);
+        String stem = PathUtils.getBaseName(normalizedPath);
         if (stem.isBlank()) {
             return List.of();
         }
@@ -366,7 +343,7 @@ public class SymbolService {
             int line = NumberUtils.toInt(matcher.group(2), NOT_FOUND_INDEX);
             int column = NumberUtils.toInt(matcher.group(3), NOT_FOUND_INDEX);
             String snippet = matcher.group(4).trim();
-            if (line < MIN_LINE_NUMBER || isNonUsageSnippet(snippet)) {
+            if (line < CtagsRunner.MIN_LINE_NUMBER || isNonUsageSnippet(snippet)) {
                 continue;
             }
             String locationKey = formatLocationKey(path, line);
@@ -383,7 +360,12 @@ public class SymbolService {
         for (RawUsageHit hit : hits) {
             hitPaths.add(hit.path());
         }
-        Map<Path, String> relPathByAbsPath = resolveCandidateFiles(hitPaths, false);
+        return resolveBatchOutlines(hitPaths, false);
+    }
+
+    private Map<String, List<SymbolInfo>> resolveBatchOutlines(Collection<String> rawRelPaths,
+            boolean normalizeRelPath) {
+        Map<Path, String> relPathByAbsPath = resolveCandidateFiles(rawRelPaths, normalizeRelPath);
         if (relPathByAbsPath.isEmpty()) {
             return Map.of();
         }
@@ -481,7 +463,7 @@ public class SymbolService {
         if (candidateFileName == null || candidateFileName.isBlank() || stem == null || stem.isBlank()) {
             return false;
         }
-        String candidateStem = stripExtension(candidateFileName);
+        String candidateStem = PathUtils.getBaseName(candidateFileName);
         if (candidateStem.equals(stem + "Test") || candidateStem.equals(stem + "Tests")
                 || candidateStem.equals(stem + "IT") || candidateStem.equals("Test" + stem)) {
             return true;
@@ -581,13 +563,6 @@ public class SymbolService {
         return grepService.listFiles(referencePrefix);
     }
 
-    private static String stripExtension(String fileName) {
-        if (StringUtils.isEmpty(fileName) || fileName.lastIndexOf(DOT_CHAR) <= 0) {
-            return StringUtils.defaultString(fileName);
-        }
-        return FilenameUtils.removeExtension(fileName);
-    }
-
     private static String extractNormalizedSubpath(String normalizedPath, List<String> prefixes) {
         int lastSlash = normalizedPath.lastIndexOf(SLASH_CHAR);
         if (lastSlash <= 0) {
@@ -621,14 +596,22 @@ public class SymbolService {
                 totalLines);
     }
 
-    private String extractSymbolContent(String relativePath, String symbolName, List<SymbolInfo> outline,
-            List<String> fileLines) {
+    static List<SymbolInfo> filterMatchingSymbols(List<SymbolInfo> outline, String symbolName) {
+        if (outline == null || outline.isEmpty()) {
+            return List.of();
+        }
         List<SymbolInfo> matching = new ArrayList<>();
         for (SymbolInfo symbol : outline) {
             if (matchesSymbol(symbol, symbolName)) {
                 matching.add(symbol);
             }
         }
+        return matching;
+    }
+
+    private String extractSymbolContent(String relativePath, String symbolName, List<SymbolInfo> outline,
+            List<String> fileLines) {
+        List<SymbolInfo> matching = filterMatchingSymbols(outline, symbolName);
         if (matching.isEmpty()) {
             return formatSymbolNotFoundError(symbolName, relativePath);
         }
@@ -657,10 +640,10 @@ public class SymbolService {
     }
 
     static int adjustStartLineForPrecedingContext(List<String> fileLines, int symbolStartLine) {
-        if (fileLines == null || fileLines.isEmpty() || symbolStartLine <= MIN_LINE_NUMBER) {
-            return Math.max(MIN_LINE_NUMBER, symbolStartLine);
+        if (fileLines == null || fileLines.isEmpty() || symbolStartLine <= CtagsRunner.MIN_LINE_NUMBER) {
+            return Math.max(CtagsRunner.MIN_LINE_NUMBER, symbolStartLine);
         }
-        int minCandidateLine = Math.max(MIN_LINE_NUMBER, symbolStartLine - MAX_PRECEDING_CONTEXT_LINES);
+        int minCandidateLine = Math.max(CtagsRunner.MIN_LINE_NUMBER, symbolStartLine - MAX_PRECEDING_CONTEXT_LINES);
         int adjustedStart = Math.min(symbolStartLine, fileLines.size());
         for (int lineNum = adjustedStart - 1; lineNum >= minCandidateLine; lineNum--) {
             String trimmed = fileLines.get(lineNum - 1).trim();
@@ -682,7 +665,7 @@ public class SymbolService {
     }
 
     private static List<LineRange> mergeLineRanges(List<LineRange> ranges) {
-        if (ranges.size() <= SINGLE_FILE_COUNT) {
+        if (ranges.size() <= CtagsRunner.SINGLE_FILE_COUNT) {
             return ranges;
         }
         List<LineRange> sorted = new ArrayList<>(ranges);

@@ -374,10 +374,7 @@ final class BuildOutputParser {
         if (rawPath == null || rawPath.isBlank()) {
             return null;
         }
-        String cleaned = rawPath.trim().replace(BACKSLASH_CHAR, '/');
-        while (cleaned.startsWith("./")) {
-            cleaned = cleaned.substring(2);
-        }
+        String cleaned = PathUtils.stripLeadingCurrentDir(rawPath);
         try {
             Path directCandidate = Path.of(cleaned);
             if (directCandidate.isAbsolute()) {

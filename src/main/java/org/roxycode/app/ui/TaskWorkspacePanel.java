@@ -215,7 +215,7 @@ public final class TaskWorkspacePanel extends JPanel {
 
         if (taskTabs != null && taskTabs.getTabCount() > 1) {
             if (plan != null && plan.technicalSteps() != null && !plan.technicalSteps().isEmpty()) {
-                long completed = plan.technicalSteps().stream().filter(ImplementationPlan.TechStep::completed).count();
+                long completed = plan.completedStepCount();
                 int total = plan.technicalSteps().size();
                 taskTabs.setTitleAt(1, PLAN_TAB_BASE_TITLE + " (" + completed + "/" + total + ")");
             } else {

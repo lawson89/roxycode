@@ -102,13 +102,21 @@ public final class PathUtils {
         }
     }
 
-    public static String normalizeRelativePath(String path) {
+    public static String stripLeadingCurrentDir(String path) {
         if (path == null || path.isBlank()) {
             return "";
         }
         String unix = FilenameUtils.separatorsToUnix(path.trim());
         while (unix.startsWith("./")) {
             unix = unix.substring(2);
+        }
+        return unix;
+    }
+
+    public static String normalizeRelativePath(String path) {
+        String unix = stripLeadingCurrentDir(path);
+        if (unix.isEmpty()) {
+            return "";
         }
         try {
             String normalized = FilenameUtils.separatorsToUnix(Path.of(unix).normalize().toString());
@@ -126,6 +134,14 @@ public final class PathUtils {
             return "";
         }
         return FilenameUtils.getName(FilenameUtils.separatorsToUnix(path.trim()));
+    }
+
+    public static String getBaseName(String path) {
+        String fileName = getFileName(path);
+        if (fileName.isEmpty() || fileName.lastIndexOf('.') <= 0) {
+            return fileName;
+        }
+        return FilenameUtils.removeExtension(fileName);
     }
 
     public static String getLowerExtension(String path, boolean allowLeadingDotFile) {

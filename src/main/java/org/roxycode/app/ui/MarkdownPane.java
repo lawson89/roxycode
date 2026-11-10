@@ -138,21 +138,18 @@ public final class MarkdownPane extends JTextPane {
         } else {
             safeThumbs = List.copyOf(thumbnailBase64List);
         }
-        Message msg = new Message(role, safeContent, timestamp, false, true, null,
-                renderMarkdownBodySafely(safeContent), true, safeThumbs);
-        messages.add(msg);
-        if (pruneMessagesIfNeeded()) {
-            renderAll(true);
-        } else {
-            appendRenderedEntry(formatMessageEntryHtml(msg, messages.size() - 1));
-        }
+        addAndRenderMessage(new Message(role, safeContent, timestamp, false, true, null,
+                renderMarkdownBodySafely(safeContent), true, safeThumbs));
     }
 
     public void appendToolLog(String output, boolean success, String error) {
         String safeOutput = StringUtils.defaultString(output);
         String timestamp = LocalDateTime.now().format(TIME_FORMATTER);
         boolean expanded = ChatHtmlTemplates.shouldDefaultToolExpanded(safeOutput, success);
-        Message msg = new Message(null, safeOutput, timestamp, true, success, error, null, expanded, List.of());
+        addAndRenderMessage(new Message(null, safeOutput, timestamp, true, success, error, null, expanded, List.of()));
+    }
+
+    private void addAndRenderMessage(Message msg) {
         messages.add(msg);
         if (pruneMessagesIfNeeded()) {
             renderAll(true);
@@ -386,12 +383,7 @@ public final class MarkdownPane extends JTextPane {
     }
 
     public void restoreMessages(List<PersistedChatEntry> entries) {
-        if (copyFeedbackTimer != null && copyFeedbackTimer.isRunning()) {
-            copyFeedbackTimer.stop();
-        }
-        copiedMessageIndex = -1;
-        messages.clear();
-        pruned = false;
+        resetMessageState();
         if (entries != null) {
             for (PersistedChatEntry entry : entries) {
                 if (entry == null) {
@@ -414,12 +406,16 @@ public final class MarkdownPane extends JTextPane {
     }
 
     public void clear() {
+        resetMessageState();
+        renderAll(true);
+    }
+
+    private void resetMessageState() {
         if (copyFeedbackTimer != null && copyFeedbackTimer.isRunning()) {
             copyFeedbackTimer.stop();
         }
         copiedMessageIndex = -1;
         messages.clear();
         pruned = false;
-        renderAll(true);
     }
 }

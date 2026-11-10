@@ -141,12 +141,7 @@ public class FileEditorService {
         }
 
         List<SymbolInfo> outline = symbolService.getFileOutline(relativePath);
-        List<SymbolInfo> matching = new ArrayList<>();
-        for (SymbolInfo symbol : outline) {
-            if (SymbolService.matchesSymbol(symbol, symbolName)) {
-                matching.add(symbol);
-            }
-        }
+        List<SymbolInfo> matching = SymbolService.filterMatchingSymbols(outline, symbolName);
         if (matching.isEmpty()) {
             return new EditorResult(false, "", formatSymbolNotFoundHint(relativePath, symbolName, outline));
         }

@@ -2,6 +2,7 @@ package org.roxycode.app.service;
 
 import java.awt.Color;
 import javax.swing.UIManager;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.SystemUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
@@ -24,6 +25,13 @@ public class EnvironmentService {
 
     public String getCurrentUser() {
         return System.getProperty("user.name");
+    }
+
+    public static String resolveCurrentUser(EnvironmentService environmentService) {
+        if (environmentService != null) {
+            return StringUtils.defaultIfBlank(environmentService.getCurrentUser(), "User");
+        }
+        return "User";
     }
 
     public long getMemoryUsageMb() {

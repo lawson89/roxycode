@@ -30,6 +30,7 @@ import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -583,10 +584,7 @@ public class PlanService {
                 return;
             }
             String timestamp = OffsetDateTime.now().toString();
-            String user = "User";
-            if (environmentService != null) {
-                user = environmentService.getCurrentUser();
-            }
+            String user = EnvironmentService.resolveCurrentUser(environmentService);
             addHandoffLogEntry(timestamp, user,
                     String.format("%s -> %s (User Approved): %s", currentPhase, pendingPhase, pendingReason));
 
@@ -622,7 +620,7 @@ public class PlanService {
                 CompletableFuture.runAsync(() -> {
                     archiveCurrentPlan(capturedPlan, capturedTimestamp);
                     publishPhaseChanged();
-                });
+                }, Edt.VIRTUAL_EXECUTOR);
                 return;
             }
             archiveCurrentPlan(capturedPlan, capturedTimestamp);
@@ -643,10 +641,7 @@ public class PlanService {
         this.pendingReason = null;
         prepareFixesOnCurrentPlan(effectiveReason);
         String timestamp = OffsetDateTime.now().toString();
-        String user = "User";
-        if (environmentService != null) {
-            user = environmentService.getCurrentUser();
-        }
+        String user = EnvironmentService.resolveCurrentUser(environmentService);
         addHandoffLogEntry(timestamp, user,
                 String.format("REVIEW -> CODE (Completion Rejected): %s", effectiveReason.trim()));
         this.currentPhase = WorkflowPhase.CODE;

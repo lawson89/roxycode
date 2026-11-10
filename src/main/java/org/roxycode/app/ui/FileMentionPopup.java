@@ -17,7 +17,6 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.concurrent.ForkJoinPool;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.JLabel;
@@ -138,7 +137,7 @@ public final class FileMentionPopup {
     private final JScrollPane popupScrollPane;
 
     private volatile GrepService grepService;
-    private volatile Executor backgroundExecutor = ForkJoinPool.commonPool();
+    private volatile Executor backgroundExecutor = Edt.VIRTUAL_EXECUTOR;
     private volatile List<FileCandidate> cachedCandidates = List.of();
 
     private boolean popupActive = false;
@@ -285,13 +284,12 @@ public final class FileMentionPopup {
         if (backgroundExecutor != null) {
             this.backgroundExecutor = backgroundExecutor;
         } else {
-            this.backgroundExecutor = ForkJoinPool.commonPool();
+            this.backgroundExecutor = Edt.VIRTUAL_EXECUTOR;
         }
     }
 
     public void invalidateCache() {
         cachedCandidates = List.of();
-        refreshIndexAsync();
     }
 
     private List<FileCandidate> performFileIndexing() {
@@ -317,15 +315,11 @@ public final class FileMentionPopup {
             cachedCandidates = List.of();
             return CompletableFuture.completedFuture(List.of());
         }
-        CompletableFuture<List<FileCandidate>> future = CompletableFuture.supplyAsync(() -> {
+        return CompletableFuture.supplyAsync(() -> {
             List<FileCandidate> indexed = performFileIndexing();
             cachedCandidates = indexed;
             return indexed;
         }, backgroundExecutor);
-        if (!SwingUtilities.isEventDispatchThread()) {
-            future.join();
-        }
-        return future;
     }
 
     void evaluateCurrentInput() {
@@ -340,8 +334,16 @@ public final class FileMentionPopup {
         }
         this.activeToken = token;
 
-        if (cachedCandidates.isEmpty() && grepService != null) {
-            refreshIndexAsync();
+        if (token.trigger() == MENTION_TRIGGER_CHAR && cachedCandidates.isEmpty() && grepService != null) {
+            CompletableFuture<List<FileCandidate>> future = refreshIndexAsync();
+            if (!future.isDone()) {
+                future.thenRunAsync(() -> {
+                    if (!cachedCandidates.isEmpty()) {
+                        evaluateCurrentInput();
+                    }
+                }, Edt.EXECUTOR);
+                return;
+            }
         }
 
         List<MentionItem> matches = rankCandidates(cachedCandidates, token);

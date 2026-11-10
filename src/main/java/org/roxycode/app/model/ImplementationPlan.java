@@ -191,16 +191,13 @@ public record ImplementationPlan(String title, String goal, List<String> require
 
     public ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
             boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
-            List<LogEntry> handoffLog, List<FileChange> fileChanges, UsageSummary usageSummary) {
-        this(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp, approvedBy, completedBy,
-                completedOn, handoffLog, fileChanges, usageSummary, null);
-    }
-
-    public ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
-            boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
             List<LogEntry> handoffLog) {
         this(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp, approvedBy, completedBy,
                 completedOn, handoffLog, List.of(), UsageSummary.EMPTY, null);
+    }
+
+    public long completedStepCount() {
+        return technicalSteps.stream().filter(TechStep::completed).count();
     }
 
     public static String normalizeStepDescription(String description) {

@@ -205,10 +205,16 @@ class ProjectServiceTest {
         assertEquals(globalBilling.resolve("api/Client.java").toAbsolutePath().normalize(),
                 projectService.resolveReadPath("@billing-service-2/api/Client.java"));
 
+        assertTrue(ProjectService.isReferencePath("@billing-service/../pom.xml"));
+        assertTrue(ProjectService.isReferencePath("@billing-service/.."));
+        assertThrows(SecurityException.class, () -> projectService.resolvePath("@billing-service/../pom.xml"));
+        assertThrows(SecurityException.class, () -> projectService.resolveReadPath("@billing-service/../pom.xml"));
+        assertThrows(SecurityException.class, () -> projectService.resolveReadPath("@billing-service/.."));
         assertThrows(SecurityException.class,
                 () -> projectService.resolveReadPath("@billing-service/../../etc/passwd"));
         assertThrows(IllegalArgumentException.class,
                 () -> projectService.resolveReadPath("@unknown-alias/src/App.java"));
+        assertThrows(IllegalArgumentException.class, () -> projectService.resolveReadPath("@../pom.xml"));
 
         ProjectService.ResolvedSearchTarget rootTarget = projectService.resolveSearchTarget("@billing-service");
         assertEquals(projBilling.toAbsolutePath().normalize(), rootTarget.workingDir());
@@ -216,12 +222,18 @@ class ProjectServiceTest {
         assertEquals("@billing-service", rootTarget.prefixAlias());
         assertTrue(rootTarget.isReferenceMount());
         assertEquals("@billing-service/src/Invoice.java", rootTarget.formatResultPath("./src/Invoice.java"));
-        assertEquals("@billing-service/src/Invoice.java:10:1:class Invoice",
-                rootTarget.formatMatchLine("./src/Invoice.java:10:1:class Invoice"));
+        String bs = String.valueOf((char) 92);
+        String snippet = "String s = " + bs + "s+ https://a.com/../b;";
+        assertEquals("@billing-service/src/Invoice.java:10:1:" + snippet,
+                rootTarget.formatMatchLine("./src" + bs + "Invoice.java:10:1:" + snippet));
+        assertEquals("src/Invoice.java-11-    // https://a.com/../b " + bs + "n",
+                new ProjectService.ResolvedSearchTarget(tempDir, ".", "")
+                        .formatMatchLine("./src" + bs + "Invoice.java-11-    // https://a.com/../b " + bs + "n"));
 
         ProjectService.ResolvedSearchTarget subTarget = projectService.resolveSearchTarget("@billing-service/src/main");
         assertEquals(projBilling.toAbsolutePath().normalize(), subTarget.workingDir());
         assertEquals("src/main", subTarget.relativeTarget());
+        assertThrows(SecurityException.class, () -> projectService.resolveSearchTarget("@billing-service/.."));
         assertThrows(SecurityException.class,
                 () -> projectService.resolveSearchTarget("@billing-service/../../outside"));
     }

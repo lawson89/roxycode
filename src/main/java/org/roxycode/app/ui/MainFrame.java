@@ -156,11 +156,7 @@ public final class MainFrame extends JPanel {
     @EventListener
     public void onPhaseChanged(PhaseChangedEvent event) {
         Edt.run(() -> {
-            if (sidebar != null) {
-                boolean pendingPhase = planService != null && planService.getPendingPhase() != null;
-                boolean waitingInput = taskChatPanel() != null && taskChatPanel().isWaitingUserInput();
-                sidebar.setTaskWaitingApproval(pendingPhase || waitingInput);
-            }
+            syncSidebarWaitingState();
             updateWorkspaceState();
         });
     }
@@ -189,6 +185,7 @@ public final class MainFrame extends JPanel {
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
         Edt.run(() -> {
+            syncSidebarWaitingState();
             updateWorkspaceState();
             updateOnboardingAndNavigationState();
         });
@@ -516,7 +513,7 @@ public final class MainFrame extends JPanel {
                 updateWorkspaceState();
             }));
             qaChat.addUserInputListener(waiting -> Edt.run(() -> {
-                sidebar.setQaWaitingApproval(waiting);
+                syncSidebarWaitingState();
                 updateWorkspaceState();
             }));
         }
@@ -527,8 +524,7 @@ public final class MainFrame extends JPanel {
                 updateWorkspaceState();
             }));
             taskChat.addUserInputListener(waiting -> Edt.run(() -> {
-                boolean pendingPhase = planService != null && planService.getPendingPhase() != null;
-                sidebar.setTaskWaitingApproval(waiting || pendingPhase);
+                syncSidebarWaitingState();
                 updateWorkspaceState();
             }));
         }
@@ -746,6 +742,18 @@ public final class MainFrame extends JPanel {
             }
         });
         refreshHubTabIcons();
+    }
+
+    private void syncSidebarWaitingState() {
+        if (sidebar == null) {
+            return;
+        }
+        ChatPanel qaChat = qaChatPanel();
+        ChatPanel taskChat = taskChatPanel();
+        boolean pendingPhase = planService != null && planService.getPendingPhase() != null;
+        boolean taskWaitingInput = taskChat != null && taskChat.isWaitingUserInput();
+        sidebar.setTaskWaitingApproval(pendingPhase || taskWaitingInput);
+        sidebar.setQaWaitingApproval(qaChat != null && qaChat.isWaitingUserInput());
     }
 
     void updateWorkspaceState() {

@@ -384,7 +384,7 @@ public class AiService implements AutoCloseable {
         }
 
         String resolvedModel = StringUtils.defaultIfBlank(modelName, resolveEffectiveGeminiModel()).trim();
-        GeminiModelConfig modelConfig = resolveModelConfigForUsage(resolvedModel);
+        GeminiModelConfig modelConfig = SettingsService.resolveModelConfig(settingsService, resolvedModel);
 
         double uncachedInputCostUsd = modelConfig.calculateUncachedInputCostUsd(counts.uncachedInputTokens());
         double cachedInputCostUsd = modelConfig.calculateCachedInputCostUsd(counts.cachedInputTokens());
@@ -395,16 +395,6 @@ public class AiService implements AutoCloseable {
                 modelConfig.contextWindowTokens(), counts.promptTokens(), counts.cachedInputTokens(),
                 counts.uncachedInputTokens(), counts.candidatesTokens(), counts.thoughtsTokens(), counts.totalTokens(),
                 phase, uncachedInputCostUsd, cachedInputCostUsd, outputCostUsd, thoughtsCostUsd, costUsd));
-    }
-
-    private GeminiModelConfig resolveModelConfigForUsage(String resolvedModel) {
-        if (settingsService != null) {
-            GeminiModelConfig cfg = settingsService.resolveModelConfig(resolvedModel);
-            if (cfg != null) {
-                return cfg;
-            }
-        }
-        return GeminiModelConfig.defaultForApiName(resolvedModel);
     }
 
     @Nullable
@@ -548,18 +538,9 @@ public class AiService implements AutoCloseable {
         if (usage == null) {
             return "";
         }
-        int promptTokens = 0;
-        if (usage.getPromptTokens() != null) {
-            promptTokens = usage.getPromptTokens();
-        }
-        int completionTokens = 0;
-        if (usage.getCompletionTokens() != null) {
-            completionTokens = usage.getCompletionTokens();
-        }
-        int totalTokens = 0;
-        if (usage.getTotalTokens() != null) {
-            totalTokens = usage.getTotalTokens();
-        }
+        int promptTokens = safeNonNegativeInt(usage.getPromptTokens());
+        int completionTokens = safeNonNegativeInt(usage.getCompletionTokens());
+        int totalTokens = safeNonNegativeInt(usage.getTotalTokens());
         if (promptTokens <= 0 && completionTokens <= 0 && totalTokens <= 0) {
             return "";
         }

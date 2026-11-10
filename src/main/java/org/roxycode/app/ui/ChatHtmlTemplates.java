@@ -98,7 +98,6 @@ public final class ChatHtmlTemplates {
         String indicator = switch (normalizedRole) {
             case ROLE_AI -> "<span class='role-ai'>ROXY " + CAT_EARS + "</span>";
             case ROLE_USER -> "<span class='role-user'>USER</span>";
-            case ROLE_SYSTEM -> "<span class='role-system'>SYSTEM</span>";
             default -> "&nbsp;";
         };
         String actionCell = "";

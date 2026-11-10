@@ -43,6 +43,7 @@ import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -214,7 +215,7 @@ public class GenericBuildToolService {
     @EventListener
     public void handleProjectChanged(ProjectChangedEvent event) {
         if (SwingUtilities.isEventDispatchThread()) {
-            CompletableFuture.runAsync(this::performProjectChanged);
+            CompletableFuture.runAsync(this::performProjectChanged, Edt.VIRTUAL_EXECUTOR);
         } else {
             performProjectChanged();
         }
@@ -340,7 +341,7 @@ public class GenericBuildToolService {
                 continue;
             }
             if (ProjectAnalysisService.isTestFile(normalized)) {
-                String stem = extractTestStem(normalized);
+                String stem = PathUtils.getBaseName(normalized);
                 if (!stem.isEmpty()) {
                     testNames.add(stem);
                 }
@@ -348,7 +349,7 @@ public class GenericBuildToolService {
                 List<String> relatedFiles = symbolService.findRelatedTests(normalized);
                 if (relatedFiles != null) {
                     for (String relatedFile : relatedFiles) {
-                        String stem = extractTestStem(relatedFile);
+                        String stem = PathUtils.getBaseName(relatedFile);
                         if (!stem.isEmpty()) {
                             testNames.add(stem);
                         }
@@ -357,18 +358,6 @@ public class GenericBuildToolService {
             }
         }
         return testNames;
-    }
-
-    static String extractTestStem(String filePath) {
-        String fileName = PathUtils.getFileName(filePath);
-        if (fileName.isEmpty()) {
-            return "";
-        }
-        int dotIndex = fileName.lastIndexOf('.');
-        if (dotIndex > 0) {
-            return fileName.substring(0, dotIndex);
-        }
-        return fileName;
     }
 
     @AgentDoc(value = "Runs the project linter or static analysis checks using the configured lint command.", examples = "buildToolService.lint()")

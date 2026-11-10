@@ -33,7 +33,6 @@ import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.events.UserInputRequestEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
-import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
@@ -239,12 +238,18 @@ public final class ChatController implements AutoCloseable {
     }
 
     private void handleSlashCommand(String text) {
-        if (CMD_RESET.equals(text)) {
+        String command = StringUtils.substringBefore(text, " ");
+        String argument = StringUtils.substringAfter(text, " ").trim();
+        if (argument.isEmpty() && CMD_RESET.equals(command)) {
             resetSession();
-        } else if (CMD_CLEAR.equals(text)) {
+            return;
+        }
+        if (argument.isEmpty() && CMD_CLEAR.equals(command)) {
             view.clearOutput();
             persistActiveChatSession();
-        } else if (CMD_HELP.equals(text)) {
+            return;
+        }
+        if (argument.isEmpty() && CMD_HELP.equals(command)) {
             String helpItem = "*   ";
             String helpText = "### Available Commands\n" + helpItem + BT + CMD_RESET + BT
                     + ": Reset the current session or topic.\n" + helpItem + BT + CMD_CLEAR + BT
@@ -252,17 +257,21 @@ public final class ChatController implements AutoCloseable {
                     + helpItem + BT + CMD_REM_PROJECT + BT + ": Append text to project memory.\n" + helpItem + BT
                     + CMD_REM_GLOBAL + BT + ": Append text to global memory.";
             view.appendMessage(ROLE_SYSTEM, helpText);
-        } else if (CMD_REM_PROJECT.trim().equals(text) || text.startsWith(CMD_REM_PROJECT)
-                || CMD_REM_GLOBAL.trim().equals(text) || text.startsWith(CMD_REM_GLOBAL)) {
-            boolean isGlobal = CMD_REM_GLOBAL.trim().equals(text) || text.startsWith(CMD_REM_GLOBAL);
-            handleMemoryCommand(text, isGlobal);
-        } else {
-            view.appendMessage(ROLE_SYSTEM,
-                    "Unknown command: " + text + ". Type " + BT + CMD_HELP + BT + " for available commands.");
+            return;
         }
+        if (CMD_REM_PROJECT.trim().equals(command)) {
+            handleMemoryCommand(argument, false);
+            return;
+        }
+        if (CMD_REM_GLOBAL.trim().equals(command)) {
+            handleMemoryCommand(argument, true);
+            return;
+        }
+        view.appendMessage(ROLE_SYSTEM,
+                "Unknown command: " + text + ". Type " + BT + CMD_HELP + BT + " for available commands.");
     }
 
-    private void handleMemoryCommand(String text, boolean global) {
+    private void handleMemoryCommand(String content, boolean global) {
         if (memoryService == null) {
             view.appendMessage(ROLE_SYSTEM, "Memory service is not available.");
             return;
@@ -271,13 +280,6 @@ public final class ChatController implements AutoCloseable {
         String prefix = CMD_REM_PROJECT;
         if (global) {
             prefix = CMD_REM_GLOBAL;
-        }
-
-        String content;
-        if (text.startsWith(prefix)) {
-            content = text.substring(prefix.length()).trim();
-        } else {
-            content = "";
         }
         if (content.isEmpty()) {
             view.appendMessage(ROLE_SYSTEM, "Please provide content to remember. Usage: " + prefix + "<text>");
@@ -454,11 +456,7 @@ public final class ChatController implements AutoCloseable {
 
     private void archiveCapturedTopic(List<ChatTranscriptEntry> capturedTranscript, String customTopicTitle) {
         String title = MemoryService.resolveTopicTitle(customTopicTitle, capturedTranscript);
-        String rawUser = null;
-        if (environmentService != null) {
-            rawUser = environmentService.getCurrentUser();
-        }
-        String user = StringUtils.defaultIfBlank(rawUser, "User");
+        String user = EnvironmentService.resolveCurrentUser(environmentService);
         String filename = memoryService.archiveTopicConversation(title, user, Instant.now().toString(),
                 capturedTranscript);
         if (filename != null && !filename.isBlank() && eventPublisher != null) {
@@ -656,10 +654,6 @@ public final class ChatController implements AutoCloseable {
         }
     }
 
-    static String buildAutonomousTransitionPrompt(WorkflowTransitionEvent event) {
-        return buildAutonomousTransitionPrompt(event, null);
-    }
-
     static String buildAutonomousTransitionPrompt(WorkflowTransitionEvent event, @Nullable GitService gitService) {
         if (event == null || event.to() == null) {
             return "Please proceed with the tasks in the current phase.";
@@ -721,20 +715,8 @@ public final class ChatController implements AutoCloseable {
     }
 
     private int resolveConfiguredContextWindowTokens() {
-        String modelName = "";
-        if (projectService != null || settingsService != null) {
-            modelName = ProjectService.resolveEffectiveGeminiModel(projectService, settingsService);
-        }
-        if (settingsService != null) {
-            GeminiModelConfig cfg = settingsService.resolveModelConfig(modelName);
-            if (cfg != null && cfg.contextWindowTokens() > 0) {
-                return cfg.contextWindowTokens();
-            }
-        }
-        if (StringUtils.isNotBlank(modelName)) {
-            return GeminiModelConfig.defaultForApiName(modelName).contextWindowTokens();
-        }
-        return GeminiModelConfig.DEFAULT_CONTEXT_WINDOW_TOKENS;
+        String modelName = ProjectService.resolveEffectiveGeminiModel(projectService, settingsService);
+        return SettingsService.resolveModelConfig(settingsService, modelName).contextWindowTokens();
     }
 
     @EventListener

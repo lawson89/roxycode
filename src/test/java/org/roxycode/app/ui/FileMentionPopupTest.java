@@ -115,6 +115,21 @@ class FileMentionPopupTest {
         assertEquals(1, popup.listModel.size());
         verify(grepService, times(1)).listFiles();
 
+        popup.invalidateCache();
+        verify(grepService, times(1)).listFiles();
+
+        inputArea.setText("/help");
+        inputArea.setCaretPosition(inputArea.getText().length());
+        SwingTestUtils.flushEdt();
+        verify(grepService, times(1)).listFiles();
+
+        inputArea.setText("Check @Chat");
+        inputArea.setCaretPosition(inputArea.getText().length());
+        SwingTestUtils.flushEdt();
+        assertTrue(popup.isPopupVisible());
+        assertEquals(1, popup.listModel.size());
+        verify(grepService, times(2)).listFiles();
+
         Point loc = popup.computePopupLocation(6, 320, 120);
         assertTrue(loc.x >= 0 && loc.x + 320 <= 400);
         assertTrue(loc.y < 0);
