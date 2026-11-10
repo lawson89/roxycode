@@ -42,6 +42,7 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.AiMemoryConfig;
 import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.ai.services.PlanService;
@@ -973,5 +974,53 @@ class ChatControllerTest extends ChatTestFixture {
         scrollBar.setValue(400); // remaining = 1000 - (400 + 100) = 500 > 80
         assertFalse(ChatPanel.isScrollBarNearBottom(scrollBar));
         assertTrue(ChatPanel.isScrollBarNearBottom(null));
+    }
+
+    @Test
+    void testSlashCommands() throws Exception {
+        ChatPanel panel = createExploreChatPanel(directExecutor);
+
+        // 1. /help
+        sendOnEdt(panel, "/help");
+        flushEdt();
+        assertTrue(panel.outputArea.getText().contains("Available Commands"));
+        assertTrue(panel.outputArea.getText().contains("/reset"));
+        assertTrue(panel.outputArea.getText().contains("/clear"));
+        assertTrue(panel.outputArea.getText().contains("/rem-p"));
+
+        // 2. /clear
+        panel.appendMessage("user", "Clear me");
+        assertTrue(panel.outputArea.getText().contains("Clear me"));
+        sendOnEdt(panel, "/clear");
+        flushEdt();
+        assertFalse(panel.outputArea.getText().contains("Clear me"));
+
+        // 3. /rem-p (Project Memory)
+        when(memoryService.readProjectMemory()).thenReturn("Existing");
+        when(memoryService.updateProjectMemory(anyString())).thenReturn(new EditorResult(true, "ok", null));
+        sendOnEdt(panel, "/rem-p New project note");
+        flushEdt();
+        verify(memoryService).updateProjectMemory("Existing\nNew project note");
+        assertTrue(panel.outputArea.getText().contains("Project memory updated successfully"));
+
+        // 4. /rem-g (Global Memory)
+        when(memoryService.readGlobalMemory()).thenReturn("");
+        when(memoryService.updateGlobalMemory(anyString())).thenReturn(new EditorResult(true, "ok", null));
+        sendOnEdt(panel, "/rem-g Global note");
+        flushEdt();
+        verify(memoryService).updateGlobalMemory("Global note");
+        assertTrue(panel.outputArea.getText().contains("Global memory updated successfully"));
+
+        // 5. /reset
+        panel.appendMessage("user", "Reset me");
+        sendOnEdt(panel, "/reset");
+        flushEdt();
+        // Reset shows prompt for non-empty conversation in Q&A
+        assertTrue(panel.userInputPromptPanel.isVisible());
+
+        // 6. Unknown command
+        sendOnEdt(panel, "/unknown");
+        flushEdt();
+        assertTrue(panel.outputArea.getText().contains("Unknown command: /unknown"));
     }
 }

@@ -66,6 +66,11 @@ public final class ChatController implements AutoCloseable {
     static final String ROLE_SYSTEM = ChatHtmlTemplates.ROLE_SYSTEM;
     static final String ROLE_USER = ChatHtmlTemplates.ROLE_USER;
     static final String ROLE_AI = ChatHtmlTemplates.ROLE_AI;
+    private static final String CMD_RESET = "/reset";
+    private static final String CMD_CLEAR = "/clear";
+    private static final String CMD_HELP = "/help";
+    private static final String CMD_REM_PROJECT = "/rem-p ";
+    private static final String CMD_REM_GLOBAL = "/rem-g ";
     static final String IMAGE_REQUIRES_TEXT_MESSAGE = "Please enter a prompt message to accompany the attached image.";
     static final String INITIAL_ACTIVITY_STATUS = "Preparing prompt Context & Repo Map...";
     private static final String BT = "`";
@@ -225,12 +230,34 @@ public final class ChatController implements AutoCloseable {
         persistActiveChatSession();
         view.clearInputText();
 
-        if (text.startsWith("/rem-p ") || text.startsWith("/rem-g ")) {
-            handleMemoryCommand(text, text.startsWith("/rem-g "));
+        if (text.startsWith("/")) {
+            handleSlashCommand(text);
             return;
         }
 
         triggerTurn(text, pendingImages);
+    }
+
+    private void handleSlashCommand(String text) {
+        if (CMD_RESET.equals(text)) {
+            resetSession();
+        } else if (CMD_CLEAR.equals(text)) {
+            view.clearOutput();
+            persistActiveChatSession();
+        } else if (CMD_HELP.equals(text)) {
+            String helpItem = "*   ";
+            String helpText = "### Available Commands\n" + helpItem + BT + CMD_RESET + BT
+                    + ": Reset the current session or topic.\n" + helpItem + BT + CMD_CLEAR + BT
+                    + ": Clear the chat output area.\n" + helpItem + BT + CMD_HELP + BT + ": Show this help message.\n"
+                    + helpItem + BT + CMD_REM_PROJECT + BT + ": Append text to project memory.\n" + helpItem + BT
+                    + CMD_REM_GLOBAL + BT + ": Append text to global memory.";
+            view.appendMessage(ROLE_SYSTEM, helpText);
+        } else if (text.startsWith(CMD_REM_PROJECT) || text.startsWith(CMD_REM_GLOBAL)) {
+            handleMemoryCommand(text, text.startsWith(CMD_REM_GLOBAL));
+        } else {
+            view.appendMessage(ROLE_SYSTEM,
+                    "Unknown command: " + text + ". Type " + BT + CMD_HELP + BT + " for available commands.");
+        }
     }
 
     private void handleMemoryCommand(String text, boolean global) {
@@ -239,9 +266,9 @@ public final class ChatController implements AutoCloseable {
             return;
         }
 
-        String prefix = "/rem-p ";
+        String prefix = CMD_REM_PROJECT;
         if (global) {
-            prefix = "/rem-g ";
+            prefix = CMD_REM_GLOBAL;
         }
 
         String content = text.substring(prefix.length()).trim();

@@ -58,7 +58,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     static final String NEW_TOPIC_BUTTON_TEXT = "New Topic";
     static final String RESET_SESSION_BUTTON_TEXT = "Reset Session";
     static final String NEW_TOPIC_TOOLTIP = "Archive current conversation and start a new Q&A topic";
-    static final String DEFAULT_PLACEHOLDER_TEXT = "Type a message... (Enter to send, Shift+Enter for newline, @ to mention files, Ctrl+V to paste image)";
+    static final String DEFAULT_PLACEHOLDER_TEXT = "Type a message... (Enter to send, Shift+Enter for newline, @ to mention files, / to run commands, Ctrl+V to paste image)";
     static final String NO_PROJECT_PLACEHOLDER_TEXT = "Select a project folder in the top bar (Change Project...) to start chatting...";
     private static final String TOOLBAR_BUTTON_STYLE = "arc: 8; font: -1; foreground: $Label.disabledForeground";
     private static final String GROW_FILL_COL = "[grow, fill]";
@@ -84,6 +84,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     JButton stopButton;
     JButton attachImageButton;
     JButton mentionButton;
+    JButton commandsButton;
     JButton viewPlanButton;
     JButton copyCommitMsgButton;
     JButton approveButton;
@@ -327,19 +328,24 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
                 TOOLBAR_BUTTON_STYLE, e -> triggerMentionPopup());
         mentionButton.setToolTipText("Insert @ to search and mention project files");
 
+        commandsButton = UiComponents.createActionButton("Commands", Codicons.TERMINAL, new Insets(4, 8, 4, 8), true,
+                TOOLBAR_BUTTON_STYLE, e -> triggerCommandsPopup());
+        commandsButton.setToolTipText("Insert / to run slash commands");
+
         updateTurnLabel();
 
         String toolbarCols;
         if (isTaskMode) {
-            toolbarCols = "[]4[]4[]8[]push[]push[right]";
+            toolbarCols = "[]4[]4[]4[]8[]push[]push[right]";
         } else {
-            toolbarCols = "[]4[]4[]push[]push[right]";
+            toolbarCols = "[]4[]4[]4[]push[]push[right]";
         }
         JPanel actionToolbar = new JPanel(new MigLayout("insets 4 8 6 8, fillx", toolbarCols, "center"));
         actionToolbar.setOpaque(false);
         actionToolbar.add(attachImageButton);
         actionToolbar.add(resetSessionButton);
         actionToolbar.add(mentionButton);
+        actionToolbar.add(commandsButton);
         if (isTaskMode) {
             autoApprovePlanCheckBox = new JCheckBox("Auto-approve Plan");
             autoApprovePlanCheckBox.setOpaque(false);
@@ -665,6 +671,28 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
             this.defaultPlaceholderText = NO_PROJECT_PLACEHOLDER_TEXT;
         }
         updateInputPlaceholderText();
+    }
+
+    void triggerCommandsPopup() {
+        if (!inputArea.isEnabled()) {
+            return;
+        }
+        inputArea.requestFocusInWindow();
+        String text = inputArea.getText();
+        int caret = inputArea.getCaretPosition();
+        if (FileMentionPopup.extractMentionToken(text, caret) == null) {
+            String insertion;
+            if (caret > 0 && !Character.isWhitespace(text.charAt(caret - 1))) {
+                insertion = " /";
+            } else {
+                insertion = "/";
+            }
+            inputArea.insert(insertion, caret);
+            inputArea.setCaretPosition(caret + insertion.length());
+        }
+        if (fileMentionPopup != null) {
+            fileMentionPopup.evaluateCurrentInput();
+        }
     }
 
     void triggerMentionPopup() {

@@ -83,6 +83,9 @@ public final class FileMentionPopup {
     }
 
     private static final List<CommandCandidate> COMMANDS = List.of(
+            new CommandCandidate("Reset Session", "Reset the current session or topic", "/reset", Codicons.REFRESH),
+            new CommandCandidate("Clear Output", "Clear the chat output area", "/clear", Codicons.CLEAR_ALL),
+            new CommandCandidate("Help", "Show available commands", "/help", Codicons.QUESTION),
             new CommandCandidate("Remember (Project)", "Append to project MEMORY.md", "/rem-p ", Codicons.PROJECT),
             new CommandCandidate("Remember (Global)", "Append to global MEMORY.md", "/rem-g ", Codicons.GLOBE));
 
