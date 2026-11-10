@@ -392,6 +392,15 @@ class ChatControllerTest extends ChatTestFixture {
         verify(aiService, never()).chat(anyString(), any(), anyString(), any());
         assertTrue(chatPanel.outputArea.getText().contains("Completion rejected"));
 
+        // Root cause message is surfaced in chat transcript when retries exhaust with a wrapper RetryException
+        clearInvocations(aiService);
+        when(aiService.chat(anyString(), any(), eq("Trigger 503"), any())).thenThrow(
+                new RuntimeException("Retry policy for operation 'LambdaRetryable' exhausted; aborting execution",
+                        new com.google.genai.errors.ServerException(503, "The model is overloaded", "UNAVAILABLE")));
+        sendOnEdt(chatPanel, "Trigger 503");
+        flushEdt();
+        assertContainsAll(chatPanel.outputArea.getText(), "Error: 503 The model is overloaded. UNAVAILABLE");
+
         // Implicit feedback: sending a message while PLAN -> CODE is pending auto-rejects transition before turn
         clearInvocations(aiService, planService);
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);

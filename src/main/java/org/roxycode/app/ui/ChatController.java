@@ -444,7 +444,7 @@ public final class ChatController implements AutoCloseable {
                     return;
                 }
                 log.error("AI chat interaction failed: {}", ex.getMessage(), ex);
-                String errorMsg = "Error: " + ExceptionUtils.getMessageOrSimpleName(ex);
+                String errorMsg = "Error: " + ExceptionUtils.getRootCauseMessage(ex);
                 Edt.run(() -> finishTurn(turnId, ROLE_AI, errorMsg));
             }
         }, null);

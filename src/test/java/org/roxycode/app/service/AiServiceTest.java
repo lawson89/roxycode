@@ -188,7 +188,7 @@ class AiServiceTest {
                 .chatMemoryRepository(new InMemoryChatMemoryRepository()).maxMessages(20).build();
         AiService service = new AiService(ChatClient.builder(mockChatModel), settingsService, null, promptService,
                 jexlTool, planService, realMemory, customToolManager, eventPublisher);
-        service.setRetryTemplate(AiConfig.createRetryTemplate(3, Duration.ofMillis(5), 2.0));
+        service.setRetryTemplate(AiConfig.createRetryTemplate(3, Duration.ofMillis(5), 2.0), 3);
         when(promptService.buildSystemPrompt(WorkflowPhase.EXPLORE)).thenReturn("EXPLORE PROMPT");
         return service;
     }
@@ -214,14 +214,33 @@ class AiServiceTest {
         }
         Thread.interrupted();
         assertTrue(AiConfig.isTransientAiError(new ClientException(429, "Too Many Requests", "RESOURCE_EXHAUSTED")));
+        assertTrue(AiConfig.isTransientAiError(new ClientException(499, "Client Closed Request", "CANCELLED")));
         assertTrue(AiConfig.isTransientAiError(new ServerException(503, "Service Unavailable", "UNAVAILABLE")));
         assertTrue(AiConfig.isTransientAiError(new RuntimeException("Err", new SocketTimeoutException("Timeout"))));
         assertTrue(AiConfig.isTransientAiError(new GenAiIOException("Network failure")));
         assertTrue(AiConfig.isTransientAiError(new TransientAiException("Rate limit")));
+        assertTrue(AiConfig.isTransientAiError(new RuntimeException("status=INTERNAL, An internal error occurred")));
+        assertTrue(AiConfig.isTransientAiError(new RuntimeException("The model is overloaded. Try again later.")));
+        assertTrue(AiConfig.isTransientAiError(new RuntimeException("HTTP/2 GOAWAY received from peer")));
+        assertTrue(AiConfig.isTransientAiError(new RuntimeException("Unexpected end of stream on connection")));
+        assertTrue(AiConfig.isTransientAiError(new RuntimeException("Outer wrapper mentioning 404 NOT FOUND in context",
+                new ServerException(503, "Service Unavailable", "UNAVAILABLE"))));
+        assertTrue(AiConfig.isTransientAiError(new RuntimeException("Outer wrapper mentioning INVALID_ARGUMENT in logs",
+                new SocketTimeoutException("Read timed out"))));
         assertFalse(AiConfig.isTransientAiError(new ClientException(400, "Bad Request", "INVALID_ARGUMENT")));
         assertFalse(AiConfig.isTransientAiError(new ClientException(401, "Unauthorized", "UNAUTHENTICATED")));
+        assertFalse(AiConfig.isTransientAiError(new RuntimeException("Outer transient marker 503",
+                new ClientException(400, "Bad Request", "INVALID_ARGUMENT"))));
         assertFalse(AiConfig.isTransientAiError(new NonTransientAiException("Invalid API key")));
         assertFalse(AiConfig.isTransientAiError(new CancellationException("Stopped")));
+
+        AtomicInteger noOpAttempts = new AtomicInteger();
+        Exception noOpEx = assertThrows(Exception.class, () -> config.retryTemplate().execute(() -> {
+            noOpAttempts.incrementAndGet();
+            throw new ServerException(503, "Overloaded", "UNAVAILABLE");
+        }));
+        assertEquals(1, noOpAttempts.get());
+        assertTrue(AiConfig.isTransientAiError(noOpEx));
     }
 
     @Test
@@ -421,7 +440,9 @@ class AiServiceTest {
         assertTrue(activityEvents.stream()
                 .anyMatch(e -> "qa:default".equals(e.conversationId()) && e.statusText().startsWith("Thinking with ")));
         assertTrue(activityEvents.stream().anyMatch(e -> "qa:default".equals(e.conversationId())
-                && e.statusText().contains("retrying model call (attempt 2)")));
+                && e.statusText().contains("backing off before retry (attempt 2/3)")));
+        assertTrue(activityEvents.stream().anyMatch(e -> "qa:default".equals(e.conversationId())
+                && e.statusText().contains("retrying model call (attempt 2/3)")));
         assertEquals("qa:default", usageEvent.conversationId());
         assertEquals(10_000, usageEvent.promptTokens());
         assertEquals(8_000, usageEvent.cachedInputTokens());
@@ -465,7 +486,7 @@ class AiServiceTest {
 
         AssistantMessage toolCallMsg = createToolCallMessage();
         ChatResponse firstTurnToolCall = createToolCallResponse(toolCallMsg);
-        ChatResponse emptyStopResponse = buildChatResponse("", "STOP", null);
+        ChatResponse emptyStopResponse = buildChatResponse("", "OTHER", null);
         ChatResponse finalNudgedResponse = buildChatResponse("Summary after second nudge", "STOP", null);
 
         List<Prompt> capturedPrompts = new ArrayList<>();

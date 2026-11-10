@@ -76,7 +76,12 @@ final class AutoNudgeAdvisor implements CallAdvisor {
             return false;
         }
         String finishReason = AiService.extractFinishReason(chatResponse);
-        return "STOP".equalsIgnoreCase(finishReason) || AiService.FINISH_REASON_UNKNOWN.equalsIgnoreCase(finishReason);
+        return isRecoverableEmptyFinishReason(finishReason);
+    }
+
+    static boolean isRecoverableEmptyFinishReason(String finishReason) {
+        return "STOP".equalsIgnoreCase(finishReason) || AiService.FINISH_REASON_UNKNOWN.equalsIgnoreCase(finishReason)
+                || "OTHER".equalsIgnoreCase(finishReason) || "MALFORMED_FUNCTION_CALL".equalsIgnoreCase(finishReason);
     }
 
     private static boolean hasGenerationOutput(ChatResponse chatResponse) {

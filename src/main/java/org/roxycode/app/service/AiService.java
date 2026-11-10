@@ -82,6 +82,7 @@ public class AiService implements AutoCloseable {
     private Function<String, ChatClient.Builder> chatClientBuilderFactory = this::createChatClientBuilderForApiKey;
     private ConnectionTester connectionTester = this::executeConnectionTest;
     private volatile RetryTemplate retryTemplate = AiConfig.createRetryTemplate();
+    private volatile int maxRetryAttempts = AiConfig.DEFAULT_MAX_RETRY_ATTEMPTS;
 
     @Autowired
     public AiService(ChatClient.Builder chatClientBuilder, SettingsService settingsService,
@@ -219,7 +220,12 @@ public class AiService implements AutoCloseable {
     }
 
     void setRetryTemplate(RetryTemplate retryTemplate) {
+        setRetryTemplate(retryTemplate, AiConfig.DEFAULT_MAX_RETRY_ATTEMPTS);
+    }
+
+    void setRetryTemplate(RetryTemplate retryTemplate, int maxRetryAttempts) {
         this.retryTemplate = Objects.requireNonNull(retryTemplate, "retryTemplate must not be null");
+        this.maxRetryAttempts = Math.max(1, maxRetryAttempts);
     }
 
     @SuppressWarnings("PMD.PreserveStackTrace")
@@ -294,6 +300,7 @@ public class AiService implements AutoCloseable {
         public ChatClientResponse adviseCall(ChatClientRequest chatClientRequest, CallAdvisorChain callAdvisorChain) {
             String conversationId = resolveConversationId(chatClientRequest);
             String modelName = resolveRequestModelName(chatClientRequest);
+            int maxAttempts = maxRetryAttempts;
             AtomicInteger attemptCounter = new AtomicInteger(0);
             ChatClientResponse response = RetryUtils.execute(retryTemplate, () -> {
                 ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
@@ -301,15 +308,15 @@ public class AiService implements AutoCloseable {
                 if (retryCount == 0) {
                     publishActivity(conversationId, "Thinking with " + modelName + "...");
                 } else {
-                    publishActivity(conversationId,
-                            "Transient API error — retrying model call (attempt " + (retryCount + 1) + ")...");
+                    publishActivity(conversationId, "Transient API error — retrying model call (attempt "
+                            + (retryCount + 1) + "/" + maxAttempts + ")...");
                 }
                 try {
                     return callAdvisorChain.copy(this).nextCall(chatClientRequest);
                 } catch (RuntimeException ex) {
-                    if (AiConfig.isTransientAiError(ex)) {
-                        publishActivity(conversationId,
-                                "Transient API error — backing off before retry (attempt " + (retryCount + 2) + ")...");
+                    if (AiConfig.isTransientAiError(ex) && (retryCount + 1) < maxAttempts) {
+                        publishActivity(conversationId, "Transient API error — backing off before retry (attempt "
+                                + (retryCount + 2) + "/" + maxAttempts + ")...");
                     }
                     throw ex;
                 }

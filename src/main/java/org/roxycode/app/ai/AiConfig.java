@@ -50,14 +50,16 @@ public class AiConfig {
 
     public static final int DEFAULT_HTTP_TIMEOUT_MS = 120_000;
     public static final int DEFAULT_MAX_TOOL_CALLS = 100;
-    public static final int DEFAULT_MAX_RETRY_ATTEMPTS = 3;
-    public static final Duration DEFAULT_INITIAL_BACKOFF = Duration.ofMillis(1500);
+    public static final int DEFAULT_MAX_RETRY_ATTEMPTS = 6;
+    public static final Duration DEFAULT_INITIAL_BACKOFF = Duration.ofMillis(2000);
     public static final double DEFAULT_BACKOFF_MULTIPLIER = 2.0;
-    public static final Duration DEFAULT_MAX_BACKOFF = Duration.ofSeconds(15);
+    public static final Duration DEFAULT_MAX_BACKOFF = Duration.ofSeconds(30);
+    public static final Duration DEFAULT_BACKOFF_JITTER = Duration.ofMillis(500);
 
     private static final int HTTP_BAD_REQUEST = 400;
     private static final int HTTP_REQUEST_TIMEOUT = 408;
     private static final int HTTP_TOO_MANY_REQUESTS = 429;
+    private static final int HTTP_CLIENT_CLOSED_REQUEST = 499;
     private static final int HTTP_INTERNAL_SERVER_ERROR = 500;
     private static final int HTTP_SERVER_ERROR_UPPER = 600;
 
@@ -65,10 +67,11 @@ public class AiConfig {
             "403 FORBIDDEN", "404 NOT FOUND", "INVALID_ARGUMENT", "PERMISSION_DENIED", "UNAUTHENTICATED",
             "API_KEY_INVALID");
 
-    private static final List<String> TRANSIENT_STATUS_MARKERS = List.of("429", "RESOURCE_EXHAUSTED",
+    private static final List<String> TRANSIENT_STATUS_MARKERS = List.of("429", "499", "RESOURCE_EXHAUSTED",
             "TOO MANY REQUESTS", "RATE LIMIT", "500 INTERNAL", "502 BAD GATEWAY", "503 SERVICE UNAVAILABLE",
-            "504 GATEWAY TIMEOUT", "UNAVAILABLE", "DEADLINE_EXCEEDED", "SOCKET TIMEOUT", "READ TIMED OUT",
-            "CONNECTION RESET");
+            "504 GATEWAY TIMEOUT", "INTERNAL", "UNAVAILABLE", "OVERLOADED", "TRY AGAIN LATER", "DEADLINE_EXCEEDED",
+            "SOCKET TIMEOUT", "READ TIMED OUT", "CONNECTION RESET", "CONNECTION CLOSED", "REMOTELY CLOSED",
+            "BROKEN PIPE", "UNEXPECTED END OF STREAM", "EOF", "GOAWAY");
 
     public static final ObjectMapper SHARED_OBJECT_MAPPER = (ObjectMapper) new ObjectMapper().findAndRegisterModules();
 
@@ -129,7 +132,8 @@ public class AiConfig {
             modelName = defaultModel.trim();
         }
         GoogleGenAiChatOptions options = GoogleGenAiChatOptions.builder().model(modelName).build();
-        GoogleGenAiChatModel.Builder builder = GoogleGenAiChatModel.builder().genAiClient(client).options(options);
+        GoogleGenAiChatModel.Builder builder = GoogleGenAiChatModel.builder().genAiClient(client).options(options)
+                .retryTemplate(createNoOpRetryTemplate());
         if (toolCallingManager != null) {
             builder.toolCallingManager(toolCallingManager);
         }
@@ -151,17 +155,32 @@ public class AiConfig {
     @Bean
     @Primary
     public RetryTemplate retryTemplate() {
-        return createRetryTemplate(DEFAULT_MAX_RETRY_ATTEMPTS, DEFAULT_INITIAL_BACKOFF, DEFAULT_BACKOFF_MULTIPLIER);
+        return createNoOpRetryTemplate();
+    }
+
+    public static RetryTemplate createNoOpRetryTemplate() {
+        RetryPolicy policy = RetryPolicy.builder().maxRetries(0).build();
+        return new RetryTemplate(policy);
     }
 
     public static RetryTemplate createRetryTemplate() {
-        return createRetryTemplate(DEFAULT_MAX_RETRY_ATTEMPTS, DEFAULT_INITIAL_BACKOFF, DEFAULT_BACKOFF_MULTIPLIER);
+        return createRetryTemplate(DEFAULT_MAX_RETRY_ATTEMPTS, DEFAULT_INITIAL_BACKOFF, DEFAULT_BACKOFF_MULTIPLIER,
+                DEFAULT_MAX_BACKOFF, DEFAULT_BACKOFF_JITTER);
     }
 
     public static RetryTemplate createRetryTemplate(int maxAttempts, Duration initialBackoff, double multiplier) {
+        return createRetryTemplate(maxAttempts, initialBackoff, multiplier, DEFAULT_MAX_BACKOFF, Duration.ZERO);
+    }
+
+    public static RetryTemplate createRetryTemplate(int maxAttempts, Duration initialBackoff, double multiplier,
+            Duration maxBackoff, Duration jitter) {
         long maxRetries = Math.max(0, maxAttempts - 1L);
-        RetryPolicy policy = RetryPolicy.builder().maxRetries(maxRetries).delay(initialBackoff).multiplier(multiplier)
-                .maxDelay(DEFAULT_MAX_BACKOFF).predicate(AiConfig::isTransientAiError).build();
+        RetryPolicy.Builder policyBuilder = RetryPolicy.builder().maxRetries(maxRetries).delay(initialBackoff)
+                .multiplier(multiplier).maxDelay(maxBackoff).predicate(AiConfig::isTransientAiError);
+        if (jitter != null && !jitter.isZero() && !jitter.isNegative()) {
+            policyBuilder.jitter(jitter);
+        }
+        RetryPolicy policy = policyBuilder.build();
         RetryTemplate template = new RetryTemplate(policy);
         template.setRetryListener(new RetryListener() {
             @Override
@@ -177,45 +196,64 @@ public class AiConfig {
         if (t == null || ExceptionUtils.isCancellation(t)) {
             return false;
         }
-        boolean foundTransient = false;
+        boolean foundTypedTransient = false;
+        boolean foundMessageNonRetryable = false;
+        boolean foundMessageTransient = false;
         for (Throwable curr = t; curr != null; curr = curr.getCause()) {
-            Boolean classification = classifyCause(curr);
-            if (Boolean.FALSE.equals(classification)) {
+            Boolean typedClassification = classifyTypedCause(curr);
+            if (Boolean.FALSE.equals(typedClassification)) {
                 return false;
             }
-            if (Boolean.TRUE.equals(classification)) {
-                foundTransient = true;
+            if (Boolean.TRUE.equals(typedClassification)) {
+                foundTypedTransient = true;
+            }
+            if (hasNonRetryableClientMessage(curr.getMessage())) {
+                foundMessageNonRetryable = true;
+            }
+            if (hasTransientStatusMessage(curr.getMessage())) {
+                foundMessageTransient = true;
             }
         }
-        return foundTransient;
+        if (foundTypedTransient) {
+            return true;
+        }
+        if (foundMessageNonRetryable) {
+            return false;
+        }
+        return foundMessageTransient;
     }
 
-    private static Boolean classifyCause(Throwable curr) {
+    private static Boolean classifyTypedCause(Throwable curr) {
         if (curr instanceof NonTransientAiException) {
             return Boolean.FALSE;
         }
         if (curr instanceof ApiException apiEx) {
-            int code = apiEx.code();
-            if (code == HTTP_TOO_MANY_REQUESTS || code == HTTP_REQUEST_TIMEOUT
-                    || (code >= HTTP_INTERNAL_SERVER_ERROR && code < HTTP_SERVER_ERROR_UPPER)) {
-                return Boolean.TRUE;
-            }
-            if (code >= HTTP_BAD_REQUEST && code < HTTP_INTERNAL_SERVER_ERROR) {
-                return Boolean.FALSE;
-            }
-            if (hasNonRetryableClientMessage(apiEx.status()) || hasNonRetryableClientMessage(apiEx.getMessage())) {
-                return Boolean.FALSE;
-            }
-            if (hasTransientStatusMessage(apiEx.status()) || hasTransientStatusMessage(apiEx.getMessage())) {
-                return Boolean.TRUE;
-            }
-        }
-        if (hasNonRetryableClientMessage(curr.getMessage())) {
-            return Boolean.FALSE;
+            return classifyApiException(apiEx);
         }
         if (curr instanceof TransientAiException || curr instanceof ResourceAccessException
                 || curr instanceof ServerException || curr instanceof GenAiIOException || curr instanceof IOException
-                || curr instanceof TimeoutException || hasTransientStatusMessage(curr.getMessage())) {
+                || curr instanceof TimeoutException) {
+            return Boolean.TRUE;
+        }
+        return null;
+    }
+
+    private static Boolean classifyApiException(ApiException apiEx) {
+        int code = apiEx.code();
+        if (code == HTTP_TOO_MANY_REQUESTS || code == HTTP_REQUEST_TIMEOUT || code == HTTP_CLIENT_CLOSED_REQUEST
+                || (code >= HTTP_INTERNAL_SERVER_ERROR && code < HTTP_SERVER_ERROR_UPPER)) {
+            return Boolean.TRUE;
+        }
+        if (code >= HTTP_BAD_REQUEST && code < HTTP_INTERNAL_SERVER_ERROR) {
+            return Boolean.FALSE;
+        }
+        if (hasNonRetryableClientMessage(apiEx.status()) || hasNonRetryableClientMessage(apiEx.getMessage())) {
+            return Boolean.FALSE;
+        }
+        if (hasTransientStatusMessage(apiEx.status()) || hasTransientStatusMessage(apiEx.getMessage())) {
+            return Boolean.TRUE;
+        }
+        if (apiEx instanceof ServerException) {
             return Boolean.TRUE;
         }
         return null;
