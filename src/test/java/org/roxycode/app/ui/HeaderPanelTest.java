@@ -52,6 +52,11 @@ class HeaderPanelTest {
         assertTrue(header.noProjectNoticeLabel.isVisible());
         assertEquals(HeaderPanel.NO_PROJECT_NOTICE_TEXT, header.noProjectNoticeLabel.getText());
         assertEquals(HeaderPanel.OPEN_PROJECT_TEXT, header.projectSwitcherButton.getText());
+        when(gitService.getCurrentBranch()).thenReturn("No active project");
+        SwingTestUtils.awaitFuture(header.refreshGitBranch());
+        assertFalse(header.branchLabel.isVisible());
+
+        when(gitService.getCurrentBranch()).thenReturn("feature/async-branch");
         SwingTestUtils.awaitFuture(header.refreshGitBranch());
         assertEquals("feature/async-branch", header.branchLabel.getText());
         assertTrue(header.branchLabel.isVisible());

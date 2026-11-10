@@ -24,7 +24,6 @@ import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.services.CtagsRunner.CtagsEntry;
-import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.service.ProjectAnalysisService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.ProjectService.ReferenceFolderMount;
@@ -244,7 +243,7 @@ public class SymbolService {
                 continue;
             }
             String enclosing = findEnclosingSymbolName(outline, hit.line());
-            boolean testFile = RepoMapPackerService.isTestFile(hit.path());
+            boolean testFile = ProjectAnalysisService.isTestFile(hit.path());
             usages.add(new SymbolUsage(hit.path(), hit.line(), hit.column(), hit.snippet(), enclosing, testFile));
             if (usages.size() >= MAX_USAGES) {
                 break;
@@ -267,7 +266,7 @@ public class SymbolService {
         if (normalizedPath.isEmpty() || CURRENT_DIR.equals(normalizedPath)) {
             return List.of();
         }
-        if (RepoMapPackerService.isTestFile(normalizedPath)) {
+        if (ProjectAnalysisService.isTestFile(normalizedPath)) {
             if (isExistingRegularFile(normalizedPath)) {
                 return List.of(normalizedPath);
             }
@@ -292,7 +291,7 @@ public class SymbolService {
                     continue;
                 }
                 String normCandidate = PathUtils.normalizeRelativePath(candidate.trim());
-                if (normCandidate.equals(normalizedPath) || !RepoMapPackerService.isTestFile(normCandidate)) {
+                if (normCandidate.equals(normalizedPath) || !ProjectAnalysisService.isTestFile(normCandidate)) {
                     continue;
                 }
                 String candidateFileName = PathUtils.getFileName(normCandidate);
@@ -331,7 +330,7 @@ public class SymbolService {
                     continue;
                 }
                 String normRef = PathUtils.normalizeRelativePath(refFile.trim());
-                if (!normRef.equals(normalizedPath) && RepoMapPackerService.isTestFile(normRef)
+                if (!normRef.equals(normalizedPath) && ProjectAnalysisService.isTestFile(normRef)
                         && !orderedResults.contains(normRef)) {
                     tier2.add(normRef);
                 }

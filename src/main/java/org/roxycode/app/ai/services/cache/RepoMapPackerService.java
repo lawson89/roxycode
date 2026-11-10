@@ -194,16 +194,8 @@ public class RepoMapPackerService {
         return new EditorResult(true, generatedMap, null);
     }
 
-    static boolean isSourceFile(String relPath) {
-        return ProjectAnalysisService.isSourceFile(relPath);
-    }
-
-    public static boolean isTestFile(String relPath) {
-        return ProjectAnalysisService.isTestFile(relPath);
-    }
-
     static boolean shouldGenerateSkeleton(String relPath) {
-        return isSourceFile(relPath) && !isTestFile(relPath);
+        return ProjectAnalysisService.isSourceFile(relPath) && !ProjectAnalysisService.isTestFile(relPath);
     }
 
     private void prefetchMissingSkeletons(Path root, List<String> relativeFiles) {

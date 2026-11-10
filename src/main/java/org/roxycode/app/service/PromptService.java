@@ -198,18 +198,13 @@ public class PromptService {
         return sb.toString();
     }
 
-    private static boolean isValidGitOutput(String value) {
-        return StringUtils.isNotBlank(value) && !value.startsWith("Error") && !value.startsWith("Not a git repository")
-                && !value.startsWith("No active project");
-    }
-
     public String getVolatileSessionContext() {
         StringBuilder sb = new StringBuilder();
         if (gitService != null && (jexlServiceRegistry == null || jexlServiceRegistry.isGitAvailable())) {
             String branch = gitService.getCurrentBranch();
             String gitStatus = gitService.getStatus();
-            boolean validBranch = isValidGitOutput(branch);
-            boolean validStatus = isValidGitOutput(gitStatus);
+            boolean validBranch = GitService.isValidOutput(branch);
+            boolean validStatus = GitService.isValidOutput(gitStatus);
             if (validBranch || validStatus) {
                 sb.append(HEADER_GIT_STATUS);
                 if (validBranch) {

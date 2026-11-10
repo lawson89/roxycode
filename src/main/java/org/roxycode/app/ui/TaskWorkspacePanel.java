@@ -24,7 +24,6 @@ import org.roxycode.app.events.ArchiveUpdatedEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
-import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.ui.ArchiveBrowserPanel.ArchiveMode;
 import org.roxycode.app.util.Edt;
@@ -61,7 +60,6 @@ public final class TaskWorkspacePanel extends JPanel {
     final JLabel planLabel = new JLabel();
     final JPanel progressTracker;
     private final List<WorkflowPhaseIndicator> indicators = new ArrayList<>();
-    private SidebarPanel sidebar;
 
     public TaskWorkspacePanel(@Qualifier("featureChatPanel") ChatPanel taskChatPanel, PlanService planService,
             PlanPanel planPanel, MemoryService memoryService) {
@@ -170,25 +168,10 @@ public final class TaskWorkspacePanel extends JPanel {
                 List.of(accent, accent, muted));
     }
 
-    public void bindSidebar(SidebarPanel sidebar) {
-        this.sidebar = sidebar;
-        syncSidebarWaitingApproval();
-    }
-
-    private void syncSidebarWaitingApproval() {
-        if (sidebar == null) {
-            return;
-        }
-        boolean pendingPhase = planService != null && planService.getPendingPhase() != null;
-        boolean waitingInput = taskChatPanel != null && taskChatPanel.isWaitingUserInput();
-        sidebar.setTaskWaitingApproval(pendingPhase || waitingInput);
-    }
-
     @EventListener
     public void onPhaseChanged(PhaseChangedEvent event) {
         Edt.run(() -> {
             updateActivePhase(event.phase());
-            syncSidebarWaitingApproval();
             if (event.phase() == WorkflowPhase.PLAN && pastPlansPanel != null) {
                 pastPlansPanel.refresh();
             }
@@ -198,16 +181,6 @@ public final class TaskWorkspacePanel extends JPanel {
     @EventListener
     public void onPlanUpdated(PlanUpdatedEvent event) {
         Edt.run(() -> updateActivePhase(planService.getCurrentPhase()));
-    }
-
-    @EventListener
-    public void onWorkflowTransition(WorkflowTransitionEvent event) {
-        if (sidebar != null && !event.autonomous()) {
-            Edt.run(() -> {
-                boolean waitingInput = taskChatPanel != null && taskChatPanel.isWaitingUserInput();
-                sidebar.setTaskWaitingApproval(event.to() != null || waitingInput);
-            });
-        }
     }
 
     public void onViewShown() {

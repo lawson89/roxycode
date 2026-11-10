@@ -332,8 +332,11 @@ public final class SwingHtmlUtils {
         return defaultSpan;
     }
 
-    private static View wrapWithZeroMinSpan(View view, Element elem) {
-        if (view instanceof InlineView) {
+    static View wrapWithZeroMinSpan(View view, Element elem) {
+        if (view == null) {
+            return null;
+        }
+        if (view.getClass() == InlineView.class) {
             return new InlineView(elem) {
                 @Override
                 public float getMinimumSpan(int axis) {
@@ -341,7 +344,7 @@ public final class SwingHtmlUtils {
                 }
             };
         }
-        if (view instanceof ParagraphView) {
+        if (view.getClass() == ParagraphView.class) {
             return new ParagraphView(elem) {
                 @Override
                 public float getMinimumSpan(int axis) {
@@ -349,7 +352,8 @@ public final class SwingHtmlUtils {
                 }
             };
         }
-        if (view instanceof BlockView bv) {
+        if (view.getClass() == BlockView.class && (elem == null || !"body".equalsIgnoreCase(elem.getName()))) {
+            BlockView bv = (BlockView) view;
             return new BlockView(elem, bv.getAxis()) {
                 @Override
                 public float getMinimumSpan(int axis) {

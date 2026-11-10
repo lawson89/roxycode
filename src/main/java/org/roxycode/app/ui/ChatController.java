@@ -210,6 +210,11 @@ public final class ChatController implements AutoCloseable {
             }
             return;
         }
+        if (text.startsWith("/")) {
+            view.clearInputText();
+            handleSlashCommand(text);
+            return;
+        }
         if (model.isTaskMode() && planService != null && planService.getPendingPhase() != null) {
             WorkflowPhase currentPhase = planService.getCurrentPhase();
             WorkflowPhase pendingPhase = planService.getPendingPhase();
@@ -230,11 +235,6 @@ public final class ChatController implements AutoCloseable {
         persistActiveChatSession();
         view.clearInputText();
 
-        if (text.startsWith("/")) {
-            handleSlashCommand(text);
-            return;
-        }
-
         triggerTurn(text, pendingImages);
     }
 
@@ -252,8 +252,10 @@ public final class ChatController implements AutoCloseable {
                     + helpItem + BT + CMD_REM_PROJECT + BT + ": Append text to project memory.\n" + helpItem + BT
                     + CMD_REM_GLOBAL + BT + ": Append text to global memory.";
             view.appendMessage(ROLE_SYSTEM, helpText);
-        } else if (text.startsWith(CMD_REM_PROJECT) || text.startsWith(CMD_REM_GLOBAL)) {
-            handleMemoryCommand(text, text.startsWith(CMD_REM_GLOBAL));
+        } else if (CMD_REM_PROJECT.trim().equals(text) || text.startsWith(CMD_REM_PROJECT)
+                || CMD_REM_GLOBAL.trim().equals(text) || text.startsWith(CMD_REM_GLOBAL)) {
+            boolean isGlobal = CMD_REM_GLOBAL.trim().equals(text) || text.startsWith(CMD_REM_GLOBAL);
+            handleMemoryCommand(text, isGlobal);
         } else {
             view.appendMessage(ROLE_SYSTEM,
                     "Unknown command: " + text + ". Type " + BT + CMD_HELP + BT + " for available commands.");
@@ -271,7 +273,12 @@ public final class ChatController implements AutoCloseable {
             prefix = CMD_REM_GLOBAL;
         }
 
-        String content = text.substring(prefix.length()).trim();
+        String content;
+        if (text.startsWith(prefix)) {
+            content = text.substring(prefix.length()).trim();
+        } else {
+            content = "";
+        }
         if (content.isEmpty()) {
             view.appendMessage(ROLE_SYSTEM, "Please provide content to remember. Usage: " + prefix + "<text>");
             return;
@@ -690,8 +697,8 @@ public final class ChatController implements AutoCloseable {
             log.debug("Failed to pre-load git status/diff for REVIEW transition: {}", e.getMessage());
             return basePrompt;
         }
-        boolean validStatus = isValidGitOutput(status);
-        boolean validDiff = isValidGitOutput(diff);
+        boolean validStatus = GitService.isValidOutput(status);
+        boolean validDiff = GitService.isValidOutput(diff);
         if (!validStatus && !validDiff) {
             return basePrompt;
         }
@@ -711,11 +718,6 @@ public final class ChatController implements AutoCloseable {
                     .append(CODE_FENCE);
         }
         return sb.toString();
-    }
-
-    private static boolean isValidGitOutput(String value) {
-        return StringUtils.isNotBlank(value) && !value.startsWith("Error") && !value.startsWith("Not a git repository")
-                && !value.startsWith("No active project");
     }
 
     private int resolveConfiguredContextWindowTokens() {

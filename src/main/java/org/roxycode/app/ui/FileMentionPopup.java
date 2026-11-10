@@ -219,28 +219,12 @@ public final class FileMentionPopup {
         return null;
     }
 
-    private static Comparator<MentionItem> candidateComparator(String queryLower) {
-        return (MentionItem m1, MentionItem m2) -> {
-            boolean c1 = m1 instanceof CommandCandidate;
-            boolean c2 = m2 instanceof CommandCandidate;
-            if (c1 != c2) {
-                if (c1) {
-                    return -1;
-                }
-                return 1;
-            }
-            if (c1) {
-                return 0;
-            }
-            FileCandidate f1 = (FileCandidate) m1;
-            FileCandidate f2 = (FileCandidate) m2;
+    static Comparator<FileCandidate> fileCandidateComparator(String queryLower) {
+        return (FileCandidate f1, FileCandidate f2) -> {
             int tier1 = computeMatchTier(f1, queryLower);
             int tier2 = computeMatchTier(f2, queryLower);
             if (tier1 != tier2) {
                 return Integer.compare(tier1, tier2);
-            }
-            if (queryLower.isEmpty()) {
-                return 0;
             }
             int len1 = f1.fileName().length();
             int len2 = f2.fileName().length();
@@ -271,19 +255,7 @@ public final class FileMentionPopup {
                     fileMatches.add(candidate);
                 }
             }
-            fileMatches.sort((f1, f2) -> {
-                int tier1 = computeMatchTier(f1, queryLower);
-                int tier2 = computeMatchTier(f2, queryLower);
-                if (tier1 != tier2) {
-                    return Integer.compare(tier1, tier2);
-                }
-                int len1 = f1.fileName().length();
-                int len2 = f2.fileName().length();
-                if (len1 != len2) {
-                    return Integer.compare(len1, len2);
-                }
-                return f1.fileNameLower().compareTo(f2.fileNameLower());
-            });
+            fileMatches.sort(fileCandidateComparator(queryLower));
             matches.addAll(fileMatches);
         }
 
@@ -333,7 +305,7 @@ public final class FileMentionPopup {
                 return List.of();
             }
             return rawFiles.stream().filter(StringUtils::isNotBlank).map(FileCandidate::fromPath)
-                    .sorted(candidateComparator("")).toList();
+                    .sorted(fileCandidateComparator("")).toList();
         } catch (Exception e) {
             log.debug("Failed to perform file indexing", e);
             return List.of();

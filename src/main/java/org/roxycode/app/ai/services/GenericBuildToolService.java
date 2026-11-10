@@ -34,7 +34,7 @@ import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerExecResult;
 import org.roxycode.app.ai.services.BuildContainerService.SandboxConfig;
 import org.roxycode.app.ai.services.BuildContainerService.SandboxMode;
-import org.roxycode.app.ai.services.cache.RepoMapPackerService;
+import org.roxycode.app.service.ProjectAnalysisService;
 import org.roxycode.app.events.AgentActivityEvent;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
@@ -69,7 +69,7 @@ public class GenericBuildToolService {
     public static final List<String> DEFAULT_JUNIT_XML_PATHS = List.of("target/surefire-reports",
             "target/failsafe-reports", "build/test-results");
     static final String LOG_TRUNCATED_PREFIX = "... [Log truncated. Full log saved to .roxycode/tmp/build.log]\n";
-    private static final Duration BUILD_TIMEOUT = Duration.ofMinutes(10);
+    public static final int DEFAULT_TIMEOUT_SECONDS = 600;
     private static final String DEFAULT_FALLBACK_TOML = """
             timeout_seconds = 600
 
@@ -173,7 +173,9 @@ public class GenericBuildToolService {
             }
             parse = Objects.requireNonNullElse(parse, ParseSection.EMPTY);
             sandbox = Objects.requireNonNullElse(sandbox, SandboxConfig.DEFAULT);
-            timeoutSeconds = Objects.requireNonNullElse(timeoutSeconds, 600);
+            if (timeoutSeconds == null || timeoutSeconds <= 0) {
+                timeoutSeconds = DEFAULT_TIMEOUT_SECONDS;
+            }
         }
     }
 
@@ -321,7 +323,7 @@ public class GenericBuildToolService {
                     planService.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, false);
                 }
                 return new BuildResult(false, singleResult.exitCode(), combinedOutput.toString(), singleResult.errors(),
-                        singleResult.failedTests());
+                        singleResult.failedTests(), singleResult.timedOut());
             }
         }
         return new BuildResult(true, 0, combinedOutput.toString(), List.of(), List.of());
@@ -337,7 +339,7 @@ public class GenericBuildToolService {
             if (StringUtils.isBlank(normalized)) {
                 continue;
             }
-            if (RepoMapPackerService.isTestFile(normalized)) {
+            if (ProjectAnalysisService.isTestFile(normalized)) {
                 String stem = extractTestStem(normalized);
                 if (!stem.isEmpty()) {
                     testNames.add(stem);
@@ -419,7 +421,8 @@ public class GenericBuildToolService {
                     %s
 
                     TEST OUTPUT:
-                    %s""".formatted(compileOutput, testResult.output()), testResult.errors(), testResult.failedTests());
+                    %s""".formatted(compileOutput, testResult.output()), testResult.errors(), testResult.failedTests(),
+                    testResult.timedOut());
         }
         if (compileOutput == null && planService != null) {
             planService.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true);
@@ -438,7 +441,7 @@ public class GenericBuildToolService {
 
                     LINT OUTPUT:
                     %s""".formatted(compileOutput, testResult.output(), lintResult.output()), lintResult.errors(),
-                    lintResult.failedTests());
+                    lintResult.failedTests(), testResult.timedOut() || lintResult.timedOut());
         }
         if (!lintResult.success()) {
             return new BuildResult(false, lintResult.exitCode(), """
@@ -447,7 +450,7 @@ public class GenericBuildToolService {
 
                     LINT OUTPUT:
                     %s""".formatted(testResult.output(), lintResult.output()), lintResult.errors(),
-                    lintResult.failedTests());
+                    lintResult.failedTests(), testResult.timedOut() || lintResult.timedOut());
         }
         return testResult;
     }

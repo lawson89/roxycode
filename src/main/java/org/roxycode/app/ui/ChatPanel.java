@@ -589,6 +589,9 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         sendButton.setEnabled(enableComposer);
         attachImageButton.setEnabled(enableComposer);
         mentionButton.setEnabled(enableComposer);
+        if (commandsButton != null) {
+            commandsButton.setEnabled(enableComposer);
+        }
         if (autoApprovePlanCheckBox != null) {
             autoApprovePlanCheckBox.setEnabled(projectReady);
         }
@@ -674,40 +677,27 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     void triggerCommandsPopup() {
-        if (!inputArea.isEnabled()) {
-            return;
-        }
-        inputArea.requestFocusInWindow();
-        String text = inputArea.getText();
-        int caret = inputArea.getCaretPosition();
-        if (FileMentionPopup.extractMentionToken(text, caret) == null) {
-            String insertion;
-            if (caret > 0 && !Character.isWhitespace(text.charAt(caret - 1))) {
-                insertion = " /";
-            } else {
-                insertion = "/";
-            }
-            inputArea.insert(insertion, caret);
-            inputArea.setCaretPosition(caret + insertion.length());
-        }
-        if (fileMentionPopup != null) {
-            fileMentionPopup.evaluateCurrentInput();
-        }
+        triggerPopup('/');
     }
 
     void triggerMentionPopup() {
+        triggerPopup('@');
+    }
+
+    void triggerPopup(char triggerChar) {
         if (!inputArea.isEnabled()) {
             return;
         }
         inputArea.requestFocusInWindow();
         String text = inputArea.getText();
         int caret = inputArea.getCaretPosition();
-        if (FileMentionPopup.extractMentionToken(text, caret) == null) {
+        FileMentionPopup.MentionToken activeToken = FileMentionPopup.extractMentionToken(text, caret);
+        if (activeToken == null || activeToken.trigger() != triggerChar) {
             String insertion;
             if (caret > 0 && !Character.isWhitespace(text.charAt(caret - 1))) {
-                insertion = " @";
+                insertion = " " + triggerChar;
             } else {
-                insertion = "@";
+                insertion = String.valueOf(triggerChar);
             }
             inputArea.insert(insertion, caret);
             inputArea.setCaretPosition(caret + insertion.length());

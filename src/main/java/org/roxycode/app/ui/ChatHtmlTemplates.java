@@ -39,10 +39,6 @@ public final class ChatHtmlTemplates {
         return "<a class='copy-action' href='copy:" + messageIndex + "'>[Copy]</a>";
     }
 
-    public static String renderAiActionCellContent(int messageIndex, boolean copied, boolean showMoveAction) {
-        return renderMessageActionCellContent(ROLE_AI, messageIndex, copied, showMoveAction);
-    }
-
     public static String renderMessageActionCellContent(String role, int messageIndex, boolean copied,
             boolean showMoveAction) {
         String normalizedRole = StringUtils.defaultString(role).toLowerCase(java.util.Locale.ROOT);

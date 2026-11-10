@@ -13,6 +13,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.ContextChangedEvent;
@@ -533,12 +534,15 @@ public class ProjectService {
             throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
         if (relativePath != null) {
-            String normalized = PathUtils.normalizeRelativePath(relativePath.trim());
-            if (ROXYCODE_TMP_DIR.equals(normalized) || normalized.startsWith(ROXYCODE_TMP_PREFIX)) {
+            String trimmed = relativePath.trim();
+            String unix = FilenameUtils.separatorsToUnix(trimmed);
+            while (unix.startsWith("./")) {
+                unix = unix.substring(2);
+            }
+            if (ROXYCODE_TMP_DIR.equals(unix) || unix.startsWith(ROXYCODE_TMP_PREFIX)) {
                 Path tmpRoot = resolveProjectDataPath(DATA_TMP_DIR);
-                String subPath = StringUtils.defaultIfEmpty(StringUtils.removeStart(normalized, ROXYCODE_TMP_PREFIX),
-                        ".");
-                if (ROXYCODE_TMP_DIR.equals(normalized)) {
+                String subPath = StringUtils.defaultIfEmpty(StringUtils.removeStart(unix, ROXYCODE_TMP_PREFIX), ".");
+                if (ROXYCODE_TMP_DIR.equals(unix)) {
                     subPath = ".";
                 }
                 return resolveWithinSandbox(tmpRoot, subPath);

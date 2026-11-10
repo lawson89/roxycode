@@ -79,6 +79,12 @@ class FileMentionPopupTest {
         assertEquals(FileMentionPopup.MAX_RESULTS,
                 FileMentionPopup.rankCandidates(manyFiles, new MentionToken(0, 4, "File", '@')).size());
 
+        List<MentionItem> allCommands = FileMentionPopup.rankCandidates(null, new MentionToken(0, 0, "", '/'));
+        assertEquals(5, allCommands.size());
+        assertEquals("/reset", allCommands.get(0).replacement());
+        assertEquals("/clear", allCommands.get(1).replacement());
+        assertEquals("/help", allCommands.get(2).replacement());
+
         List<MentionItem> commands = FileMentionPopup.rankCandidates(null, new MentionToken(0, 1, "rem", '/'));
         assertEquals(2, commands.size());
         assertEquals("/rem-p ", commands.get(0).replacement());

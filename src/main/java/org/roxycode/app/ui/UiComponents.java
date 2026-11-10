@@ -117,6 +117,9 @@ final class UiComponents {
         if (source == null) {
             return new BufferedImage(safeMax, safeMax, BufferedImage.TYPE_INT_ARGB);
         }
+        if (source.getWidth() <= safeMax && source.getHeight() <= safeMax) {
+            return source;
+        }
         try {
             return Thumbnails.of(source).size(safeMax, safeMax).asBufferedImage();
         } catch (IOException e) {

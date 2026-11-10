@@ -200,6 +200,37 @@ class BuildContainerServiceTest {
     }
 
     @Test
+    void testExecuteCommandStopsActiveContainerOnTimeout() throws Exception {
+        AtomicBoolean sessionClosed = new AtomicBoolean(false);
+
+        buildContainerService.setContainerSessionFactory(key -> {
+            sessionClosed.set(false);
+            return new ContainerSession() {
+                @Override
+                public ContainerExecResult execInContainer(java.time.Duration timeout, String... command) {
+                    return new ContainerExecResult(-1, "", "timed out", true);
+                }
+
+                @Override
+                public boolean isRunning() {
+                    return !sessionClosed.get();
+                }
+
+                @Override
+                public void close() {
+                    sessionClosed.set(true);
+                }
+            };
+        });
+
+        SandboxConfig config = new SandboxConfig("docker", List.of(), "eclipse-temurin:25-jdk", "/workspace");
+        ContainerExecResult res = buildContainerService.executeCommand(tempDir, config, Map.of(), "./mvnw test",
+                java.time.Duration.ofMinutes(1));
+        assertTrue(res.timedOut());
+        assertTrue(sessionClosed.get(), "Active container session must be stopped when command times out");
+    }
+
+    @Test
     void testSandboxModeAndSandboxConfigNormalization() {
         assertEquals(SandboxMode.NONE, SandboxMode.fromString(null));
         assertEquals(SandboxMode.NONE, SandboxMode.fromString(""));

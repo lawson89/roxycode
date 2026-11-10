@@ -267,8 +267,7 @@ public final class HeaderPanel extends JPanel {
 
     CompletableFuture<String> updateBranchLabel() {
         return Edt.supplyAsync(gitService::getCurrentBranch, branch -> {
-            boolean valid = branch != null && !branch.isEmpty() && !branch.startsWith("Error")
-                    && !"Not a git repository".equals(branch);
+            boolean valid = GitService.isValidOutput(branch);
             if (valid) {
                 branchLabel.setIcon(FontIcon.of(Codicons.SOURCE_CONTROL, 14, resolveBranchAccentColor()));
                 branchLabel.setText(branch);

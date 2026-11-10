@@ -1018,9 +1018,28 @@ class ChatControllerTest extends ChatTestFixture {
         // Reset shows prompt for non-empty conversation in Q&A
         assertTrue(panel.userInputPromptPanel.isVisible());
 
-        // 6. Unknown command
+        // 6. Bare /rem-p and /rem-g usage hints
+        sendOnEdt(panel, "/rem-p");
+        flushEdt();
+        assertTrue(panel.outputArea.getText().contains("Please provide content to remember. Usage: /rem-p"));
+
+        sendOnEdt(panel, "/rem-g");
+        flushEdt();
+        assertTrue(panel.outputArea.getText().contains("Please provide content to remember. Usage: /rem-g"));
+
+        // 7. Unknown command
         sendOnEdt(panel, "/unknown");
         flushEdt();
         assertTrue(panel.outputArea.getText().contains("Unknown command: /unknown"));
+
+        // 8. Slash commands with pending transition banner do not reject phase or persist chat
+        ChatPanel featurePanel = createFeatureChatPanel(directExecutor);
+        when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+        when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
+        sendOnEdt(featurePanel, "/help");
+        flushEdt();
+        verify(planService, never()).rejectTransition();
+        verify(aiService, never()).chat(anyString(), any(), anyString(), any());
+        assertTrue(featurePanel.outputArea.getText().contains("Available Commands"));
     }
 }

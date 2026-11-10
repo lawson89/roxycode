@@ -144,12 +144,25 @@ public final class MainFrame extends JPanel {
 
     @EventListener
     public void onWorkflowTransition(WorkflowTransitionEvent event) {
-        Edt.run(this::updateWorkspaceState);
+        Edt.run(() -> {
+            if (sidebar != null && !event.autonomous()) {
+                boolean waitingInput = taskChatPanel() != null && taskChatPanel().isWaitingUserInput();
+                sidebar.setTaskWaitingApproval(event.to() != null || waitingInput);
+            }
+            updateWorkspaceState();
+        });
     }
 
     @EventListener
     public void onPhaseChanged(PhaseChangedEvent event) {
-        Edt.run(this::updateWorkspaceState);
+        Edt.run(() -> {
+            if (sidebar != null) {
+                boolean pendingPhase = planService != null && planService.getPendingPhase() != null;
+                boolean waitingInput = taskChatPanel() != null && taskChatPanel().isWaitingUserInput();
+                sidebar.setTaskWaitingApproval(pendingPhase || waitingInput);
+            }
+            updateWorkspaceState();
+        });
     }
 
     @EventListener
@@ -496,8 +509,6 @@ public final class MainFrame extends JPanel {
                 taskChat.submitMovedFeatureRequest(content);
             }
         });
-        taskWorkspacePanel.bindSidebar(sidebar);
-
         ChatPanel qaChat = qaChatPanel();
         if (qaChat != null) {
             qaChat.addLoadingListener(loading -> Edt.run(() -> {

@@ -10,6 +10,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.SystemUtils;
@@ -28,6 +30,7 @@ import org.testcontainers.utility.DockerImageName;
 public class BuildContainerService {
 
     private static final Logger log = LoggerFactory.getLogger(BuildContainerService.class);
+    private static final ExecutorService DOCKER_EXEC_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
     static final String DEFAULT_CONTAINER_IMAGE = "ubuntu:24.04";
     static final String DEFAULT_CONTAINER_WORKDIR = "/workspace";
@@ -313,7 +316,12 @@ public class BuildContainerService {
         ContainerSessionKey sessionKey = new ContainerSessionKey(projectRoot.toAbsolutePath().normalize(),
                 sandboxConfig.image(), sandboxConfig.workdir(), Map.copyOf(env));
         try {
-            return getOrCreateContainerSession(sessionKey).execInContainer(timeout, "sh", "-c", command);
+            ContainerExecResult result = getOrCreateContainerSession(sessionKey).execInContainer(timeout, "sh", "-c",
+                    command);
+            if (result.timedOut()) {
+                stopActiveContainer();
+            }
+            return result;
         } catch (InterruptedException | java.util.concurrent.CancellationException e) {
             stopActiveContainer();
             throw e;
@@ -390,13 +398,18 @@ public class BuildContainerService {
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
-                });
+                }, DOCKER_EXEC_EXECUTOR);
 
                 try {
                     Container.ExecResult r = future.get(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);
                     return new ContainerExecResult(r.getExitCode(), r.getStdout(), r.getStderr(), false);
                 } catch (java.util.concurrent.TimeoutException e) {
                     future.cancel(true);
+                    try {
+                        container.stop();
+                    } catch (Exception ex) {
+                        log.debug("Failed to stop timed-out container: {}", ex.getMessage());
+                    }
                     return new ContainerExecResult(-1, "",
                             "Command timed out after " + timeout.toSeconds() + " seconds", true);
                 } catch (java.util.concurrent.ExecutionException e) {

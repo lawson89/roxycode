@@ -346,9 +346,29 @@ public class GitService {
         return sb.toString();
     }
 
+    public static boolean isValidOutput(String output) {
+        if (output == null || output.isBlank()) {
+            return false;
+        }
+        if (NO_ACTIVE_PROJECT.equals(output) || NOT_A_GIT_REPOSITORY.equals(output)) {
+            return false;
+        }
+        if (output.startsWith("Error") || output.startsWith("fatal:") || output.startsWith("error:")
+                || output.startsWith("warning:")) {
+            return false;
+        }
+        return true;
+    }
+
     private static boolean isGitError(String output) {
-        return output != null && (NO_ACTIVE_PROJECT.equals(output) || NOT_A_GIT_REPOSITORY.equals(output)
-                || output.startsWith("Error"));
+        if (output == null || output.isEmpty()) {
+            return false;
+        }
+        if (NO_ACTIVE_PROJECT.equals(output) || NOT_A_GIT_REPOSITORY.equals(output)) {
+            return true;
+        }
+        return output.startsWith("Error") || output.startsWith("fatal:") || output.startsWith("error:")
+                || output.startsWith("warning:");
     }
 
     private static String combineDiffs(String first, String second) {

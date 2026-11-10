@@ -96,18 +96,11 @@ public final class FrontmatterUtils {
             return YAML_DELIMITER + "\n" + YAML_DELIMITER + "\n\n";
         }
         try {
-            String dumped = AiConfig.SHARED_YAML_MAPPER.writeValueAsString(fields);
-            String clean = dumped.trim();
-            while (clean.startsWith(YAML_DELIMITER)) {
-                clean = clean.substring(3).trim();
-            }
-            while (clean.endsWith(YAML_DELIMITER)) {
-                clean = clean.substring(0, clean.length() - 3).trim();
-            }
-            return YAML_DELIMITER + "\n" + clean + "\n" + YAML_DELIMITER + "\n\n";
+            String dumped = AiConfig.SHARED_YAML_MAPPER.writeValueAsString(fields).trim();
+            return YAML_DELIMITER + "\n" + dumped + "\n" + YAML_DELIMITER + "\n\n";
         } catch (Exception e) {
             log.warn("Failed to format YAML frontmatter: {}", e.getMessage());
-            return "---\n---\n\n";
+            return YAML_DELIMITER + "\n" + YAML_DELIMITER + "\n\n";
         }
     }
 }

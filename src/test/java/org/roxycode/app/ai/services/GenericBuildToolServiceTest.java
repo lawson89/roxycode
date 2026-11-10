@@ -563,7 +563,7 @@ class GenericBuildToolServiceTest {
     }
 
     @Test
-    void testConfigurableBuildTimeout() throws IOException {
+    void testConfigurableBuildTimeoutAndNonPositiveFallback() throws IOException {
         writeBuildToml("""
                 timeout_seconds = 2
                 [commands]
@@ -579,6 +579,42 @@ class GenericBuildToolServiceTest {
             assertFalse(result.isSuccess());
             assertTrue(result.isTimedOut());
             assertContainsAll(result.getErrors().get(0), "Command timed out after 2 seconds");
+        }
+
+        writeBuildToml("""
+                timeout_seconds = 0
+                [commands]
+                compile = 'echo ok'
+                """);
+        GenericBuildToolService.BuildConfig config = buildToolService.loadConfig();
+        assertEquals(GenericBuildToolService.DEFAULT_TIMEOUT_SECONDS, config.timeoutSeconds());
+
+        writeBuildToml("""
+                timeout_seconds = -15
+                [commands]
+                compile = 'echo ok'
+                """);
+        GenericBuildToolService.BuildConfig negativeConfig = buildToolService.loadConfig();
+        assertEquals(GenericBuildToolService.DEFAULT_TIMEOUT_SECONDS, negativeConfig.timeoutSeconds());
+    }
+
+    @Test
+    void testCompositeResultsPreserveTimedOutFlag() throws IOException {
+        writeBuildToml("""
+                [commands]
+                compile = 'echo compile'
+                test_all = 'echo test'
+                lint = 'echo lint'
+                """);
+
+        try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
+            runner.when(() -> ProcessRunner.run(anyList(), eq(projectRoot), anyMap(), any(), eq(true), any()))
+                    .thenReturn(new ProcessResult(0, "compile ok", "", false))
+                    .thenReturn(new ProcessResult(-1, "test timed out", "", true));
+
+            BuildResult result = buildToolService.buildAndTest();
+            assertFalse(result.isSuccess());
+            assertTrue(result.isTimedOut());
         }
     }
 }

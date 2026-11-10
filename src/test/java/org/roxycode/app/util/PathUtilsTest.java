@@ -63,6 +63,18 @@ class PathUtilsTest {
     }
 
     @Test
+    void testNormalizeRelativePathHandlesInternalParentSegmentsAndPreservesEscaping() {
+        assertEquals("src/ChatPanel.java", PathUtils.normalizeRelativePath("src/main/../ChatPanel.java"));
+        assertEquals("ChatPanel.java", PathUtils.normalizeRelativePath("src/foo/../../ChatPanel.java"));
+        assertEquals("..", PathUtils.normalizeRelativePath(".."));
+        assertEquals("../src/Main.java", PathUtils.normalizeRelativePath("../src/Main.java"));
+        assertEquals("", PathUtils.normalizeRelativePath("src/.."));
+        assertEquals("..", PathUtils.normalizeRelativePath("src/../.."));
+        assertEquals("file:with:colon.txt", PathUtils.normalizeRelativePath("file:with:colon.txt"));
+        assertEquals("*.java", PathUtils.normalizeRelativePath("*.java"));
+    }
+
+    @Test
     void testFormatArchiveTimestampParsesIsoAndFallsBackWhenInvalid() {
         assertEquals("20250514-153000", PathUtils.formatArchiveTimestamp("2025-05-14T15:30:00Z"));
         assertTrue(PathUtils.formatArchiveTimestamp(null).matches("[0-9]{8}-[0-9]{6}"));

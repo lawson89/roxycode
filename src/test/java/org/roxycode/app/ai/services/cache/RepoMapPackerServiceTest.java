@@ -13,6 +13,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.service.ProjectAnalysisService;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService.RepoMapSnapshot;
@@ -142,23 +143,23 @@ class RepoMapPackerServiceTest {
     @Test
     void testSourceAndTestClassificationHelpers() {
         for (String src : List.of("src/main/java/App.java", "app/main.py", "web/Component.tsx", "cmd/server.go")) {
-            assertTrue(RepoMapPackerService.isSourceFile(src));
+            assertTrue(ProjectAnalysisService.isSourceFile(src));
             assertTrue(RepoMapPackerService.shouldGenerateSkeleton(src));
         }
 
         for (String nonSrc : List.of("README.md", "pom.xml", "settings.toml", "")) {
-            assertFalse(RepoMapPackerService.isSourceFile(nonSrc));
+            assertFalse(ProjectAnalysisService.isSourceFile(nonSrc));
             assertFalse(RepoMapPackerService.shouldGenerateSkeleton(nonSrc));
         }
-        assertFalse(RepoMapPackerService.isSourceFile(null));
+        assertFalse(ProjectAnalysisService.isSourceFile(null));
 
         for (String testPath : List.of("src/test/java/org/roxycode/Helper.java", "tests/integration/run.py",
                 "__tests__/App.tsx", "src/main/java/MyTest.java", "src/test_runner.py", "src/app.spec.ts")) {
-            assertTrue(RepoMapPackerService.isTestFile(testPath));
+            assertTrue(ProjectAnalysisService.isTestFile(testPath));
             assertFalse(RepoMapPackerService.shouldGenerateSkeleton(testPath));
         }
-        assertFalse(RepoMapPackerService.isTestFile("src/main/java/ContestService.java"));
-        assertFalse(RepoMapPackerService.isTestFile(null));
+        assertFalse(ProjectAnalysisService.isTestFile("src/main/java/ContestService.java"));
+        assertFalse(ProjectAnalysisService.isTestFile(null));
     }
 
     @Test

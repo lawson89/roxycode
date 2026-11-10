@@ -6,6 +6,7 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.InvalidPathException;
 import java.nio.file.attribute.PosixFilePermission;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -109,14 +110,15 @@ public final class PathUtils {
         while (unix.startsWith("./")) {
             unix = unix.substring(2);
         }
-        if (unix.contains("../") || unix.endsWith("/..") || "..".equals(unix)) {
+        try {
+            String normalized = FilenameUtils.separatorsToUnix(Path.of(unix).normalize().toString());
+            if (CURRENT_DIR.equals(normalized)) {
+                return "";
+            }
+            return normalized;
+        } catch (InvalidPathException e) {
             return unix;
         }
-        String normalized = FilenameUtils.separatorsToUnix(Path.of(unix).normalize().toString());
-        if (CURRENT_DIR.equals(normalized)) {
-            return "";
-        }
-        return normalized;
     }
 
     public static String getFileName(String path) {

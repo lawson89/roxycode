@@ -246,13 +246,22 @@ class MainFrameTest {
             assertEquals(longTitle, taskWorkspacePanel.planLabel.getToolTipText());
             assertEquals("Plan (1/2)", taskWorkspacePanel.taskTabs.getTitleAt(1));
 
-            taskWorkspacePanel.onWorkflowTransition(
+            frame.onWorkflowTransition(
                     new WorkflowTransitionEvent(WorkflowPhase.PLAN, WorkflowPhase.CODE, "Ready", false));
             SwingTestUtils.flushEdt();
             assertTrue(frame.sidebar.isTaskWaitingApproval());
 
             when(planService.getPendingPhase()).thenReturn(null);
-            taskWorkspacePanel.onPhaseChanged(new PhaseChangedEvent(WorkflowPhase.CODE));
+            frame.onPhaseChanged(new PhaseChangedEvent(WorkflowPhase.CODE));
+            SwingTestUtils.flushEdt();
+            assertFalse(frame.sidebar.isTaskWaitingApproval());
+
+            frame.onWorkflowTransition(
+                    new WorkflowTransitionEvent(WorkflowPhase.REVIEW, WorkflowPhase.PLAN, "Finished", false));
+            SwingTestUtils.flushEdt();
+            assertTrue(frame.sidebar.isTaskWaitingApproval());
+
+            frame.onPhaseChanged(new PhaseChangedEvent(WorkflowPhase.PLAN));
             SwingTestUtils.flushEdt();
             assertFalse(frame.sidebar.isTaskWaitingApproval());
 

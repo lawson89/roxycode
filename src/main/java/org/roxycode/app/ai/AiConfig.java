@@ -92,11 +92,6 @@ public class AiConfig {
         return SHARED_TOML_MAPPER;
     }
 
-    @Bean
-    public YAMLMapper yamlMapper() {
-        return SHARED_YAML_MAPPER;
-    }
-
     @Bean(destroyMethod = "close")
     public Client googleGenAiClient(GoogleGenAiConnectionProperties properties,
             @Value("${roxycode.ai.http-timeout-ms:120000}") int httpTimeoutMs) throws IOException {
