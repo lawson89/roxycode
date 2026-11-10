@@ -40,6 +40,8 @@ public class SymbolService {
     private static final String CURRENT_DIR = ".";
     private static final String WORD_BOUNDARY = "\\b";
     private static final Pattern SIMPLE_IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
+    private static final int USAGE_PARTS_COUNT = 4;
+    private static final int MIN_MERGEABLE_RANGES = 2;
 
     private final ProjectService projectService;
     private final GrepService grepService;
@@ -96,12 +98,12 @@ public class SymbolService {
         }
         Path filePath = projectService.resolveReadPath(relativePath);
         List<String> fileLines = FileReadService.readLinesSafely(filePath);
-        return extractSymbolContent(relativePath, symbolName, matching, fileLines);
+        return extractSymbolContent(matching, fileLines);
     }
 
     @AgentDoc(value = "Reads multiple symbols from a file in a single batch call.", examples = "symbolService.readSymbols('src/main/java/App.java', ['main', 'helper'])")
     public Map<String, String> readSymbols(@AgentDoc(DOC_FILE_PATH) String relativePath,
-            @AgentDoc("The symbol names to read") String[] symbolNames) throws IOException {
+            @AgentDoc("The symbol names to read") String... symbolNames) throws IOException {
         if (symbolNames == null || symbolNames.length == 0) {
             return Map.of();
         }
@@ -128,7 +130,7 @@ public class SymbolService {
             if (matching.isEmpty()) {
                 results.put(name, formatSymbolNotFoundError(name, relativePath));
             } else {
-                results.put(name, extractSymbolContent(relativePath, name, matching, fileLines));
+                results.put(name, extractSymbolContent(matching, fileLines));
             }
         }
         return results;
@@ -317,8 +319,8 @@ public class SymbolService {
     private List<RawUsageHit> parseAndFilterUsageHits(List<String> rawMatches) {
         List<RawUsageHit> hits = new ArrayList<>();
         for (String match : rawMatches) {
-            String[] parts = match.split(":", 4);
-            if (parts.length < 4) {
+            String[] parts = match.split(":", USAGE_PARTS_COUNT);
+            if (parts.length < USAGE_PARTS_COUNT) {
                 continue;
             }
             try {
@@ -454,10 +456,6 @@ public class SymbolService {
         return grepService.listFiles(referencePrefix);
     }
 
-    private String normalizeRelativePath(Path resolvedPath, String fallbackRelativePath) {
-        return projectService.formatReadDisplayPath(resolvedPath, fallbackRelativePath);
-    }
-
     private static String extractUnqualifiedName(String symbolQuery) {
         int lastDot = symbolQuery.lastIndexOf('.');
         if (lastDot < 0 || lastDot == symbolQuery.length() - 1) {
@@ -471,8 +469,7 @@ public class SymbolService {
                 + relativePath;
     }
 
-    private String extractSymbolContent(String relativePath, String symbolName, List<SymbolInfo> matching,
-            List<String> fileLines) {
+    private String extractSymbolContent(List<SymbolInfo> matching, List<String> fileLines) {
         List<LineRange> ranges = new ArrayList<>();
         for (SymbolInfo sym : matching) {
             int start = adjustStartLineForPrecedingContext(fileLines, sym.startLine());
@@ -511,7 +508,7 @@ public class SymbolService {
     }
 
     private static List<LineRange> mergeLineRanges(List<LineRange> ranges) {
-        if (ranges.size() <= 1) {
+        if (ranges.size() < MIN_MERGEABLE_RANGES) {
             return ranges;
         }
         List<LineRange> sorted = ranges.stream().sorted(Comparator.comparingInt(LineRange::startLine)).toList();

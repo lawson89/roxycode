@@ -104,7 +104,7 @@ public class ProjectService {
             if (projectService != null && workingDir != null) {
                 try {
                     return projectService.toDisplayPath(workingDir.resolve(norm));
-                } catch (Exception e) {
+                } catch (Exception ignored) {
                     // Fallback to manual prefixing
                 }
             }
