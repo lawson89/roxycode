@@ -27,11 +27,16 @@ import java.awt.Shape;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.RoundRectangle2D;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URL;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Base64;
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
@@ -57,6 +62,7 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.model.ThinkingLevelOption;
+import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.lang.Nullable;
@@ -75,6 +81,12 @@ final class UiComponents {
     static final String SUBTLE_RED_BUTTON_STYLE = "foreground: $Actions.Red; hoverBackground: fade($Actions.Red, 12%); pressedBackground: fade($Actions.Red, 20%); borderColor: fade($Actions.Red, 45%); focusedBorderColor: $Actions.Red; hoverBorderColor: $Actions.Red";
     static final Color AMBER_LIGHT = new Color(0xd9, 0x77, 0x06);
     static final Color AMBER_DARK = new Color(0xf5, 0x9e, 0x0b);
+    static final int CHAT_THUMBNAIL_MAX_DIM = 180;
+    private static final String TEMP_THUMB_DIR_PREFIX = "roxycode-thumbs-";
+    private static Path tempThumbnailDir;
+
+    record HtmlImagePreview(String url, int width, int height) {
+    }
 
     private UiComponents() {
     }
@@ -96,18 +108,90 @@ final class UiComponents {
     }
 
     /**
-     * Scales an image into a square ARGB thumbnail of the given pixel size.
+     * Scales an image proportionally into an ARGB thumbnail fitting within {@code maxDimension} while preserving aspect
+     * ratio.
      */
-    static BufferedImage createThumbnail(BufferedImage source, int size) {
-        BufferedImage thumb = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+    static BufferedImage createThumbnail(BufferedImage source, int maxDimension) {
+        int safeMax = Math.max(1, maxDimension);
+        if (source == null) {
+            return new BufferedImage(safeMax, safeMax, BufferedImage.TYPE_INT_ARGB);
+        }
+        int srcWidth = Math.max(1, source.getWidth());
+        int srcHeight = Math.max(1, source.getHeight());
+        double scale = Math.min(1.0, Math.min((double) safeMax / srcWidth, (double) safeMax / srcHeight));
+        int targetWidth = Math.max(1, (int) Math.round(srcWidth * scale));
+        int targetHeight = Math.max(1, (int) Math.round(srcHeight * scale));
+        BufferedImage thumb = new BufferedImage(targetWidth, targetHeight, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g2 = thumb.createGraphics();
         try {
             g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-            g2.drawImage(source, 0, 0, size, size, null);
+            g2.drawImage(source, 0, 0, targetWidth, targetHeight, null);
         } finally {
             g2.dispose();
         }
         return thumb;
+    }
+
+    /**
+     * Encodes scaled aspect-ratio-preserving PNG thumbnails as base64 strings for persistence and HTML rendering.
+     */
+    static List<String> encodeThumbnailsToBase64Png(List<BufferedImage> images, int maxDimension) {
+        if (images == null || images.isEmpty()) {
+            return List.of();
+        }
+        List<String> encoded = new ArrayList<>(images.size());
+        for (BufferedImage image : images) {
+            if (image == null) {
+                continue;
+            }
+            try {
+                BufferedImage thumb = createThumbnail(image, maxDimension);
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                ImageIO.write(thumb, "png", baos);
+                encoded.add(Base64.getEncoder().encodeToString(baos.toByteArray()));
+            } catch (Exception e) {
+                log.warn("Failed to encode chat thumbnail: {}", e.getMessage());
+            }
+        }
+        return List.copyOf(encoded);
+    }
+
+    @Nullable
+    static HtmlImagePreview writeBase64ThumbnailToTempUrl(String base64Png) {
+        if (StringUtils.isBlank(base64Png)) {
+            return null;
+        }
+        try {
+            byte[] pngBytes = Base64.getDecoder().decode(base64Png.trim());
+            if (pngBytes.length == 0) {
+                return null;
+            }
+            BufferedImage image = ImageIO.read(new ByteArrayInputStream(pngBytes));
+            if (image == null || image.getWidth() <= 0 || image.getHeight() <= 0) {
+                return null;
+            }
+            Path outputDir = getOrCreateTempThumbnailDir();
+            String fileName = "thumb-" + PathUtils.computeSha256Hex(base64Png, 16) + ".png";
+            Path pngFile = outputDir.resolve(fileName);
+            if (!Files.exists(pngFile)) {
+                Files.write(pngFile, pngBytes);
+                pngFile.toFile().deleteOnExit();
+            }
+            return new HtmlImagePreview(pngFile.toUri().toURL().toExternalForm(), image.getWidth(), image.getHeight());
+        } catch (Exception e) {
+            log.debug("Failed to decode thumbnail image for HTML preview: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private static synchronized Path getOrCreateTempThumbnailDir() throws IOException {
+        if (tempThumbnailDir != null && Files.isDirectory(tempThumbnailDir)) {
+            return tempThumbnailDir;
+        }
+        Path created = Files.createTempDirectory(TEMP_THUMB_DIR_PREFIX);
+        created.toFile().deleteOnExit();
+        tempThumbnailDir = created;
+        return created;
     }
 
     /**

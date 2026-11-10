@@ -14,6 +14,7 @@ import com.vladsch.flexmark.html.HtmlRenderer;
 import com.vladsch.flexmark.html.IndependentAttributeProviderFactory;
 import com.vladsch.flexmark.html.renderer.LinkResolverContext;
 import com.vladsch.flexmark.parser.Parser;
+import com.vladsch.flexmark.ast.Code;
 import com.vladsch.flexmark.ast.FencedCodeBlock;
 import com.vladsch.flexmark.ast.IndentedCodeBlock;
 import com.vladsch.flexmark.html.HtmlWriter;
@@ -706,7 +707,15 @@ public final class SwingHtmlUtils {
         @Override
         public Set<NodeRenderingHandler<?>> getNodeRenderingHandlers() {
             return Set.of(new NodeRenderingHandler<>(FencedCodeBlock.class, this::render),
-                    new NodeRenderingHandler<>(IndentedCodeBlock.class, this::render));
+                    new NodeRenderingHandler<>(IndentedCodeBlock.class, this::render),
+                    new NodeRenderingHandler<>(Code.class, this::renderInlineCode));
+        }
+
+        @SuppressWarnings("PMD.UnusedFormalParameter")
+        private void renderInlineCode(Code node, NodeRendererContext context, HtmlWriter html) {
+            html.raw("<code>&nbsp;");
+            html.text(node.getText().normalizeEOL());
+            html.raw("&nbsp;</code>");
         }
 
         @SuppressWarnings("PMD.UnusedFormalParameter")

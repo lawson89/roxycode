@@ -40,11 +40,24 @@ public final class MarkdownPane extends JTextPane {
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     public record PersistedChatEntry(String role, String content, String timestamp, boolean isTool, boolean success,
-            String error, boolean toolExpanded) {
+            String error, boolean toolExpanded, List<String> thumbnailBase64List) {
+
+        public PersistedChatEntry(String role, String content, String timestamp, boolean isTool, boolean success,
+                String error, boolean toolExpanded) {
+            this(role, content, timestamp, isTool, success, error, toolExpanded, List.of());
+        }
+
+        public PersistedChatEntry {
+            if (thumbnailBase64List == null || thumbnailBase64List.isEmpty()) {
+                thumbnailBase64List = List.of();
+            } else {
+                thumbnailBase64List = List.copyOf(thumbnailBase64List);
+            }
+        }
     }
 
     private record Message(String role, String content, String timestamp, boolean isTool, boolean success, String error,
-            String renderedHtml, boolean toolExpanded) {
+            String renderedHtml, boolean toolExpanded, List<String> thumbnailBase64List) {
     }
 
     public MarkdownPane(boolean taskMode) {
@@ -113,10 +126,20 @@ public final class MarkdownPane extends JTextPane {
     }
 
     public void appendMessage(String role, String content) {
+        appendMessage(role, content, List.of());
+    }
+
+    public void appendMessage(String role, String content, List<String> thumbnailBase64List) {
         String safeContent = StringUtils.defaultString(content);
         String timestamp = LocalDateTime.now().format(TIME_FORMATTER);
+        List<String> safeThumbs;
+        if (thumbnailBase64List == null || thumbnailBase64List.isEmpty()) {
+            safeThumbs = List.of();
+        } else {
+            safeThumbs = List.copyOf(thumbnailBase64List);
+        }
         Message msg = new Message(role, safeContent, timestamp, false, true, null,
-                renderMarkdownBodySafely(safeContent), true);
+                renderMarkdownBodySafely(safeContent), true, safeThumbs);
         messages.add(msg);
         if (pruneMessagesIfNeeded()) {
             renderAll(true);
@@ -129,7 +152,7 @@ public final class MarkdownPane extends JTextPane {
         String safeOutput = StringUtils.defaultString(output);
         String timestamp = LocalDateTime.now().format(TIME_FORMATTER);
         boolean expanded = ChatHtmlTemplates.shouldDefaultToolExpanded(safeOutput, success);
-        Message msg = new Message(null, safeOutput, timestamp, true, success, error, null, expanded);
+        Message msg = new Message(null, safeOutput, timestamp, true, success, error, null, expanded, List.of());
         messages.add(msg);
         if (pruneMessagesIfNeeded()) {
             renderAll(true);
@@ -158,7 +181,7 @@ public final class MarkdownPane extends JTextPane {
             return;
         }
         Message updated = new Message(msg.role(), msg.content(), msg.timestamp(), true, msg.success(), msg.error(),
-                msg.renderedHtml(), !msg.toolExpanded());
+                msg.renderedHtml(), !msg.toolExpanded(), msg.thumbnailBase64List());
         messages.set(index, updated);
         if (!updateToolCellInPlace(index, updated)) {
             renderAll(false);
@@ -231,7 +254,12 @@ public final class MarkdownPane extends JTextPane {
         int savedCaret = getCaretPosition();
         try {
             boolean copied = messageIndex == this.copiedMessageIndex;
-            doc.setInnerHTML(cellElem, ChatHtmlTemplates.renderAiActionCellContent(messageIndex, copied, !taskMode));
+            String role = ChatHtmlTemplates.ROLE_AI;
+            if (messageIndex >= 0 && messageIndex < messages.size() && messages.get(messageIndex).role() != null) {
+                role = messages.get(messageIndex).role();
+            }
+            doc.setInnerHTML(cellElem,
+                    ChatHtmlTemplates.renderMessageActionCellContent(role, messageIndex, copied, !taskMode));
             setCaretPosition(Math.min(savedCaret, doc.getLength()));
             return true;
         } catch (BadLocationException | IOException e) {
@@ -308,7 +336,7 @@ public final class MarkdownPane extends JTextPane {
                 safeRole = msg.role().toLowerCase(Locale.ROOT);
             }
             return ChatHtmlTemplates.renderChatEntry(safeRole, msg.renderedHtml(), msg.timestamp(), index,
-                    index == copiedMessageIndex, !taskMode);
+                    index == copiedMessageIndex, !taskMode, msg.thumbnailBase64List());
         } catch (Exception e) {
             return ERROR_RENDERING_HTML;
         }
@@ -352,7 +380,7 @@ public final class MarkdownPane extends JTextPane {
         List<PersistedChatEntry> exported = new ArrayList<>(messages.size());
         for (Message msg : messages) {
             exported.add(new PersistedChatEntry(msg.role(), msg.content(), msg.timestamp(), msg.isTool(), msg.success(),
-                    msg.error(), msg.toolExpanded()));
+                    msg.error(), msg.toolExpanded(), msg.thumbnailBase64List()));
         }
         return List.copyOf(exported);
     }
@@ -374,10 +402,10 @@ public final class MarkdownPane extends JTextPane {
                         LocalDateTime.now().format(TIME_FORMATTER));
                 if (entry.isTool()) {
                     messages.add(new Message(null, safeContent, safeTimestamp, true, entry.success(), entry.error(),
-                            null, entry.toolExpanded()));
+                            null, entry.toolExpanded(), List.of()));
                 } else {
                     messages.add(new Message(entry.role(), safeContent, safeTimestamp, false, true, null,
-                            renderMarkdownBodySafely(safeContent), true));
+                            renderMarkdownBodySafely(safeContent), true, entry.thumbnailBase64List()));
                 }
             }
         }

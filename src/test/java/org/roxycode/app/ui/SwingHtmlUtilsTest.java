@@ -15,6 +15,8 @@ class SwingHtmlUtilsTest {
         String html = SwingHtmlUtils.renderMarkdownToHtml("""
                 # Heading
 
+                Use `inline<Code>` here.
+
                 | Name | Value |
                 | :--- | ---: |
                 | Key | 42 |
@@ -23,8 +25,8 @@ class SwingHtmlUtilsTest {
                 public class Demo {}
                 ~~~
                 """);
-        assertContainsAll(html, "<h1>Heading</h1>", "md-table", "cellpadding", "md-th", "md-td",
-                "<span class='mtk-keyword'>public</span>");
+        assertContainsAll(html, "<h1>Heading</h1>", "<code>&nbsp;inline&lt;Code&gt;&nbsp;</code>", "md-table",
+                "cellpadding", "md-th", "md-td", "<span class='mtk-keyword'>public</span>");
     }
 
     @Test

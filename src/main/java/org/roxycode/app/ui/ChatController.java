@@ -215,11 +215,15 @@ public final class ChatController implements AutoCloseable {
                 view.hideTransitionBanner();
             }
         }
+        List<java.awt.image.BufferedImage> pendingImages = model.drainPendingImages();
+        view.clearAttachments();
+        List<String> thumbnailBase64List = UiComponents.encodeThumbnailsToBase64Png(pendingImages,
+                UiComponents.CHAT_THUMBNAIL_MAX_DIM);
         view.hideUserInputPrompt();
-        view.appendMessage(ROLE_USER, text);
+        view.appendMessage(ROLE_USER, text, thumbnailBase64List);
         persistActiveChatSession();
         view.clearInputText();
-        triggerTurn(text);
+        triggerTurn(text, pendingImages);
     }
 
     private boolean cancelActiveTurnState(boolean markCancelled) {
@@ -412,6 +416,12 @@ public final class ChatController implements AutoCloseable {
     }
 
     public void triggerTurn(String text) {
+        List<java.awt.image.BufferedImage> pendingImages = model.drainPendingImages();
+        view.clearAttachments();
+        triggerTurn(text, pendingImages);
+    }
+
+    private void triggerTurn(String text, List<java.awt.image.BufferedImage> pendingImages) {
         if (text == null || text.trim().isEmpty()) {
             return;
         }
@@ -424,9 +434,6 @@ public final class ChatController implements AutoCloseable {
         view.updateActivityStatus(INITIAL_ACTIVITY_STATUS);
         model.setCurrentTurn(0);
         view.updateTurnLabel();
-
-        List<java.awt.image.BufferedImage> pendingImages = model.drainPendingImages();
-        view.clearAttachments();
 
         FutureTask<Void> task = new FutureTask<>(() -> {
             try {

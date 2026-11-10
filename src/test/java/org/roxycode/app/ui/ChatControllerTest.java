@@ -550,7 +550,10 @@ class ChatControllerTest extends ChatTestFixture {
         assertEquals(ChatPanel.DEFAULT_PLACEHOLDER_TEXT,
                 chatPanel.inputArea.getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT));
 
-        BufferedImage src = new BufferedImage(120, 80, BufferedImage.TYPE_INT_ARGB);
+        BufferedImage src = new BufferedImage(120, 60, BufferedImage.TYPE_INT_ARGB);
+        BufferedImage chipThumb = UiComponents.createThumbnail(src, ChatPanel.THUMBNAIL_SIZE);
+        assertEquals(64, chipThumb.getWidth());
+        assertEquals(32, chipThumb.getHeight());
         File imgFile = tempDir.resolve("sample.png").toFile();
         ImageIO.write(src, "png", imgFile);
         SwingTestUtils.awaitFuture(chatPanel.loadImageAttachmentAsync(imgFile));
@@ -918,5 +921,57 @@ class ChatControllerTest extends ChatTestFixture {
             int stopRightEdge = panel.stopButton.getX() + panel.stopButton.getWidth();
             assertEquals(idleRightEdge, stopRightEdge, "Stop button right edge should match Send button right edge");
         }
+    }
+
+    @Test
+    void testSendMessageWithAttachmentRendersThumbnailAutoSubmitMoveToFeatureAndSmartScroll() {
+        ChatPanel taskPanel = createFeatureChatPanel(directExecutor);
+        when(aiService.chat(eq("task:default"), any(), anyString(), any())).thenReturn("Plan drafted.");
+
+        // 1. Sending a user message with an attached image renders thumbnail in USER bubble and persists it
+        BufferedImage screenshot = new BufferedImage(240, 120, BufferedImage.TYPE_INT_ARGB);
+        SwingTestUtils.runOnEdt(() -> taskPanel.addPendingImage(screenshot));
+        sendOnEdt(taskPanel, "Analyze this screenshot");
+        flushEdt();
+
+        assertFalse(taskPanel.model.hasPendingImages());
+        assertContainsAll(taskPanel.outputArea.getText(), "Analyze this screenshot", "<img src=", "180", "90");
+        List<MarkdownPane.PersistedChatEntry> exported = taskPanel.exportMessages();
+        assertEquals(1, exported.get(0).thumbnailBase64List().size());
+
+        // 2. submitMovedFeatureRequest auto-submits when idle and ready, or falls back to setInputText when
+        // busy/pending
+        clearInvocations(aiService);
+        SwingTestUtils.runOnEdt(() -> {
+            taskPanel.setInputText("leftover draft");
+            assertTrue(taskPanel.submitMovedFeatureRequest("Implement feature X"));
+        });
+        flushEdt();
+        assertEquals("", taskPanel.inputArea.getText());
+        verify(aiService).chat(eq("task:default"), any(), eq("Implement feature X"), any());
+
+        clearInvocations(aiService);
+        SwingTestUtils.runOnEdt(() -> {
+            taskPanel.setLoading(true);
+            assertFalse(taskPanel.submitMovedFeatureRequest("Queued while busy"));
+        });
+        assertEquals("Queued while busy", taskPanel.inputArea.getText());
+        verifyNoInteractions(aiService);
+
+        SwingTestUtils.runOnEdt(() -> {
+            taskPanel.setLoading(false);
+            taskPanel.showTransitionBanner(PlanService.APPROVAL_PLAN_TO_CODE);
+            assertFalse(taskPanel.submitMovedFeatureRequest("Queued while approval pending"));
+        });
+        assertEquals("Queued while approval pending", taskPanel.inputArea.getText());
+        verifyNoInteractions(aiService);
+
+        // 3. Smart auto-scroll helper checks whether scrollbar is near the bottom
+        javax.swing.JScrollBar scrollBar = new javax.swing.JScrollBar(java.awt.Adjustable.VERTICAL, 0, 100, 0, 1000);
+        scrollBar.setValue(850); // remaining = 1000 - (850 + 100) = 50 <= 80
+        assertTrue(ChatPanel.isScrollBarNearBottom(scrollBar));
+        scrollBar.setValue(400); // remaining = 1000 - (400 + 100) = 500 > 80
+        assertFalse(ChatPanel.isScrollBarNearBottom(scrollBar));
+        assertTrue(ChatPanel.isScrollBarNearBottom(null));
     }
 }

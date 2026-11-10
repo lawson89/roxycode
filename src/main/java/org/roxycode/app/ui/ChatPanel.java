@@ -64,6 +64,10 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
     private static final String GROW_FILL_COL = "[grow, fill]";
     private static final String HIDEMODE_3 = "hidemode 3";
     static final int THUMBNAIL_SIZE = 64;
+    static final int COMPOSER_MIN_HEIGHT = 215;
+    static final int COMPOSER_PREFERRED_HEIGHT = 225;
+    static final double SPLIT_PANE_RESIZE_WEIGHT = 0.85;
+    private static final int AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 80;
     private static final int ACTIVITY_ANIMATION_DELAY_MS = 500;
     private static final int ACTIVITY_ELAPSED_DELAY_MS = 1000;
     private static final FontAwesomeSolid[] HOURGLASS_FRAMES = {FontAwesomeSolid.HOURGLASS_START,
@@ -176,7 +180,7 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         JPanel inputSection = createInputSection(isTaskMode);
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT, topComponent, inputSection);
-        splitPane.setResizeWeight(1.0);
+        splitPane.setResizeWeight(SPLIT_PANE_RESIZE_WEIGHT);
         splitPane.setBorder(BorderFactory.createEmptyBorder());
         add(splitPane, BorderLayout.CENTER);
 
@@ -230,10 +234,10 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         outputArea.addComponentListener(new java.awt.event.ComponentAdapter() {
             @Override
             public void componentResized(java.awt.event.ComponentEvent e) {
-                SwingUtilities.invokeLater(() -> {
-                    JScrollBar vertical = outputScrollPane.getVerticalScrollBar();
-                    vertical.setValue(vertical.getMaximum());
-                });
+                JScrollBar vertical = outputScrollPane.getVerticalScrollBar();
+                if (isScrollBarNearBottom(vertical)) {
+                    SwingUtilities.invokeLater(() -> vertical.setValue(vertical.getMaximum()));
+                }
             }
         });
 
@@ -256,7 +260,8 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         attachmentPanel.setVisible(false);
 
         JPanel inputSection = new JPanel(new MigLayout("fill, insets 6 12 4 12", GROW_FILL_COL, GROW_FILL_COL));
-        inputSection.setMinimumSize(new Dimension(0, 150));
+        inputSection.setMinimumSize(new Dimension(0, COMPOSER_MIN_HEIGHT));
+        inputSection.setPreferredSize(new Dimension(0, COMPOSER_PREFERRED_HEIGHT));
 
         JPanel composerCard = new JPanel(new BorderLayout());
         updateComposerCardBorder(composerCard, false);
@@ -617,6 +622,30 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
         }
     }
 
+    public boolean submitMovedFeatureRequest(String content) {
+        if (StringUtils.isBlank(content)) {
+            return false;
+        }
+        boolean canAutoSubmit = isProjectReady() && !isLoading() && !isWaitingUserInput()
+                && !controller.hasPendingPhase() && !inlineActionPanel.isVisible();
+        if (canAutoSubmit) {
+            fileMentionPopup.hidePopup();
+            clearInputText();
+            controller.sendMessage(content);
+            return true;
+        }
+        setInputText(content);
+        return false;
+    }
+
+    static boolean isScrollBarNearBottom(JScrollBar scrollBar) {
+        if (scrollBar == null) {
+            return true;
+        }
+        int remaining = scrollBar.getMaximum() - (scrollBar.getValue() + scrollBar.getVisibleAmount());
+        return remaining <= AUTO_SCROLL_BOTTOM_THRESHOLD_PX;
+    }
+
     public boolean isAutoApprovePlanEnabled() {
         return autoApprovePlanCheckBox != null && autoApprovePlanCheckBox.isSelected();
     }
@@ -671,6 +700,10 @@ public final class ChatPanel extends JPanel implements AutoCloseable {
 
     void appendMessage(String role, String content) {
         outputArea.appendMessage(role, content);
+    }
+
+    void appendMessage(String role, String content, List<String> thumbnailBase64List) {
+        outputArea.appendMessage(role, content, thumbnailBase64List);
     }
 
     void appendToolLog(String output, boolean success, String error) {

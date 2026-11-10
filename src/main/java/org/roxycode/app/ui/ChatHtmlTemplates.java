@@ -40,11 +40,37 @@ public final class ChatHtmlTemplates {
     }
 
     public static String renderAiActionCellContent(int messageIndex, boolean copied, boolean showMoveAction) {
+        return renderMessageActionCellContent(ROLE_AI, messageIndex, copied, showMoveAction);
+    }
+
+    public static String renderMessageActionCellContent(String role, int messageIndex, boolean copied,
+            boolean showMoveAction) {
+        String normalizedRole = StringUtils.defaultString(role).toLowerCase(java.util.Locale.ROOT);
         String moveAction = "";
-        if (showMoveAction) {
+        if (ROLE_AI.equals(normalizedRole) && showMoveAction) {
             moveAction = renderMoveToActionHtml(messageIndex) + "&nbsp;&nbsp;";
         }
         return moveAction + renderCopyActionHtml(messageIndex, copied);
+    }
+
+    public static String renderUserAttachmentsHtml(List<String> thumbnailBase64List) {
+        if (thumbnailBase64List == null || thumbnailBase64List.isEmpty()) {
+            return "";
+        }
+        StringBuilder cells = new StringBuilder();
+        for (String base64Png : thumbnailBase64List) {
+            UiComponents.HtmlImagePreview preview = UiComponents.writeBase64ThumbnailToTempUrl(base64Png);
+            if (preview != null) {
+                cells.append("<td valign='middle' style='padding-right: 8px; padding-bottom: 6px;'>")
+                        .append("<img src='").append(SwingHtmlUtils.escapeHtml(preview.url())).append("' width='")
+                        .append(preview.width()).append("' height='").append(preview.height()).append("'></td>");
+            }
+        }
+        if (cells.isEmpty()) {
+            return "";
+        }
+        return "<table border='0' cellpadding='0' cellspacing='0' style='margin-top: 6px; margin-bottom: 2px;'><tr>"
+                + cells + "</tr></table>";
     }
 
     private static String unwrapSingleParagraph(String html) {
@@ -57,7 +83,12 @@ public final class ChatHtmlTemplates {
 
     public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,
             boolean copied, boolean showMoveAction) {
-        String normalizedRole = StringUtils.defaultString(role);
+        return renderChatEntry(role, content, timestamp, messageIndex, copied, showMoveAction, List.of());
+    }
+
+    public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,
+            boolean copied, boolean showMoveAction, List<String> thumbnailBase64List) {
+        String normalizedRole = StringUtils.defaultString(role).toLowerCase(java.util.Locale.ROOT);
         if (ROLE_SYSTEM.equalsIgnoreCase(normalizedRole)) {
             String inlineContent = unwrapSingleParagraph(content);
             String safeTime = SwingHtmlUtils.escapeHtml(StringUtils.defaultString(timestamp));
@@ -75,10 +106,14 @@ public final class ChatHtmlTemplates {
             default -> "&nbsp;";
         };
         String actionCell = "";
-        if (ROLE_AI.equals(role) && messageIndex >= 0) {
+        if ((ROLE_AI.equals(normalizedRole) || ROLE_USER.equals(normalizedRole)) && messageIndex >= 0) {
             actionCell = "<td id='" + COPY_CELL_ID_PREFIX + messageIndex
                     + "' align='right' valign='middle' nowrap='nowrap'>"
-                    + renderAiActionCellContent(messageIndex, copied, showMoveAction) + "</td>";
+                    + renderMessageActionCellContent(normalizedRole, messageIndex, copied, showMoveAction) + "</td>";
+        }
+        String attachmentsHtml = "";
+        if (ROLE_USER.equals(normalizedRole)) {
+            attachmentsHtml = renderUserAttachmentsHtml(thumbnailBase64List);
         }
 
         return """
@@ -92,7 +127,7 @@ public final class ChatHtmlTemplates {
                                     %s
                                 </tr>
                             </table>
-                            <div class="content" style="margin-top: 4px;">%s</div>
+                            %s<div class="content" style="margin-top: 4px;">%s</div>
                         </td>
                     </tr>
                 </table>
@@ -101,7 +136,7 @@ public final class ChatHtmlTemplates {
                 </table>
                 """
                 .formatted(safeRole, safeRole, indicator,
-                        SwingHtmlUtils.escapeHtml(StringUtils.defaultString(timestamp)), actionCell,
+                        SwingHtmlUtils.escapeHtml(StringUtils.defaultString(timestamp)), actionCell, attachmentsHtml,
                         StringUtils.defaultString(content));
     }
 

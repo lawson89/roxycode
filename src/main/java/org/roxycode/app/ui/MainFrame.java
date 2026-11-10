@@ -493,7 +493,7 @@ public final class MainFrame extends JPanel {
             showCard(TASK_VIEW);
             ChatPanel taskChat = taskChatPanel();
             if (taskChat != null) {
-                taskChat.setInputText(content);
+                taskChat.submitMovedFeatureRequest(content);
             }
         });
         taskWorkspacePanel.bindSidebar(sidebar);

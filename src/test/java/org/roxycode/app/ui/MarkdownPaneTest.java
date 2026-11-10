@@ -47,9 +47,10 @@ class MarkdownPaneTest {
         pane.appendMessage("ai", String.join(System.lineSeparator(), "| Col A | Col B |", "|---|---|", "| 1 | 2 |"));
 
         String html = pane.getText();
-        assertContainsAll(html, "Executed successfully", "Error: Syntax Error: &lt;eof&gt;", "md-table", "copy-cell-3",
-                "copy-cell-5", "tool-accent", "tool-accent-error");
+        assertContainsAll(html, "Executed successfully", "Error: Syntax Error: &lt;eof&gt;", "md-table", "copy-cell-0",
+                "copy-cell-3", "copy-cell-4", "copy-cell-5", "tool-accent", "tool-accent-error");
         assertFalse(html.contains("<eof>"));
+        assertFalse(html.contains("feature:0"));
 
         List<ChatTranscriptEntry> transcript = pane.getConversationMessages();
         assertEquals(4, transcript.size());
@@ -67,9 +68,15 @@ class MarkdownPaneTest {
         assertEquals(5, pane.getCaretPosition());
         assertContainsAll(pane.getText(), "Copied!", "feature:3", "feature:5", "copy:5");
 
+        pane.copyMessageMarkdown(0);
+        assertEquals(0, pane.copiedMessageIndex);
+        assertEquals("Prompt 1", pane.lastCopiedMarkdown);
+        assertContainsAll(pane.getText(), "Copied!", "copy:3", "feature:3", "feature:5");
+        assertFalse(pane.getText().contains("feature:0"));
+
         pane.copyMessageMarkdown(5);
         assertEquals(5, pane.copiedMessageIndex);
-        assertContainsAll(pane.getText(), "copy:3", "feature:3", "feature:5");
+        assertContainsAll(pane.getText(), "copy:0", "copy:3", "feature:3", "feature:5");
 
         for (ActionListener listener : pane.copyFeedbackTimer.getActionListeners()) {
             listener.actionPerformed(null);
@@ -123,8 +130,18 @@ class MarkdownPaneTest {
         assertContainsAll(pane.getText(), "tool-call-error", "tool-accent-error", "[Hide code]", "line5_failed",
                 "Compilation failed");
 
-        pane.appendMessage("user", "Verify persistence");
+        java.awt.image.BufferedImage wideImg = new java.awt.image.BufferedImage(360, 180,
+                java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        java.awt.image.BufferedImage thumb = UiComponents.createThumbnail(wideImg, UiComponents.CHAT_THUMBNAIL_MAX_DIM);
+        assertEquals(180, thumb.getWidth());
+        assertEquals(90, thumb.getHeight());
+        List<String> encodedThumbs = UiComponents.encodeThumbnailsToBase64Png(List.of(wideImg),
+                UiComponents.CHAT_THUMBNAIL_MAX_DIM);
+        assertEquals(1, encodedThumbs.size());
+
+        pane.appendMessage("user", "Verify persistence", encodedThumbs);
         pane.appendMessage("ai", "Persistence verified.");
+        assertContainsAll(pane.getText(), "<img src=", "180", "90");
         List<MarkdownPane.PersistedChatEntry> exported = pane.exportMessages();
         assertEquals(4, exported.size());
         assertTrue(exported.get(0).isTool());
@@ -133,11 +150,12 @@ class MarkdownPaneTest {
         assertTrue(exported.get(1).toolExpanded());
         assertEquals("Compilation failed", exported.get(1).error());
 
+        assertEquals(encodedThumbs, exported.get(2).thumbnailBase64List());
         MarkdownPane restoredPane = new MarkdownPane(true);
         restoredPane.restoreMessages(exported);
         assertEquals(exported, restoredPane.exportMessages());
         assertContainsAll(restoredPane.getText(), "[Show 5 lines]", "line5_failed", "Compilation failed",
-                "Verify persistence", "Persistence verified.");
+                "Verify persistence", "Persistence verified.", "<img src=", "180", "90");
     }
 
     @Test
