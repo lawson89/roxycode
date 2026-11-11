@@ -21,6 +21,7 @@ import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.model.ThinkingLevel;
 import org.roxycode.app.model.ThinkingLevelOption;
+import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.util.Edt;
@@ -45,23 +46,27 @@ final class BuildConfigPanel extends JPanel {
     static final String SECTION_BUILD_CONFIG_TITLE = "Build Configuration (build.toml)";
     static final String BUILD_CONFIG_HINT_TEXT = "Need help customizing build.toml or regexes for your stack? Ask Roxy!";
     static final String APPLY_TEMPLATE_TEXT = "Apply Template";
+    static final String CONFIGURE_WITH_ROXY_TEXT = "Configure with Roxy";
+    static final String CONFIGURING_WITH_ROXY_TEXT = "Configuring...";
+    static final String CONFIGURING_WITH_ROXY_STATUS = "Roxy is inspecting project files and configuring build.toml...";
     static final String SAVE_BUTTON_TEXT = "Confirm & Save Settings";
     private static final String DEFAULT_TEMPLATE_ID = "default";
     private static final String HEADER_FONT_STYLE = "font: bold +2";
-    static final String UNCONFIRMED_BUILD_NOTICE_TEXT = "Build configuration was initialized from the auto-detected template. Please review the commands below and click 'Confirm & Save Settings'. Need help customizing build.toml or regexes for your stack? Ask Roxy!";
+    static final String UNCONFIRMED_BUILD_NOTICE_TEXT = "Build configuration was initialized from the auto-detected template. Please review the commands below (or click 'Configure with Roxy') and click 'Confirm & Save Settings'.";
     static final String BUILD_TOML_GUIDE_TOOLTIP_HTML = """
             <html><div style='width: 390px;'>
             <b>build.toml Quick Reference</b><br><br>
             &bull; <b><code>[commands]</code></b>: Shell commands for <code>install</code>, <code>clean</code>, <code>compile</code>, <code>build</code>, <code>test_all</code>, <code>test_single</code> (uses <code>{testName}</code> placeholder), <code>lint</code>, and <code>format</code>.<br>
-            &bull; <b><code>[env]</code></b>: Key-value environment variables passed to all build processes.<br>
+            &bull; <b><code>[env]</code></b>: Key-value environment variables passed to all build processes (e.g., <code>JAVA_HOME</code>).<br>
             &bull; <b><code>[parse]</code></b>: <code>error_regex</code>, <code>test_failure_regex</code>, <code>context_lines</code>, and optional <code>junit_xml_paths</code> for structured failure extraction.<br>
-            &bull; <b><code>[sandbox]</code></b>: <code>mode</code> (<code>"none"</code>, <code>"native"</code> for Linux <code>bwrap</code> / macOS <code>sandbox-exec</code>, or <code>"docker"</code>), <code>writable_paths</code>, <code>image</code>, and <code>workdir</code>.<br><br>
-            <i>Need help customizing build.toml or regexes for your stack? Switch to <b>Ask Roxy</b>!</i>
+            &bull; <b><code>[sandbox]</code></b>: <code>mode</code> (<code>"none"</code>, <code>"native"</code> for Linux <code>bwrap</code> / macOS <code>sandbox-exec</code>, or <code>"docker"</code>), <code>readable_paths</code>, <code>writable_paths</code>, <code>image</code>, and <code>workdir</code>.<br><br>
+            <i>Click <b>Configure with Roxy</b> to automatically tailor build.toml to your project and host toolchains!</i>
             </div></html>""";
 
     private final transient GenericBuildToolService buildToolService;
     private final transient SettingsService settingsService;
     private final transient ProjectService projectService;
+    private final transient AiService aiService;
     final JLabel titleLabel;
     final JLabel subtitleLabel;
     final JPanel modelCardPanel;
@@ -76,6 +81,7 @@ final class BuildConfigPanel extends JPanel {
     final JLabel buildConfigHintLabel;
     final JComboBox<BuildTemplateInfo> templateCombo;
     final JButton applyTemplateButton;
+    final JButton configureWithRoxyButton;
     final UiComponents.InlineConfirmBar templateConfirmBar;
     final UiComponents.WarningBanner unconfirmedBanner;
     final RSyntaxTextArea textArea;
@@ -89,12 +95,18 @@ final class BuildConfigPanel extends JPanel {
     private transient Runnable onConfirmSavedCallback;
     transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
 
-    @Autowired
     public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
             @Nullable ProjectService projectService) {
+        this(buildToolService, settingsService, projectService, null);
+    }
+
+    @Autowired
+    public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
+            @Nullable ProjectService projectService, @Nullable AiService aiService) {
         this.buildToolService = buildToolService;
         this.settingsService = settingsService;
         this.projectService = projectService;
+        this.aiService = aiService;
         setLayout(new MigLayout("fill, insets 20, hidemode 3", "[grow, fill]", "[]12[]14[grow, fill]"));
         setOpaque(true);
 
@@ -169,7 +181,7 @@ final class BuildConfigPanel extends JPanel {
         buildHeaderRow.add(buildConfigHintLabel, "skip 1");
         buildCardPanel.add(buildHeaderRow, "growx, wmin 0, wrap, gapbottom 8");
 
-        JPanel templateToolbar = new JPanel(new MigLayout("fillx, insets 0, hidemode 3", "[][][][grow]", "[]"));
+        JPanel templateToolbar = new JPanel(new MigLayout("fillx, insets 0, hidemode 3", "[][][][][grow]", "[]"));
         templateToolbar.setOpaque(false);
         JLabel templateLabel = new JLabel("Build Template:");
         templateCombo = new JComboBox<>();
@@ -190,10 +202,15 @@ final class BuildConfigPanel extends JPanel {
         templateCombo.addActionListener(e -> templateConfirmBar.cancel());
         applyTemplateButton = new JButton(APPLY_TEMPLATE_TEXT);
         applyTemplateButton.addActionListener(e -> applySelectedTemplate());
+        configureWithRoxyButton = UiComponents.createActionButton(CONFIGURE_WITH_ROXY_TEXT, Codicons.HUBOT, null, false,
+                null, e -> configureWithRoxy());
+        configureWithRoxyButton.setToolTipText(
+                "Inspect project build files and installed host toolchains to automatically generate build.toml with Roxy");
 
         templateToolbar.add(templateLabel, "gapright 6");
         templateToolbar.add(templateCombo, "w 220:280:360, gapright 8");
         templateToolbar.add(applyTemplateButton, "gapright 8");
+        templateToolbar.add(configureWithRoxyButton, "gapright 8");
         templateToolbar.add(templateConfirmBar);
         buildCardPanel.add(templateToolbar, "growx, wmin 0, wrap, gapbottom 8");
 
@@ -284,6 +301,67 @@ final class BuildConfigPanel extends JPanel {
             UiComponents.showStatusMessage(statusLabel, statusTimer,
                     "Applied '" + selected.displayName() + "' template.", true);
         }
+    }
+
+    void configureWithRoxy() {
+        if (buildToolService == null || aiService == null) {
+            UiComponents.showStatusMessage(statusLabel, statusTimer, "Roxy AI service is not available.", false);
+            return;
+        }
+        if (textEditedByUser) {
+            templateConfirmBar.prompt("Replace unsaved build.toml edits with Roxy's auto-generated configuration?",
+                    "Confirm", false, this::performConfigureWithRoxy);
+            return;
+        }
+        templateConfirmBar.cancel();
+        performConfigureWithRoxy();
+    }
+
+    CompletableFuture<String> performConfigureWithRoxy() {
+        BuildTemplateInfo selected = (BuildTemplateInfo) templateCombo.getSelectedItem();
+        String selectedTemplateId = detectedTemplateId;
+        if (selected != null && StringUtils.isNotBlank(selected.id())) {
+            selectedTemplateId = selected.id();
+        }
+        final String templateId = selectedTemplateId;
+        final String currentEditorText = textArea.getText();
+
+        configureWithRoxyButton.setEnabled(false);
+        configureWithRoxyButton.setText(CONFIGURING_WITH_ROXY_TEXT);
+        applyTemplateButton.setEnabled(false);
+        statusTimer.stop();
+        statusLabel.setForeground(SwingHtmlUtils.getAccentColor());
+        statusLabel.setText(CONFIGURING_WITH_ROXY_STATUS);
+        statusLabel.setToolTipText(CONFIGURING_WITH_ROXY_STATUS);
+
+        CompletableFuture<String> future = Edt.supplyAsync(() -> {
+            try {
+                String context = buildToolService.collectBuildConfigurationContext(templateId, currentEditorText);
+                String rawResponse = aiService.generateBuildToml(context);
+                return buildToolService.extractAndValidateGeneratedToml(rawResponse);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
+            }
+        }, generatedToml -> {
+            restoreConfigureWithRoxyButtonState();
+            setEditorContentProgrammatically(generatedToml);
+            UiComponents.showStatusMessage(statusLabel, statusTimer,
+                    "Roxy configured build.toml! Review and click 'Confirm & Save Settings'.", true);
+        }, ex -> {
+            restoreConfigureWithRoxyButtonState();
+            Throwable cause = ExceptionUtils.getRootCause(ex);
+            log.error("Failed to configure build.toml with Roxy: {}", cause.getMessage());
+            UiComponents.showStatusMessage(statusLabel, statusTimer, "Roxy configuration failed: " + cause.getMessage(),
+                    false);
+        });
+        lastAsyncFuture = future;
+        return future;
+    }
+
+    private void restoreConfigureWithRoxyButtonState() {
+        configureWithRoxyButton.setEnabled(true);
+        configureWithRoxyButton.setText(CONFIGURE_WITH_ROXY_TEXT);
+        applyTemplateButton.setEnabled(true);
     }
 
     void loadModelOptions() {

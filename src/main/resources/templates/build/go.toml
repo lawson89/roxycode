@@ -12,6 +12,9 @@ format = "gofmt -w ."
 
 [env]
 ROXY_CODE = "true"
+# Optional: Set Go environment variables if needed:
+# GOROOT = "/usr/local/go"
+# CGO_ENABLED = "1"
 
 [parse]
 error_regex = '^.*:\d+:\d+: '
@@ -21,7 +24,9 @@ context_lines = 5
 [sandbox]
 # Isolation mode: "none" | "native" (Linux bwrap / macOS sandbox-exec) | "docker"
 mode = "none"
-# Additional host paths mounted read-write in "native" mode (supports ~/ expansion)
+# Additional host paths mounted read-only in "native" mode (e.g., Go SDK managers; supports ~/ expansion)
+readable_paths = ["~/.sdkman", "~/sdk", "~/.asdf", "~/.mise", "~/.gvm"]
+# Additional host paths mounted read-write in "native" mode (e.g., Go build & module caches; supports ~/ expansion)
 writable_paths = ["~/.cache/go-build", "~/go/pkg", "~/Library/Caches/go-build"]
 # Docker settings (used when mode = "docker")
 image = "golang:1.23"

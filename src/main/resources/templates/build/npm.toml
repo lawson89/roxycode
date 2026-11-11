@@ -14,6 +14,8 @@ format = ''
 
 [env]
 ROXY_CODE = "true"
+# Optional: Set Node/toolchain environment variables if needed:
+# NODE_OPTIONS = "--max-old-space-size=4096"
 
 [parse]
 error_regex = '(^error\b|ERROR in|TS\d+:)'
@@ -23,8 +25,10 @@ context_lines = 5
 [sandbox]
 # Isolation mode: "none" | "native" (Linux bwrap / macOS sandbox-exec) | "docker"
 mode = "none"
-# Additional host paths mounted read-write in "native" mode (supports ~/ expansion)
-writable_paths = ["~/.npm", "~/.cache"]
+# Additional host paths mounted read-only in "native" mode (e.g., Node version managers; supports ~/ expansion)
+readable_paths = ["~/.nvm", "~/.fnm", "~/.volta", "~/.asdf", "~/.mise"]
+# Additional host paths mounted read-write in "native" mode (e.g., package caches; supports ~/ expansion)
+writable_paths = ["~/.npm", "~/.cache", "~/.local/share/pnpm", "~/.yarn"]
 # Docker settings (used when mode = "docker")
 image = "node:22"
 workdir = "/workspace"

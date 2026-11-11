@@ -51,26 +51,27 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
 
 ### Project Settings & build.toml (Project Settings Sidebar View)
 - **AI Model & Thinking Overrides**: Optionally override the Global Settings Gemini model and thinking level (ADAPTIVE, MINIMAL/NONE, LOW, MEDIUM, HIGH, or model default) for the active project. When **Adaptive (Phase-Aware)** is selected, Roxy dynamically adjusts thinking per sub-turn (PLAN: HIGH while designing the blueprint -> LOW after submitPlan; CODE: LOW for fast execution -> HIGH after any tool/build/test failure; REVIEW: MEDIUM; EXPLORE: LOW on initial discovery -> MEDIUM on synthesis).
-- **Build Configuration (<projectDataDir>/build.toml)**:
-  - Must be reviewed and confirmed (**Confirm & Save Settings**) before workspace chat is unlocked for a project. Built-in templates are provided for Maven, Gradle, npm/Node, Python, Rust, Go, CMake, and Default.
-  - **[commands]**: Shell commands executed from the project root:
-    - install: Sync dependencies (e.g., './mvnw dependency:resolve', 'npm install').
-    - clean: Clean build artifacts.
-    - compile: Compile source/test code; marks "Code compiles successfully" on exit code 0.
-    - build: Package the project (falls back to compile if blank).
-    - test_all: Run the test suite; marks "Unit tests pass" on exit code 0.
-    - test_single: Run a single test using the {testName} placeholder (e.g., './mvnw test -Dtest={testName}').
-    - lint: Static analysis / linter checks (executed as part of buildAndTest()).
-    - format: Auto-format source code (triggers file change refresh).
-  - **[env]**: Key-value environment variables passed to build commands (e.g., ROXY_CODE = "true").
-  - **[parse]**:
-    - error_regex / test_failure_regex: RipGrep regex patterns used to extract concise compiler and test failure blocks from build logs.
-    - context_lines: Number of trailing log lines captured after each regex match.
-    - junit_xml_paths: Directories or glob paths (e.g., ["target/surefire-reports"]) scanned for recent JUnit XML failure reports.
-  - **[sandbox]**:
-    - mode: "none" (host execution), "native" (OS-level sandbox using Linux bwrap or macOS sandbox-exec with read-only root and writable project directory), or "docker" (isolated Testcontainers container).
-    - writable_paths: Extra host paths mounted read-write in "native" mode (supports ~/ expansion, e.g., ["~/.m2", "~/.cargo"]).
-    - image & workdir: Container image (e.g., "eclipse-temurin:25-jdk") and working directory ("/workspace") when mode = "docker".
+  - **Build Configuration (<projectDataDir>/build.toml)**:
+    - Must be reviewed and confirmed (**Confirm & Save Settings**) before workspace chat is unlocked for a project. Built-in templates are provided for Maven, Gradle, npm/Node, Python, Rust, Go, CMake, and Default, or click **Configure with Roxy** to have Roxy inspect your project files and installed host toolchains to generate a tailored build.toml automatically.
+    - **[commands]**: Shell commands executed from the project root:
+      - install: Sync dependencies (e.g., './mvnw dependency:resolve', 'npm install').
+      - clean: Clean build artifacts.
+      - compile: Compile source/test code; marks "Code compiles successfully" on exit code 0.
+      - build: Package the project (falls back to compile if blank).
+      - test_all: Run the test suite; marks "Unit tests pass" on exit code 0.
+      - test_single: Run a single test using the {testName} placeholder (e.g., './mvnw test -Dtest={testName}').
+      - lint: Static analysis / linter checks (executed as part of buildAndTest()).
+      - format: Auto-format source code (triggers file change refresh).
+    - **[env]**: Key-value environment variables passed to build commands (e.g., ROXY_CODE = "true", JAVA_HOME = "/path/to/jdk").
+    - **[parse]**:
+      - error_regex / test_failure_regex: RipGrep regex patterns used to extract concise compiler and test failure blocks from build logs.
+      - context_lines: Number of trailing log lines captured after each regex match.
+      - junit_xml_paths: Directories or glob paths (e.g., ["target/surefire-reports"]) scanned for recent JUnit XML failure reports.
+    - **[sandbox]**:
+      - mode: "none" (host execution), "native" (OS-level sandbox using Linux bwrap or macOS sandbox-exec with read-only system mounts including /opt and writable project directory), or "docker" (isolated Testcontainers container).
+      - readable_paths: Extra host paths mounted read-only in "native" mode for user-installed toolchains/JDKs/version managers (supports ~/ expansion, e.g., ["~/.sdkman", "~/.jdks", "~/.nvm", "~/.rustup"]).
+      - writable_paths: Extra host paths mounted read-write in "native" mode for package/build caches (supports ~/ expansion, e.g., ["~/.m2", "~/.cargo"]).
+      - image & workdir: Container image (e.g., "eclipse-temurin:25-jdk") and working directory ("/workspace") when mode = "docker".
 
 ### System Tools, JEXL API & Global Settings
 - **System Tools**: Checks status and install commands for required CLI tools (**Ripgrep**, **Universal Ctags**) and optional tools/sandbox runtimes (**Git**, **Bubblewrap** / **Seatbelt**, **Docker**).

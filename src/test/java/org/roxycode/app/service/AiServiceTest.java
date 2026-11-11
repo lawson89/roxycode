@@ -362,6 +362,17 @@ class AiServiceTest {
         verify(requestSpec, never()).tools(any(Object[].class));
         GoogleGenAiChatOptions searchOptions = searchOptionsCaptor.getValue().build();
         assertTrue(searchOptions.getGoogleSearchRetrieval());
+
+        clearInvocations(requestSpec);
+        String rawTomlResp = """
+                  [commands]
+                compile = './mvnw test-compile'  """;
+        when(responseSpec.chatResponse()).thenReturn(buildChatResponse(rawTomlResp, "STOP", null));
+        assertThrows(IllegalArgumentException.class, () -> aiService.generateBuildToml("   "));
+        String generatedToml = aiService.generateBuildToml("  ## Target Build Template (maven)  ");
+        assertTrue(generatedToml.contains("compile = './mvnw test-compile'"));
+        verify(requestSpec).system(AiService.BUILD_TOML_GENERATOR_SYSTEM_PROMPT);
+        verify(requestSpec).user("## Target Build Template (maven)");
     }
 
     static Stream<Arguments> finishReasonFormattingCases() {

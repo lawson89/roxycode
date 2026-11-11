@@ -14,6 +14,10 @@ format = ''
 
 [env]
 ROXY_CODE = "true"
+# Optional: Override JAVA_HOME if your project requires a specific JDK version:
+# JAVA_HOME = "/Users/you/.sdkman/candidates/java/21.0.5-tem"
+# JAVA_HOME = "/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home"
+# JAVA_HOME = "/usr/lib/jvm/java-21-openjdk-amd64"
 
 [parse]
 error_regex = '\[ERROR\].*\[\d+,\d+\]|PMD Failure:'
@@ -24,7 +28,9 @@ junit_xml_paths = ["target/surefire-reports", "target/failsafe-reports"]
 [sandbox]
 # Isolation mode: "none" | "native" (Linux bwrap / macOS sandbox-exec) | "docker"
 mode = "none"
-# Additional host paths mounted read-write in "native" mode (supports ~/ expansion)
+# Additional host paths mounted read-only in "native" mode (e.g., user-installed JDKs / version managers; supports ~/ expansion)
+readable_paths = ["~/.sdkman", "~/.jdks", "~/.asdf", "~/.mise", "~/.jabba"]
+# Additional host paths mounted read-write in "native" mode (e.g., package caches; supports ~/ expansion)
 writable_paths = ["~/.m2"]
 # Docker settings (used when mode = "docker")
 image = "eclipse-temurin:25-jdk"

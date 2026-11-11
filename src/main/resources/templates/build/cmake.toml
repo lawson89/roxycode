@@ -14,6 +14,9 @@ format = ''
 
 [env]
 ROXY_CODE = "true"
+# Optional: Set C/C++ compiler or CMake environment variables if needed:
+# CC = "clang"
+# CXX = "clang++"
 
 [parse]
 error_regex = '(^|:\d+:\d+:\s*)error:'
@@ -23,8 +26,10 @@ context_lines = 5
 [sandbox]
 # Isolation mode: "none" | "native" (Linux bwrap / macOS sandbox-exec) | "docker"
 mode = "none"
-# Additional host paths mounted read-write in "native" mode (supports ~/ expansion)
-writable_paths = []
+# Additional host paths mounted read-only in "native" mode (e.g., custom toolchains / vcpkg; supports ~/ expansion)
+readable_paths = ["~/.local", "~/vcpkg"]
+# Additional host paths mounted read-write in "native" mode (e.g., ccache / conan caches; supports ~/ expansion)
+writable_paths = ["~/.cache/ccache", "~/.ccache", "~/.conan2"]
 # Docker settings (used when mode = "docker")
 image = "gcc:14"
 workdir = "/workspace"

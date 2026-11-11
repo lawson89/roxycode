@@ -66,16 +66,21 @@ class BuildContainerService {
     }
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record SandboxConfig(String mode, @JsonProperty("writable_paths") List<String> writablePaths, String image,
-            String workdir) {
-        public static final SandboxConfig DEFAULT = new SandboxConfig("none", List.of(), DEFAULT_CONTAINER_IMAGE,
-                DEFAULT_CONTAINER_WORKDIR);
+    public record SandboxConfig(String mode, @JsonProperty("readable_paths") List<String> readablePaths,
+            @JsonProperty("writable_paths") List<String> writablePaths, String image, String workdir) {
+        public static final SandboxConfig DEFAULT = new SandboxConfig("none", List.of(), List.of(),
+                DEFAULT_CONTAINER_IMAGE, DEFAULT_CONTAINER_WORKDIR);
 
         public SandboxConfig {
             mode = StringUtils.defaultIfBlank(mode, "none").trim();
+            readablePaths = List.copyOf(Objects.requireNonNullElse(readablePaths, List.of()));
             writablePaths = List.copyOf(Objects.requireNonNullElse(writablePaths, List.of()));
             image = StringUtils.defaultIfBlank(image, DEFAULT_CONTAINER_IMAGE).trim();
             workdir = StringUtils.defaultIfBlank(workdir, DEFAULT_CONTAINER_WORKDIR).trim();
+        }
+
+        public SandboxConfig(String mode, List<String> writablePaths, String image, String workdir) {
+            this(mode, List.of(), writablePaths, image, workdir);
         }
 
         public SandboxMode resolvedMode() {
@@ -159,21 +164,32 @@ class BuildContainerService {
     }
 
     public List<String> buildNativeSandboxCommand(Path projectRoot, SandboxConfig sandboxConfig, String command) {
+        List<String> rawReadable = List.of();
         List<String> rawWritable = List.of();
         if (sandboxConfig != null) {
+            rawReadable = sandboxConfig.readablePaths();
             rawWritable = sandboxConfig.writablePaths();
         }
+        List<Path> readablePaths = resolveReadablePaths(rawReadable, projectRoot);
         List<Path> writablePaths = resolveWritablePaths(rawWritable, projectRoot);
         if (SystemUtils.IS_OS_MAC) {
-            return buildSeatbeltCommand(projectRoot, writablePaths, command);
+            return buildSeatbeltCommand(projectRoot, readablePaths, writablePaths, command);
         }
         if (SystemUtils.IS_OS_LINUX) {
-            return buildBubblewrapCommand(projectRoot, writablePaths, command);
+            return buildBubblewrapCommand(projectRoot, readablePaths, writablePaths, command);
         }
         throw new IllegalStateException("Native sandbox is not supported on OS: " + SystemUtils.OS_NAME);
     }
 
+    static List<Path> resolveReadablePaths(List<String> rawPaths, Path projectRoot) {
+        return resolveSandboxPaths(rawPaths, projectRoot, false);
+    }
+
     static List<Path> resolveWritablePaths(List<String> rawPaths, Path projectRoot) {
+        return resolveSandboxPaths(rawPaths, projectRoot, true);
+    }
+
+    private static List<Path> resolveSandboxPaths(List<String> rawPaths, Path projectRoot, boolean createIfMissing) {
         if (rawPaths == null || rawPaths.isEmpty()) {
             return List.of();
         }
@@ -209,7 +225,7 @@ class BuildContainerService {
                     resolved = candidate.toAbsolutePath().normalize();
                 }
             }
-            if (homeDir != null && resolved.startsWith(homeDir) && !Files.exists(resolved)) {
+            if (createIfMissing && homeDir != null && resolved.startsWith(homeDir) && !Files.exists(resolved)) {
                 try {
                     Files.createDirectories(resolved);
                 } catch (IOException e) {
@@ -224,16 +240,30 @@ class BuildContainerService {
     }
 
     static List<String> buildBubblewrapCommand(Path projectRoot, List<Path> writablePaths, String command) {
+        return buildBubblewrapCommand(projectRoot, List.of(), writablePaths, command);
+    }
+
+    static List<String> buildBubblewrapCommand(Path projectRoot, List<Path> readablePaths, List<Path> writablePaths,
+            String command) {
         String rootStr = projectRoot.toAbsolutePath().normalize().toString();
         List<String> args = new ArrayList<>();
         Collections.addAll(args, "bwrap", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp");
 
-        // Essential system directories for binaries and libraries
-        List<String> systemPaths = List.of("/usr", "/bin", "/lib", "/lib64", "/etc/alternatives", "/etc/ssl",
+        // Essential system directories for binaries, toolchains, and libraries
+        List<String> systemPaths = List.of("/usr", "/bin", "/lib", "/lib64", "/opt", "/etc/alternatives", "/etc/ssl",
                 "/etc/pki", "/etc/resolv.conf", "/etc/hosts");
         for (String path : systemPaths) {
             if (Files.exists(Path.of(path))) {
                 Collections.addAll(args, "--ro-bind", path, path);
+            }
+        }
+
+        if (readablePaths != null) {
+            for (Path p : readablePaths) {
+                if (p != null) {
+                    String pathStr = p.toAbsolutePath().normalize().toString();
+                    Collections.addAll(args, "--ro-bind", pathStr, pathStr);
+                }
             }
         }
 
@@ -251,6 +281,10 @@ class BuildContainerService {
     }
 
     static String buildSeatbeltProfile(Path projectRoot, List<Path> writablePaths) {
+        return buildSeatbeltProfile(projectRoot, List.of(), writablePaths);
+    }
+
+    static String buildSeatbeltProfile(Path projectRoot, List<Path> readablePaths, List<Path> writablePaths) {
         String rootStr = escapeSeatbeltPath(projectRoot.toAbsolutePath().normalize().toString());
         StringBuilder sb = new StringBuilder();
         sb.append("""
@@ -266,6 +300,7 @@ class BuildContainerService {
                   (subpath "/usr")
                   (subpath "/bin")
                   (subpath "/lib")
+                  (subpath "/opt")
                   (subpath "/System")
                   (subpath "/Library")
                   (subpath "/etc")
@@ -285,6 +320,16 @@ class BuildContainerService {
                   (literal "/dev/urandom")
                 )
                 """);
+
+        if (readablePaths != null) {
+            for (Path p : readablePaths) {
+                if (p != null) {
+                    String escaped = escapeSeatbeltPath(p.toAbsolutePath().normalize().toString());
+                    sb.append("  (allow file-read* (subpath ").append(DQ).append(escaped).append(DQ).append("))")
+                            .append(NL);
+                }
+            }
+        }
 
         // Project root access
         sb.append("  (allow file-read* file-write* (subpath ").append(DQ).append(rootStr).append(DQ).append("))")
@@ -307,7 +352,12 @@ class BuildContainerService {
     }
 
     static List<String> buildSeatbeltCommand(Path projectRoot, List<Path> writablePaths, String command) {
-        String profile = buildSeatbeltProfile(projectRoot, writablePaths);
+        return buildSeatbeltCommand(projectRoot, List.of(), writablePaths, command);
+    }
+
+    static List<String> buildSeatbeltCommand(Path projectRoot, List<Path> readablePaths, List<Path> writablePaths,
+            String command) {
+        String profile = buildSeatbeltProfile(projectRoot, readablePaths, writablePaths);
         return List.of("/usr/bin/sandbox-exec", "-p", profile, "sh", "-c", command);
     }
 

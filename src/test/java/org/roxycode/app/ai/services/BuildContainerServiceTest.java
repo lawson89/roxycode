@@ -248,9 +248,11 @@ class BuildContainerServiceTest {
         assertEquals(BuildContainerService.DEFAULT_CONTAINER_IMAGE, defaultCfg.image());
         assertEquals(BuildContainerService.DEFAULT_CONTAINER_WORKDIR, defaultCfg.workdir());
 
-        SandboxConfig customCfg = new SandboxConfig(" native ", List.of("~/.m2"), " eclipse-temurin:25-jdk ", " /app ");
+        SandboxConfig customCfg = new SandboxConfig(" native ", List.of("~/.sdkman"), List.of("~/.m2"),
+                " eclipse-temurin:25-jdk ", " /app ");
         assertEquals("native", customCfg.mode());
         assertEquals(SandboxMode.NATIVE, customCfg.resolvedMode());
+        assertEquals(List.of("~/.sdkman"), customCfg.readablePaths());
         assertEquals(List.of("~/.m2"), customCfg.writablePaths());
         assertEquals("eclipse-temurin:25-jdk", customCfg.image());
         assertEquals("/app", customCfg.workdir());
@@ -261,9 +263,16 @@ class BuildContainerServiceTest {
         Path projectRoot = Files.createDirectories(tempDir.resolve("my-project"));
         Path existingSubdir = Files.createDirectories(projectRoot.resolve("target-cache"));
         Path fakeHome = Files.createDirectories(tempDir.resolve("fake-home"));
+        Path existingSdkman = Files.createDirectories(fakeHome.resolve(".sdkman"));
         String originalHome = System.getProperty("user.home");
         try {
             System.setProperty("user.home", fakeHome.toString());
+            List<Path> resolvedReadable = BuildContainerService
+                    .resolveReadablePaths(List.of("~/.sdkman", "~/.missing-jdk", "  "), projectRoot);
+            assertEquals(List.of(existingSdkman.toAbsolutePath().normalize()), resolvedReadable);
+            assertFalse(Files.exists(fakeHome.resolve(".missing-jdk")),
+                    "resolveReadablePaths must not create missing directories");
+
             List<Path> resolved = BuildContainerService.resolveWritablePaths(
                     List.of("~/.m2/repo", "target-cache", "non-existent-relative", "~/.m2/repo", "  "), projectRoot);
             Path expectedHomeCache = fakeHome.resolve(".m2/repo").toAbsolutePath().normalize();
@@ -271,8 +280,8 @@ class BuildContainerServiceTest {
             assertEquals(List.of(expectedHomeCache, existingSubdir.toAbsolutePath().normalize()), resolved);
 
             String rootStr = projectRoot.toAbsolutePath().normalize().toString();
-            List<String> bwrapCmd = BuildContainerService.buildBubblewrapCommand(projectRoot, resolved,
-                    "./mvnw compile");
+            List<String> bwrapCmd = BuildContainerService.buildBubblewrapCommand(projectRoot, resolvedReadable,
+                    resolved, "./mvnw compile");
             assertTrue(bwrapCmd.containsAll(List.of("bwrap", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp")));
             // System binds (at least /usr and /bin should exist on most systems)
             if (Files.exists(Path.of("/usr"))) {
@@ -281,8 +290,16 @@ class BuildContainerServiceTest {
             if (Files.exists(Path.of("/bin"))) {
                 assertTrue(bwrapCmd.contains("/bin"));
             }
-            // Writable binds
-            assertTrue(bwrapCmd.contains(expectedHomeCache.toString()));
+            if (Files.exists(Path.of("/opt"))) {
+                assertTrue(bwrapCmd.contains("/opt"));
+            }
+            // Readable binds mounted via --ro-bind before writable binds
+            int sdkmanIndex = bwrapCmd.indexOf(existingSdkman.toAbsolutePath().normalize().toString());
+            int m2Index = bwrapCmd.indexOf(expectedHomeCache.toString());
+            assertTrue(sdkmanIndex > 0);
+            assertEquals("--ro-bind", bwrapCmd.get(sdkmanIndex - 1));
+            assertTrue(sdkmanIndex < m2Index, "Readable paths must be bound before writable paths");
+            assertEquals("--bind", bwrapCmd.get(m2Index - 1));
             assertTrue(bwrapCmd.contains(existingSubdir.toAbsolutePath().normalize().toString()));
             // Project root bind
             assertTrue(bwrapCmd.contains(rootStr));
@@ -291,14 +308,18 @@ class BuildContainerServiceTest {
             assertEquals("-c", bwrapCmd.get(bwrapCmd.size() - 2));
             assertEquals("./mvnw compile", bwrapCmd.get(bwrapCmd.size() - 1));
 
-            String dq = "\"";
-            String bs = "\\";
+            String dq = String.valueOf((char) 34);
+            String bs = String.valueOf((char) 92);
             Path pathWithQuote = fakeHome.resolve("dir" + dq + "quote" + bs + "slash");
-            String seatbeltProfile = BuildContainerService.buildSeatbeltProfile(projectRoot, List.of(pathWithQuote));
-            SwingTestUtils.assertContainsAll(seatbeltProfile, "(version 1)", "(deny default)",
-                    "(allow file-read-metadata)", "(subpath " + dq + "/usr" + dq + ")",
-                    "(allow file-read* file-write* (subpath " + dq + rootStr + dq + "))",
-                    "dir" + bs + dq + "quote" + bs + bs + "slash");
+            String seatbeltProfile = BuildContainerService.buildSeatbeltProfile(projectRoot, resolvedReadable,
+                    List.of(pathWithQuote));
+            SwingTestUtils
+                    .assertContainsAll(seatbeltProfile, "(version 1)", "(deny default)", "(allow file-read-metadata)",
+                            "(subpath " + dq + "/usr" + dq + ")", "(subpath " + dq + "/opt" + dq + ")",
+                            "(allow file-read* (subpath " + dq + existingSdkman.toAbsolutePath().normalize() + dq
+                                    + "))",
+                            "(allow file-read* file-write* (subpath " + dq + rootStr + dq + "))",
+                            "dir" + bs + dq + "quote" + bs + bs + "slash");
 
             List<String> seatbeltCmd = BuildContainerService.buildSeatbeltCommand(projectRoot, resolved, "./mvnw test");
             assertEquals("/usr/bin/sandbox-exec", seatbeltCmd.get(0));
@@ -308,7 +329,8 @@ class BuildContainerServiceTest {
             assertEquals("-c", seatbeltCmd.get(4));
             assertEquals("./mvnw test", seatbeltCmd.get(5));
 
-            SandboxConfig nativeCfg = new SandboxConfig("native", List.of("~/.m2/repo"), "ubuntu:24.04", "/workspace");
+            SandboxConfig nativeCfg = new SandboxConfig("native", List.of("~/.sdkman"), List.of("~/.m2/repo"),
+                    "ubuntu:24.04", "/workspace");
             if (SystemUtils.IS_OS_LINUX) {
                 List<String> dispatched = buildContainerService.buildNativeSandboxCommand(projectRoot, nativeCfg,
                         "echo ok");

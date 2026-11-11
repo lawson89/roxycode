@@ -87,6 +87,8 @@ public class GenericBuildToolService {
             [sandbox]
             # Isolation mode: "none" | "native" (Linux bwrap / macOS sandbox-exec) | "docker"
             mode = "none"
+            # Additional host paths mounted read-only in "native" mode (supports ~/ expansion)
+            readable_paths = []
             # Additional host paths mounted read-write in "native" mode (supports ~/ expansion)
             writable_paths = []
             # Docker settings (used when mode = "docker")
@@ -716,6 +718,229 @@ public class GenericBuildToolService {
             }
         }
         return loadDefaultTemplateContent();
+    }
+
+    private static final int MAX_BUILD_CONTEXT_FILE_CHARS = 8_000;
+    private static final int MAX_DISCOVERED_JDKS = 25;
+    private static final int MAX_ROOT_LISTING_ENTRIES = 60;
+    private static final int FENCE_MARKER_LENGTH = 3;
+    private static final char NEWLINE_CHAR = (char) 10;
+    private static final List<String> BUILD_CONTEXT_FILES = List.of("pom.xml", "build.gradle", "build.gradle.kts",
+            "settings.gradle", "settings.gradle.kts", "gradle.properties", ".mvn/jvm.config", "package.json",
+            "pyproject.toml", "requirements.txt", "Cargo.toml", "rust-toolchain.toml", "go.mod", "CMakeLists.txt",
+            "Makefile", ".sdkmanrc", ".java-version", ".nvmrc", ".node-version", ".python-version", ".tool-versions",
+            "mise.toml");
+
+    /**
+     * Collects project build files, version files, host environment/toolchain hints, and the selected template to
+     * provide rich context for AI-assisted {@code build.toml} generation.
+     *
+     * @param templateId
+     *            the selected or detected template ID (e.g., {@code "maven"}, {@code "gradle"})
+     * @param currentEditorToml
+     *            the current {@code build.toml} content in the editor (optional)
+     * @return a structured Markdown/text summary of project and host build context
+     */
+    public String collectBuildConfigurationContext(@Nullable String templateId, @Nullable String currentEditorToml) {
+        String effectiveTemplateId = StringUtils.defaultIfBlank(templateId, detectTemplate());
+        String templateContent = loadTemplateContent(effectiveTemplateId);
+        String nl = System.lineSeparator();
+        StringBuilder sb = new StringBuilder(4096);
+        sb.append("## Target Build Template (").append(effectiveTemplateId).append(')').append(nl).append("~~~toml")
+                .append(nl).append(templateContent.trim()).append(nl).append("~~~").append(nl).append(nl);
+
+        if (StringUtils.isNotBlank(currentEditorToml)
+                && !StringUtils.equals(currentEditorToml.trim(), templateContent.trim())) {
+            sb.append("## Current Editor build.toml").append(nl).append("~~~toml").append(nl)
+                    .append(StringUtils.abbreviate(currentEditorToml.trim(), MAX_BUILD_CONTEXT_FILE_CHARS)).append(nl)
+                    .append("~~~").append(nl).append(nl);
+        }
+
+        appendHostEnvironmentSection(sb);
+        if (projectService.hasActiveProject()) {
+            appendProjectFilesSection(sb, projectService.getCurrentProjectRoot());
+        }
+        return sb.toString();
+    }
+
+    private void appendHostEnvironmentSection(StringBuilder sb) {
+        String nl = System.lineSeparator();
+        sb.append("## Host Environment & Detected Toolchains").append(nl);
+        sb.append("- OS: ").append(SystemUtils.OS_NAME).append(" (").append(SystemUtils.OS_ARCH).append(')').append(nl);
+        String userHome = System.getProperty("user.home", "");
+        sb.append("- User Home: ").append(userHome).append(nl);
+        sb.append("- RoxyCode Runtime Java: ").append(System.getProperty("java.version", "")).append(" (")
+                .append(System.getProperty("java.home", "")).append(')').append(nl);
+        String envJavaHome = System.getenv("JAVA_HOME");
+        if (StringUtils.isNotBlank(envJavaHome)) {
+            sb.append("- Host JAVA_HOME env: ").append(envJavaHome).append(nl);
+        }
+        boolean nativeSandbox = buildContainerService != null && buildContainerService.isNativeSandboxAvailable();
+        boolean dockerAvailable = buildContainerService != null && buildContainerService.isDockerAvailable();
+        sb.append("- Native Sandbox Available (bwrap / sandbox-exec): ").append(nativeSandbox).append(nl);
+        sb.append("- Docker Available: ").append(dockerAvailable).append(nl);
+
+        List<String> jdkDirs = discoverHostJdkDirectories(userHome);
+        if (!jdkDirs.isEmpty()) {
+            sb.append("- Installed Host JDKs:").append(nl);
+            for (String jdk : jdkDirs) {
+                sb.append("  - ").append(jdk).append(nl);
+            }
+        }
+        List<String> toolchainRoots = discoverHostToolchainDirectories(userHome);
+        if (!toolchainRoots.isEmpty()) {
+            sb.append("- Existing User Toolchain / Cache Directories:").append(nl);
+            for (String dir : toolchainRoots) {
+                sb.append("  - ").append(dir).append(nl);
+            }
+        }
+        sb.append(nl);
+    }
+
+    static List<String> discoverHostJdkDirectories(@Nullable String userHome) {
+        List<Path> searchRoots = new ArrayList<>();
+        if (StringUtils.isNotBlank(userHome)) {
+            Path home = Path.of(userHome);
+            searchRoots.add(home.resolve(".sdkman/candidates/java"));
+            searchRoots.add(home.resolve(".jdks"));
+            searchRoots.add(home.resolve(".asdf/installs/java"));
+            searchRoots.add(home.resolve(".local/share/mise/installs/java"));
+            searchRoots.add(home.resolve(".jabba/jdk"));
+        }
+        searchRoots.add(Path.of("/Library/Java/JavaVirtualMachines"));
+        searchRoots.add(Path.of("/usr/lib/jvm"));
+        searchRoots.add(Path.of("/opt/java"));
+        searchRoots.add(Path.of("/opt/jdk"));
+
+        Set<String> discovered = new LinkedHashSet<>();
+        for (Path root : searchRoots) {
+            if (!Files.isDirectory(root)) {
+                continue;
+            }
+            try (java.util.stream.Stream<Path> stream = Files.list(root)) {
+                List<Path> children = stream.sorted().toList();
+                for (Path child : children) {
+                    if (!Files.isDirectory(child)) {
+                        continue;
+                    }
+                    Path contentsHome = child.resolve("Contents/Home");
+                    if (Files.isDirectory(contentsHome)) {
+                        discovered.add(contentsHome.toAbsolutePath().normalize().toString());
+                    } else {
+                        discovered.add(child.toAbsolutePath().normalize().toString());
+                    }
+                    if (discovered.size() >= MAX_DISCOVERED_JDKS) {
+                        return List.copyOf(discovered);
+                    }
+                }
+            } catch (IOException e) {
+                log.debug("Failed to list JDK directory {}: {}", root, e.getMessage());
+            }
+        }
+        return List.copyOf(discovered);
+    }
+
+    private static List<String> discoverHostToolchainDirectories(@Nullable String userHome) {
+        if (StringUtils.isBlank(userHome)) {
+            return List.of();
+        }
+        Path home = Path.of(userHome);
+        List<String> candidates = List.of(".sdkman", ".jdks", ".m2", ".gradle", ".nvm", ".fnm", ".volta", ".npm",
+                ".local/share/pnpm", ".yarn", ".pyenv", ".local", ".cache/pip", ".cache/uv", ".rustup", ".cargo", "sdk",
+                "go/pkg", ".cache/go-build", ".asdf", ".mise");
+        List<String> existing = new ArrayList<>();
+        for (String rel : candidates) {
+            if (Files.exists(home.resolve(rel))) {
+                existing.add("~/" + rel);
+            }
+        }
+        return List.copyOf(existing);
+    }
+
+    private static void appendProjectFilesSection(StringBuilder sb, Path projectRoot) {
+        String nl = System.lineSeparator();
+        sb.append("## Project Root Directory Listing").append(nl);
+        try (java.util.stream.Stream<Path> stream = Files.list(projectRoot)) {
+            List<String> names = stream.map(p -> {
+                String name = p.getFileName().toString();
+                if (Files.isDirectory(p)) {
+                    return name + "/";
+                }
+                return name;
+            }).sorted().limit(MAX_ROOT_LISTING_ENTRIES).toList();
+            sb.append(String.join(", ", names)).append(nl).append(nl);
+        } catch (IOException e) {
+            sb.append("(Unable to list directory)").append(nl).append(nl);
+        }
+
+        sb.append("## Project Build & Version Files").append(nl);
+        for (String relPath : BUILD_CONTEXT_FILES) {
+            Path file = projectRoot.resolve(relPath);
+            if (!Files.isRegularFile(file)) {
+                continue;
+            }
+            try {
+                String content = Files.readString(file, StandardCharsets.UTF_8);
+                if (StringUtils.isNotBlank(content)) {
+                    sb.append("### ").append(relPath).append(nl).append("~~~").append(nl)
+                            .append(StringUtils.abbreviate(content.trim(), MAX_BUILD_CONTEXT_FILE_CHARS)).append(nl)
+                            .append("~~~").append(nl).append(nl);
+                }
+            } catch (IOException e) {
+                log.debug("Skipping unreadable build context file {}: {}", relPath, e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Extracts raw TOML content from an AI response (stripping optional Markdown code fences) and validates that it
+     * parses cleanly into a {@link BuildConfig}.
+     *
+     * @param rawResponse
+     *            the raw text returned by the model
+     * @return the validated TOML string
+     * @throws IOException
+     *             if the response is blank or cannot be parsed as a valid {@code build.toml}
+     */
+    public String extractAndValidateGeneratedToml(String rawResponse) throws IOException {
+        String extracted = extractTomlFromResponse(rawResponse);
+        if (extracted.isBlank()) {
+            throw new IOException("Roxy returned an empty build.toml configuration.");
+        }
+        parseConfig(extracted);
+        String nl = System.lineSeparator();
+        if (extracted.endsWith(nl)) {
+            return extracted;
+        }
+        return extracted + nl;
+    }
+
+    static String extractTomlFromResponse(@Nullable String rawResponse) {
+        String trimmed = StringUtils.trimToEmpty(rawResponse);
+        if (trimmed.isEmpty()) {
+            return "";
+        }
+        String backtickFence = "~~~".replace('~', (char) 96);
+        String fence = null;
+        int fenceStart = trimmed.indexOf(backtickFence);
+        if (fenceStart >= 0) {
+            fence = backtickFence;
+        } else {
+            fenceStart = trimmed.indexOf("~~~");
+            if (fenceStart >= 0) {
+                fence = "~~~";
+            }
+        }
+        if (fence != null && fenceStart >= 0) {
+            int firstNewline = trimmed.indexOf(NEWLINE_CHAR, fenceStart + FENCE_MARKER_LENGTH);
+            if (firstNewline > fenceStart) {
+                int fenceEnd = trimmed.indexOf(fence, firstNewline + 1);
+                if (fenceEnd > firstNewline) {
+                    return trimmed.substring(firstNewline + 1, fenceEnd).trim();
+                }
+            }
+        }
+        return trimmed;
     }
 
     public void saveConfigContent(String content) throws IOException {

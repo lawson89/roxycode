@@ -14,6 +14,9 @@ format = ''
 
 [env]
 ROXY_CODE = "true"
+# Optional: Set Python environment variables if needed:
+# PYTHONPATH = "."
+# VIRTUAL_ENV = ".venv"
 
 [parse]
 error_regex = '^(E\s+|SyntaxError:|IndentationError:)'
@@ -23,8 +26,10 @@ context_lines = 5
 [sandbox]
 # Isolation mode: "none" | "native" (Linux bwrap / macOS sandbox-exec) | "docker"
 mode = "none"
-# Additional host paths mounted read-write in "native" mode (supports ~/ expansion)
-writable_paths = ["~/.cache/pip"]
+# Additional host paths mounted read-only in "native" mode (e.g., Python version managers / uv / pyenv; supports ~/ expansion)
+readable_paths = ["~/.pyenv", "~/.local", "~/.asdf", "~/.mise", "~/.conda"]
+# Additional host paths mounted read-write in "native" mode (e.g., pip / uv / pytest caches; supports ~/ expansion)
+writable_paths = ["~/.cache/pip", "~/.cache/uv", "~/.cache/pypoetry"]
 # Docker settings (used when mode = "docker")
 image = "python:3.12"
 workdir = "/workspace"

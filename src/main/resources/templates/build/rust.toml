@@ -12,6 +12,9 @@ format = "cargo fmt"
 
 [env]
 ROXY_CODE = "true"
+# Optional: Set Rust / Cargo environment variables if needed:
+# RUST_BACKTRACE = "1"
+# CARGO_TERM_COLOR = "never"
 
 [parse]
 error_regex = '^error(\[E\d+\])?:'
@@ -21,7 +24,9 @@ context_lines = 5
 [sandbox]
 # Isolation mode: "none" | "native" (Linux bwrap / macOS sandbox-exec) | "docker"
 mode = "none"
-# Additional host paths mounted read-write in "native" mode (supports ~/ expansion)
+# Additional host paths mounted read-only in "native" mode (e.g., rustup toolchains; supports ~/ expansion)
+readable_paths = ["~/.rustup", "~/.cargo/bin"]
+# Additional host paths mounted read-write in "native" mode (e.g., Cargo registry & git cache; supports ~/ expansion)
 writable_paths = ["~/.cargo"]
 # Docker settings (used when mode = "docker")
 image = "rust:1.85"

@@ -215,4 +215,57 @@ class BuildConfigPanelTest {
         assertTrue(panel.textArea.getText().contains("./mvnw test-compile"));
         assertEquals("Applied 'Maven' template.", panel.statusLabel.getText());
     }
+
+    @Test
+    void testConfigureWithRoxyPopulatesEditorAndPromptsOnUnsavedEdits() throws Exception {
+        org.roxycode.app.service.AiService aiService = mock(org.roxycode.app.service.AiService.class);
+        when(buildToolService.getAvailableTemplates()).thenReturn(GenericBuildToolService.AVAILABLE_TEMPLATES);
+        when(buildToolService.detectTemplate()).thenReturn("maven");
+        when(buildToolService.collectBuildConfigurationContext(eq("maven"), anyString()))
+                .thenReturn("## Maven Context");
+        String tailoredToml = """
+                [commands]
+                compile = "./mvnw test-compile"
+                lint = "./mvnw spotless:check pmd:check"
+                [env]
+                JAVA_HOME = "/Users/dev/.sdkman/candidates/java/21.0.5-tem"
+                [sandbox]
+                mode = "native"
+                readable_paths = ["~/.sdkman"]
+                writable_paths = ["~/.m2"]
+                """;
+        when(aiService.generateBuildToml("## Maven Context")).thenReturn(tailoredToml);
+        when(buildToolService.extractAndValidateGeneratedToml(tailoredToml)).thenReturn(tailoredToml);
+
+        BuildConfigPanel panel = SwingTestUtils
+                .callOnEdt(() -> new BuildConfigPanel(buildToolService, settingsService, projectService, aiService));
+        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
+
+        SwingTestUtils.clickOnEdt(panel.configureWithRoxyButton);
+        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
+
+        assertEquals(tailoredToml, panel.textArea.getText());
+        assertTrue(panel.configureWithRoxyButton.isEnabled());
+        assertEquals(BuildConfigPanel.CONFIGURE_WITH_ROXY_TEXT, panel.configureWithRoxyButton.getText());
+        assertEquals("Roxy configured build.toml! Review and click 'Confirm & Save Settings'.",
+                panel.statusLabel.getText());
+
+        // Verify unsaved-edit confirmation prompt and error handling
+        SwingTestUtils.runOnEdt(() -> {
+            panel.textArea.setText("# Unsaved user edit");
+            panel.configureWithRoxyButton.doClick();
+        });
+        assertTrue(panel.templateConfirmBar.isPromptVisible());
+        assertEquals("Replace unsaved build.toml edits with Roxy's auto-generated configuration?",
+                panel.templateConfirmBar.getMessage());
+
+        when(buildToolService.extractAndValidateGeneratedToml(anyString()))
+                .thenThrow(new IOException("Invalid TOML syntax"));
+        SwingTestUtils.clickOnEdt(panel.templateConfirmBar.confirmButton);
+        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
+
+        assertTrue(panel.configureWithRoxyButton.isEnabled());
+        assertEquals("Roxy configuration failed: Invalid TOML syntax", panel.statusLabel.getText());
+        assertEquals("# Unsaved user edit", panel.textArea.getText());
+    }
 }

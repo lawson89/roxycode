@@ -645,4 +645,52 @@ class GenericBuildToolServiceTest {
             assertTrue(result.isTimedOut());
         }
     }
+
+    @Test
+    void testCollectBuildConfigurationContextAndExtractAndValidateGeneratedToml() throws IOException {
+        Files.writeString(projectRoot.resolve("pom.xml"),
+                "<project><properties><java.version>21</java.version></properties></project>");
+        Files.writeString(projectRoot.resolve(".java-version"), "21.0.5-tem");
+        Path fakeHome = Files.createDirectories(projectRoot.resolve("fake-home"));
+        Path fakeSdkmanJava = Files.createDirectories(fakeHome.resolve(".sdkman/candidates/java/21.0.5-tem"));
+        Files.createDirectories(fakeHome.resolve(".m2"));
+        when(buildContainerService.isNativeSandboxAvailable()).thenReturn(true);
+
+        List<String> discoveredJdks = GenericBuildToolService.discoverHostJdkDirectories(fakeHome.toString());
+        assertTrue(discoveredJdks.contains(fakeSdkmanJava.toAbsolutePath().normalize().toString()));
+
+        String currentToml = """
+                [commands]
+                compile = 'mvn compile'
+                """;
+        String context = buildToolService.collectBuildConfigurationContext("maven", currentToml);
+        assertContainsAll(context, "## Target Build Template (maven)", "~/.sdkman", "## Current Editor build.toml",
+                "## Host Environment & Detected Toolchains", "- Native Sandbox Available (bwrap / sandbox-exec): true",
+                "### pom.xml", "<java.version>21</java.version>", "### .java-version", "21.0.5-tem");
+
+        String fencedResponse = """
+                ~~~toml
+                timeout_seconds = 600
+                [commands]
+                compile = "./mvnw test-compile"
+                [env]
+                JAVA_HOME = "/opt/jdk-21"
+                [sandbox]
+                mode = "native"
+                readable_paths = ["~/.sdkman"]
+                writable_paths = ["~/.m2"]
+                ~~~
+                """;
+        String validated = buildToolService.extractAndValidateGeneratedToml(fencedResponse);
+        assertTrue(validated.endsWith(System.lineSeparator()));
+        GenericBuildToolService.BuildConfig parsed = buildToolService.parseConfig(validated);
+        assertEquals("./mvnw test-compile", parsed.commands().compile());
+        assertEquals("/opt/jdk-21", parsed.env().get("JAVA_HOME"));
+        assertEquals("native", parsed.sandbox().mode());
+        assertEquals(List.of("~/.sdkman"), parsed.sandbox().readablePaths());
+        assertEquals(List.of("~/.m2"), parsed.sandbox().writablePaths());
+
+        assertThrows(IOException.class, () -> buildToolService.extractAndValidateGeneratedToml("   "));
+        assertThrows(IOException.class, () -> buildToolService.extractAndValidateGeneratedToml("not = [valid toml"));
+    }
 }

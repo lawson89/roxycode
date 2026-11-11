@@ -12,6 +12,8 @@ format = ''
 
 [env]
 ROXY_CODE = "true"
+# Optional: Define environment variables passed to build commands:
+# JAVA_HOME = "/path/to/jdk"
 
 [parse]
 error_regex = '^ERROR:'
@@ -21,6 +23,8 @@ context_lines = 5
 [sandbox]
 # Isolation mode: "none" | "native" (Linux bwrap / macOS sandbox-exec) | "docker"
 mode = "none"
+# Additional host paths mounted read-only in "native" mode (supports ~/ expansion)
+readable_paths = []
 # Additional host paths mounted read-write in "native" mode (supports ~/ expansion)
 writable_paths = []
 # Docker settings (used when mode = "docker")
