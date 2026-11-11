@@ -94,8 +94,12 @@ class BuildConfigPanelTest {
         assertNull(panel.thinkingLevelInfoIcon.getClientProperty(FlatClientProperties.STYLE));
         assertSame(panel.buildSectionHeaderLabel.getParent(), panel.buildConfigHintLabel.getParent());
         assertSame(panel.buildSectionHeaderLabel.getParent(), panel.configureWithRoxyButton.getParent());
+        assertSame(panel.buildSectionHeaderLabel.getParent(), panel.statusLabel.getParent());
+        assertNotSame(panel.saveButton.getParent(), panel.statusLabel.getParent());
+        assertSame(panel.titleLabel.getParent().getParent(), panel.saveButton.getParent());
+        assertFalse(panel.statusLabel.isVisible());
+        assertTrue(panel.buildConfigHintLabel.isVisible());
         assertNotNull(panel.buildCardPanel);
-        assertSame(panel.saveButton.getParent(), panel.statusLabel.getParent());
         assertEquals(BuildConfigPanel.SAVE_BUTTON_TEXT, panel.saveButton.getText());
         assertTrue(panel.textArea.getText().contains("./mvnw test-compile"));
         assertTrue(panel.unconfirmedBanner.isVisible());
@@ -135,6 +139,8 @@ class BuildConfigPanelTest {
         assertEquals(BuildConfigPanel.SAVED_FEEDBACK_BUTTON_TEXT, panel.saveButton.getText());
         assertFalse(panel.unconfirmedBanner.isVisible());
         assertEquals("Configuration saved successfully!", panel.statusLabel.getText());
+        assertTrue(panel.statusLabel.isVisible());
+        assertFalse(panel.buildConfigHintLabel.isVisible());
         assertEquals(1, confirmCallbackCount.get());
         verify(projectService).setProjectGeminiModel("gemini-3.5-pro");
         verify(projectService).setProjectThinkingLevel("HIGH");
@@ -164,7 +170,15 @@ class BuildConfigPanelTest {
         assertEquals(BuildConfigPanel.SAVE_BUTTON_TEXT, panel.saveButton.getText());
         assertEquals("Error saving config: " + unsupportedSandboxMsg, panel.statusLabel.getText());
         assertEquals("Error saving config: " + unsupportedSandboxMsg, panel.statusLabel.getToolTipText());
+        assertTrue(panel.statusLabel.isVisible());
+        assertFalse(panel.buildConfigHintLabel.isVisible());
         verify(projectService, never()).setBuildConfirmed(true);
+
+        // Editing TOML clears the error status and restores the hint label
+        SwingTestUtils.runOnEdt(() -> panel.textArea.setText(updatedToml + "# fixed"));
+        assertFalse(panel.statusLabel.isVisible());
+        assertEquals("", panel.statusLabel.getText());
+        assertTrue(panel.buildConfigHintLabel.isVisible());
     }
 
     @Test

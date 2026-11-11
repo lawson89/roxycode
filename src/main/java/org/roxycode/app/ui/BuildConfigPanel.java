@@ -92,12 +92,13 @@ final class BuildConfigPanel extends JPanel {
     final RSyntaxTextArea textArea;
     final JButton saveButton;
     final JLabel statusLabel;
-    private final Timer statusTimer;
+    final Timer statusTimer;
     final Timer saveFeedbackTimer;
 
     private final transient UiComponents.UiGuard textUpdateGuard = new UiComponents.UiGuard();
     private boolean textEditedByUser = false;
     private boolean saveFeedbackActive = false;
+    private boolean lastStatusSuccess = true;
     private String savedTomlContent = "";
     private String savedModelApiName = "";
     private String savedThinkingLevelId = "";
@@ -125,6 +126,7 @@ final class BuildConfigPanel extends JPanel {
         subtitleLabel = new JLabel(SUBTITLE_TEXT);
         statusLabel = new JLabel("");
         statusLabel.setFont(statusLabel.getFont().deriveFont(Font.BOLD, 11.5f));
+        statusLabel.setVisible(false);
 
         saveButton = UiComponents.createActionButton(SAVE_BUTTON_TEXT, Codicons.SAVE, new Insets(6, 14, 6, 14), false,
                 SAVE_BUTTON_BASE_STYLE + UiComponents.ACCENT_BUTTON_STYLE, e -> saveConfig());
@@ -137,12 +139,7 @@ final class BuildConfigPanel extends JPanel {
         });
         saveFeedbackTimer.setRepeats(false);
 
-        JPanel headerActions = new JPanel(new MigLayout("insets 0, gapx 12", "[][]", "[center]"));
-        headerActions.setOpaque(false);
-        headerActions.add(statusLabel);
-        headerActions.add(saveButton);
-
-        add(UiComponents.createPageHeader(titleLabel, subtitleLabel, headerActions), "growx, wmin 0, wrap");
+        add(UiComponents.createPageHeader(titleLabel, subtitleLabel, saveButton), "growx, wmin 0, wrap");
 
         modelCardPanel = new JPanel(new MigLayout("fillx, wrap 1, insets 16 18 16 18, gapy 8", "[grow, fill]", ""));
         UiComponents.styleCardPanel(modelCardPanel);
@@ -202,12 +199,13 @@ final class BuildConfigPanel extends JPanel {
                 "Inspect project build files and installed host toolchains to automatically generate build.toml with Roxy");
 
         JPanel buildHeaderRow = new JPanel(
-                new MigLayout("fillx, insets 0, gapx 8", "[][][grow][right][right]", "[center]"));
+                new MigLayout("fillx, insets 0, gapx 8, hidemode 3", "[][][0:0, grow, right][]", "[center]"));
         buildHeaderRow.setOpaque(false);
         buildHeaderRow.add(buildSectionHeaderLabel);
         buildHeaderRow.add(buildConfigInfoIcon);
-        buildHeaderRow.add(buildConfigHintLabel, "skip 1");
-        buildHeaderRow.add(configureWithRoxyButton);
+        buildHeaderRow.add(statusLabel, "cell 2 0, wmin 0, hidemode 3");
+        buildHeaderRow.add(buildConfigHintLabel, "cell 2 0, wmin 0, hidemode 3");
+        buildHeaderRow.add(configureWithRoxyButton, "cell 3 0");
         buildCardPanel.add(buildHeaderRow, "growx, wmin 0, wrap, gapbottom 8");
 
         templateConfirmBar = new UiComponents.InlineConfirmBar();
@@ -239,7 +237,8 @@ final class BuildConfigPanel extends JPanel {
         buildCardPanel.add(new RTextScrollPane(textArea), "grow, push");
         add(buildCardPanel, "grow, push, wmin 0");
 
-        statusTimer = UiComponents.createStatusTimer(statusLabel, 3000);
+        statusTimer = new Timer(3000, e -> clearBuildStatus());
+        statusTimer.setRepeats(false);
 
         applySectionStyling();
         lastAsyncFuture = loadConfig();
@@ -269,9 +268,27 @@ final class BuildConfigPanel extends JPanel {
         updateBannerState();
     }
 
+    void showBuildStatus(String message, boolean success) {
+        lastStatusSuccess = success;
+        buildConfigHintLabel.setVisible(false);
+        statusLabel.setVisible(true);
+        UiComponents.showStatusMessage(statusLabel, statusTimer, message, success);
+        statusLabel.setToolTipText(message);
+    }
+
+    void clearBuildStatus() {
+        if (statusTimer != null && statusTimer.isRunning()) {
+            statusTimer.stop();
+        }
+        statusLabel.setText("");
+        statusLabel.setToolTipText(null);
+        statusLabel.setVisible(false);
+        buildConfigHintLabel.setVisible(true);
+    }
+
     void configureWithRoxy() {
         if (buildToolService == null || (onConfigureWithRoxyCallback == null && aiService == null)) {
-            UiComponents.showStatusMessage(statusLabel, statusTimer, "Roxy AI service is not available.", false);
+            showBuildStatus("Roxy AI service is not available.", false);
             return;
         }
         if (onConfigureWithRoxyCallback != null) {
@@ -300,8 +317,7 @@ final class BuildConfigPanel extends JPanel {
                     callback::accept, ex -> {
                         Throwable cause = ExceptionUtils.getRootCause(ex);
                         log.error("Failed to prepare interactive build.toml prompt: {}", cause.getMessage());
-                        UiComponents.showStatusMessage(statusLabel, statusTimer,
-                                "Roxy configuration failed: " + cause.getMessage(), false);
+                        showBuildStatus("Roxy configuration failed: " + cause.getMessage(), false);
                     });
             lastAsyncFuture = future;
             return future;
@@ -314,10 +330,7 @@ final class BuildConfigPanel extends JPanel {
         configureStatusLabel.setForeground(SwingHtmlUtils.getAccentColor());
         configureStatusLabel.setText(CONFIGURING_WITH_ROXY_STATUS);
         configureStatusLabel.setVisible(true);
-        statusTimer.stop();
-        statusLabel.setForeground(SwingHtmlUtils.getAccentColor());
-        statusLabel.setText(CONFIGURING_WITH_ROXY_STATUS);
-        statusLabel.setToolTipText(CONFIGURING_WITH_ROXY_STATUS);
+        clearBuildStatus();
 
         CompletableFuture<String> future = Edt.supplyAsync(() -> {
             try {
@@ -330,14 +343,12 @@ final class BuildConfigPanel extends JPanel {
         }, generatedToml -> {
             restoreConfigureWithRoxyButtonState();
             setEditorContentProgrammatically(generatedToml, false);
-            UiComponents.showStatusMessage(statusLabel, statusTimer,
-                    "Roxy configured build.toml! Review and click 'Confirm & Save Settings'.", true);
+            showBuildStatus("Roxy configured build.toml! Review and click 'Confirm & Save Settings'.", true);
         }, ex -> {
             restoreConfigureWithRoxyButtonState();
             Throwable cause = ExceptionUtils.getRootCause(ex);
             log.error("Failed to configure build.toml with Roxy: {}", cause.getMessage());
-            UiComponents.showStatusMessage(statusLabel, statusTimer, "Roxy configuration failed: " + cause.getMessage(),
-                    false);
+            showBuildStatus("Roxy configuration failed: " + cause.getMessage(), false);
         });
         lastAsyncFuture = future;
         return future;
@@ -494,7 +505,11 @@ final class BuildConfigPanel extends JPanel {
         UiComponents.refreshActionButtonIcons(this);
         updateSaveButtonState();
 
-        statusLabel.setForeground(SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green"));
+        if (lastStatusSuccess) {
+            statusLabel.setForeground(SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green"));
+        } else {
+            statusLabel.setForeground(SwingHtmlUtils.getUiColor(new Color(0xdc, 0x35, 0x45), "Actions.Red"));
+        }
     }
 
     @EventListener
@@ -513,6 +528,7 @@ final class BuildConfigPanel extends JPanel {
     public void onProjectChanged(ProjectChangedEvent event) {
         Edt.run(() -> {
             cancelSaveFeedback();
+            clearBuildStatus();
             loadModelOptions();
             loadThinkingLevelOptions();
             updateSelectedModelDetails();
@@ -527,6 +543,7 @@ final class BuildConfigPanel extends JPanel {
             String currentText = StringUtils.defaultString(textArea.getText());
             textEditedByUser = !Objects.equals(currentText, savedTomlContent);
             cancelSaveFeedback();
+            clearBuildStatus();
             templateConfirmBar.cancel();
             updateBannerState();
         }
@@ -604,7 +621,7 @@ final class BuildConfigPanel extends JPanel {
             saveFeedbackActive = true;
             saveFeedbackTimer.restart();
             updateBannerState();
-            UiComponents.showStatusMessage(statusLabel, statusTimer, "Configuration saved successfully!", true);
+            showBuildStatus("Configuration saved successfully!", true);
             if (!wasBuildConfirmed && onConfirmSavedCallback != null) {
                 onConfirmSavedCallback.run();
             }
@@ -613,8 +630,7 @@ final class BuildConfigPanel extends JPanel {
             updateSaveButtonState();
             Throwable cause = ExceptionUtils.getRootCause(ex);
             log.error("Failed to save build config: {}", cause.getMessage());
-            UiComponents.showStatusMessage(statusLabel, statusTimer, "Error saving config: " + cause.getMessage(),
-                    false);
+            showBuildStatus("Error saving config: " + cause.getMessage(), false);
         });
         lastAsyncFuture = future;
         return future;
@@ -630,7 +646,7 @@ final class BuildConfigPanel extends JPanel {
 
     void applyGeneratedBuildToml(String toml) {
         setEditorContentProgrammatically(toml, false);
-        UiComponents.showStatusMessage(statusLabel, statusTimer, APPLIED_FROM_ASK_ROXY_STATUS, true);
+        showBuildStatus(APPLIED_FROM_ASK_ROXY_STATUS, true);
     }
 
     private void updateTextAreaTheme() {
