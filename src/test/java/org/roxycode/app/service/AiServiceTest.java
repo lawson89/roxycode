@@ -828,4 +828,193 @@ class AiServiceTest {
                 () -> service.chat("task:no-progress", WorkflowPhase.CODE, "Fails immediately", null));
         verify(alwaysFailingModel, times(3)).call(any(Prompt.class));
     }
+
+    @Test
+    void testToolHistoryCompactionAdvisorTokenQuantizedEpochsAndRecentSafetyWindow() {
+        String smallPayload = "S".repeat(800); // 200 tokens, <= 1200 chars
+        String largePayload5k = "HEADER_START_" + "L".repeat(20_000 - 24) + "_FOOTER_END"; // 20,000 chars = 5,000
+                                                                                           // tokens
+
+        // 1. 25 small tool turns (25 * 200 = 5,000 tokens total < 20,000 epoch): never triggers compaction
+        List<Message> manySmallTurns = new ArrayList<>();
+        manySmallTurns.add(new UserMessage("Run 25 small steps"));
+        for (int i = 0; i < 25; i++) {
+            manySmallTurns.add(createToolCallMessage());
+            manySmallTurns.add(ToolResponseMessage.builder()
+                    .responses(
+                            List.of(new ToolResponseMessage.ToolResponse("id-" + i, "executeJexl", "M".repeat(1_600)))) // 1,600
+                                                                                                                        // chars
+                                                                                                                        // =
+                                                                                                                        // 400
+                                                                                                                        // tokens
+                                                                                                                        // (19
+                                                                                                                        // eligible
+                                                                                                                        // *
+                                                                                                                        // 400
+                                                                                                                        // =
+                                                                                                                        // 7,600
+                                                                                                                        // <
+                                                                                                                        // 20k)
+                    .build());
+        }
+        Prompt smallTurnsPrompt = new Prompt(manySmallTurns);
+        assertSame(smallTurnsPrompt, ToolHistoryCompactionAdvisor.compactPrompt(smallTurnsPrompt));
+
+        // 2. Build a sequence with 4 large turns (4 * 5,000 = 20,000 tokens) + 1 small turn (200 tokens)
+        // followed by 6 recent large turns (protected by KEEP_RECENT_TOOL_TURNS = 6).
+        // Before all 4 large turns exit the recent-6 window (e.g., only 3 eligible = 15,000 tokens), no compaction
+        // occurs.
+        List<Message> messages = new ArrayList<>();
+        messages.add(new UserMessage("Start big refactoring"));
+        for (int i = 0; i < 3; i++) {
+            messages.add(createToolCallMessage());
+            messages.add(ToolResponseMessage.builder()
+                    .responses(List.of(new ToolResponseMessage.ToolResponse("big-" + i, "executeJexl", largePayload5k)))
+                    .build());
+        }
+        messages.add(createToolCallMessage());
+        messages.add(ToolResponseMessage.builder()
+                .responses(List.of(new ToolResponseMessage.ToolResponse("small-3", "executeJexl", smallPayload)))
+                .build());
+        for (int i = 0; i < 6; i++) {
+            messages.add(createToolCallMessage());
+            messages.add(ToolResponseMessage.builder()
+                    .responses(
+                            List.of(new ToolResponseMessage.ToolResponse("recent-" + i, "executeJexl", largePayload5k)))
+                    .build());
+        }
+        // Currently 10 total tool turns -> 4 eligible (indices 0,1,2 = 15,000 tokens + index 3 = 200 tokens = 15,200 <
+        // 20k)
+        assertSame(messages, ToolHistoryCompactionAdvisor.compactMessages(messages));
+
+        // 3. Add 1 more tool turn (total 11 tool turns -> 5 eligible: 0,1,2 [15k], 3 [200], 4 [5k] => 20,200 >= 20k!)
+        // Epoch 1 locks at boundary = 5 (tool turns 0..4).
+        messages.add(createToolCallMessage());
+        messages.add(ToolResponseMessage.builder()
+                .responses(List.of(new ToolResponseMessage.ToolResponse("turn-10", "executeJexl", largePayload5k)))
+                .build());
+
+        List<Message> compactedEpoch1 = ToolHistoryCompactionAdvisor.compactMessages(messages);
+        assertNotSame(messages, compactedEpoch1);
+        List<ToolResponseMessage> epoch1Tools = compactedEpoch1.stream().filter(ToolResponseMessage.class::isInstance)
+                .map(ToolResponseMessage.class::cast).toList();
+        assertEquals(11, epoch1Tools.size());
+
+        // Tool turns 0, 1, 2, and 4 were > 1,200 chars inside Epoch 1 -> compacted with head + notice + tail
+        for (int idx : List.of(0, 1, 2, 4)) {
+            String data = epoch1Tools.get(idx).getResponses().get(0).responseData();
+            assertTrue(data.startsWith("HEADER_START_"));
+            assertTrue(data.endsWith("_FOOTER_END"));
+            assertTrue(data.contains("...[compacted 19500 chars from earlier tool turn; re-read if needed]..."));
+            assertTrue(data.length() < 600);
+        }
+        // Tool turn 3 was inside Epoch 1 but <= 1,200 chars -> untouched!
+        assertEquals(smallPayload, epoch1Tools.get(3).getResponses().get(0).responseData());
+
+        // Tool turns 5..10 (the last 6 recent tool turns) are completely untouched!
+        for (int idx = 5; idx < 11; idx++) {
+            assertEquals(largePayload5k, epoch1Tools.get(idx).getResponses().get(0).responseData());
+        }
+
+        // 4. Prefix-cache stability across subsequent sub-turns (turns 11, 12, 13):
+        // Adding 3 more 5k-token tool turns puts turns 5, 6, 7 into the eligible window (3 * 5k = 15k < 20k).
+        // Epoch 1 boundary MUST stay locked at 5 (turns 5, 6, 7 remain uncompacted!).
+        for (int extra = 0; extra < 3; extra++) {
+            messages.add(createToolCallMessage());
+            messages.add(ToolResponseMessage.builder()
+                    .responses(List
+                            .of(new ToolResponseMessage.ToolResponse("extra-" + extra, "executeJexl", largePayload5k)))
+                    .build());
+        }
+        List<Message> afterThreeMoreTurns = ToolHistoryCompactionAdvisor.compactMessages(messages);
+        List<ToolResponseMessage> midEpochTools = afterThreeMoreTurns.stream()
+                .filter(ToolResponseMessage.class::isInstance).map(ToolResponseMessage.class::cast).toList();
+        assertEquals(14, midEpochTools.size());
+        // Prefix 0..4 is identical to compactedEpoch1; turns 5..13 are all raw
+        for (int idx = 0; idx < 5; idx++) {
+            assertEquals(epoch1Tools.get(idx).getResponses().get(0).responseData(),
+                    midEpochTools.get(idx).getResponses().get(0).responseData());
+        }
+        for (int idx = 5; idx < 14; idx++) {
+            assertEquals(largePayload5k, midEpochTools.get(idx).getResponses().get(0).responseData());
+        }
+
+        // 5. Add 1 more 5k-token tool turn (turn 8 becomes eligible: turns 5, 6, 7, 8 = 4 * 5k = 20,000 tokens).
+        // Epoch 2 locks at boundary = 9 (tool turns 0..8 compacted, 9..14 recent raw).
+        messages.add(createToolCallMessage());
+        messages.add(ToolResponseMessage.builder()
+                .responses(
+                        List.of(new ToolResponseMessage.ToolResponse("epoch2-trigger", "executeJexl", largePayload5k)))
+                .build());
+        List<Message> compactedEpoch2 = ToolHistoryCompactionAdvisor.compactMessages(messages);
+        List<ToolResponseMessage> epoch2Tools = compactedEpoch2.stream().filter(ToolResponseMessage.class::isInstance)
+                .map(ToolResponseMessage.class::cast).toList();
+        assertEquals(15, epoch2Tools.size());
+        for (int idx : List.of(0, 1, 2, 4, 5, 6, 7, 8)) {
+            assertTrue(epoch2Tools.get(idx).getResponses().get(0).responseData()
+                    .contains("...[compacted 19500 chars from earlier tool turn; re-read if needed]..."));
+        }
+        for (int idx = 9; idx < 15; idx++) {
+            assertEquals(largePayload5k, epoch2Tools.get(idx).getResponses().get(0).responseData());
+        }
+    }
+
+    @Test
+    void testAiServiceAdvisorChainCompactsOlderToolEpochBeforeModelCall() {
+        ChatModel mockChatModel = mock(ChatModel.class);
+        ToolCallingManager customToolManager = mock(ToolCallingManager.class);
+        AiService service = createRealClientService(mockChatModel, customToolManager);
+        when(promptService.buildSystemPrompt(WorkflowPhase.CODE)).thenReturn("CODE PROMPT");
+
+        String hugeToolOutput = "BEGIN_" + "X".repeat(80_000) + "_END"; // 80,010 chars = 20,002 tokens (1 turn crosses
+                                                                        // 20k epoch!)
+        String recentToolOutput = "RECENT_" + "Y".repeat(2_000);
+
+        AssistantMessage toolCallMsg = createToolCallMessage();
+        ChatResponse toolCallResp = createToolCallResponse(toolCallMsg);
+
+        List<Prompt> capturedModelPrompts = new ArrayList<>();
+        AtomicInteger callCount = new AtomicInteger();
+        when(mockChatModel.call(any(Prompt.class))).thenAnswer(inv -> {
+            capturedModelPrompts.add(inv.getArgument(0));
+            if (callCount.incrementAndGet() == 1) {
+                return toolCallResp;
+            }
+            return buildChatResponse("Done with compacted history", "STOP", null);
+        });
+
+        // Simulate ToolCallingManager returning 7 tool turns: 1st turn is 20,002 tokens (eligible), followed by 6
+        // recent turns
+        List<Message> historyAfterTools = new ArrayList<>();
+        historyAfterTools.add(new UserMessage("Run tools"));
+        historyAfterTools.add(toolCallMsg);
+        historyAfterTools.add(ToolResponseMessage.builder()
+                .responses(List.of(new ToolResponseMessage.ToolResponse("call-0", "executeJexl", hugeToolOutput)))
+                .build());
+        for (int i = 1; i <= 6; i++) {
+            historyAfterTools.add(toolCallMsg);
+            historyAfterTools.add(ToolResponseMessage.builder()
+                    .responses(
+                            List.of(new ToolResponseMessage.ToolResponse("call-" + i, "executeJexl", recentToolOutput)))
+                    .build());
+        }
+        when(customToolManager.executeToolCalls(any(Prompt.class), eq(toolCallResp)))
+                .thenReturn(DefaultToolExecutionResult.builder().conversationHistory(historyAfterTools)
+                        .returnDirect(false).build());
+
+        String response = service.chat("task:compact-chain", WorkflowPhase.CODE, "Run tools", null);
+        assertEquals("Done with compacted history", response);
+        assertEquals(2, capturedModelPrompts.size());
+
+        List<ToolResponseMessage> secondCallTools = capturedModelPrompts.get(1).getInstructions().stream()
+                .filter(ToolResponseMessage.class::isInstance).map(ToolResponseMessage.class::cast).toList();
+        assertEquals(7, secondCallTools.size());
+        String firstToolData = secondCallTools.get(0).getResponses().get(0).responseData();
+        assertTrue(firstToolData.startsWith("BEGIN_"));
+        assertTrue(firstToolData.endsWith("_END"));
+        assertTrue(firstToolData.contains("...[compacted "));
+        for (int i = 1; i <= 6; i++) {
+            assertEquals(recentToolOutput, secondCallTools.get(i).getResponses().get(0).responseData());
+        }
+    }
 }

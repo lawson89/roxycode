@@ -138,7 +138,7 @@ public class AiService implements AutoCloseable {
     }
 
     private ChatClient buildChatClient(ChatClient.Builder builder) {
-        return builder.defaultAdvisors(new ModelCallRetryAdvisor()).build();
+        return builder.defaultAdvisors(new ToolHistoryCompactionAdvisor(), new ModelCallRetryAdvisor()).build();
     }
 
     private GenAiConnectionConfig resolveConfiguredConnection() {
