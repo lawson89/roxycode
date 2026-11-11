@@ -772,7 +772,7 @@ public final class SwingHtmlUtils {
             if (node instanceof FencedCodeBlock fenced) {
                 language = fenced.getInfo().toString();
             }
-            if (PlantUmlRenderer.isDiagramLanguage(language)) {
+            if (PlantUmlRenderer.isDiagramBlock(language, code)) {
                 Optional<String> diagramHtml = PlantUmlRenderer.renderDiagramHtml(code, language, FlatLaf.isLafDark());
                 if (diagramHtml.isPresent()) {
                     html.raw(diagramHtml.get());

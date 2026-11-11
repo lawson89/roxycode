@@ -34,8 +34,9 @@ final class PlantUmlRenderer {
     private static final String TEMP_DIR_PREFIX = "roxycode-diagrams-";
     private static final String LANG_PLANTUML = "plantuml";
     private static final String LANG_PUML = "puml";
+    private static final String LANG_UML = "uml";
     private static final String LANG_DITAA = "ditaa";
-    private static final Set<String> DIAGRAM_LANGUAGES = Set.of(LANG_PLANTUML, LANG_PUML, LANG_DITAA);
+    private static final Set<String> DIAGRAM_LANGUAGES = Set.of(LANG_PLANTUML, LANG_PUML, LANG_UML, LANG_DITAA);
 
     private static final String START_PREFIX = "@start";
     private static final String START_UML = "@startuml";
@@ -46,6 +47,9 @@ final class PlantUmlRenderer {
     private static final String START_WBS = "@startwbs";
     private static final String SMETANA_PRAGMA = "!pragma layout smetana";
     private static final String ERROR_DESCRIPTION_MARKER = "(Error)";
+    private static final char DOUBLE_QUOTE_CHAR = '"';
+    private static final char BACKSLASH_CHAR = '\\';
+    private static final char NEWLINE_CHAR = '\n';
 
     private static final int DITAA_FONT_SIZE = 13;
     private static final int DITAA_PADDING_X = 16;
@@ -88,6 +92,9 @@ final class PlantUmlRenderer {
             skinparam DatabaseBorderColor #334155
             skinparam NodeBackgroundColor #F8FAFC
             skinparam NodeBorderColor #334155
+            skinparam CardBackgroundColor #F8FAFC
+            skinparam CardBorderColor #334155
+            skinparam CardFontColor #0F172A
             """;
 
     private static final String DARK_THEME_DIRECTIVES = """
@@ -127,6 +134,9 @@ final class PlantUmlRenderer {
             skinparam DatabaseBorderColor #94A3B8
             skinparam NodeBackgroundColor #2D2D30
             skinparam NodeBorderColor #94A3B8
+            skinparam CardBackgroundColor #2D2D30
+            skinparam CardBorderColor #94A3B8
+            skinparam CardFontColor #E2E8F0
             """;
 
     private static final String LIGHT_MINDMAP_STYLE = """
@@ -200,6 +210,33 @@ final class PlantUmlRenderer {
         return DIAGRAM_LANGUAGES.contains(normalized);
     }
 
+    public static boolean isDiagramBlock(String language, String code) {
+        if (isDiagramLanguage(language)) {
+            return true;
+        }
+        return startsWithDiagramDirective(code);
+    }
+
+    private static boolean startsWithDiagramDirective(String code) {
+        if (code == null || code.isBlank()) {
+            return false;
+        }
+        String lower = code.trim().toLowerCase(Locale.ROOT);
+        return lower.startsWith(START_UML) || lower.startsWith(START_DITAA) || lower.startsWith(START_MINDMAP)
+                || lower.startsWith(START_WBS);
+    }
+
+    static String resolveEffectiveLanguage(String language, String code) {
+        String normalized = normalizeLanguage(language);
+        if (LANG_DITAA.equals(normalized)) {
+            return LANG_DITAA;
+        }
+        if (code != null && code.trim().toLowerCase(Locale.ROOT).startsWith(START_DITAA)) {
+            return LANG_DITAA;
+        }
+        return LANG_PLANTUML;
+    }
+
     static String normalizeLanguage(String language) {
         if (language == null) {
             return "";
@@ -213,16 +250,77 @@ final class PlantUmlRenderer {
     }
 
     public static Optional<String> renderDiagramHtml(String code, String language, boolean darkTheme) {
-        if (code == null || code.isBlank() || !isDiagramLanguage(language)) {
+        if (code == null || code.isBlank() || !isDiagramBlock(language, code)) {
             return Optional.empty();
         }
-        String normalizedLanguage = normalizeLanguage(language);
-        String normalizedSource = buildPlantUmlSource(code, normalizedLanguage, darkTheme);
+        String effectiveLanguage = resolveEffectiveLanguage(language, code);
+        String normalizedSource = buildPlantUmlSource(code, effectiveLanguage, darkTheme);
         if (normalizedSource.isBlank()) {
             return Optional.empty();
         }
-        DiagramCacheKey cacheKey = new DiagramCacheKey(normalizedSource, darkTheme, normalizedLanguage);
+        DiagramCacheKey cacheKey = new DiagramCacheKey(normalizedSource, darkTheme, effectiveLanguage);
         return DIAGRAM_CACHE.get(cacheKey, PlantUmlRenderer::generateDiagramHtml);
+    }
+
+    static String sanitizeMultilineQuotedStrings(String umlBody) {
+        if (umlBody == null || umlBody.indexOf(DOUBLE_QUOTE_CHAR) < 0 || umlBody.indexOf(NEWLINE_CHAR) < 0) {
+            return umlBody;
+        }
+        StringBuilder sb = new StringBuilder(umlBody.length() + 16);
+        boolean inQuotes = false;
+        int len = umlBody.length();
+        int i = 0;
+        while (i < len) {
+            char c = umlBody.charAt(i);
+            if (c == BACKSLASH_CHAR && i + 1 < len) {
+                sb.append(c).append(umlBody.charAt(i + 1));
+                i += 2;
+                continue;
+            }
+            if (c == DOUBLE_QUOTE_CHAR) {
+                if (inQuotes) {
+                    inQuotes = false;
+                } else if (hasClosingQuote(umlBody, i + 1)) {
+                    inQuotes = true;
+                }
+                sb.append(c);
+                i++;
+                continue;
+            }
+            if (c == NEWLINE_CHAR && inQuotes) {
+                sb.append("\\n");
+                i++;
+                while (i < len) {
+                    char nextChar = umlBody.charAt(i);
+                    if (nextChar == ' ' || nextChar == '\t') {
+                        i++;
+                    } else {
+                        break;
+                    }
+                }
+                continue;
+            }
+            sb.append(c);
+            i++;
+        }
+        return sb.toString();
+    }
+
+    private static boolean hasClosingQuote(String text, int fromIndex) {
+        int len = text.length();
+        int i = fromIndex;
+        while (i < len) {
+            char c = text.charAt(i);
+            if (c == BACKSLASH_CHAR) {
+                i += 2;
+                continue;
+            }
+            if (c == DOUBLE_QUOTE_CHAR) {
+                return true;
+            }
+            i++;
+        }
+        return false;
     }
 
     static String buildPlantUmlSource(String rawCode, String language, boolean darkTheme) {
@@ -242,11 +340,12 @@ final class PlantUmlRenderer {
             return START_DITAA + "\n" + normalizedLines + "\n" + END_DITAA;
         }
 
+        String sanitizedLines = sanitizeMultilineQuotedStrings(normalizedLines);
         String wrapped;
         if (lowerCode.startsWith(START_PREFIX)) {
-            wrapped = normalizedLines;
+            wrapped = sanitizedLines;
         } else {
-            wrapped = START_UML + "\n" + normalizedLines + "\n" + END_UML;
+            wrapped = START_UML + "\n" + sanitizedLines + "\n" + END_UML;
         }
 
         int firstNewline = wrapped.indexOf('\n');

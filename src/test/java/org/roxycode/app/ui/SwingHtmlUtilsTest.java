@@ -130,8 +130,24 @@ class SwingHtmlUtilsTest {
         String renderedValid = SwingHtmlUtils.renderMarkdownToHtml(validDiagramMd);
         assertContainsAll(renderedValid, "diagram-container", "<img src=", "file:");
 
+        String umlAndUnlabeledMd = """
+                ~~~uml
+                rectangle "Step 1: Estimate
+                (detail)" as S1
+                ~~~
+
+                ~~~
+                @startuml
+                Alice -> Bob: From unlabeled fence
+                @enduml
+                ~~~
+                """;
+        String renderedUmlAndUnlabeled = SwingHtmlUtils.renderMarkdownToHtml(umlAndUnlabeledMd);
+        assertContainsAll(renderedUmlAndUnlabeled, "diagram-container", "<img src=", "file:");
+        assertFalse(renderedUmlAndUnlabeled.contains("Alice -&gt; Bob"));
+
         String invalidDiagramMd = """
-                ~~~plantuml
+                ~~~uml
                 invalid plantuml syntax @@@
                 ~~~
                 """;
