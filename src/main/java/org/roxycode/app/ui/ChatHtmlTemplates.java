@@ -27,6 +27,9 @@ public final class ChatHtmlTemplates {
             .compile("([a-zA-Z_][a-zA-Z0-9_]*Service[.][a-zA-Z_][a-zA-Z0-9_]*)[ 	]*[(]");
     private static final Pattern MOVE_TO_FEATURE_MENTION_PATTERN = Pattern.compile(
             "(?:<strong>|<b>|<code>)?" + Pattern.quote("[Move to Feature Request]") + "(?:</code>|</b>|</strong>)?");
+    private static final Pattern APPLY_BUILD_TOML_MENTION_PATTERN = Pattern.compile(
+            "(?:<strong>|<b>|<code>)?" + Pattern.quote("[Apply to build.toml]") + "(?:</code>|</b>|</strong>)?");
+
     private ChatHtmlTemplates() {
     }
 
@@ -50,6 +53,21 @@ public final class ChatHtmlTemplates {
         return MOVE_TO_FEATURE_MENTION_PATTERN.matcher(renderedHtml).replaceAll(Matcher.quoteReplacement(linkHtml));
     }
 
+    public static String renderApplyBuildTomlActionHtml(int messageIndex, boolean applied) {
+        if (applied) {
+            return "<span class='copy-feedback'>&#10003; Applied to build.toml</span>";
+        }
+        return "<a class='feature-action' href='buildtoml:" + messageIndex + "'>[Apply to build.toml]</a>";
+    }
+
+    static String linkifyApplyBuildTomlMentions(String renderedHtml, int messageIndex) {
+        if (StringUtils.isBlank(renderedHtml) || messageIndex < 0 || !renderedHtml.contains("[Apply to build.toml]")) {
+            return StringUtils.defaultString(renderedHtml);
+        }
+        String linkHtml = renderApplyBuildTomlActionHtml(messageIndex, false);
+        return APPLY_BUILD_TOML_MENTION_PATTERN.matcher(renderedHtml).replaceAll(Matcher.quoteReplacement(linkHtml));
+    }
+
     public static String renderCopyActionHtml(int messageIndex, boolean copied) {
         if (copied) {
             return "<span class='copy-feedback'>&#10003; Copied!</span>";
@@ -59,17 +77,27 @@ public final class ChatHtmlTemplates {
 
     public static String renderMessageActionCellContent(String role, int messageIndex, boolean copied,
             boolean showMoveAction) {
-        return renderMessageActionCellContent(role, messageIndex, copied, showMoveAction, false);
+        return renderMessageActionCellContent(role, messageIndex, copied, showMoveAction, false, false, false);
     }
 
     public static String renderMessageActionCellContent(String role, int messageIndex, boolean copied,
             boolean showMoveAction, boolean movedToFeature) {
+        return renderMessageActionCellContent(role, messageIndex, copied, showMoveAction, movedToFeature, false, false);
+    }
+
+    public static String renderMessageActionCellContent(String role, int messageIndex, boolean copied,
+            boolean showMoveAction, boolean movedToFeature, boolean showApplyBuildTomlAction,
+            boolean appliedToBuildToml) {
         String normalizedRole = StringUtils.defaultString(role).toLowerCase(java.util.Locale.ROOT);
-        String moveAction = "";
-        if (ROLE_AI.equals(normalizedRole) && showMoveAction) {
-            moveAction = renderMoveToActionHtml(messageIndex, movedToFeature) + "&nbsp;&nbsp;";
+        StringBuilder actions = new StringBuilder();
+        if (ROLE_AI.equals(normalizedRole) && showApplyBuildTomlAction) {
+            actions.append(renderApplyBuildTomlActionHtml(messageIndex, appliedToBuildToml)).append("&nbsp;&nbsp;");
         }
-        return moveAction + renderCopyActionHtml(messageIndex, copied);
+        if (ROLE_AI.equals(normalizedRole) && showMoveAction) {
+            actions.append(renderMoveToActionHtml(messageIndex, movedToFeature)).append("&nbsp;&nbsp;");
+        }
+        actions.append(renderCopyActionHtml(messageIndex, copied));
+        return actions.toString();
     }
 
     public static String renderUserAttachmentsHtml(List<String> thumbnailBase64List) {
@@ -113,6 +141,13 @@ public final class ChatHtmlTemplates {
 
     public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,
             boolean copied, boolean showMoveAction, boolean movedToFeature, List<String> thumbnailBase64List) {
+        return renderChatEntry(role, content, timestamp, messageIndex, copied, showMoveAction, movedToFeature, false,
+                false, thumbnailBase64List);
+    }
+
+    public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,
+            boolean copied, boolean showMoveAction, boolean movedToFeature, boolean showApplyBuildTomlAction,
+            boolean appliedToBuildToml, List<String> thumbnailBase64List) {
         String normalizedRole = StringUtils.defaultString(role).toLowerCase(java.util.Locale.ROOT);
         if (ROLE_SYSTEM.equalsIgnoreCase(normalizedRole)) {
             String inlineContent = unwrapSingleParagraph(content);
@@ -132,8 +167,9 @@ public final class ChatHtmlTemplates {
         String actionCell = "";
         if ((ROLE_AI.equals(normalizedRole) || ROLE_USER.equals(normalizedRole)) && messageIndex >= 0) {
             actionCell = "<td id='" + COPY_CELL_ID_PREFIX + messageIndex
-                    + "' align='right' valign='middle' nowrap='nowrap'>" + renderMessageActionCellContent(
-                            normalizedRole, messageIndex, copied, showMoveAction, movedToFeature)
+                    + "' align='right' valign='middle' nowrap='nowrap'>"
+                    + renderMessageActionCellContent(normalizedRole, messageIndex, copied, showMoveAction,
+                            movedToFeature, showApplyBuildTomlAction, appliedToBuildToml)
                     + "</td>";
         }
         String attachmentsHtml = "";
@@ -143,6 +179,9 @@ public final class ChatHtmlTemplates {
         String renderedBody = StringUtils.defaultString(content);
         if (ROLE_AI.equals(normalizedRole) && showMoveAction && messageIndex >= 0) {
             renderedBody = linkifyMoveToFeatureMentions(renderedBody, messageIndex);
+        }
+        if (ROLE_AI.equals(normalizedRole) && showApplyBuildTomlAction && messageIndex >= 0) {
+            renderedBody = linkifyApplyBuildTomlMentions(renderedBody, messageIndex);
         }
 
         return """

@@ -88,6 +88,7 @@ class MainFrameTest {
         settingsPanel = new SettingsPanel(settingsService, null);
         GenericBuildToolService buildToolService = mock(GenericBuildToolService.class);
         when(buildToolService.getConfigContent()).thenReturn("");
+        when(buildToolService.buildInteractiveConfigurationPrompt(any(), anyString())).thenReturn("Interactive prompt");
         buildConfigPanel = new BuildConfigPanel(buildToolService, settingsService, projectService);
         ContextManagerPanel contextManagerPanel = new ContextManagerPanel(mock(PromptService.class), projectService);
         AgentMemoryPanel agentMemoryPanel = new AgentMemoryPanel(mock(MemoryService.class), projectService,
@@ -156,6 +157,28 @@ class MainFrameTest {
             frame.showCard(MainFrame.TASK_VIEW);
             frame.updateOnboardingAndNavigationState();
             assertEquals(MainFrame.BUILD_CONFIG_VIEW, frame.currentCard);
+
+            // Verify round-trip Configure with Roxy -> QA_VIEW and [Apply to build.toml] -> BUILD_CONFIG_VIEW
+            frame.showCard(MainFrame.BUILD_CONFIG_VIEW);
+            SwingTestUtils.clickOnEdt(buildConfigPanel.configureWithRoxyButton);
+            SwingTestUtils.awaitFuture(buildConfigPanel.lastAsyncFuture);
+            SwingTestUtils.flushEdt();
+            assertEquals(MainFrame.QA_VIEW, frame.currentCard);
+
+            String appliedToml = String.join(System.lineSeparator(), "[commands]", "compile = './mvnw test-compile'",
+                    "");
+            String aiMsg = String.join(System.lineSeparator(), "~~~toml", "[commands]",
+                    "compile = './mvnw test-compile'", "~~~", "Click [Apply to build.toml].");
+            SwingTestUtils.runOnEdt(() -> {
+                frame.qaChatPanel().appendMessage("ai", aiMsg);
+                frame.qaChatPanel().outputArea
+                        .applyMessageToBuildToml(frame.qaChatPanel().outputArea.exportMessages().size() - 1);
+            });
+            SwingTestUtils.flushEdt();
+            assertEquals(MainFrame.BUILD_CONFIG_VIEW, frame.currentCard);
+            assertEquals(appliedToml, buildConfigPanel.textArea.getText());
+            assertEquals(BuildConfigPanel.APPLIED_FROM_ASK_ROXY_STATUS, buildConfigPanel.statusLabel.getText());
+            assertTrue(frame.qaChatPanel().outputArea.getText().contains("Configuration applied to"));
 
             doAnswer(inv -> {
                 when(projectService.isBuildConfirmed()).thenReturn(true);

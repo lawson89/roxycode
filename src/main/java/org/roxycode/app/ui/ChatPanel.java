@@ -624,6 +624,12 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         }
     }
 
+    public void setOnApplyBuildTomlListener(Consumer<String> listener) {
+        if (outputArea != null) {
+            outputArea.setOnApplyBuildTomlListener(listener);
+        }
+    }
+
     public void setInputText(String text) {
         if (inputArea != null) {
             inputArea.setText(text);
@@ -651,24 +657,31 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         if (trimmed.isEmpty() || "---".equals(trimmed) || "***".equals(trimmed)) {
             return true;
         }
-        return trimmed.contains("[Move to Feature Request]");
+        return trimmed.contains("[Move to Feature Request]") || trimmed.contains("[Apply to build.toml]");
+    }
+
+    public boolean submitPrompt(String prompt) {
+        if (StringUtils.isBlank(prompt)) {
+            return false;
+        }
+        String trimmedPrompt = prompt.trim();
+        boolean canAutoSubmit = isProjectReady() && !isLoading() && !isWaitingUserInput()
+                && !controller.hasPendingPhase() && !inlineActionPanel.isVisible();
+        if (canAutoSubmit) {
+            fileMentionPopup.hidePopup();
+            clearInputText();
+            controller.sendMessage(trimmedPrompt);
+            return true;
+        }
+        setInputText(trimmedPrompt);
+        return false;
     }
 
     public boolean submitMovedFeatureRequest(String content) {
         if (StringUtils.isBlank(content)) {
             return false;
         }
-        String cleanedContent = stripTrailingMoveToFeatureCta(content);
-        boolean canAutoSubmit = isProjectReady() && !isLoading() && !isWaitingUserInput()
-                && !controller.hasPendingPhase() && !inlineActionPanel.isVisible();
-        if (canAutoSubmit) {
-            fileMentionPopup.hidePopup();
-            clearInputText();
-            controller.sendMessage(cleanedContent);
-            return true;
-        }
-        setInputText(cleanedContent);
-        return false;
+        return submitPrompt(stripTrailingMoveToFeatureCta(content));
     }
 
     public void notifyFeatureRequestSent(boolean autoSubmitted) {
@@ -679,6 +692,11 @@ final class ChatPanel extends JPanel implements AutoCloseable {
             notice = "Feature request copied to the **Feature Development** composer.";
         }
         appendMessage(ChatHtmlTemplates.ROLE_SYSTEM, notice);
+        controller.persistActiveChatSession();
+    }
+
+    public void notifyBuildTomlApplied() {
+        appendMessage(ChatHtmlTemplates.ROLE_SYSTEM, "Configuration applied to **Project Settings** (`build.toml`).");
         controller.persistActiveChatSession();
     }
 

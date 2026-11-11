@@ -692,5 +692,40 @@ class GenericBuildToolServiceTest {
 
         assertThrows(IOException.class, () -> buildToolService.extractAndValidateGeneratedToml("   "));
         assertThrows(IOException.class, () -> buildToolService.extractAndValidateGeneratedToml("not = [valid toml"));
+
+        String interactivePrompt = buildToolService.buildInteractiveConfigurationPrompt("maven", currentToml);
+        assertContainsAll(interactivePrompt, "### Interactive Configuration Instructions", "userInputService",
+                "[Apply to build.toml]", "## Target Build Template (maven)", "### pom.xml");
+
+        String markdownWithBuildToml = """
+                Here is your tailored configuration:
+
+                ~~~toml
+                [commands]
+                compile = './mvnw test-compile'
+
+                [sandbox]
+                mode = 'native'
+                ~~~
+
+                Click **[Apply to build.toml]** to apply it.
+                """;
+        String extractedBlock = GenericBuildToolService.extractValidBuildTomlBlock(markdownWithBuildToml);
+        assertNotNull(extractedBlock);
+        assertTrue(extractedBlock.endsWith(System.lineSeparator()));
+        assertContainsAll(extractedBlock, "[commands]", "compile = './mvnw test-compile'", "mode = 'native'");
+
+        assertNull(GenericBuildToolService.extractValidBuildTomlBlock("No code blocks here."));
+        assertNull(GenericBuildToolService.extractValidBuildTomlBlock("""
+                ~~~toml
+                key = 'no commands or sandbox section'
+                ~~~
+                """));
+        assertNull(GenericBuildToolService.extractValidBuildTomlBlock("""
+                ~~~toml
+                [commands]
+                compile = [invalid
+                ~~~
+                """));
     }
 }

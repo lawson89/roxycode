@@ -7,6 +7,7 @@ import java.io.UncheckedIOException;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.apache.commons.lang3.StringUtils;
@@ -48,6 +49,7 @@ final class BuildConfigPanel extends JPanel {
     static final String CONFIGURE_WITH_ROXY_TEXT = "Configure with Roxy";
     static final String CONFIGURING_WITH_ROXY_TEXT = "Configuring...";
     static final String CONFIGURING_WITH_ROXY_STATUS = "Roxy is inspecting project files and configuring build.toml...";
+    static final String APPLIED_FROM_ASK_ROXY_STATUS = "Applied build.toml from Ask Roxy! Review and click 'Confirm & Save Settings'.";
     static final String SAVE_BUTTON_TEXT = "Confirm & Save Settings";
     static final String SAVED_FEEDBACK_BUTTON_TEXT = "Confirmed & Saved!";
     static final String CONFIRMED_BUTTON_TEXT = "Settings Confirmed";
@@ -100,6 +102,7 @@ final class BuildConfigPanel extends JPanel {
     private String savedThinkingLevelId = "";
     String detectedTemplateId = DEFAULT_TEMPLATE_ID;
     private transient Runnable onConfirmSavedCallback;
+    private transient Consumer<String> onConfigureWithRoxyCallback;
     transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
 
     public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
@@ -265,8 +268,13 @@ final class BuildConfigPanel extends JPanel {
     }
 
     void configureWithRoxy() {
-        if (buildToolService == null || aiService == null) {
+        if (buildToolService == null || (onConfigureWithRoxyCallback == null && aiService == null)) {
             UiComponents.showStatusMessage(statusLabel, statusTimer, "Roxy AI service is not available.", false);
+            return;
+        }
+        if (onConfigureWithRoxyCallback != null) {
+            templateConfirmBar.cancel();
+            performConfigureWithRoxy();
             return;
         }
         if (textEditedByUser) {
@@ -282,6 +290,20 @@ final class BuildConfigPanel extends JPanel {
         refreshDetectedTemplate();
         final String templateId = detectedTemplateId;
         final String currentEditorText = textArea.getText();
+
+        if (onConfigureWithRoxyCallback != null) {
+            final Consumer<String> callback = onConfigureWithRoxyCallback;
+            CompletableFuture<String> future = Edt.supplyAsync(
+                    () -> buildToolService.buildInteractiveConfigurationPrompt(templateId, currentEditorText),
+                    callback::accept, ex -> {
+                        Throwable cause = ExceptionUtils.getRootCause(ex);
+                        log.error("Failed to prepare interactive build.toml prompt: {}", cause.getMessage());
+                        UiComponents.showStatusMessage(statusLabel, statusTimer,
+                                "Roxy configuration failed: " + cause.getMessage(), false);
+                    });
+            lastAsyncFuture = future;
+            return future;
+        }
 
         configureWithRoxyButton.setEnabled(false);
         configureWithRoxyButton.setText(CONFIGURING_WITH_ROXY_TEXT);
@@ -597,6 +619,15 @@ final class BuildConfigPanel extends JPanel {
 
     void setOnConfirmSavedCallback(Runnable callback) {
         this.onConfirmSavedCallback = callback;
+    }
+
+    void setOnConfigureWithRoxyCallback(Consumer<String> callback) {
+        this.onConfigureWithRoxyCallback = callback;
+    }
+
+    void applyGeneratedBuildToml(String toml) {
+        setEditorContentProgrammatically(toml, false);
+        UiComponents.showStatusMessage(statusLabel, statusTimer, APPLIED_FROM_ASK_ROXY_STATUS, true);
     }
 
     private void updateTextAreaTheme() {

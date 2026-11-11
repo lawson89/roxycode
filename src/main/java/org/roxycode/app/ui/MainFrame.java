@@ -159,6 +159,16 @@ public final class MainFrame extends JPanel {
                 updateOnboardingAndNavigationState();
                 showCard(QA_VIEW);
             });
+            buildConfigPanel.setOnConfigureWithRoxyCallback(prompt -> {
+                showCard(QA_VIEW);
+                if (qaWorkspacePanel != null) {
+                    qaWorkspacePanel.focusChatInput();
+                }
+                ChatPanel qaChat = qaChatPanel();
+                if (qaChat != null) {
+                    qaChat.submitPrompt(prompt);
+                }
+            });
         }
         handleStartupSettingsCheck();
         checkRequiredSystemToolsOnStartup(systemToolsPanel);
@@ -539,6 +549,16 @@ public final class MainFrame extends JPanel {
                 if (qaChat != null) {
                     qaChat.notifyFeatureRequestSent(autoSubmitted);
                 }
+            }
+        });
+        qaWorkspacePanel.setOnApplyBuildTomlListener(toml -> {
+            ChatPanel qaChat = qaChatPanel();
+            if (qaChat != null) {
+                qaChat.notifyBuildTomlApplied();
+            }
+            showCard(BUILD_CONFIG_VIEW);
+            if (buildConfigPanel != null) {
+                buildConfigPanel.applyGeneratedBuildToml(toml);
             }
         });
         ChatPanel qaChat = qaChatPanel();

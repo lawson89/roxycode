@@ -35,6 +35,24 @@ class MarkdownPaneTest {
         MarkdownPane taskPane = new MarkdownPane(true);
         taskPane.appendMessage("ai", "Task response mentioning [Move to Feature Request]");
         assertFalse(taskPane.getText().contains("feature:0"));
+
+        String[] appliedToml = new String[1];
+        pane.setOnApplyBuildTomlListener(toml -> appliedToml[0] = toml);
+        String buildTomlResponse = String.join(System.lineSeparator(), "Tailored build.toml:", "~~~toml", "[commands]",
+                "compile = './mvnw test-compile'", "[sandbox]", "mode = 'native'", "~~~",
+                "Click **[Apply to build.toml]** to apply.");
+        pane.appendMessage("ai", buildTomlResponse);
+        String htmlWithBuildToml = pane.getText();
+        assertContainsAll(htmlWithBuildToml, "buildtoml:1", "[Apply to", "build.toml]", "feature:1");
+        assertEquals(2, org.apache.commons.lang3.StringUtils.countMatches(htmlWithBuildToml, "buildtoml:1"));
+
+        pane.fireHyperlinkUpdate(new HyperlinkEvent(pane, HyperlinkEvent.EventType.ACTIVATED, null, "buildtoml:1"));
+        assertNotNull(appliedToml[0]);
+        assertTrue(appliedToml[0].contains("compile = './mvnw test-compile'"));
+        assertTrue(pane.getText().contains("Applied to build.toml"));
+
+        taskPane.appendMessage("ai", buildTomlResponse);
+        assertFalse(taskPane.getText().contains("buildtoml:"));
     }
 
     @Test

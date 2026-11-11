@@ -893,6 +893,134 @@ public class GenericBuildToolService {
     }
 
     /**
+     * Builds an interactive prompt for Ask Roxy ({@code EXPLORE} phase) containing the detected build template, current
+     * editor {@code build.toml}, host environment/toolchains, and project build files, instructing Roxy to ask
+     * clarifying questions via {@code userInputService} before generating the final fenced {@code build.toml} block.
+     *
+     * @param templateId
+     *            the target template identifier (or {@code null} to auto-detect)
+     * @param currentEditorToml
+     *            the current {@code build.toml} content in the editor (optional)
+     * @return the interactive configuration prompt string
+     */
+    public String buildInteractiveConfigurationPrompt(@Nullable String templateId, @Nullable String currentEditorToml) {
+        String context = collectBuildConfigurationContext(templateId, currentEditorToml);
+        String nl = System.lineSeparator();
+        String backtickFence = "~~~".replace('~', (char) 96);
+        StringBuilder sb = new StringBuilder(context.length() + 1200);
+        sb.append("Please help me configure build.toml for this project.").append(nl).append(nl);
+        sb.append("### Interactive Configuration Instructions").append(nl);
+        sb.append(
+                "1. **Inspect Context**: Review the host environment, detected JDKs/toolchains, sandbox availability, ")
+                .append("and project build files below (use fileReadService if you need to inspect any additional project files).")
+                .append(nl);
+        sb.append(
+                "2. **Ask Clarifying Questions First**: Before generating the final build.toml, use userInputService ")
+                .append("(selectOption, askText, or confirm) via executeJexl to ask me about any meaningful configuration choices up front:")
+                .append(nl);
+        sb.append(
+                "   - **Sandbox Mode**: If multiple execution modes are available (e.g., Native Sandbox bwrap/sandbox-exec, Docker, or host 'none'), ask which sandbox mode I prefer.")
+                .append(nl);
+        sb.append(
+                "   - **Toolchain / Runtime & Custom Flags**: If multiple JDKs, toolchains, Docker images, or custom build/test/lint flags are relevant, ask for my preference.")
+                .append(nl);
+        sb.append(
+                "3. **Output Complete build.toml**: Once I answer, output the complete, tailored build.toml inside a single fenced ")
+                .append(backtickFence).append("toml")
+                .append(" code block (including [commands], [env], [parse], and [sandbox]), ")
+                .append("and remind me that I can click **[Apply to build.toml]** on your message to apply it directly to **Project Settings**.")
+                .append(nl).append(nl);
+        sb.append(context);
+        return sb.toString();
+    }
+
+    /**
+     * Scans a Markdown message for fenced code blocks and returns the last valid {@code build.toml} block that contains
+     * a {@code [commands]} or {@code [sandbox]} section and parses cleanly into a {@link BuildConfig}.
+     *
+     * @param markdown
+     *            the raw Markdown message text
+     * @return the normalized TOML content ending with a line separator, or {@code null} if no valid {@code build.toml}
+     *         block is present
+     */
+    public static @Nullable String extractValidBuildTomlBlock(@Nullable String markdown) {
+        if (StringUtils.isBlank(markdown)) {
+            return null;
+        }
+        List<String> blocks = extractFencedCodeBlocks(markdown);
+        if (blocks.isEmpty()) {
+            return null;
+        }
+        TomlMapper mapper = new TomlMapper();
+        String nl = System.lineSeparator();
+        String validToml = null;
+        for (String block : blocks) {
+            String trimmed = block.trim();
+            if (!containsBuildTomlSectionHeader(trimmed)) {
+                continue;
+            }
+            try {
+                mapper.readValue(BuildOutputParser.sanitizeTomlEscapes(trimmed), BuildConfig.class);
+                if (trimmed.endsWith(nl)) {
+                    validToml = trimmed;
+                } else {
+                    validToml = trimmed + nl;
+                }
+            } catch (IOException ignored) {
+                // Not a valid build.toml block
+            }
+        }
+        return validToml;
+    }
+
+    private static boolean containsBuildTomlSectionHeader(String tomlContent) {
+        for (String line : tomlContent.lines().toList()) {
+            String stripped = line.trim();
+            if ("[commands]".equals(stripped) || "[sandbox]".equals(stripped)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static List<String> extractFencedCodeBlocks(String markdown) {
+        List<String> blocks = new ArrayList<>();
+        List<String> lines = markdown.lines().toList();
+        String activeFence = "";
+        StringBuilder currentBlock = new StringBuilder();
+        String backtickFence = "~~~".replace('~', (char) 96);
+        String nl = System.lineSeparator();
+
+        for (String line : lines) {
+            String trimmed = line.trim();
+            if (activeFence.isEmpty()) {
+                String fenceType = "";
+                if (trimmed.startsWith(backtickFence)) {
+                    fenceType = backtickFence;
+                } else if (trimmed.startsWith("~~~")) {
+                    fenceType = "~~~";
+                }
+                if (!fenceType.isEmpty()) {
+                    String info = trimmed.substring(fenceType.length()).trim().toLowerCase(java.util.Locale.ROOT);
+                    if (info.isEmpty() || "toml".equals(info) || "ini".equals(info) || "build.toml".equals(info)) {
+                        activeFence = fenceType;
+                        currentBlock.setLength(0);
+                    }
+                }
+            } else if (trimmed.startsWith(activeFence) && trimmed.substring(activeFence.length()).trim().isEmpty()) {
+                blocks.add(currentBlock.toString());
+                activeFence = "";
+            } else {
+                if (currentBlock.length() > 0) {
+                    currentBlock.append(nl);
+                }
+                currentBlock.append(line);
+            }
+        }
+        return blocks;
+    }
+
+    /**
      * Extracts raw TOML content from an AI response (stripping optional Markdown code fences) and validates that it
      * parses cleanly into a {@link BuildConfig}.
      *

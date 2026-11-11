@@ -298,5 +298,19 @@ class BuildConfigPanelTest {
         assertFalse(panel.configureStatusLabel.isVisible());
         assertEquals("Roxy configuration failed: Invalid TOML syntax", panel.statusLabel.getText());
         assertEquals("# Unsaved user edit", panel.textArea.getText());
+
+        // Verify interactive callback routing and applyGeneratedBuildToml
+        String[] interactivePromptCaptured = new String[1];
+        when(buildToolService.buildInteractiveConfigurationPrompt(eq("maven"), anyString()))
+                .thenReturn("Interactive prompt for Ask Roxy");
+        panel.setOnConfigureWithRoxyCallback(p -> interactivePromptCaptured[0] = p);
+        SwingTestUtils.clickOnEdt(panel.configureWithRoxyButton);
+        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
+        assertEquals("Interactive prompt for Ask Roxy", interactivePromptCaptured[0]);
+
+        SwingTestUtils.runOnEdt(() -> panel.applyGeneratedBuildToml(tailoredToml));
+        assertEquals(tailoredToml, panel.textArea.getText());
+        assertTrue(panel.hasUnsavedChanges());
+        assertEquals(BuildConfigPanel.APPLIED_FROM_ASK_ROXY_STATUS, panel.statusLabel.getText());
     }
 }

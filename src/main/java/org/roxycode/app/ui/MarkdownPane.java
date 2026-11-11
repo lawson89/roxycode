@@ -14,6 +14,7 @@ import javax.swing.text.StyleConstants;
 import javax.swing.text.html.HTML;
 import javax.swing.text.html.HTMLDocument;
 import org.apache.commons.lang3.StringUtils;
+import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.model.ChatTranscriptEntry;
 
 /**
@@ -24,6 +25,7 @@ final class MarkdownPane extends JTextPane {
     private static final long serialVersionUID = 1L;
     private static final String COPY_PREFIX = "copy:";
     private static final String FEATURE_PREFIX = "feature:";
+    private static final String BUILD_TOML_PREFIX = "buildtoml:";
     private static final String TOGGLE_TOOL_PREFIX = "toggle-tool:";
     private static final int COPY_FEEDBACK_DELAY_MS = 1500;
     private static final int INITIAL_MESSAGE_COUNT = 1;
@@ -34,6 +36,7 @@ final class MarkdownPane extends JTextPane {
     private final List<Message> messages = new ArrayList<>();
     private final boolean taskMode;
     private java.util.function.Consumer<String> onMoveToFeatureListener;
+    private java.util.function.Consumer<String> onApplyBuildTomlListener;
     int copiedMessageIndex = -1;
     Timer copyFeedbackTimer;
     String lastCopiedMarkdown;
@@ -52,7 +55,8 @@ final class MarkdownPane extends JTextPane {
     }
 
     private record Message(String role, String content, String timestamp, boolean isTool, boolean success, String error,
-            String renderedHtml, boolean toolExpanded, boolean movedToFeature, List<String> thumbnailBase64List) {
+            String renderedHtml, boolean toolExpanded, boolean movedToFeature, String extractedBuildToml,
+            boolean appliedToBuildToml, List<String> thumbnailBase64List) {
     }
 
     public MarkdownPane(boolean taskMode) {
@@ -87,6 +91,11 @@ final class MarkdownPane extends JTextPane {
                 moveMessageToFeature(Integer.parseInt(desc.substring(FEATURE_PREFIX.length())));
             } catch (NumberFormatException ignored) {
             }
+        } else if (desc.startsWith(BUILD_TOML_PREFIX)) {
+            try {
+                applyMessageToBuildToml(Integer.parseInt(desc.substring(BUILD_TOML_PREFIX.length())));
+            } catch (NumberFormatException ignored) {
+            }
         } else if (desc.startsWith(TOGGLE_TOOL_PREFIX)) {
             try {
                 toggleToolLog(Integer.parseInt(desc.substring(TOGGLE_TOOL_PREFIX.length())));
@@ -117,6 +126,17 @@ final class MarkdownPane extends JTextPane {
         this.onMoveToFeatureListener = listener;
     }
 
+    public void setOnApplyBuildTomlListener(java.util.function.Consumer<String> listener) {
+        this.onApplyBuildTomlListener = listener;
+    }
+
+    private String resolveExtractedBuildToml(String role, String content) {
+        if (!taskMode && ChatHtmlTemplates.ROLE_AI.equalsIgnoreCase(role)) {
+            return GenericBuildToolService.extractValidBuildTomlBlock(content);
+        }
+        return null;
+    }
+
     public void appendMessage(String role, String content) {
         appendMessage(role, content, List.of());
     }
@@ -130,16 +150,17 @@ final class MarkdownPane extends JTextPane {
         } else {
             safeThumbs = List.copyOf(thumbnailBase64List);
         }
+        String extractedToml = resolveExtractedBuildToml(role, safeContent);
         addAndRenderMessage(new Message(role, safeContent, timestamp, false, true, null,
-                renderMarkdownBodySafely(safeContent), true, false, safeThumbs));
+                renderMarkdownBodySafely(safeContent), true, false, extractedToml, false, safeThumbs));
     }
 
     public void appendToolLog(String output, boolean success, String error) {
         String safeOutput = StringUtils.defaultString(output);
         String timestamp = LocalDateTime.now().format(TIME_FORMATTER);
         boolean expanded = ChatHtmlTemplates.shouldDefaultToolExpanded(safeOutput, success);
-        addAndRenderMessage(
-                new Message(null, safeOutput, timestamp, true, success, error, null, expanded, false, List.of()));
+        addAndRenderMessage(new Message(null, safeOutput, timestamp, true, success, error, null, expanded, false, null,
+                false, List.of()));
     }
 
     private void addAndRenderMessage(Message msg) {
@@ -171,7 +192,8 @@ final class MarkdownPane extends JTextPane {
             return;
         }
         Message updated = new Message(msg.role(), msg.content(), msg.timestamp(), true, msg.success(), msg.error(),
-                msg.renderedHtml(), !msg.toolExpanded(), msg.movedToFeature(), msg.thumbnailBase64List());
+                msg.renderedHtml(), !msg.toolExpanded(), msg.movedToFeature(), msg.extractedBuildToml(),
+                msg.appliedToBuildToml(), msg.thumbnailBase64List());
         messages.set(index, updated);
         if (!updateToolCellInPlace(index, updated)) {
             renderAll(false);
@@ -243,7 +265,8 @@ final class MarkdownPane extends JTextPane {
         }
         if (!msg.movedToFeature()) {
             Message updated = new Message(msg.role(), msg.content(), msg.timestamp(), msg.isTool(), msg.success(),
-                    msg.error(), msg.renderedHtml(), msg.toolExpanded(), true, msg.thumbnailBase64List());
+                    msg.error(), msg.renderedHtml(), msg.toolExpanded(), true, msg.extractedBuildToml(),
+                    msg.appliedToBuildToml(), msg.thumbnailBase64List());
             messages.set(index, updated);
             if (!updateActionCellInPlace(index)) {
                 renderAll(false);
@@ -251,6 +274,28 @@ final class MarkdownPane extends JTextPane {
         }
         if (onMoveToFeatureListener != null) {
             onMoveToFeatureListener.accept(msg.content());
+        }
+    }
+
+    void applyMessageToBuildToml(int index) {
+        if (index < 0 || index >= messages.size()) {
+            return;
+        }
+        Message msg = messages.get(index);
+        if (msg.isTool() || StringUtils.isBlank(msg.extractedBuildToml())) {
+            return;
+        }
+        if (!msg.appliedToBuildToml()) {
+            Message updated = new Message(msg.role(), msg.content(), msg.timestamp(), msg.isTool(), msg.success(),
+                    msg.error(), msg.renderedHtml(), msg.toolExpanded(), msg.movedToFeature(), msg.extractedBuildToml(),
+                    true, msg.thumbnailBase64List());
+            messages.set(index, updated);
+            if (!updateActionCellInPlace(index)) {
+                renderAll(false);
+            }
+        }
+        if (onApplyBuildTomlListener != null) {
+            onApplyBuildTomlListener.accept(msg.extractedBuildToml());
         }
     }
 
@@ -267,15 +312,19 @@ final class MarkdownPane extends JTextPane {
             boolean copied = messageIndex == this.copiedMessageIndex;
             String role = ChatHtmlTemplates.ROLE_AI;
             boolean movedToFeature = false;
+            boolean showApplyBuildToml = false;
+            boolean appliedToBuildToml = false;
             if (messageIndex >= 0 && messageIndex < messages.size()) {
                 Message msg = messages.get(messageIndex);
                 if (msg.role() != null) {
                     role = msg.role();
                 }
                 movedToFeature = msg.movedToFeature();
+                showApplyBuildToml = !taskMode && StringUtils.isNotBlank(msg.extractedBuildToml());
+                appliedToBuildToml = msg.appliedToBuildToml();
             }
             doc.setInnerHTML(cellElem, ChatHtmlTemplates.renderMessageActionCellContent(role, messageIndex, copied,
-                    !taskMode, movedToFeature));
+                    !taskMode, movedToFeature, showApplyBuildToml, appliedToBuildToml));
             setCaretPosition(Math.min(savedCaret, doc.getLength()));
             return true;
         } catch (BadLocationException | IOException e) {
@@ -351,8 +400,10 @@ final class MarkdownPane extends JTextPane {
             if (msg.role() != null) {
                 safeRole = msg.role().toLowerCase(Locale.ROOT);
             }
+            boolean showApplyBuildToml = !taskMode && StringUtils.isNotBlank(msg.extractedBuildToml());
             return ChatHtmlTemplates.renderChatEntry(safeRole, msg.renderedHtml(), msg.timestamp(), index,
-                    index == copiedMessageIndex, !taskMode, msg.movedToFeature(), msg.thumbnailBase64List());
+                    index == copiedMessageIndex, !taskMode, msg.movedToFeature(), showApplyBuildToml,
+                    msg.appliedToBuildToml(), msg.thumbnailBase64List());
         } catch (Exception e) {
             return ERROR_RENDERING_HTML;
         }
@@ -413,10 +464,12 @@ final class MarkdownPane extends JTextPane {
                         LocalDateTime.now().format(TIME_FORMATTER));
                 if (entry.isTool()) {
                     messages.add(new Message(null, safeContent, safeTimestamp, true, entry.success(), entry.error(),
-                            null, entry.toolExpanded(), false, List.of()));
+                            null, entry.toolExpanded(), false, null, false, List.of()));
                 } else {
+                    String extractedToml = resolveExtractedBuildToml(entry.role(), safeContent);
                     messages.add(new Message(entry.role(), safeContent, safeTimestamp, false, true, null,
-                            renderMarkdownBodySafely(safeContent), true, false, entry.thumbnailBase64List()));
+                            renderMarkdownBodySafely(safeContent), true, false, extractedToml, false,
+                            entry.thumbnailBase64List()));
                 }
             }
         }
