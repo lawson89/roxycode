@@ -31,6 +31,13 @@ public final class ChatHtmlTemplates {
     }
 
     public static String renderMoveToActionHtml(int messageIndex) {
+        return renderMoveToActionHtml(messageIndex, false);
+    }
+
+    public static String renderMoveToActionHtml(int messageIndex, boolean moved) {
+        if (moved) {
+            return "<span class='copy-feedback'>&#10003; Sent to Feature Development</span>";
+        }
         return "<a class='feature-action' href='feature:" + messageIndex + "'>[Move to Feature Request]</a>";
     }
 
@@ -52,10 +59,15 @@ public final class ChatHtmlTemplates {
 
     public static String renderMessageActionCellContent(String role, int messageIndex, boolean copied,
             boolean showMoveAction) {
+        return renderMessageActionCellContent(role, messageIndex, copied, showMoveAction, false);
+    }
+
+    public static String renderMessageActionCellContent(String role, int messageIndex, boolean copied,
+            boolean showMoveAction, boolean movedToFeature) {
         String normalizedRole = StringUtils.defaultString(role).toLowerCase(java.util.Locale.ROOT);
         String moveAction = "";
         if (ROLE_AI.equals(normalizedRole) && showMoveAction) {
-            moveAction = renderMoveToActionHtml(messageIndex) + "&nbsp;&nbsp;";
+            moveAction = renderMoveToActionHtml(messageIndex, movedToFeature) + "&nbsp;&nbsp;";
         }
         return moveAction + renderCopyActionHtml(messageIndex, copied);
     }
@@ -95,6 +107,12 @@ public final class ChatHtmlTemplates {
 
     public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,
             boolean copied, boolean showMoveAction, List<String> thumbnailBase64List) {
+        return renderChatEntry(role, content, timestamp, messageIndex, copied, showMoveAction, false,
+                thumbnailBase64List);
+    }
+
+    public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,
+            boolean copied, boolean showMoveAction, boolean movedToFeature, List<String> thumbnailBase64List) {
         String normalizedRole = StringUtils.defaultString(role).toLowerCase(java.util.Locale.ROOT);
         if (ROLE_SYSTEM.equalsIgnoreCase(normalizedRole)) {
             String inlineContent = unwrapSingleParagraph(content);
@@ -114,8 +132,9 @@ public final class ChatHtmlTemplates {
         String actionCell = "";
         if ((ROLE_AI.equals(normalizedRole) || ROLE_USER.equals(normalizedRole)) && messageIndex >= 0) {
             actionCell = "<td id='" + COPY_CELL_ID_PREFIX + messageIndex
-                    + "' align='right' valign='middle' nowrap='nowrap'>"
-                    + renderMessageActionCellContent(normalizedRole, messageIndex, copied, showMoveAction) + "</td>";
+                    + "' align='right' valign='middle' nowrap='nowrap'>" + renderMessageActionCellContent(
+                            normalizedRole, messageIndex, copied, showMoveAction, movedToFeature)
+                    + "</td>";
         }
         String attachmentsHtml = "";
         if (ROLE_USER.equals(normalizedRole)) {

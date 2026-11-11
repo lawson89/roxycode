@@ -29,6 +29,9 @@ class MarkdownPaneTest {
 
         pane.fireHyperlinkUpdate(new HyperlinkEvent(pane, HyperlinkEvent.EventType.ACTIVATED, null, "feature:0"));
         assertEquals(aiContent, movedContent[0]);
+        assertTrue(pane.getText().contains("Sent to Feature Development"));
+        pane.copyMessageMarkdown(0);
+        assertContainsAll(pane.getText(), "Sent to Feature Development", "Copied!");
         MarkdownPane taskPane = new MarkdownPane(true);
         taskPane.appendMessage("ai", "Task response mentioning [Move to Feature Request]");
         assertFalse(taskPane.getText().contains("feature:0"));

@@ -968,6 +968,16 @@ class ChatControllerTest extends ChatTestFixture {
         assertEquals("Queued while approval pending", taskPanel.inputArea.getText());
         verifyNoInteractions(aiService);
 
+        ChatPanel qaPanel = createExploreChatPanel(directExecutor);
+        SwingTestUtils.runOnEdt(() -> {
+            qaPanel.notifyFeatureRequestSent(true);
+            qaPanel.notifyFeatureRequestSent(false);
+        });
+        assertContainsAll(qaPanel.outputArea.getText(), "Feature request sent to", "Feature request copied to the",
+                "composer");
+        assertEquals(2, qaPanel.exportMessages().size());
+        assertEquals(ChatHtmlTemplates.ROLE_SYSTEM, qaPanel.exportMessages().get(0).role());
+
         // 3. Smart auto-scroll helper checks whether scrollbar is near the bottom
         javax.swing.JScrollBar scrollBar = new javax.swing.JScrollBar(java.awt.Adjustable.VERTICAL, 0, 100, 0, 1000);
         scrollBar.setValue(850); // remaining = 1000 - (850 + 100) = 50 <= 80

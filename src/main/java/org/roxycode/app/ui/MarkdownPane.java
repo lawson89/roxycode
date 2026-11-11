@@ -52,7 +52,7 @@ final class MarkdownPane extends JTextPane {
     }
 
     private record Message(String role, String content, String timestamp, boolean isTool, boolean success, String error,
-            String renderedHtml, boolean toolExpanded, List<String> thumbnailBase64List) {
+            String renderedHtml, boolean toolExpanded, boolean movedToFeature, List<String> thumbnailBase64List) {
     }
 
     public MarkdownPane(boolean taskMode) {
@@ -84,10 +84,7 @@ final class MarkdownPane extends JTextPane {
             }
         } else if (desc.startsWith(FEATURE_PREFIX)) {
             try {
-                int index = Integer.parseInt(desc.substring(FEATURE_PREFIX.length()));
-                if (index >= 0 && index < messages.size() && onMoveToFeatureListener != null) {
-                    onMoveToFeatureListener.accept(messages.get(index).content());
-                }
+                moveMessageToFeature(Integer.parseInt(desc.substring(FEATURE_PREFIX.length())));
             } catch (NumberFormatException ignored) {
             }
         } else if (desc.startsWith(TOGGLE_TOOL_PREFIX)) {
@@ -134,14 +131,15 @@ final class MarkdownPane extends JTextPane {
             safeThumbs = List.copyOf(thumbnailBase64List);
         }
         addAndRenderMessage(new Message(role, safeContent, timestamp, false, true, null,
-                renderMarkdownBodySafely(safeContent), true, safeThumbs));
+                renderMarkdownBodySafely(safeContent), true, false, safeThumbs));
     }
 
     public void appendToolLog(String output, boolean success, String error) {
         String safeOutput = StringUtils.defaultString(output);
         String timestamp = LocalDateTime.now().format(TIME_FORMATTER);
         boolean expanded = ChatHtmlTemplates.shouldDefaultToolExpanded(safeOutput, success);
-        addAndRenderMessage(new Message(null, safeOutput, timestamp, true, success, error, null, expanded, List.of()));
+        addAndRenderMessage(
+                new Message(null, safeOutput, timestamp, true, success, error, null, expanded, false, List.of()));
     }
 
     private void addAndRenderMessage(Message msg) {
@@ -173,7 +171,7 @@ final class MarkdownPane extends JTextPane {
             return;
         }
         Message updated = new Message(msg.role(), msg.content(), msg.timestamp(), true, msg.success(), msg.error(),
-                msg.renderedHtml(), !msg.toolExpanded(), msg.thumbnailBase64List());
+                msg.renderedHtml(), !msg.toolExpanded(), msg.movedToFeature(), msg.thumbnailBase64List());
         messages.set(index, updated);
         if (!updateToolCellInPlace(index, updated)) {
             renderAll(false);
@@ -235,6 +233,27 @@ final class MarkdownPane extends JTextPane {
         copyFeedbackTimer.start();
     }
 
+    void moveMessageToFeature(int index) {
+        if (index < 0 || index >= messages.size()) {
+            return;
+        }
+        Message msg = messages.get(index);
+        if (msg.isTool()) {
+            return;
+        }
+        if (!msg.movedToFeature()) {
+            Message updated = new Message(msg.role(), msg.content(), msg.timestamp(), msg.isTool(), msg.success(),
+                    msg.error(), msg.renderedHtml(), msg.toolExpanded(), true, msg.thumbnailBase64List());
+            messages.set(index, updated);
+            if (!updateActionCellInPlace(index)) {
+                renderAll(false);
+            }
+        }
+        if (onMoveToFeatureListener != null) {
+            onMoveToFeatureListener.accept(msg.content());
+        }
+    }
+
     private boolean updateActionCellInPlace(int messageIndex) {
         if (!(getDocument() instanceof HTMLDocument doc)) {
             return false;
@@ -247,11 +266,16 @@ final class MarkdownPane extends JTextPane {
         try {
             boolean copied = messageIndex == this.copiedMessageIndex;
             String role = ChatHtmlTemplates.ROLE_AI;
-            if (messageIndex >= 0 && messageIndex < messages.size() && messages.get(messageIndex).role() != null) {
-                role = messages.get(messageIndex).role();
+            boolean movedToFeature = false;
+            if (messageIndex >= 0 && messageIndex < messages.size()) {
+                Message msg = messages.get(messageIndex);
+                if (msg.role() != null) {
+                    role = msg.role();
+                }
+                movedToFeature = msg.movedToFeature();
             }
-            doc.setInnerHTML(cellElem,
-                    ChatHtmlTemplates.renderMessageActionCellContent(role, messageIndex, copied, !taskMode));
+            doc.setInnerHTML(cellElem, ChatHtmlTemplates.renderMessageActionCellContent(role, messageIndex, copied,
+                    !taskMode, movedToFeature));
             setCaretPosition(Math.min(savedCaret, doc.getLength()));
             return true;
         } catch (BadLocationException | IOException e) {
@@ -328,7 +352,7 @@ final class MarkdownPane extends JTextPane {
                 safeRole = msg.role().toLowerCase(Locale.ROOT);
             }
             return ChatHtmlTemplates.renderChatEntry(safeRole, msg.renderedHtml(), msg.timestamp(), index,
-                    index == copiedMessageIndex, !taskMode, msg.thumbnailBase64List());
+                    index == copiedMessageIndex, !taskMode, msg.movedToFeature(), msg.thumbnailBase64List());
         } catch (Exception e) {
             return ERROR_RENDERING_HTML;
         }
@@ -389,10 +413,10 @@ final class MarkdownPane extends JTextPane {
                         LocalDateTime.now().format(TIME_FORMATTER));
                 if (entry.isTool()) {
                     messages.add(new Message(null, safeContent, safeTimestamp, true, entry.success(), entry.error(),
-                            null, entry.toolExpanded(), List.of()));
+                            null, entry.toolExpanded(), false, List.of()));
                 } else {
                     messages.add(new Message(entry.role(), safeContent, safeTimestamp, false, true, null,
-                            renderMarkdownBodySafely(safeContent), true, entry.thumbnailBase64List()));
+                            renderMarkdownBodySafely(safeContent), true, false, entry.thumbnailBase64List()));
                 }
             }
         }

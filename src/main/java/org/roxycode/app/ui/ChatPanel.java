@@ -671,6 +671,17 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         return false;
     }
 
+    public void notifyFeatureRequestSent(boolean autoSubmitted) {
+        String notice;
+        if (autoSubmitted) {
+            notice = "Feature request sent to **Feature Development**.";
+        } else {
+            notice = "Feature request copied to the **Feature Development** composer.";
+        }
+        appendMessage(ChatHtmlTemplates.ROLE_SYSTEM, notice);
+        controller.persistActiveChatSession();
+    }
+
     static boolean isScrollBarNearBottom(JScrollBar scrollBar) {
         if (scrollBar == null) {
             return true;

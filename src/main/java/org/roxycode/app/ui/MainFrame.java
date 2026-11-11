@@ -534,7 +534,11 @@ public final class MainFrame extends JPanel {
             showCard(TASK_VIEW);
             ChatPanel taskChat = taskChatPanel();
             if (taskChat != null) {
-                taskChat.submitMovedFeatureRequest(content);
+                boolean autoSubmitted = taskChat.submitMovedFeatureRequest(content);
+                ChatPanel qaChat = qaChatPanel();
+                if (qaChat != null) {
+                    qaChat.notifyFeatureRequestSent(autoSubmitted);
+                }
             }
         });
         ChatPanel qaChat = qaChatPanel();
