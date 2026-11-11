@@ -260,17 +260,25 @@ class BuildContainerService {
         // Essential system directories for binaries, toolchains, and libraries
         List<String> systemPaths = List.of("/usr", "/bin", "/lib", "/lib64", "/opt", "/etc/alternatives", "/etc/ssl",
                 "/etc/pki", "/etc/resolv.conf", "/etc/hosts");
+        List<Path> mountedSystemDirs = new ArrayList<>();
         for (String path : systemPaths) {
-            if (Files.exists(Path.of(path))) {
+            Path sysPath = Path.of(path).toAbsolutePath().normalize();
+            if (Files.exists(sysPath)) {
                 Collections.addAll(args, "--ro-bind", path, path);
+                if (Files.isDirectory(sysPath)) {
+                    mountedSystemDirs.add(sysPath);
+                }
             }
         }
 
         if (readablePaths != null) {
             for (Path p : readablePaths) {
                 if (p != null) {
-                    String pathStr = p.toAbsolutePath().normalize().toString();
-                    Collections.addAll(args, "--ro-bind", pathStr, pathStr);
+                    Path normalized = p.toAbsolutePath().normalize();
+                    if (!isCoveredBySystemMount(normalized, mountedSystemDirs)) {
+                        String pathStr = normalized.toString();
+                        Collections.addAll(args, "--ro-bind", pathStr, pathStr);
+                    }
                 }
             }
         }
@@ -286,6 +294,19 @@ class BuildContainerService {
         Collections.addAll(args, "--bind", rootStr, rootStr, "--chdir", rootStr, "--die-with-parent", "sh", "-c",
                 command);
         return List.copyOf(args);
+    }
+
+    static boolean isCoveredBySystemMount(Path candidate, List<Path> mountedSystemDirs) {
+        if (candidate == null || mountedSystemDirs == null) {
+            return false;
+        }
+        Path normalizedCandidate = candidate.toAbsolutePath().normalize();
+        for (Path sysDir : mountedSystemDirs) {
+            if (sysDir != null && normalizedCandidate.startsWith(sysDir)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     static String buildSeatbeltProfile(Path projectRoot, List<Path> readablePaths, List<Path> writablePaths) {

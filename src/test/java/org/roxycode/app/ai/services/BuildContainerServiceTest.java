@@ -296,18 +296,30 @@ class BuildContainerServiceTest {
             assertEquals(List.of(expectedHomeCache, existingSubdir.toAbsolutePath().normalize()), resolved);
 
             String rootStr = projectRoot.toAbsolutePath().normalize().toString();
-            List<String> bwrapCmd = BuildContainerService.buildBubblewrapCommand(projectRoot, resolvedReadable,
+            Path redundantUsrJdk = Path.of("/usr/lib/jvm/temurin-21-jdk-amd64");
+            Path redundantOptJdk = Path.of("/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64");
+            List<Path> bwrapReadableInput = List.of(existingSdkman.toAbsolutePath().normalize(), redundantUsrJdk,
+                    redundantOptJdk);
+            List<String> bwrapCmd = BuildContainerService.buildBubblewrapCommand(projectRoot, bwrapReadableInput,
                     resolved, "./mvnw compile");
             assertTrue(bwrapCmd.containsAll(List.of("bwrap", "--dev", "/dev", "--proc", "/proc", "--tmpfs", "/tmp")));
+            assertTrue(BuildContainerService.isCoveredBySystemMount(redundantUsrJdk, List.of(Path.of("/usr"))));
+            assertTrue(BuildContainerService.isCoveredBySystemMount(redundantOptJdk, List.of(Path.of("/opt"))));
+            assertFalse(BuildContainerService.isCoveredBySystemMount(existingSdkman,
+                    List.of(Path.of("/usr"), Path.of("/opt"))));
             // System binds (at least /usr and /bin should exist on most systems)
             if (Files.exists(Path.of("/usr"))) {
                 assertTrue(bwrapCmd.contains("/usr"));
+                assertFalse(bwrapCmd.contains(redundantUsrJdk.toString()),
+                        "Subpaths under mounted /usr must not be redundantly bound");
             }
             if (Files.exists(Path.of("/bin"))) {
                 assertTrue(bwrapCmd.contains("/bin"));
             }
             if (Files.exists(Path.of("/opt"))) {
                 assertTrue(bwrapCmd.contains("/opt"));
+                assertFalse(bwrapCmd.contains(redundantOptJdk.toString()),
+                        "Subpaths under mounted /opt must not be redundantly bound");
             }
             // Readable binds mounted via --ro-bind before writable binds
             int sdkmanIndex = bwrapCmd.indexOf(existingSdkman.toAbsolutePath().normalize().toString());

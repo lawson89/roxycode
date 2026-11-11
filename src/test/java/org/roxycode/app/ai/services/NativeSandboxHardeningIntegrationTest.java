@@ -10,12 +10,14 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledIfEnvironmentVariable;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.services.BuildContainerService.SandboxConfig;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.SystemToolService;
 
+@DisabledIfEnvironmentVariable(named = "CI", matches = "(?i)true", disabledReason = "Skipped in CI environments where container/namespace bind mounts are restricted")
 class NativeSandboxHardeningIntegrationTest {
 
     @TempDir
