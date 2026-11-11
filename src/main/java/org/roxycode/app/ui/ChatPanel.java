@@ -70,7 +70,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     private static final int AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 80;
     private static final int ACTIVITY_ANIMATION_DELAY_MS = 500;
     private static final int ACTIVITY_ELAPSED_DELAY_MS = 1000;
-    private static final Codicons[] HOURGLASS_FRAMES = {Codicons.SYNC, Codicons.PULSE, Codicons.WATCH};
+    private static final Codicons[] HOURGLASS_FRAMES = {Codicons.CIRCLE_FILLED, Codicons.CIRCLE_OUTLINE};
 
     public record NewTopicChoice(boolean proceed, boolean saveTopic, String topicName) {
     }
