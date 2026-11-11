@@ -52,7 +52,7 @@ public class AiConfig {
     public static final int DEFAULT_HTTP_TIMEOUT_MS = 120_000;
     public static final String UNCONFIGURED_API_KEY_PLACEHOLDER = "unconfigured-api-key";
     public static final int DEFAULT_MAX_TOOL_CALLS = 100;
-    public static final int DEFAULT_MAX_RETRY_ATTEMPTS = 6;
+    public static final int DEFAULT_MAX_RETRY_ATTEMPTS = 3;
     public static final Duration DEFAULT_INITIAL_BACKOFF = Duration.ofMillis(2000);
     public static final double DEFAULT_BACKOFF_MULTIPLIER = 2.0;
     public static final Duration DEFAULT_MAX_BACKOFF = Duration.ofSeconds(30);

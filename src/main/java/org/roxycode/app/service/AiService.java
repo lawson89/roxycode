@@ -5,6 +5,7 @@ import com.google.genai.types.GenerateContentResponseUsageMetadata;
 import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import org.apache.commons.lang3.StringUtils;
@@ -31,14 +32,17 @@ import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.metadata.Usage;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.google.genai.GoogleGenAiChatModel;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.retry.RetryUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -60,8 +64,10 @@ public class AiService implements AutoCloseable {
     private static final String AGENT_NAME = "Roxy";
 
     public static final int MAX_AUTO_NUDGES = 2;
+    public static final int MAX_AUTO_CONTINUES = 2;
     public static final int TEST_CONNECTION_TIMEOUT_MS = 15_000;
     public static final String AUTO_NUDGE_PROMPT = "You completed the turn without returning any text response. Please summarize what you just did or provide your final response to the user.";
+    public static final String AUTO_CONTINUE_ACTIVITY_MESSAGE = "API connection reset — resuming turn automatically";
     static final String GROUNDED_SEARCH_SYSTEM_PROMPT = "You are a technical research assistant. Use Google Search to provide accurate, up-to-date facts, synthesis, and source URLs or citations when available.";
     private static final List<String> TOOL_FAILURE_MARKERS = List.of("""
             "success":false""", """
@@ -84,6 +90,8 @@ public class AiService implements AutoCloseable {
     private final ToolCallingManager toolCallingManager;
     private volatile GenAiConnectionConfig activeConnectionConfig;
     private volatile Client managedClient;
+    private volatile ChatModel activeChatModel;
+    private Function<GenAiConnectionConfig, ChatModel> connectionChatModelFactory = this::createChatModelForConnection;
     private Function<GenAiConnectionConfig, ChatClient.Builder> connectionChatClientBuilderFactory = this::createChatClientBuilderForConnection;
     private ConnectionConfigTester connectionTester = this::executeConnectionTest;
     private volatile RetryTemplate retryTemplate = AiConfig.createRetryTemplate();
@@ -141,13 +149,17 @@ public class AiService implements AutoCloseable {
     }
 
     @SuppressWarnings("PMD.CloseResource")
-    private ChatClient.Builder createChatClientBuilderForConnection(GenAiConnectionConfig config) {
+    private ChatModel createChatModelForConnection(GenAiConnectionConfig config) {
         Client oldClient = this.managedClient;
         Client newClient = AiConfig.createGenAiClient(config, AiConfig.DEFAULT_HTTP_TIMEOUT_MS);
         this.managedClient = newClient;
         closeClientQuietly(oldClient);
-        GoogleGenAiChatModel chatModel = AiConfig.createChatModel(newClient, resolveEffectiveGeminiModel(),
-                toolCallingManager);
+        return AiConfig.createChatModel(newClient, resolveEffectiveGeminiModel(), toolCallingManager);
+    }
+
+    private ChatClient.Builder createChatClientBuilderForConnection(GenAiConnectionConfig config) {
+        ChatModel chatModel = connectionChatModelFactory.apply(config);
+        this.activeChatModel = chatModel;
         return ChatClient.builder(chatModel);
     }
 
@@ -169,6 +181,7 @@ public class AiService implements AutoCloseable {
     public synchronized void close() {
         Client clientToClose = this.managedClient;
         this.managedClient = null;
+        this.activeChatModel = null;
         closeClientQuietly(clientToClose);
     }
 
@@ -210,6 +223,18 @@ public class AiService implements AutoCloseable {
         } else {
             log.info("Hot-reloaded Gemini ChatClient with updated API key");
         }
+    }
+
+    synchronized boolean reloadClientConnection() {
+        GenAiConnectionConfig config = this.activeConnectionConfig;
+        if (config == null || !config.isConfigured()) {
+            config = resolveConfiguredConnection();
+        }
+        if (config == null || !config.isConfigured()) {
+            return false;
+        }
+        reloadChatClient(config);
+        return true;
     }
 
     /**
@@ -258,8 +283,14 @@ public class AiService implements AutoCloseable {
         }
     }
 
+    @SuppressWarnings("PMD.NullAssignment")
     void setConnectionChatClientBuilderFactory(Function<GenAiConnectionConfig, ChatClient.Builder> factory) {
         this.connectionChatClientBuilderFactory = Objects.requireNonNull(factory, "factory must not be null");
+        this.activeChatModel = null;
+    }
+
+    void setConnectionChatModelFactory(Function<GenAiConnectionConfig, ChatModel> factory) {
+        this.connectionChatModelFactory = Objects.requireNonNull(factory, "factory must not be null");
     }
 
     void setConnectionConfigTester(ConnectionConfigTester connectionTester) {
@@ -313,8 +344,36 @@ public class AiService implements AutoCloseable {
         String convId = turnContext.conversationId();
         try {
             ChatClient.ChatClientRequestSpec promptSpec = buildPrompt(turnContext, message, images);
-            ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
-            ChatResponse chatResponse = executeChatCall(promptSpec, convId, resolvedPhase);
+            int autoContinueCount = 0;
+            ChatResponse chatResponse;
+            while (true) {
+                ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
+                int turnsBeforeCall = turnContext.turnCounter().get();
+                try {
+                    chatResponse = executeChatCall(promptSpec, convId, resolvedPhase);
+                    break;
+                } catch (RuntimeException ex) {
+                    ExceptionUtils.rethrowIfCancelled(ex, "Chat turn cancelled");
+                    int completedToolTurns = turnContext.turnCounter().get();
+                    boolean madeProgressInAttempt = completedToolTurns > turnsBeforeCall;
+                    if (!AiConfig.isTransientAiError(ex) || !madeProgressInAttempt
+                            || autoContinueCount >= MAX_AUTO_CONTINUES) {
+                        throw ex;
+                    }
+                    autoContinueCount++;
+                    log.warn(
+                            "Transient API error after {} tool step(s); resetting client and auto-continuing (attempt {}/{}): {}",
+                            completedToolTurns, autoContinueCount, MAX_AUTO_CONTINUES, ex.getMessage());
+                    publishActivity(convId, AUTO_CONTINUE_ACTIVITY_MESSAGE
+                            + formatRetryAttemptSuffix(autoContinueCount, MAX_AUTO_CONTINUES));
+                    reloadClientConnection();
+                    recordAutoContinueInterruption(convId, completedToolTurns);
+                    WorkflowPhase currentPhase = Objects.requireNonNullElseGet(planService.getCurrentPhase(),
+                            () -> resolvedPhase);
+                    turnContext = new TurnToolContext(convId, currentPhase, turnContext.turnCounter());
+                    promptSpec = buildPrompt(turnContext, buildAutoContinuePrompt(completedToolTurns), null);
+                }
+            }
             ExceptionUtils.checkInterrupted("Chat turn interrupted after model call");
             String content = ChatResponseFormatter.formatChatResponse(chatResponse, turnContext);
             publishTurnComplete(convId, turnContext.turnCounter().get(), content);
@@ -364,6 +423,21 @@ public class AiService implements AutoCloseable {
         }
     }
 
+    private void recordAutoContinueInterruption(String conversationId, int completedToolTurns) {
+        if (chatMemory != null && StringUtils.isNotBlank(conversationId)) {
+            chatMemory.add(conversationId,
+                    new AssistantMessage("[System Note: Previous API connection was interrupted after completing "
+                            + completedToolTurns
+                            + " tool step(s). Resuming automatically from current workspace state.]"));
+        }
+    }
+
+    static String buildAutoContinuePrompt(int completedToolTurns) {
+        return "The previous API request was interrupted by a transient network/server error after completing "
+                + completedToolTurns
+                + " tool step(s). All file modifications and plan step updates from completed tool calls are already saved. Review CURRENT PLAN PROGRESS and GIT STATUS in the system prompt and continue seamlessly from the current state without repeating completed work.";
+    }
+
     private ChatResponse executeChatCall(ChatClient.ChatClientRequestSpec promptSpec, String convId,
             WorkflowPhase phase) {
         return promptSpec.advisors(a -> {
@@ -390,6 +464,7 @@ public class AiService implements AutoCloseable {
             String conversationId = resolveConversationId(chatClientRequest);
             String modelName = resolveRequestModelName(chatClientRequest);
             WorkflowPhase currentPhase = resolveWorkflowPhase(chatClientRequest);
+            recordToolProgressIfPresent(chatClientRequest);
             ThinkingLevel configuredLevel = resolveEffectiveThinkingLevel();
             ThinkingLevel activeSubTurnLevel = resolveActiveSubTurnThinkingLevel(configuredLevel, currentPhase,
                     chatClientRequest);
@@ -399,25 +474,44 @@ public class AiService implements AutoCloseable {
                     activeSubTurnLevel);
             int maxAttempts = maxRetryAttempts;
             AtomicInteger attemptCounter = new AtomicInteger(0);
+            AtomicBoolean downgradeThinkingOnRetry = new AtomicBoolean(false);
             ChatClientResponse response = RetryUtils.execute(retryTemplate, () -> {
                 ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
                 int retryCount = attemptCounter.getAndIncrement();
+                ChatClientRequest requestForAttempt = effectiveRequest;
                 if (retryCount == 0) {
                     publishActivity(conversationId, thinkingActivityMessage);
                 } else {
+                    if (downgradeThinkingOnRetry.get()) {
+                        ThinkingLevel downgradedLevel = downgradeThinkingLevelForRetry(configuredLevel,
+                                activeSubTurnLevel);
+                        requestForAttempt = applyThinkingLevelOverride(effectiveRequest, downgradedLevel);
+                    }
                     publishActivity(conversationId, "Transient API error — retrying model call"
                             + formatRetryAttemptSuffix(retryCount + 1, maxAttempts));
                 }
                 try {
-                    return callAdvisorChain.copy(this).nextCall(effectiveRequest);
+                    ChatModel currentChatModel = activeChatModel;
+                    if (currentChatModel != null && requestForAttempt != null && requestForAttempt.prompt() != null) {
+                        ChatResponse modelResponse = currentChatModel.call(requestForAttempt.prompt());
+                        return ChatClientResponse.builder().chatResponse(modelResponse)
+                                .context(requestForAttempt.context()).build();
+                    }
+                    return callAdvisorChain.copy(this).nextCall(requestForAttempt);
                 } catch (RuntimeException ex) {
                     if (AiConfig.isTransientAiError(ex) && (retryCount + 1) < maxAttempts) {
                         int nextAttempt = retryCount + 2;
                         if (AiConfig.isRateLimitError(ex)) {
                             waitForRateLimitCooldown(conversationId, nextAttempt, maxAttempts);
                         } else {
-                            publishActivity(conversationId, "Transient API error — backing off before retry"
-                                    + formatRetryAttemptSuffix(nextAttempt, maxAttempts));
+                            downgradeThinkingOnRetry.set(true);
+                            boolean clientReset = reloadClientConnection();
+                            String resetDetail = "Transient API error — backing off before retry";
+                            if (clientReset) {
+                                resetDetail = "Transient API error — resetting client connection before retry";
+                            }
+                            publishActivity(conversationId,
+                                    resetDetail + formatRetryAttemptSuffix(nextAttempt, maxAttempts));
                         }
                     }
                     throw ex;
@@ -505,15 +599,49 @@ public class AiService implements AutoCloseable {
         return false;
     }
 
+    private static void recordToolProgressIfPresent(@Nullable ChatClientRequest request) {
+        ToolResponseState toolState = inspectPromptToolResponses(request);
+        if (!toolState.hasToolResponses() || request == null || request.prompt() == null) {
+            return;
+        }
+        if (request.prompt().getOptions() instanceof ToolCallingChatOptions toolOpts
+                && toolOpts.getToolContext() != null
+                && toolOpts.getToolContext().get(TurnToolContext.TURN_COUNTER_KEY) instanceof AtomicInteger counter
+                && counter.get() == 0) {
+            counter.set(1);
+        }
+    }
+
+    static ThinkingLevel downgradeThinkingLevelForRetry(@Nullable ThinkingLevel configuredLevel,
+            @Nullable ThinkingLevel activeSubTurnLevel) {
+        ThinkingLevel current = activeSubTurnLevel;
+        if (current == null || current == ThinkingLevel.DEFAULT) {
+            current = Objects.requireNonNullElse(configuredLevel, ThinkingLevel.DEFAULT);
+        }
+        if (current == ThinkingLevel.HIGH || current == ThinkingLevel.MEDIUM || current == ThinkingLevel.ADAPTIVE
+                || current == ThinkingLevel.DEFAULT) {
+            return ThinkingLevel.LOW;
+        }
+        return current;
+    }
+
     private static ChatClientRequest applySubTurnThinkingLevel(ChatClientRequest request, ThinkingLevel configuredLevel,
             ThinkingLevel activeSubTurnLevel) {
-        if (configuredLevel != ThinkingLevel.ADAPTIVE || request == null || request.prompt() == null) {
+        if (configuredLevel != ThinkingLevel.ADAPTIVE) {
+            return request;
+        }
+        return applyThinkingLevelOverride(request, activeSubTurnLevel);
+    }
+
+    private static ChatClientRequest applyThinkingLevelOverride(ChatClientRequest request,
+            ThinkingLevel targetThinkingLevel) {
+        if (request == null || request.prompt() == null || targetThinkingLevel == null) {
             return request;
         }
         ChatOptions options = request.prompt().getOptions();
         if (options instanceof GoogleGenAiChatOptions genAiOptions) {
             GoogleGenAiChatOptions.Builder builder = GoogleGenAiChatOptions.builder().model(genAiOptions.getModel())
-                    .thinkingLevel(activeSubTurnLevel.getGenAiThinkingLevel());
+                    .thinkingLevel(targetThinkingLevel.getGenAiThinkingLevel());
             if (genAiOptions.getToolCallbacks() != null) {
                 builder.toolCallbacks(genAiOptions.getToolCallbacks());
             }

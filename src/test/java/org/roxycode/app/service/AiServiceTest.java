@@ -681,4 +681,151 @@ class AiServiceTest {
                 serviceWithRealClient.chat("task:plan", WorkflowPhase.PLAN, "Create plan", null));
         assertEquals(List.of(GoogleGenAiThinkingLevel.HIGH, GoogleGenAiThinkingLevel.LOW), capturedPlanThinkingLevels);
     }
+
+    @Test
+    void testNonRateLimitRetryRecreatesClientModelAndDowngradesThinkingLevelToLow() {
+        ChatModel initialModel = mock(ChatModel.class);
+        ChatModel recreatedModel = mock(ChatModel.class);
+        lenient().when(recreatedModel.getOptions())
+                .thenReturn(GoogleGenAiChatOptions.builder().model("gemini-3.1-pro").build());
+
+        ToolCallingManager customToolManager = mock(ToolCallingManager.class);
+        AiService service = createRealClientService(initialModel, customToolManager);
+        when(promptService.buildSystemPrompt(WorkflowPhase.CODE)).thenReturn("CODE PROMPT");
+        settings.setGeminiApiKey("valid-api-key");
+        settings.setThinkingLevel("HIGH");
+
+        AtomicInteger modelFactoryCalls = new AtomicInteger();
+        service.setConnectionChatModelFactory(cfg -> {
+            int count = modelFactoryCalls.incrementAndGet();
+            if (count == 1) {
+                return initialModel;
+            }
+            return recreatedModel;
+        });
+        service.reloadChatClient(AiConfig.GenAiConnectionConfig.forApiKey("valid-api-key"));
+        assertEquals(1, modelFactoryCalls.get());
+
+        List<GoogleGenAiThinkingLevel> initialModelThinking = new ArrayList<>();
+        when(initialModel.call(any(Prompt.class))).thenAnswer(inv -> {
+            Prompt p = inv.getArgument(0);
+            if (p.getOptions() instanceof GoogleGenAiChatOptions opts) {
+                initialModelThinking.add(opts.getThinkingLevel());
+            }
+            throw new ServerException(503, "Service Unavailable", "UNAVAILABLE");
+        });
+
+        List<GoogleGenAiThinkingLevel> recreatedModelThinking = new ArrayList<>();
+        when(recreatedModel.call(any(Prompt.class))).thenAnswer(inv -> {
+            Prompt p = inv.getArgument(0);
+            if (p.getOptions() instanceof GoogleGenAiChatOptions opts) {
+                recreatedModelThinking.add(opts.getThinkingLevel());
+            }
+            return buildChatResponse("Recovered on fresh client with LOW thinking", "STOP", null);
+        });
+
+        clearInvocations(eventPublisher);
+        String response = service.chat("task:retry-reset", WorkflowPhase.CODE, "Fix issue", null);
+        assertEquals("Recovered on fresh client with LOW thinking", response);
+        assertEquals(2, modelFactoryCalls.get());
+        assertEquals(List.of(GoogleGenAiThinkingLevel.HIGH), initialModelThinking);
+        assertEquals(List.of(GoogleGenAiThinkingLevel.LOW), recreatedModelThinking);
+
+        ArgumentCaptor<Object> eventsCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher, atLeastOnce()).publishEvent(eventsCaptor.capture());
+        List<String> statusMessages = eventsCaptor.getAllValues().stream().filter(AgentActivityEvent.class::isInstance)
+                .map(AgentActivityEvent.class::cast).map(AgentActivityEvent::statusText).toList();
+        assertTrue(statusMessages.stream()
+                .anyMatch(s -> s.contains("resetting client connection before retry (attempt 2/3)")));
+    }
+
+    @Test
+    void testAutoContinueSelfHealingRecoversAfterToolProgressWhenFastRetriesExhausted() {
+        ChatModel firstClientModel = mock(ChatModel.class);
+        ChatModel retryClientModel1 = mock(ChatModel.class);
+        ChatModel retryClientModel2 = mock(ChatModel.class);
+        ChatModel autoContinueClientModel = mock(ChatModel.class);
+        for (ChatModel m : List.of(firstClientModel, retryClientModel1, retryClientModel2, autoContinueClientModel)) {
+            lenient().when(m.getOptions())
+                    .thenReturn(GoogleGenAiChatOptions.builder().model("gemini-2.5-flash").build());
+        }
+
+        ToolCallingManager customToolManager = mock(ToolCallingManager.class);
+        ChatMemory realMemory = MessageWindowChatMemory.builder()
+                .chatMemoryRepository(new InMemoryChatMemoryRepository()).maxMessages(20).build();
+        AiService service = new AiService(ChatClient.builder(firstClientModel), settingsService, null, promptService,
+                jexlTool, planService, realMemory, customToolManager, eventPublisher);
+        service.setRetryTemplate(AiConfig.createRetryTemplate(3, Duration.ofMillis(5), 2.0), 3);
+        settings.setGeminiApiKey("valid-api-key");
+
+        List<ChatModel> modelSequence = List.of(firstClientModel, retryClientModel1, retryClientModel2,
+                autoContinueClientModel);
+        AtomicInteger factoryIndex = new AtomicInteger(0);
+        service.setConnectionChatModelFactory(cfg -> {
+            int idx = Math.min(factoryIndex.getAndIncrement(), modelSequence.size() - 1);
+            return modelSequence.get(idx);
+        });
+        service.reloadChatClient(AiConfig.GenAiConnectionConfig.forApiKey("valid-api-key"));
+
+        when(promptService.buildSystemPrompt(WorkflowPhase.CODE)).thenReturn("INITIAL SYSTEM PROMPT",
+                "REFRESHED SYSTEM PROMPT WITH UPDATED PLAN");
+
+        AssistantMessage toolCallMsg = createToolCallMessage();
+        ChatResponse firstTurnToolCallResp = createToolCallResponse(toolCallMsg);
+        ToolResponseMessage successToolMsg = ToolResponseMessage.builder()
+                .responses(List.of(new ToolResponseMessage.ToolResponse("call-1", "executeJexl", """
+                        {"success":true,"content":"Step 0 completed"}"""))).build();
+
+        AtomicInteger firstModelCalls = new AtomicInteger();
+        when(firstClientModel.call(any(Prompt.class))).thenAnswer(inv -> {
+            if (firstModelCalls.incrementAndGet() == 1) {
+                return firstTurnToolCallResp;
+            }
+            throw new ServerException(500, "Internal Server Error", "INTERNAL");
+        });
+        when(retryClientModel1.call(any(Prompt.class)))
+                .thenThrow(new ServerException(500, "Internal Server Error", "INTERNAL"));
+        when(retryClientModel2.call(any(Prompt.class)))
+                .thenThrow(new ServerException(500, "Internal Server Error", "INTERNAL"));
+
+        List<Prompt> autoContinuePrompts = new ArrayList<>();
+        when(autoContinueClientModel.call(any(Prompt.class))).thenAnswer(inv -> {
+            autoContinuePrompts.add(inv.getArgument(0));
+            return buildChatResponse("Completed remaining steps after auto-continue!", "STOP", null);
+        });
+
+        when(customToolManager.executeToolCalls(any(Prompt.class), eq(firstTurnToolCallResp)))
+                .thenReturn(DefaultToolExecutionResult.builder()
+                        .conversationHistory(List.of(new UserMessage("Implement feature"), toolCallMsg, successToolMsg))
+                        .returnDirect(false).build());
+
+        clearInvocations(eventPublisher);
+        String result = service.chat("task:auto-continue", WorkflowPhase.CODE, "Implement feature", null);
+        assertEquals("Completed remaining steps after auto-continue!", result);
+        assertEquals(1, autoContinuePrompts.size());
+        Prompt recoveryPrompt = autoContinuePrompts.get(0);
+        assertEquals("REFRESHED SYSTEM PROMPT WITH UPDATED PLAN", recoveryPrompt.getSystemMessage().getText());
+        assertTrue(recoveryPrompt.getInstructions().stream().anyMatch(
+                m -> m instanceof UserMessage && m.getText().contains("interrupted by a transient network/server")));
+
+        ArgumentCaptor<Object> eventsCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher, atLeastOnce()).publishEvent(eventsCaptor.capture());
+        List<String> statusMessages = eventsCaptor.getAllValues().stream().filter(AgentActivityEvent.class::isInstance)
+                .map(AgentActivityEvent.class::cast).map(AgentActivityEvent::statusText).toList();
+        assertTrue(statusMessages.stream()
+                .anyMatch(s -> s.contains(AiService.AUTO_CONTINUE_ACTIVITY_MESSAGE) && s.contains("(attempt 1/2)")));
+
+        // Verify that when 0 tool turns occurred, transient failure after fast retries is NOT auto-continued
+        ChatModel alwaysFailingModel = mock(ChatModel.class);
+        lenient().when(alwaysFailingModel.getOptions())
+                .thenReturn(GoogleGenAiChatOptions.builder().model("gemini-2.5-flash").build());
+        when(alwaysFailingModel.call(any(Prompt.class)))
+                .thenThrow(new ServerException(503, "Service Unavailable", "UNAVAILABLE"));
+        service.setConnectionChatModelFactory(cfg -> alwaysFailingModel);
+        service.reloadChatClient(AiConfig.GenAiConnectionConfig.forApiKey("valid-api-key"));
+
+        assertThrows(ServerException.class,
+                () -> service.chat("task:no-progress", WorkflowPhase.CODE, "Fails immediately", null));
+        verify(alwaysFailingModel, times(3)).call(any(Prompt.class));
+    }
 }
