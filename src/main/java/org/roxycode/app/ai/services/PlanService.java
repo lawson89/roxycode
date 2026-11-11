@@ -422,14 +422,15 @@ public class PlanService {
             "REVIEW"}, examples = {
                     "planService.requestCompletion('All requirements and quality gates verified', 'feat: summary')"})
     public synchronized String requestCompletion(
-            @AgentDoc("The reason for completing the current cycle") String reason) {
+            @AgentDoc("The structured Final Review Notes (Markdown audit summary covering Requirements, Code Quality/Guidelines, and Test Coverage)") String reason) {
         return requestCompletion(reason, null);
     }
 
     @AgentDoc(value = "Signals completion of the current cycle with a proposed Conventional Commit message and returns to planning.", phases = {
             "REVIEW"}, examples = {
                     "planService.requestCompletion('All requirements and quality gates verified', 'feat: add branch comparison tools')"})
-    public synchronized String requestCompletion(@AgentDoc("The reason for completing the current cycle") String reason,
+    public synchronized String requestCompletion(
+            @AgentDoc("The structured Final Review Notes (Markdown audit summary covering Requirements, Code Quality/Guidelines, and Test Coverage)") String reason,
             @AgentDoc("The proposed Conventional Commit message") String commitMessage) {
         requirePhase("requestCompletion");
         return routeToPhase(WorkflowPhase.PLAN, reason, commitMessage);
@@ -478,9 +479,12 @@ public class PlanService {
         if (currentPhase == WorkflowPhase.REVIEW && nextPhase == WorkflowPhase.CODE) {
             prepareFixesOnCurrentPlan(reason);
         }
-        if (currentPhase == WorkflowPhase.REVIEW && nextPhase == WorkflowPhase.PLAN && currentPlan != null
-                && StringUtils.isNotBlank(commitMessage)) {
-            setCurrentPlan(currentPlan.withCommitMessage(commitMessage));
+        if (currentPhase == WorkflowPhase.REVIEW && nextPhase == WorkflowPhase.PLAN && currentPlan != null) {
+            ImplementationPlan updated = currentPlan.withFinalReviewNotes(reason);
+            if (StringUtils.isNotBlank(commitMessage)) {
+                updated = updated.withCommitMessage(commitMessage);
+            }
+            setCurrentPlan(updated);
         }
 
         if (rule.autonomous()) {
@@ -520,8 +524,8 @@ public class PlanService {
         if (currentPlan == null) {
             return;
         }
-        ImplementationPlan updated = currentPlan.withVerificationStepCompleted(ImplementationPlan.STEP_CODE_REVIEW,
-                false);
+        ImplementationPlan updated = currentPlan
+                .withVerificationStepCompleted(ImplementationPlan.STEP_CODE_REVIEW, false).withFinalReviewNotes(null);
         setCurrentPlan(updated);
         if (currentPlan.collectIncompleteSteps(true).isEmpty()) {
             addTechnicalStep("Address review findings: " + reason.trim());

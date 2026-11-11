@@ -43,12 +43,18 @@ class ImplementationPlanTest {
                 "| verified details |");
 
         ImplementationPlan withCommit = plan
+                .withFinalReviewNotes("  ### Audit Summary" + LF + "- All requirements verified  ")
                 .withCommitMessage("feat: add branch diff" + LF + LF + "- Add getBranchDiff()");
+        assertEquals("### Audit Summary" + LF + "- All requirements verified", withCommit.getFinalReviewNotes());
         assertEquals("feat: add branch diff" + LF + LF + "- Add getBranchDiff()", withCommit.commitMessage());
-        SwingTestUtils.assertContainsAll(withCommit.toMarkdown(false), "## Proposed Commit Message",
-                "feat: add branch diff", "- Add getBranchDiff()");
+        String withCommitMd = withCommit.toMarkdown(false);
+        SwingTestUtils.assertContainsAll(withCommitMd, "## Final Review Notes", "### Audit Summary",
+                "- All requirements verified", "## Proposed Commit Message", "feat: add branch diff",
+                "- Add getBranchDiff()");
+        assertTrue(withCommitMd.indexOf("## Final Review Notes") < withCommitMd.indexOf("## Proposed Commit Message"));
         SwingTestUtils.assertContainsAll(withCommit.toArchivedMarkdown("id-1", "roxy", "/roxy"),
-                "## Proposed Commit Message", "feat: add branch diff");
+                "## Final Review Notes", "- All requirements verified", "## Proposed Commit Message",
+                "feat: add branch diff");
 
         String promptContext = plan.formatPromptContextMarkdown();
         SwingTestUtils.assertContainsAll(promptContext, "**Title:** Feature Plan", "**Goal:** Deliver feature",

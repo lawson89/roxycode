@@ -46,11 +46,14 @@ import org.roxycode.app.util.TokenUtils;
  *            the summary of token usage and cost
  * @param commitMessage
  *            the proposed git commit message
+ * @param finalReviewNotes
+ *            the structured final review audit notes
  */
 @SuppressWarnings("PMD.AvoidDuplicateLiterals")
 public record ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
         boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
-        List<LogEntry> handoffLog, List<FileChange> fileChanges, UsageSummary usageSummary, String commitMessage) {
+        List<LogEntry> handoffLog, List<FileChange> fileChanges, UsageSummary usageSummary, String commitMessage,
+        String finalReviewNotes) {
 
     public static final String NO_FILES_CHANGED = "No files changed";
     public static final String STEP_COMPILE = "Code compiles successfully";
@@ -287,13 +290,21 @@ public record ImplementationPlan(String title, String goal, List<String> require
         fileChanges = List.copyOf(Objects.requireNonNullElse(fileChanges, List.of()));
         usageSummary = Objects.requireNonNullElse(usageSummary, UsageSummary.EMPTY);
         commitMessage = StringUtils.trimToNull(commitMessage);
+        finalReviewNotes = StringUtils.trimToNull(finalReviewNotes);
+    }
+
+    public ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
+            boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
+            List<LogEntry> handoffLog, List<FileChange> fileChanges, UsageSummary usageSummary, String commitMessage) {
+        this(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp, approvedBy, completedBy,
+                completedOn, handoffLog, fileChanges, usageSummary, commitMessage, null);
     }
 
     public ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
             boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
             List<LogEntry> handoffLog) {
         this(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp, approvedBy, completedBy,
-                completedOn, handoffLog, List.of(), UsageSummary.EMPTY, null);
+                completedOn, handoffLog, List.of(), UsageSummary.EMPTY, null, null);
     }
 
     public long completedStepCount() {
@@ -379,8 +390,13 @@ public record ImplementationPlan(String title, String goal, List<String> require
         if (preservedCommitMsg == null && previousPlan != null) {
             preservedCommitMsg = previousPlan.commitMessage();
         }
+        String preservedReviewNotes = finalReviewNotes;
+        if (preservedReviewNotes == null && previousPlan != null) {
+            preservedReviewNotes = previousPlan.finalReviewNotes();
+        }
         return withTechnicalSteps(steps).withHandoffLog(preservedLog).withFileChanges(preservedChanges)
-                .withUsageSummary(preservedUsage).withCommitMessage(preservedCommitMsg);
+                .withUsageSummary(preservedUsage).withCommitMessage(preservedCommitMsg)
+                .withFinalReviewNotes(preservedReviewNotes);
     }
 
     public List<String> collectIncompleteSteps(boolean excludeCodeReviewStep) {
@@ -404,7 +420,7 @@ public record ImplementationPlan(String title, String goal, List<String> require
 
     public ImplementationPlan withTechnicalSteps(List<TechStep> newSteps) {
         return new ImplementationPlan(title, goal, requirements, newSteps, userApproved, approvalTimestamp, approvedBy,
-                completedBy, completedOn, handoffLog, fileChanges, usageSummary, commitMessage);
+                completedBy, completedOn, handoffLog, fileChanges, usageSummary, commitMessage, finalReviewNotes);
     }
 
     public ImplementationPlan withVerificationStepCompleted(String stepDescription, boolean completed) {
@@ -434,17 +450,18 @@ public record ImplementationPlan(String title, String goal, List<String> require
 
     public ImplementationPlan withApproval(String user, String timestamp) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, true, timestamp, user, completedBy,
-                completedOn, handoffLog, fileChanges, usageSummary, commitMessage);
+                completedOn, handoffLog, fileChanges, usageSummary, commitMessage, finalReviewNotes);
     }
 
     public ImplementationPlan withCompletion(String user, String timestamp) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
-                approvedBy, user, timestamp, handoffLog, fileChanges, usageSummary, commitMessage);
+                approvedBy, user, timestamp, handoffLog, fileChanges, usageSummary, commitMessage, finalReviewNotes);
     }
 
     public ImplementationPlan withHandoffLog(List<LogEntry> newLog) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
-                approvedBy, completedBy, completedOn, newLog, fileChanges, usageSummary, commitMessage);
+                approvedBy, completedBy, completedOn, newLog, fileChanges, usageSummary, commitMessage,
+                finalReviewNotes);
     }
 
     public ImplementationPlan withAddedHandoffLogEntry(String timestamp, String user, String message) {
@@ -455,17 +472,30 @@ public record ImplementationPlan(String title, String goal, List<String> require
 
     public ImplementationPlan withFileChanges(List<FileChange> newChanges) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
-                approvedBy, completedBy, completedOn, handoffLog, newChanges, usageSummary, commitMessage);
+                approvedBy, completedBy, completedOn, handoffLog, newChanges, usageSummary, commitMessage,
+                finalReviewNotes);
     }
 
     public ImplementationPlan withUsageSummary(UsageSummary newUsage) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
-                approvedBy, completedBy, completedOn, handoffLog, fileChanges, newUsage, commitMessage);
+                approvedBy, completedBy, completedOn, handoffLog, fileChanges, newUsage, commitMessage,
+                finalReviewNotes);
     }
 
     public ImplementationPlan withCommitMessage(String newCommitMessage) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
-                approvedBy, completedBy, completedOn, handoffLog, fileChanges, usageSummary, newCommitMessage);
+                approvedBy, completedBy, completedOn, handoffLog, fileChanges, usageSummary, newCommitMessage,
+                finalReviewNotes);
+    }
+
+    public ImplementationPlan withFinalReviewNotes(String newFinalReviewNotes) {
+        return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
+                approvedBy, completedBy, completedOn, handoffLog, fileChanges, usageSummary, commitMessage,
+                newFinalReviewNotes);
+    }
+
+    public String getFinalReviewNotes() {
+        return finalReviewNotes;
     }
 
     public ImplementationPlan withRecordedTokenUsage(TokenUsageEvent event, WorkflowPhase fallbackPhase) {
@@ -538,6 +568,11 @@ public record ImplementationPlan(String title, String goal, List<String> require
             md.append("- ").append(req).append('\n');
         }
         md.append("\n## Technical Steps\n").append(formatStepsMarkdown());
+
+        if (StringUtils.isNotBlank(finalReviewNotes)) {
+            md.append(StringUtils.LF).append("## Final Review Notes").append(StringUtils.LF).append(finalReviewNotes)
+                    .append(StringUtils.LF);
+        }
 
         if (StringUtils.isNotBlank(commitMessage)) {
             md.append(StringUtils.LF).append("## Proposed Commit Message").append(StringUtils.LF).append(CODE_FENCE)

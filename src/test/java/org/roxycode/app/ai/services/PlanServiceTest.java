@@ -214,8 +214,9 @@ class PlanServiceTest {
         String commitMsg = String.join(String.valueOf((char) 10), "feat: archive plans", "",
                 "- Persist completed plans to disk");
         String completionMsg = archivingService.requestCompletion("All checks passed", commitMsg);
-        assertContainsAll(completionMsg, "Approve Feature Request as complete", "## Proposed Commit Message",
-                "feat: archive plans");
+        assertContainsAll(completionMsg, "Approve Feature Request as complete", "## Final Review Notes",
+                "All checks passed", "## Proposed Commit Message", "feat: archive plans");
+        assertEquals("All checks passed", archivingService.getCurrentPlan().finalReviewNotes());
         assertEquals(commitMsg, archivingService.getCurrentPlan().commitMessage());
         verify(eventPublisher).publishEvent(
                 new WorkflowTransitionEvent(WorkflowPhase.REVIEW, WorkflowPhase.PLAN, "All checks passed", false));
@@ -239,7 +240,8 @@ class PlanServiceTest {
                 "codeCostUsd: ", "0.0071", "estimatedCostUsd: ", "0.0122", "## Token Usage & Cost",
                 "### Cost by Token Category", "| **Total (2 calls)** | **52.5k (52500)** | — | **$0.01** |",
                 "### Cost by Workflow Phase", "| Plan | 1 | 21.0k | $0.0051 |", "| Code | 1 | 31.5k | $0.0071 |",
-                "## Proposed Commit Message", "feat: archive plans", "MODIFIED src/Main.java");
+                "## Final Review Notes", "All checks passed", "## Proposed Commit Message", "feat: archive plans",
+                "MODIFIED src/Main.java");
         verify(eventPublisher).publishEvent(argThat((Object ev) -> ev instanceof ArchiveUpdatedEvent));
 
         archivingService.submitPlan("Temp Plan", "Goal", new String[0], new String[]{"Step"});
@@ -306,11 +308,13 @@ class PlanServiceTest {
         archivingService.requestCompletion("Done");
         assertEquals(WorkflowPhase.REVIEW, archivingService.getCurrentPhase());
         assertEquals(WorkflowPhase.PLAN, archivingService.getPendingPhase());
+        assertEquals("Done", archivingService.getCurrentPlan().finalReviewNotes());
 
         archivingService.rejectCompletionAndReturnToCode("Handle null input in parser");
         assertEquals(WorkflowPhase.CODE, archivingService.getCurrentPhase());
         assertNull(archivingService.getPendingPhase());
         assertNull(archivingService.getPendingReason());
+        assertNull(archivingService.getCurrentPlan().finalReviewNotes());
         assertTrue(archivingService.getCurrentPlan().technicalSteps().stream()
                 .anyMatch(s -> !s.completed() && s.description().contains("Handle null input in parser")));
     }
