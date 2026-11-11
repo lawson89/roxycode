@@ -40,7 +40,7 @@ public final class SplashScreenWindow extends JWindow {
         progressBar.setIndeterminate(true);
 
         rootPanel.add(UiComponents.createRoundedImagePanel(UiComponents.ROXY_LOGO_RESOURCE, 96, 20),
-                "w 80!, h 80!, center");
+                "w 96!, h 96!, center");
         rootPanel.add(titleLabel, "center");
         rootPanel.add(subtitleLabel, "center");
         rootPanel.add(statusLabel, "center");

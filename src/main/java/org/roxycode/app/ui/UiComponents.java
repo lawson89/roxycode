@@ -203,6 +203,16 @@ final class UiComponents {
      * Creates a rounded image panel that clips and renders the image directly.
      */
     static JPanel createRoundedImagePanel(@Nullable Image image, int size, int arc) {
+        int innerSize = Math.max(1, size - 4);
+        Image scaledImage = image;
+        if (image instanceof BufferedImage bufferedImage) {
+            try {
+                scaledImage = Thumbnails.of(bufferedImage).size(innerSize, innerSize).asBufferedImage();
+            } catch (IOException e) {
+                log.warn("Failed to pre-scale rounded panel image: {}", e.getMessage());
+            }
+        }
+        Image finalImage = scaledImage;
         JPanel panel = new JPanel() {
             private static final long serialVersionUID = 1L;
 
@@ -219,10 +229,10 @@ final class UiComponents {
                     g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
                     g2.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
                     RoundRectangle2D.Float clipShape = new RoundRectangle2D.Float(2, 2, w - 4, h - 4, arc, arc);
-                    if (image != null) {
+                    if (finalImage != null) {
                         Shape oldClip = g2.getClip();
                         g2.clip(clipShape);
-                        g2.drawImage(image, 0, 0, w, h, null);
+                        g2.drawImage(finalImage, 2, 2, w - 4, h - 4, null);
                         g2.setClip(oldClip);
                     } else {
                         g2.setColor(SwingHtmlUtils.getUiColor(new Color(100, 100, 255), "Component.accentColor"));
