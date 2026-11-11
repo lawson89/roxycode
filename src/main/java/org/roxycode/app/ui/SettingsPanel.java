@@ -92,6 +92,9 @@ public final class SettingsPanel extends JPanel {
     final JTextField vertexCredentialsPathField;
     final JButton browseCredentialsButton;
     final JButton testConnectionButton;
+    final JProgressBar testConnectionProgressBar;
+    final JLabel testConnectionStatusLabel;
+    final Timer testConnectionStatusTimer;
     final JSpinner maxAgentToolTurnsSpinner;
     final JCheckBox logToolCallsCheckBox;
     final JCheckBox googleGroundingCheckBox;
@@ -208,6 +211,13 @@ public final class SettingsPanel extends JPanel {
         testConnectionButton.setIconTextGap(6);
         testConnectionButton.addActionListener(e -> testConnection());
 
+        testConnectionProgressBar = new JProgressBar();
+        testConnectionProgressBar.setVisible(false);
+
+        testConnectionStatusLabel = new JLabel("");
+        testConnectionStatusLabel.setFont(testConnectionStatusLabel.getFont().deriveFont(Font.BOLD, 11.5f));
+        testConnectionStatusLabel.setVisible(false);
+
         int initialToolTurns = Math.clamp(settingsService.getSettings().getMaxAgentToolTurns(), MIN_AGENT_TOOL_TURNS,
                 MAX_AGENT_TOOL_TURNS);
         maxAgentToolTurnsSpinner = new JSpinner(
@@ -235,6 +245,8 @@ public final class SettingsPanel extends JPanel {
         add(UiComponents.createBorderlessScrollPane(cardsContainer), "grow, wmin 0");
 
         statusTimer = UiComponents.createStatusTimer(statusLabel, 3000);
+        testConnectionStatusTimer = new Timer(5000, e -> clearTestConnectionStatus());
+        testConnectionStatusTimer.setRepeats(false);
 
         updateAuthProviderVisibility();
         applyThemeStyling();
@@ -324,9 +336,12 @@ public final class SettingsPanel extends JPanel {
         card.add(apiKeyPanel, "growx, wmin 0, hidemode 3");
         card.add(vertexAiPanel, "growx, wmin 0, hidemode 3");
 
-        JPanel testActionRow = new JPanel(new MigLayout("insets 2 0 0 0", "[]", "[center]"));
+        JPanel testActionRow = new JPanel(
+                new MigLayout("insets 2 0 0 0, gapx 10, hidemode 3", "[][140:180:220][grow, fill]", "[center]"));
         testActionRow.setOpaque(false);
         testActionRow.add(testConnectionButton);
+        testActionRow.add(testConnectionProgressBar, "growx, hidemode 3");
+        testActionRow.add(testConnectionStatusLabel, "growx, wmin 0, hidemode 3");
         card.add(testActionRow, GROWX_WMIN_0);
         return card;
     }
@@ -418,6 +433,8 @@ public final class SettingsPanel extends JPanel {
 
         testConnectionButton.setIcon(FontIcon.of(Codicons.PLUG, 14, accentColor));
         testConnectionButton.putClientProperty(FlatClientProperties.STYLE, "arc: 8; margin: 5,12,5,12");
+        testConnectionProgressBar.putClientProperty(FlatClientProperties.STYLE,
+                "arc: 6; foreground: $Component.accentColor");
     }
 
     @Override
@@ -439,6 +456,9 @@ public final class SettingsPanel extends JPanel {
         boolean vertexSelected = isVertexAiSelected();
         apiKeyPanel.setVisible(!vertexSelected);
         vertexAiPanel.setVisible(vertexSelected);
+        if (testConnectionStatusLabel != null) {
+            clearTestConnectionStatus();
+        }
         revalidate();
         repaint();
     }
@@ -558,15 +578,15 @@ public final class SettingsPanel extends JPanel {
 
         if (vertexSelected) {
             if (projectId.isEmpty()) {
-                showStatusMessage(CONNECTION_FAILED_PREFIX + "Please enter a GCP Project ID first.", false);
+                showTestConnectionStatus(CONNECTION_FAILED_PREFIX + "Please enter a GCP Project ID first.", false);
                 return CompletableFuture.completedFuture(null);
             }
             if (location.isEmpty()) {
-                showStatusMessage(CONNECTION_FAILED_PREFIX + "Please enter a Vertex Location first.", false);
+                showTestConnectionStatus(CONNECTION_FAILED_PREFIX + "Please enter a Vertex Location first.", false);
                 return CompletableFuture.completedFuture(null);
             }
         } else if (apiKey.isEmpty()) {
-            showStatusMessage(CONNECTION_FAILED_PREFIX + "Please enter a Gemini API Key first.", false);
+            showTestConnectionStatus(CONNECTION_FAILED_PREFIX + "Please enter a Gemini API Key first.", false);
             return CompletableFuture.completedFuture(null);
         }
 
@@ -585,8 +605,11 @@ public final class SettingsPanel extends JPanel {
             connectionConfig = GenAiConnectionConfig.forApiKey(apiKey);
         }
 
+        clearTestConnectionStatus();
         testConnectionButton.setEnabled(false);
         testConnectionButton.setText(TESTING_CONNECTION_TEXT);
+        testConnectionProgressBar.setIndeterminate(true);
+        testConnectionProgressBar.setVisible(true);
 
         CompletableFuture<String> future = Edt.supplyAsync(() -> {
             if (aiService == null) {
@@ -597,16 +620,35 @@ public final class SettingsPanel extends JPanel {
             }
             return aiService.testConnection(apiKey, modelName);
         }, response -> {
-            testConnectionButton.setEnabled(true);
-            testConnectionButton.setText(TEST_CONNECTION_TEXT);
-            showStatusMessage(CONNECTION_SUCCESS_TEXT, true);
+            restoreTestConnectionButtonState();
+            showTestConnectionStatus(CONNECTION_SUCCESS_TEXT, true);
         }, error -> {
-            testConnectionButton.setEnabled(true);
-            testConnectionButton.setText(TEST_CONNECTION_TEXT);
-            showStatusMessage(CONNECTION_FAILED_PREFIX + ExceptionUtils.getRootCauseMessage(error), false);
+            restoreTestConnectionButtonState();
+            showTestConnectionStatus(CONNECTION_FAILED_PREFIX + ExceptionUtils.getRootCauseMessage(error), false);
         });
         lastAsyncFuture = future;
         return future;
+    }
+
+    private void restoreTestConnectionButtonState() {
+        testConnectionButton.setEnabled(true);
+        testConnectionButton.setText(TEST_CONNECTION_TEXT);
+        testConnectionProgressBar.setIndeterminate(false);
+        testConnectionProgressBar.setVisible(false);
+    }
+
+    void showTestConnectionStatus(String message, boolean success) {
+        testConnectionStatusLabel.setVisible(true);
+        UiComponents.showStatusMessage(testConnectionStatusLabel, testConnectionStatusTimer, message, success);
+    }
+
+    void clearTestConnectionStatus() {
+        if (testConnectionStatusTimer != null && testConnectionStatusTimer.isRunning()) {
+            testConnectionStatusTimer.stop();
+        }
+        testConnectionStatusLabel.setText("");
+        testConnectionStatusLabel.setToolTipText(null);
+        testConnectionStatusLabel.setVisible(false);
     }
 
     private void showStatusMessage(String message, boolean success) {

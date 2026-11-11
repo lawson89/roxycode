@@ -124,9 +124,13 @@ class SettingsPanelTest {
         SwingTestUtils.clickOnEdt(settingsPanel.getApiKeyLinkButton);
         assertEquals(SettingsPanel.GEMINI_API_KEY_URL, openedUrl.get());
 
+        assertFalse(settingsPanel.testConnectionProgressBar.isVisible());
+        assertFalse(settingsPanel.testConnectionStatusLabel.isVisible());
+
         settingsPanel.geminiApiKeyField.setText("   ");
         SwingTestUtils.clickOnEdt(settingsPanel.testConnectionButton);
-        assertTrue(settingsPanel.statusLabel.getText().contains("Please enter a Gemini API Key first."));
+        assertTrue(settingsPanel.testConnectionStatusLabel.isVisible());
+        assertTrue(settingsPanel.testConnectionStatusLabel.getText().contains("Please enter a Gemini API Key first."));
         verifyNoInteractions(aiService);
 
         CompletableFuture<String> gate = new CompletableFuture<>();
@@ -136,20 +140,28 @@ class SettingsPanelTest {
         SwingTestUtils.runOnEdt(() -> {
             assertFalse(settingsPanel.testConnectionButton.isEnabled());
             assertEquals(SettingsPanel.TESTING_CONNECTION_TEXT, settingsPanel.testConnectionButton.getText());
+            assertTrue(settingsPanel.testConnectionProgressBar.isVisible());
+            assertTrue(settingsPanel.testConnectionProgressBar.isIndeterminate());
+            assertFalse(settingsPanel.testConnectionStatusLabel.isVisible());
         });
 
         gate.complete("OK");
         SwingTestUtils.awaitFuture(settingsPanel.lastAsyncFuture);
         assertTrue(settingsPanel.testConnectionButton.isEnabled());
-        assertEquals(SettingsPanel.CONNECTION_SUCCESS_TEXT, settingsPanel.statusLabel.getText());
+        assertFalse(settingsPanel.testConnectionProgressBar.isVisible());
+        assertFalse(settingsPanel.testConnectionProgressBar.isIndeterminate());
+        assertTrue(settingsPanel.testConnectionStatusLabel.isVisible());
+        assertEquals(SettingsPanel.CONNECTION_SUCCESS_TEXT, settingsPanel.testConnectionStatusLabel.getText());
 
         when(aiService.testConnection(eq("invalid-key"), anyString()))
                 .thenThrow(new IllegalStateException("401 UNAUTHORIZED: API key not valid"));
         settingsPanel.geminiApiKeyField.setText("invalid-key");
         SwingTestUtils.clickOnEdt(settingsPanel.testConnectionButton);
         SwingTestUtils.awaitFuture(settingsPanel.lastAsyncFuture);
+        assertFalse(settingsPanel.testConnectionProgressBar.isVisible());
+        assertTrue(settingsPanel.testConnectionStatusLabel.isVisible());
         assertEquals(SettingsPanel.CONNECTION_FAILED_PREFIX + "401 UNAUTHORIZED: API key not valid",
-                settingsPanel.statusLabel.getText());
+                settingsPanel.testConnectionStatusLabel.getText());
     }
 
     @Test
@@ -166,13 +178,15 @@ class SettingsPanelTest {
         settingsPanel.vertexProjectIdField.setText("   ");
         settingsPanel.vertexLocationField.setText("us-central1");
         SwingTestUtils.clickOnEdt(settingsPanel.testConnectionButton);
-        assertTrue(settingsPanel.statusLabel.getText().contains("Please enter a GCP Project ID first."));
+        assertTrue(settingsPanel.testConnectionStatusLabel.isVisible());
+        assertTrue(settingsPanel.testConnectionStatusLabel.getText().contains("Please enter a GCP Project ID first."));
         verifyNoInteractions(aiService);
 
         settingsPanel.vertexProjectIdField.setText("my-gcp-project");
         settingsPanel.vertexLocationField.setText("   ");
         SwingTestUtils.clickOnEdt(settingsPanel.testConnectionButton);
-        assertTrue(settingsPanel.statusLabel.getText().contains("Please enter a Vertex Location first."));
+        assertTrue(settingsPanel.testConnectionStatusLabel.isVisible());
+        assertTrue(settingsPanel.testConnectionStatusLabel.getText().contains("Please enter a Vertex Location first."));
         verifyNoInteractions(aiService);
 
         settingsPanel.setCredentialsFileChooser(() -> new File("/tmp/service-account.json"));
@@ -186,7 +200,8 @@ class SettingsPanelTest {
         when(aiService.testConnection(eq(expectedConfig), anyString())).thenReturn("OK");
         SwingTestUtils.clickOnEdt(settingsPanel.testConnectionButton);
         SwingTestUtils.awaitFuture(settingsPanel.lastAsyncFuture);
-        assertEquals(SettingsPanel.CONNECTION_SUCCESS_TEXT, settingsPanel.statusLabel.getText());
+        assertTrue(settingsPanel.testConnectionStatusLabel.isVisible());
+        assertEquals(SettingsPanel.CONNECTION_SUCCESS_TEXT, settingsPanel.testConnectionStatusLabel.getText());
 
         java.util.concurrent.atomic.AtomicInteger initialCallbackCount = new java.util.concurrent.atomic.AtomicInteger();
         settingsPanel.setOnInitialApiKeyConfiguredCallback(initialCallbackCount::incrementAndGet);
