@@ -63,6 +63,17 @@ final class AgentMemoryPanel extends JPanel {
     static final String PROJECT_TAB_TITLE = "Project Memory (<projectDataDir>/memory)";
     static final String NO_PROJECT_MESSAGE = "No active project selected. Select a project folder in the top bar to manage Project Memory.";
     static final String PINNED_WARNING_TEXT = "Exceeds prompt limit (8,192 chars / 200 lines) — excess content is truncated in prompts";
+    static final String PINNED_MEMORY_TOOLTIP_HTML = "<html><body style='width: 300px; padding: 4px;'>"
+            + "<b>Pinned MEMORY.md Cheat-Sheet</b><br>"
+            + "Automatically injected into Roxy's stable system prompt across all workflow phases (capped at <b>8,192 chars / 200 lines</b> per scope).<br><br>"
+            + "• <b>Global Memory</b>: Personal coding style and cross-project preferences (<code>/rem-g &lt;note&gt;</code> in chat).<br>"
+            + "• <b>Project Memory</b>: Project architecture rules and build/test gotchas (<code>/rem-p &lt;note&gt;</code> in chat)."
+            + "</body></html>";
+    static final String TOPIC_NOTES_TOOLTIP_HTML = "<html><body style='width: 300px; padding: 4px;'>"
+            + "<b>Topic Notes (notes/*.md)</b><br>"
+            + "Structured Markdown notes with YAML frontmatter (title, tags, updated timestamp).<br><br>"
+            + "A compact catalog of note slugs, titles, and tags is listed in the system prompt so Roxy can read or search full notes on demand via <code>memoryService</code> without bloating every prompt."
+            + "</body></html>";
     private static final int TIMESTAMP_DISPLAY_LEN = 16;
 
     private final transient MemoryService memoryService;
@@ -163,6 +174,7 @@ final class AgentMemoryPanel extends JPanel {
         final JPanel notesCardPanel;
 
         final JLabel pinnedHeaderLabel;
+        final JLabel pinnedInfoIcon;
         final JLabel memoryCounterLabel = new JLabel();
         final JLabel memoryWarningLabel = new JLabel(PINNED_WARNING_TEXT);
         final RSyntaxTextArea memoryEditor = new RSyntaxTextArea();
@@ -170,6 +182,7 @@ final class AgentMemoryPanel extends JPanel {
         final JButton revertMemoryButton = new JButton("Revert");
 
         final JLabel notesHeaderLabel;
+        final JLabel notesInfoIcon;
         final JTextField searchField = new JTextField();
         final JButton newNoteButton = new JButton("New Note");
         final DefaultListModel<NoteDetail> noteListModel = new DefaultListModel<>();
@@ -210,8 +223,10 @@ final class AgentMemoryPanel extends JPanel {
 
             pinnedHeaderLabel = UiComponents.createSectionHeader("Pinned MEMORY.md Cheat-Sheet", Codicons.PIN,
                     "font: bold");
+            pinnedInfoIcon = UiComponents.createInfoIcon(PINNED_MEMORY_TOOLTIP_HTML);
             notesHeaderLabel = UiComponents.createSectionHeader("Topic Notes (notes/*.md)", Codicons.BOOK,
                     "font: bold");
+            notesInfoIcon = UiComponents.createInfoIcon(TOPIC_NOTES_TOOLTIP_HTML);
 
             pinnedCardPanel = buildPinnedMemoryCard();
             notesCardPanel = buildTopicNotesCard();
@@ -238,9 +253,10 @@ final class AgentMemoryPanel extends JPanel {
                     new MigLayout("fill, insets 8 12 10 12, hidemode 3", "[grow, fill]", "[][][grow]"));
             UiComponents.styleCardPanel(card);
 
-            JPanel toolbar = new JPanel(new MigLayout("fillx, insets 0", "[]12[grow, fill][][]", "center"));
+            JPanel toolbar = new JPanel(new MigLayout("fillx, insets 0", "[]6[]12[grow, fill][][]", "center"));
             toolbar.setOpaque(false);
             toolbar.add(pinnedHeaderLabel);
+            toolbar.add(pinnedInfoIcon);
             memoryCounterLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
             toolbar.add(memoryCounterLabel, GROWX);
 
@@ -267,7 +283,11 @@ final class AgentMemoryPanel extends JPanel {
             JPanel card = new JPanel(
                     new MigLayout("fill, insets 8 12 10 12, gapy 6", "[grow, fill]", "[][grow, fill]"));
             UiComponents.styleCardPanel(card);
-            card.add(notesHeaderLabel, GROWX_WRAP);
+            JPanel notesHeaderRow = new JPanel(new MigLayout("insets 0, gapx 6", "[][]", "center"));
+            notesHeaderRow.setOpaque(false);
+            notesHeaderRow.add(notesHeaderLabel);
+            notesHeaderRow.add(notesInfoIcon);
+            card.add(notesHeaderRow, GROWX_WRAP);
             JPanel leftPane = new JPanel(new BorderLayout(0, 6));
             leftPane.setOpaque(false);
 
@@ -697,6 +717,8 @@ final class AgentMemoryPanel extends JPanel {
             statusLabel.setForeground(mutedColor);
             searchField.putClientProperty(FlatClientProperties.TEXT_FIELD_LEADING_ICON,
                     FontIcon.of(Codicons.SEARCH, 14, mutedColor));
+            UiComponents.updateInfoIconTheme(pinnedInfoIcon);
+            UiComponents.updateInfoIconTheme(notesInfoIcon);
             UiComponents.refreshActionButtonIcons(this);
             SwingHtmlUtils.applyRSyntaxTheme(memoryEditor, settingsService);
             SwingHtmlUtils.applyRSyntaxTheme(noteBodyEditor, settingsService);

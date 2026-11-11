@@ -78,6 +78,7 @@ final class BuildConfigPanel extends JPanel {
     final JLabel modelSectionHeaderLabel;
     final JComboBox<GeminiModelConfig> modelCombo;
     final JComboBox<ThinkingLevelOption> thinkingLevelCombo;
+    final JLabel thinkingLevelInfoIcon;
     final JLabel modelApiBadgeLabel;
     final JTextArea modelDescriptionArea;
     final JLabel buildSectionHeaderLabel;
@@ -166,12 +167,13 @@ final class BuildConfigPanel extends JPanel {
         modelCardPanel.add(modelDescriptionArea, "growx, wmin 0, gaptop 2, hidemode 3");
 
         thinkingLevelCombo = new JComboBox<>();
+        thinkingLevelInfoIcon = UiComponents.createInfoIcon(UiComponents.THINKING_LEVEL_TOOLTIP_HTML);
         JSeparator modelCardSeparator = new JSeparator(SwingConstants.HORIZONTAL);
         modelCardSeparator.setOpaque(false);
         modelCardPanel.add(modelCardSeparator, "growx, gaptop 2, gapbottom 2");
         modelCardPanel.add(UiComponents.createFieldRow(UiComponents.createFieldTextBlock("Project Thinking Level",
-                "Override the default Global Settings thinking level specifically for the active project.", null),
-                thinkingLevelCombo, "w 240:280:340"), "growx, wmin 0");
+                "Override the default Global Settings thinking level specifically for the active project.",
+                thinkingLevelInfoIcon), thinkingLevelCombo, "w 240:280:340"), "growx, wmin 0");
 
         add(modelCardPanel, "growx, wmin 0, wrap");
 
@@ -487,6 +489,7 @@ final class BuildConfigPanel extends JPanel {
         UiComponents.styleCodePillBadge(modelApiBadgeLabel);
         modelSectionHeaderLabel.setIcon(FontIcon.of(Codicons.HUBOT, 18, accentColor));
         buildSectionHeaderLabel.setIcon(FontIcon.of(Codicons.PACKAGE, 18, accentColor));
+        UiComponents.updateInfoIconTheme(thinkingLevelInfoIcon);
         UiComponents.updateInfoIconTheme(buildConfigInfoIcon);
         UiComponents.refreshActionButtonIcons(this);
         updateSaveButtonState();

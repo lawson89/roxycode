@@ -36,6 +36,7 @@ class CodebaseCachePanelTest {
                 && CodebaseCachePanel.NO_SNAPSHOT_STATUS.equals(panel.statusLabel.getText()));
         assertEquals("Repo Map & Prompt", panel.titleLabel.getText());
         assertEquals("Refresh Repo Map", panel.packButton.getText());
+        assertNotNull(panel.promptLayersInfoIcon.getToolTipText());
         verify(packerService, times(1)).forceRegenerateRepoMap();
 
         RepoMapSnapshot snapshot = new RepoMapSnapshot("roxycode", "cached repo map",

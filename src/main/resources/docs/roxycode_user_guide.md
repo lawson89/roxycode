@@ -4,19 +4,21 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
 
 ## 1. Workspaces & Workflow Lifecycle
 
-### Codebase Q&A (EXPLORE Phase — Technical Mentor)
-- **Purpose**: Read-only codebase exploration, architecture Q&A, debugging guidance, and answering questions about RoxyCode itself.
+### Ask Roxy (EXPLORE Phase — Technical Mentor)
+- **Purpose**: Read-only codebase exploration, architecture Q&A, debugging guidance, interactive `build.toml` configuration, and answering questions about RoxyCode itself.
 - **Capabilities**: Uses fileReadService, grepService, symbolService, gitService, buildToolService (read/test commands), memoryService, userInputService, and webSearchService via executeJexl. File mutation (fileEditorService) is disabled.
-- **Composer Features**:
+- **Composer & Action Features**:
   - Type '@' or click **@ Mention** to fuzzy-search and attach project file paths.
+  - Type '/' or click **/ Commands** to run slash commands: `/reset` (reset session), `/clear` (clear chat view), `/help` (list commands), `/rem-p <note>` (save note to Project Memory), and `/rem-g <note>` (save note to Global Memory).
   - Press **Enter** to send, **Shift+Enter** for a newline, and **Ctrl+V** (or the image button) to attach screenshots/images.
-  - Click **[Move to Feature Request]** on any Roxy response to copy that architectural finding or prompt directly into the **Feature Development** workspace.
+  - Click **[Move to Feature Request]** on any Roxy response to copy that architectural finding or prompt directly into the **Build Feature** workspace.
+  - Click **[Apply to build.toml]** on any Roxy response containing a valid `build.toml` code block to populate the **Project Settings** editor and switch to it for confirmation.
 - **Past Topics Tab**: Browse, search, and copy archived Q&A conversations (<projectDataDir>/archive/topics/*.md). Starting a **New Topic** prompts whether to archive the current conversation.
 
-### Feature Development (PLAN -> CODE -> REVIEW Lifecycle)
+### Build Feature (PLAN -> CODE -> REVIEW Lifecycle)
 - **1. Plan (PLAN — Lead Architect)**:
   - Roxy explores the codebase (read-only) and submits a structured implementation plan (planService.submitPlan) with a title, goal, requirements, and detailed blueprint technical steps containing exact file paths, 1-based line ranges, and method/logic specifications (plus automatic quality gates: "Code compiles successfully", "Unit tests pass", and "Automated code review passes").
-  - Roxy calls planService.requestDevelopment(reason), displaying an **Approval Banner** (Approve / Reject). No files are modified until the user clicks **Approve**.
+  - Roxy calls planService.requestDevelopment(reason), displaying an **Approval Banner** (Approve / Reject), or transitions automatically if **Auto-approve Plan** is enabled in the composer toolbar. No files are modified until the plan is approved.
 - **2. Code (CODE — Senior Developer)**:
   - Unlocks fileEditorService (writeFile, replaceBlock, replaceBlocks, replaceLines, replaceSymbol, insertAtLine, revertFile, deleteFile, moveFile, copyFile, mkdirs).
   - Roxy implements steps, marks technical steps completed in real time (planService.markStepCompleted / markStepsCompleted), and verifies changes with buildToolService.compile(), runTests(), runSingleTest(), format(), lint(), or buildAndTest().
@@ -25,12 +27,12 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
 - **3. Review (REVIEW — Code Reviewer)**:
   - Roxy audits gitService.getDiff(), test coverage, and adherence to requirements.
   - If issues are found, Roxy autonomously routes back to CODE via planService.requestFixes(reason).
-  - If verification passes, Roxy marks the review gate complete and calls planService.requestCompletion(reason), prompting the user for final **Approve / Reject** sign-off. Approving archives the completed plan and resets for the next feature.
-- **Plan & Past Plans Tabs**: The **Plan** tab renders live checklist progress and the handoff log; **Past Plans** searches archived plans (<projectDataDir>/archive/plans/*.md).
+  - If verification passes, Roxy marks the review gate complete and calls planService.requestCompletion(reason), prompting the user for final **Approve / Reject** sign-off (with a **Copy Commit Msg** button on the completion banner and Plan tab). Approving archives the completed plan and resets for the next feature.
+- **Plan & Past Plans Tabs**: The **Plan** tab renders live checklist progress, the handoff log, and **Copy Commit Msg** / **Copy as Markdown** actions; **Past Plans** searches archived plans (<projectDataDir>/archive/plans/*.md).
 
-## 2. Context, Agent Memory & Repo Map
+## 2. Context & Prompts Hub & Agent Memory
 
-### Context & Reference Folders (Context Sidebar View)
+### Context Folders (Context & Prompts -> Context Folders Tab)
 - **Context Folders (Auto-Injected Docs)**: Manages external read-only folders whose top-level text/markdown files are automatically injected into Roxy's stable system prompt:
   - **Global Context Folders**: Applied across all projects (~/.roxycode/settings.toml).
   - **Project Context Folders**: Specific to the active repository (<projectDataDir>/context.toml), supporting project-relative or absolute paths.
@@ -38,21 +40,24 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
   - Listed concisely under `## READ-ONLY REFERENCE FOLDERS` in the stable system prompt.
   - Addressable on demand via `@<alias>` or `@<alias>/subpath` in `fileReadService`, `grepService`, and `symbolService`, while strictly blocked from any writes or deletions in `fileEditorService`.
 
+### Repo Map & Prompt (Context & Prompts -> Repo Map & Prompt Tab)
+- Displays the Universal Ctags structural skeleton (RepoMapPackerService) of source files with class/method line numbers, plus live token estimates for the Repo Map, Stable Prompt & Memory, and Session Context to maximize Gemini prefix cache hits.
+
+### JEXL API (Context & Prompts -> JEXL API Tab)
+- Interactive reference of all `@AgentService` methods exposed inside `executeJexl`.
+
 ### Agent Memory (Agent Memory Sidebar View)
 - Two-tier persistent memory (memoryService) shared across all phases:
-  - **Global Memory (~/.roxycode/memory/)**: User-wide preferences and coding style (MEMORY.md + notes/<slug>.md).
-  - **Project Memory (<projectDataDir>/memory/)**: Project architecture decisions and build/test gotchas (MEMORY.md + notes/<slug>.md).
+  - **Global Memory (~/.roxycode/memory/)**: User-wide preferences and coding style (MEMORY.md + notes/<slug>.md; quick-add via `/rem-g <note>`).
+  - **Project Memory (<projectDataDir>/memory/)**: Project architecture decisions and build/test gotchas (MEMORY.md + notes/<slug>.md; quick-add via `/rem-p <note>`).
 - Pinned MEMORY.md files (capped at 8,192 chars / 200 lines each in the prompt) and note catalogs are injected into the stable prompt; full notes and archives are searchable via memoryService.search(pattern).
 
-### Repo Map & Prompt (Repo Map Sidebar View)
-- Displays the Universal Ctags structural skeleton (RepoMapPackerService) of source files with class/method line numbers, plus live token estimates for the Repo Map, Stable Context, and Session Context to maximize Gemini prefix cache hits.
-
-## 3. Configuration & System Tools
+## 3. Configuration & Settings & Tools Hub
 
 ### Project Settings & build.toml (Project Settings Sidebar View)
 - **AI Model & Thinking Overrides**: Optionally override the Global Settings Gemini model and thinking level (ADAPTIVE, MINIMAL/NONE, LOW, MEDIUM, HIGH, or model default) for the active project. When **Adaptive (Phase-Aware)** is selected, Roxy dynamically adjusts thinking per sub-turn (PLAN: HIGH while designing the blueprint -> LOW after submitPlan; CODE: LOW for fast execution -> HIGH after any tool/build/test failure; REVIEW: MEDIUM; EXPLORE: LOW on initial discovery -> MEDIUM on synthesis).
   - **Build Configuration (<projectDataDir>/build.toml)**:
-    - Must be reviewed and confirmed (**Confirm & Save Settings**) before workspace chat is unlocked for a project. Built-in templates are provided for Maven, Gradle, npm/Node, Python, Rust, Go, CMake, and Default, or click **Configure with Roxy** to have Roxy inspect your project files and installed host toolchains to generate a tailored build.toml automatically.
+    - Must be reviewed and confirmed (**Confirm & Save Settings**) before Build Feature chat is unlocked for a project. Built-in templates are provided for Maven, Gradle, npm/Node, Python, Rust, Go, CMake, and Default, or click **Configure with Roxy** to open an interactive **Ask Roxy** session where Roxy inspects your project files and installed host toolchains, asks clarifying questions if needed, and generates a tailored `build.toml` with a one-click **[Apply to build.toml]** action.
     - **[commands]**: Shell commands executed from the project root:
       - install: Sync dependencies (e.g., './mvnw dependency:resolve', 'npm install').
       - clean: Clean build artifacts.
@@ -73,7 +78,6 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
       - writable_paths: Extra host paths mounted read-write in "native" mode for package/build caches (supports ~/ expansion, e.g., ["~/.m2", "~/.cargo"]).
       - image & workdir: Container image (e.g., "eclipse-temurin:25-jdk") and working directory ("/workspace") when mode = "docker".
 
-### System Tools, JEXL API & Global Settings
-- **System Tools**: Checks status and install commands for required CLI tools (**Ripgrep**, **Universal Ctags**) and optional tools/sandbox runtimes (**Git**, **Bubblewrap** / **Seatbelt**, **Docker**).
-- **JEXL API**: Interactive reference of all @AgentService methods exposed in executeJexl.
+### Global Settings & System Tools (Settings & Tools Sidebar Hub)
 - **Global Settings**: Configures Light/Dark theme, Gemini API key, default Gemini model & thinking level, max tool turns per request, chat memory window, tool call logging, and Google Search grounding (webSearchService).
+- **System Tools**: Checks status and install commands for required CLI tools (**Ripgrep**, **Universal Ctags**) and optional tools/sandbox runtimes (**Git**, **Bubblewrap** / **Seatbelt**, **Docker**).

@@ -49,6 +49,8 @@ class AgentMemoryPanelTest {
         SwingTestUtils.awaitFuture(panel.projectScopeView.lastAsyncFuture);
 
         assertEquals("# Initial Global Memory", panel.globalScopeView.memoryEditor.getText());
+        assertNotNull(panel.globalScopeView.pinnedInfoIcon.getToolTipText());
+        assertNotNull(panel.globalScopeView.notesInfoIcon.getToolTipText());
         assertFalse(panel.globalScopeView.isMemoryDirty());
         assertFalse(panel.globalScopeView.saveMemoryButton.isEnabled());
         assertFalse(panel.globalScopeView.isMemoryWarningVisible());

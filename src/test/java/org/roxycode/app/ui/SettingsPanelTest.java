@@ -65,6 +65,7 @@ class SettingsPanelTest {
         JSpinner.DefaultEditor turnsEditor = (JSpinner.DefaultEditor) settingsPanel.maxAgentToolTurnsSpinner
                 .getEditor();
 
+        assertNotNull(settingsPanel.thinkingLevelInfoIcon.getToolTipText());
         assertEquals(ThinkingLevel.DEFAULT, settingsPanel.thinkingLevelCombo.getSelectedItem());
         settingsPanel.thinkingLevelCombo.setSelectedItem(ThinkingLevel.HIGH);
         turnsEditor.getTextField().setText("85");

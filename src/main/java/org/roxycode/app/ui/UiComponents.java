@@ -84,6 +84,17 @@ final class UiComponents {
     static final String SUBTLE_RED_BUTTON_STYLE = "foreground: $Actions.Red; hoverBackground: fade($Actions.Red, 12%); pressedBackground: fade($Actions.Red, 20%); borderColor: fade($Actions.Red, 45%); focusedBorderColor: $Actions.Red; hoverBorderColor: $Actions.Red";
     static final Color AMBER_LIGHT = new Color(0xd9, 0x77, 0x06);
     static final Color AMBER_DARK = new Color(0xf5, 0x9e, 0x0b);
+    static final Color INFO_BLUE_LIGHT = new Color(0x25, 0x63, 0xeb);
+    static final Color INFO_BLUE_DARK = new Color(0x3b, 0x82, 0xf6);
+    static final String THINKING_LEVEL_TOOLTIP_HTML = "<html><body style='width: 310px; padding: 4px;'>"
+            + "<b>Thinking Level</b><br>" + "Controls the reasoning depth used by Gemini models:<br><br>"
+            + "• <b>Adaptive (Phase-Aware)</b>: Dynamically adjusts thinking per sub-turn:<br>"
+            + "&nbsp;&nbsp;– <b>PLAN</b>: HIGH while designing blueprint → LOW after submitting plan<br>"
+            + "&nbsp;&nbsp;– <b>CODE</b>: LOW for fast execution → HIGH after any tool/build/test failure<br>"
+            + "&nbsp;&nbsp;– <b>REVIEW</b>: MEDIUM for balanced diff and test auditing<br>"
+            + "&nbsp;&nbsp;– <b>EXPLORE</b>: LOW on initial discovery → MEDIUM on synthesis<br>"
+            + "• <b>Fixed Levels (Minimal/None, Low, Medium, High)</b>: Uses a constant thinking budget on every turn."
+            + "</body></html>";
     static final int CHAT_THUMBNAIL_MAX_DIM = 180;
     private static final String TEMP_THUMB_DIR_PREFIX = "roxycode-thumbs-";
     private static Path tempThumbnailDir;
@@ -414,9 +425,9 @@ final class UiComponents {
 
     static Color resolveInfoIconColor() {
         if (FlatLaf.isLafDark()) {
-            return AMBER_DARK;
+            return INFO_BLUE_DARK;
         }
-        return AMBER_LIGHT;
+        return INFO_BLUE_LIGHT;
     }
 
     static JLabel createInfoIcon(String htmlTooltip) {
@@ -461,9 +472,10 @@ final class UiComponents {
             return;
         }
         Color infoColor = resolveInfoIconColor();
-        iconLabel.setIcon(FontIcon.of(Codicons.INFO, 15, infoColor));
-        iconLabel.putClientProperty(FlatClientProperties.STYLE, null);
-        iconLabel.setBorder(null);
+        String hex = SwingHtmlUtils.toHex(infoColor);
+        iconLabel.setIcon(FontIcon.of(Codicons.INFO, 16, infoColor));
+        iconLabel.putClientProperty(FlatClientProperties.STYLE,
+                "arc: 999; background: fade(" + hex + ", 14%); border: 2,5,2,5,fade(" + hex + ", 38%),1,999");
         iconLabel.setOpaque(false);
     }
 

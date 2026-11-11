@@ -50,6 +50,10 @@ class ContextManagerPanelTest {
         assertEquals("Remove", globalCol.btnRemoveReferenceFolder.getText());
         assertEquals("Remove", projCol.btnRemoveFolder.getText());
         assertEquals("Remove", projCol.btnRemoveReferenceFolder.getText());
+        assertNotNull(globalCol.foldersInfoIcon.getToolTipText());
+        assertNotNull(globalCol.referenceFoldersInfoIcon.getToolTipText());
+        assertNotNull(projCol.foldersInfoIcon.getToolTipText());
+        assertNotNull(projCol.referenceFoldersInfoIcon.getToolTipText());
         assertNotNull(globalCol.getClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE));
         assertNotNull(projCol.getClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE));
         assertEquals("/global", globalCol.folderListModel.getElementAt(0));

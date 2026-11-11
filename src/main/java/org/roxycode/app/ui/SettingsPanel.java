@@ -71,6 +71,7 @@ public final class SettingsPanel extends JPanel {
     final JComboBox<String> themeCombo;
     final JComboBox<GeminiModelConfig> modelCombo;
     final JComboBox<ThinkingLevel> thinkingLevelCombo;
+    final JLabel thinkingLevelInfoIcon = UiComponents.createInfoIcon(UiComponents.THINKING_LEVEL_TOOLTIP_HTML);
     final JLabel modelApiBadgeLabel;
     final JTextArea modelDescriptionArea;
     final JSpinner maxMessagesSpinner;
@@ -226,9 +227,8 @@ public final class SettingsPanel extends JPanel {
         card.add(modelDescriptionArea, "growx, wmin 0, gaptop 2, hidemode 3");
         card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
 
-        card.add(UiComponents.createFieldRow(
-                UiComponents.createFieldTextBlock("Thinking Level",
-                        "Default reasoning effort used by Gemini models when generating responses.", null),
+        card.add(UiComponents.createFieldRow(UiComponents.createFieldTextBlock("Thinking Level",
+                "Default reasoning effort used by Gemini models when generating responses.", thinkingLevelInfoIcon),
                 thinkingLevelCombo, CONTROL_WIDTH_CONSTRAINTS), GROWX_WMIN_0);
 
         card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
@@ -321,6 +321,7 @@ public final class SettingsPanel extends JPanel {
             agentExecutionHeaderLabel.setIcon(FontIcon.of(Codicons.PULSE, 18, accentColor));
         }
         UiComponents.styleCodePillBadge(modelApiBadgeLabel);
+        UiComponents.updateInfoIconTheme(thinkingLevelInfoIcon);
 
         String accentHex = SwingHtmlUtils.toHex(accentColor);
         UiComponents.refreshActionButtonIcons(this);

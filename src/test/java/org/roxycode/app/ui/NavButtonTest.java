@@ -15,8 +15,10 @@ class NavButtonTest {
     void testWaitingApprovalBadgeBusyDotTooltipsNavigationAccessAndSplitPaneGrip() {
         SettingsPanel.applyTheme("macOS Dark");
         assertEquals("grip", UIManager.get("SplitPaneDivider.style"));
+        assertEquals(UiComponents.INFO_BLUE_DARK, UiComponents.resolveInfoIconColor());
         SettingsPanel.applyTheme("FlatLaf Light");
         assertEquals("grip", UIManager.get("SplitPaneDivider.style"));
+        assertEquals(UiComponents.INFO_BLUE_LIGHT, UiComponents.resolveInfoIconColor());
 
         SwingTestUtils.runOnEdt(() -> {
             NavButton btn = new NavButton("Feature Request", FontIcon.of(Codicons.GIT_PULL_REQUEST, 16));

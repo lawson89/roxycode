@@ -2,6 +2,7 @@ package org.roxycode.app.ui;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.GridLayout;
 import java.io.File;
@@ -50,6 +51,15 @@ final class ContextManagerPanel extends JPanel {
     static final String GLOBAL_SUBTITLE = "Shared across all projects";
     static final String PROJECT_SUBTITLE = "Scoped to active project";
     static final String REFERENCE_FOLDERS_SECTION_TITLE = "Reference Folders (Read-Only @alias)";
+    static final String CONTEXT_FOLDERS_TOOLTIP_HTML = "<html><body style='width: 280px; padding: 4px;'>"
+            + "<b>Context Folders (Auto-Injected Docs)</b><br>"
+            + "Top-level non-binary text and Markdown files inside these folders are automatically injected into Roxy's stable system prompt on every turn.<br><br>"
+            + "Use this for coding guidelines, architecture conventions, and shared documentation." + "</body></html>";
+    static final String REFERENCE_FOLDERS_TOOLTIP_HTML = "<html><body style='width: 280px; padding: 4px;'>"
+            + "<b>Reference Folders (Read-Only @alias)</b><br>"
+            + "Mounts external repositories or source directories as read-only <code>@&lt;alias&gt;</code> prefixes without consuming prompt tokens up front.<br><br>"
+            + "Roxy can search, inspect symbols, and read files on demand via <code>@&lt;alias&gt;/path</code> while all file modifications remain strictly blocked."
+            + "</body></html>";
 
     final JLabel titleLabel;
     final JLabel subtitleLabel;
@@ -113,8 +123,10 @@ final class ContextManagerPanel extends JPanel {
         final JLabel headerLabel;
         final JLabel subtitleLabel;
         final JLabel foldersSectionLabel;
+        final JLabel foldersInfoIcon;
         final JLabel filesSectionLabel;
         final JLabel referenceFoldersSectionLabel;
+        final JLabel referenceFoldersInfoIcon;
 
         final DefaultListModel<String> folderListModel = new DefaultListModel<>();
         final JList<String> folderList = new JList<>(folderListModel);
@@ -177,11 +189,17 @@ final class ContextManagerPanel extends JPanel {
 
             foldersSectionLabel = new JLabel(sectionTitle + " Folders");
             foldersSectionLabel.setIconTextGap(6);
+            foldersInfoIcon = UiComponents.createInfoIcon(CONTEXT_FOLDERS_TOOLTIP_HTML);
+
+            JPanel foldersHeaderRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+            foldersHeaderRow.setOpaque(false);
+            foldersHeaderRow.add(foldersSectionLabel);
+            foldersHeaderRow.add(foldersInfoIcon);
 
             JPanel foldersPanel = new JPanel(new BorderLayout(0, 5));
             foldersPanel.setOpaque(false);
             foldersPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-            foldersPanel.add(foldersSectionLabel, BorderLayout.NORTH);
+            foldersPanel.add(foldersHeaderRow, BorderLayout.NORTH);
             foldersPanel.add(new JScrollPane(folderList), BorderLayout.CENTER);
             foldersPanel.add(folderButtons, BorderLayout.SOUTH);
 
@@ -211,11 +229,17 @@ final class ContextManagerPanel extends JPanel {
 
             referenceFoldersSectionLabel = new JLabel(REFERENCE_FOLDERS_SECTION_TITLE);
             referenceFoldersSectionLabel.setIconTextGap(6);
+            referenceFoldersInfoIcon = UiComponents.createInfoIcon(REFERENCE_FOLDERS_TOOLTIP_HTML);
+
+            JPanel referenceFoldersHeaderRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
+            referenceFoldersHeaderRow.setOpaque(false);
+            referenceFoldersHeaderRow.add(referenceFoldersSectionLabel);
+            referenceFoldersHeaderRow.add(referenceFoldersInfoIcon);
 
             JPanel referenceFoldersPanel = new JPanel(new BorderLayout(0, 5));
             referenceFoldersPanel.setOpaque(false);
             referenceFoldersPanel.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-            referenceFoldersPanel.add(referenceFoldersSectionLabel, BorderLayout.NORTH);
+            referenceFoldersPanel.add(referenceFoldersHeaderRow, BorderLayout.NORTH);
             referenceFoldersPanel.add(new JScrollPane(referenceFolderList), BorderLayout.CENTER);
             referenceFoldersPanel.add(referenceFolderButtons, BorderLayout.SOUTH);
 
@@ -311,6 +335,8 @@ final class ContextManagerPanel extends JPanel {
             foldersSectionLabel.setIcon(FontIcon.of(Codicons.FOLDER, 14, accent));
             filesSectionLabel.setIcon(FontIcon.of(Codicons.FILE, 14, accent));
             referenceFoldersSectionLabel.setIcon(FontIcon.of(Codicons.REPO, 14, accent));
+            UiComponents.updateInfoIconTheme(foldersInfoIcon);
+            UiComponents.updateInfoIconTheme(referenceFoldersInfoIcon);
 
             btnAddFolder.setIcon(FontIcon.of(Codicons.ADD, 14, accent));
             btnRemoveFolder.setIcon(FontIcon.of(Codicons.TRASH, 14, buttonFg));

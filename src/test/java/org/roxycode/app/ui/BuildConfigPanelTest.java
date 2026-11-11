@@ -90,6 +90,9 @@ class BuildConfigPanelTest {
         assertEquals(BuildConfigPanel.TITLE_TEXT, panel.titleLabel.getText());
         assertEquals(UiComponents.formatWrappingHtml(BuildConfigPanel.SUBTITLE_TEXT), panel.subtitleLabel.getText());
         assertEquals(BuildConfigPanel.BUILD_CONFIG_HINT_TEXT, panel.buildConfigHintLabel.getText());
+        assertNotNull(panel.thinkingLevelInfoIcon.getToolTipText());
+        assertTrue(String.valueOf(panel.thinkingLevelInfoIcon.getClientProperty(FlatClientProperties.STYLE))
+                .contains("arc: 999"));
         assertSame(panel.buildSectionHeaderLabel.getParent(), panel.buildConfigHintLabel.getParent());
         assertSame(panel.buildSectionHeaderLabel.getParent(), panel.configureWithRoxyButton.getParent());
         assertNotNull(panel.buildCardPanel);

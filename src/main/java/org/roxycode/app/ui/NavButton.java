@@ -145,7 +145,12 @@ final class NavButton extends JButton {
         updateIconColor();
         boolean highlightWaiting = !isSelected() && waitingApproval;
         boolean dark = FlatLaf.isLafDark();
-        Color amberAccent = UiComponents.resolveInfoIconColor();
+        Color amberAccent;
+        if (dark) {
+            amberAccent = UiComponents.AMBER_DARK;
+        } else {
+            amberAccent = UiComponents.AMBER_LIGHT;
+        }
         Color amberTint;
         if (dark) {
             amberTint = AMBER_TINT_DARK;

@@ -54,6 +54,13 @@ final class CodebaseCachePanel extends JPanel {
     static final String TAB_REPO_MAP = "Repo Map";
     static final String TAB_STABLE_PROMPT = "Stable Prompt & Memory";
     static final String TAB_SESSION_CONTEXT = "Session Context";
+    static final String PROMPT_LAYERS_TOOLTIP_HTML = "<html><body style='width: 310px; padding: 4px;'>"
+            + "<b>Repo Map &amp; Prompt Layers</b><br>"
+            + "Roxy organizes context into three layers to maximize Gemini prefix cache hits:<br><br>"
+            + "• <b>Repo Map</b>: Universal Ctags structural skeleton of source files with class/method line numbers.<br>"
+            + "• <b>Stable Prompt &amp; Memory</b>: System rules, Context Folders, Reference Folder catalog, and Agent Memory.<br>"
+            + "• <b>Session Context</b>: Active workflow phase, JEXL API docs, git status, and implementation plan progress.<br><br>"
+            + "Click <b>Refresh Repo Map</b> to force a full symbol re-scan." + "</body></html>";
     private static final int TAB_INDEX_STABLE_PROMPT = 1;
     private static final int TAB_INDEX_SESSION_CONTEXT = 2;
     private static final String GROWX = "growx";
@@ -68,6 +75,7 @@ final class CodebaseCachePanel extends JPanel {
     final JPanel summaryCardPanel = new JPanel(
             new MigLayout("fillx, insets 12 16 12 16, wrap 1, gapy 6", "[grow, fill]", ""));
     final JLabel statusLabel = new JLabel("Status: Unknown");
+    final JLabel promptLayersInfoIcon = UiComponents.createInfoIcon(PROMPT_LAYERS_TOOLTIP_HTML);
     final JLabel repoMapTokensLabel = new JLabel();
     final JLabel stableTokensLabel = new JLabel();
     final JLabel sessionTokensLabel = new JLabel();
@@ -168,9 +176,10 @@ final class CodebaseCachePanel extends JPanel {
         stableTokensLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
         sessionTokensLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
 
-        JPanel topSummaryRow = new JPanel(new MigLayout("insets 0, fillx", "[grow, fill][]", "center"));
+        JPanel topSummaryRow = new JPanel(new MigLayout("insets 0, fillx", "[]6[grow, fill][]", "center"));
         topSummaryRow.setOpaque(false);
-        topSummaryRow.add(statusLabel, GROWX);
+        topSummaryRow.add(statusLabel);
+        topSummaryRow.add(promptLayersInfoIcon, GROWX);
         topSummaryRow.add(totalTokensLabel);
         summaryCardPanel.add(topSummaryRow, GROWX);
 
@@ -206,6 +215,7 @@ final class CodebaseCachePanel extends JPanel {
 
     void updateTheme() {
         UiComponents.styleCardPanel(summaryCardPanel);
+        UiComponents.updateInfoIconTheme(promptLayersInfoIcon);
         UiComponents.refreshActionButtonIcons(this);
         repoMapTokensLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
         stableTokensLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
