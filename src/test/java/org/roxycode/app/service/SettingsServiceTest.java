@@ -131,15 +131,36 @@ class SettingsServiceTest {
         assertEquals(ThinkingLevel.DEFAULT, ThinkingLevel.fromString(null));
         assertEquals(ThinkingLevel.DEFAULT, ThinkingLevel.fromString("  "));
         assertEquals(ThinkingLevel.DEFAULT, ThinkingLevel.fromString("unknown-level"));
+        assertEquals(ThinkingLevel.ADAPTIVE, ThinkingLevel.fromString("ADAPTIVE"));
+        assertEquals(ThinkingLevel.ADAPTIVE, ThinkingLevel.fromString("Adaptive (Phase-Aware)"));
         assertEquals(ThinkingLevel.MINIMAL, ThinkingLevel.fromString("NONE"));
         assertEquals(ThinkingLevel.MINIMAL, ThinkingLevel.fromString("minimal"));
         assertEquals(ThinkingLevel.LOW, ThinkingLevel.fromString("low"));
         assertEquals(ThinkingLevel.MEDIUM, ThinkingLevel.fromString("Medium"));
         assertEquals(ThinkingLevel.HIGH, ThinkingLevel.fromString("HIGH"));
 
+        assertEquals(ThinkingLevel.HIGH, ThinkingLevel.ADAPTIVE
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, false, false, false));
+        assertEquals(ThinkingLevel.LOW,
+                ThinkingLevel.ADAPTIVE.resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, true, true, false));
+        assertEquals(ThinkingLevel.LOW,
+                ThinkingLevel.ADAPTIVE.resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.CODE, true, true, false));
+        assertEquals(ThinkingLevel.HIGH,
+                ThinkingLevel.ADAPTIVE.resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.CODE, true, true, true));
+        assertEquals(ThinkingLevel.MEDIUM, ThinkingLevel.ADAPTIVE
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.REVIEW, true, false, false));
+        assertEquals(ThinkingLevel.LOW, ThinkingLevel.ADAPTIVE
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.EXPLORE, false, false, false));
+        assertEquals(ThinkingLevel.MEDIUM, ThinkingLevel.ADAPTIVE
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.EXPLORE, false, true, false));
+
         GoogleGenAiChatOptions.Builder defaultBuilder = GoogleGenAiChatOptions.builder().model("gemini-3.5-flash");
         ThinkingLevel.DEFAULT.applyTo(defaultBuilder);
         assertNull(defaultBuilder.build().getThinkingLevel());
+
+        GoogleGenAiChatOptions.Builder adaptiveBuilder = GoogleGenAiChatOptions.builder().model("gemini-3.5-flash");
+        ThinkingLevel.ADAPTIVE.applyTo(adaptiveBuilder);
+        assertNull(adaptiveBuilder.build().getThinkingLevel());
 
         GoogleGenAiChatOptions.Builder highBuilder = GoogleGenAiChatOptions.builder().model("gemini-3.5-flash");
         ThinkingLevel.HIGH.applyTo(highBuilder);
@@ -182,9 +203,11 @@ class SettingsServiceTest {
     @Test
     void testResolveModelConfig() {
         SettingsService service = new SettingsService(null, null);
+        service.setSettingsPathOverride(tempDir.resolve("nonexistent-settings.toml"));
         assertNotNull(service.resolveModelConfig("gemini-3.5-flash"));
-        // The global model defaults to the first model in models.toml if AppSettings is blank
-        assertEquals("gemini-4-argon", SettingsService.resolveGlobalGeminiModel(service));
+        assertEquals(AppSettings.DEFAULT_GEMINI_MODEL, SettingsService.resolveGlobalGeminiModel(service));
+        service.getSettings().setGeminiModel("   ");
+        assertEquals(AppSettings.DEFAULT_GEMINI_MODEL, SettingsService.resolveGlobalGeminiModel(service));
     }
 
     @Test

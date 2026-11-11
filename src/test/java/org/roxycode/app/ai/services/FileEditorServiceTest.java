@@ -14,6 +14,9 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.MockedStatic;
+import org.roxycode.app.service.ProcessRunner;
+import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.JexlServiceRegistry;
 import org.roxycode.app.ai.JexlTool;
@@ -257,20 +260,22 @@ class FileEditorServiceTest {
         assertEditFails(fileEditorService.revertFile("DoesNotExist.java"),
                 "File does not exist on disk or in git HEAD: DoesNotExist.java");
 
-        // Initialize a real git repo in tempDir to test tracked file revert
-        org.roxycode.app.service.ProcessRunner.run(List.of("git", "init"), tempDir, true);
-        org.roxycode.app.service.ProcessRunner.run(List.of("git", "config", "user.email", "test@example.com"), tempDir,
-                true);
-        org.roxycode.app.service.ProcessRunner.run(List.of("git", "config", "user.name", "Test User"), tempDir, true);
-        Path trackedFile = Files.writeString(tempDir.resolve("Tracked.txt"), "original head content\n");
-        org.roxycode.app.service.ProcessRunner.run(List.of("git", "add", "Tracked.txt"), tempDir, true);
-        org.roxycode.app.service.ProcessRunner.run(List.of("git", "commit", "-m", "initial"), tempDir, true);
+        Path trackedFile = Files.writeString(tempDir.resolve("Tracked.txt"), "dirty modified content\n");
+        try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
+            runner.when(() -> ProcessRunner.run(eq(List.of("git", "ls-files", "--error-unmatch", "Tracked.txt")),
+                    eq(tempDir), eq(true))).thenReturn(new ProcessResult(0, "Tracked.txt\n", "", false));
+            runner.when(() -> ProcessRunner.run(eq(List.of("git", "checkout", "HEAD", "--", "Tracked.txt")),
+                    eq(tempDir), eq(true))).thenAnswer(inv -> {
+                        Files.writeString(trackedFile, "original head content\n");
+                        return new ProcessResult(0, "", "", false);
+                    });
 
-        Files.writeString(trackedFile, "dirty modified content\n");
-        clearInvocations(eventPublisher);
-        EditorResult revertTracked = fileEditorService.revertFile("Tracked.txt");
-        assertTrue(revertTracked.success());
-        assertEquals("original head content\n", Files.readString(trackedFile));
-        verify(eventPublisher).publishEvent(new FileChangedEvent("Tracked.txt", FileChangedEvent.ChangeType.MODIFIED));
+            clearInvocations(eventPublisher);
+            EditorResult revertTracked = fileEditorService.revertFile("Tracked.txt");
+            assertTrue(revertTracked.success());
+            assertEquals("original head content\n", Files.readString(trackedFile));
+            verify(eventPublisher)
+                    .publishEvent(new FileChangedEvent("Tracked.txt", FileChangedEvent.ChangeType.MODIFIED));
+        }
     }
 }

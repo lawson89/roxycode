@@ -2,14 +2,18 @@ package org.roxycode.app.model;
 
 import java.util.Locale;
 import org.apache.commons.lang3.StringUtils;
+import org.roxycode.app.ai.WorkflowPhase;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.ai.google.genai.common.GoogleGenAiThinkingLevel;
 import org.springframework.lang.Nullable;
 
+/**
+ * Represents configurable Gemini thinking levels, including phase- and sub-turn-aware adaptive thinking.
+ */
 public enum ThinkingLevel {
-    DEFAULT("DEFAULT", "Model Default", null), MINIMAL("MINIMAL", "Minimal", GoogleGenAiThinkingLevel.MINIMAL),
-    LOW("LOW", "Low", GoogleGenAiThinkingLevel.LOW), MEDIUM("MEDIUM", "Medium", GoogleGenAiThinkingLevel.MEDIUM),
-    HIGH("HIGH", "High", GoogleGenAiThinkingLevel.HIGH);
+    DEFAULT("DEFAULT", "Model Default", null), ADAPTIVE("ADAPTIVE", "Adaptive (Phase-Aware)", null),
+    MINIMAL("MINIMAL", "Minimal", GoogleGenAiThinkingLevel.MINIMAL), LOW("LOW", "Low", GoogleGenAiThinkingLevel.LOW),
+    MEDIUM("MEDIUM", "Medium", GoogleGenAiThinkingLevel.MEDIUM), HIGH("HIGH", "High", GoogleGenAiThinkingLevel.HIGH);
 
     private static final String ALIAS_NONE = "NONE";
 
@@ -32,12 +36,71 @@ public enum ThinkingLevel {
         return displayName;
     }
 
+    @Nullable
+    public GoogleGenAiThinkingLevel getGenAiThinkingLevel() {
+        return genAiThinkingLevel;
+    }
+
     public void applyTo(GoogleGenAiChatOptions.Builder builder) {
         if (builder == null) {
             return;
         }
         if (genAiThinkingLevel != null) {
             builder.thinkingLevel(genAiThinkingLevel);
+        }
+    }
+
+    /**
+     * Resolves the concrete sub-turn thinking level for a model call. When this level is {@link #ADAPTIVE}, the
+     * thinking budget is chosen dynamically based on the active workflow phase and sub-turn state:
+     * <ul>
+     * <li>{@code PLAN}: {@link #HIGH} while designing the blueprint, dropping to {@link #LOW} after a plan is
+     * submitted.</li>
+     * <li>{@code CODE}: {@link #LOW} by default for fast mechanical execution, escalating to {@link #HIGH} when the
+     * previous tool execution reported a failure.</li>
+     * <li>{@code REVIEW}: {@link #MEDIUM}.</li>
+     * <li>{@code EXPLORE}: {@link #LOW} on initial tool discovery, rising to {@link #MEDIUM} after tool outputs are
+     * returned for synthesis.</li>
+     * </ul>
+     *
+     * @param phase
+     *            the current workflow phase
+     * @param planSubmitted
+     *            whether an implementation plan is currently submitted
+     * @param hasToolResponses
+     *            whether the prompt already contains tool execution responses
+     * @param lastToolCallFailed
+     *            whether the most recent tool execution response contains a failure or error
+     * @return the concrete {@link ThinkingLevel} to apply to the model call
+     */
+    public ThinkingLevel resolveSubTurnLevel(@Nullable WorkflowPhase phase, boolean planSubmitted,
+            boolean hasToolResponses, boolean lastToolCallFailed) {
+        if (this != ADAPTIVE) {
+            return this;
+        }
+        if (phase == null) {
+            return MEDIUM;
+        }
+        switch (phase) {
+            case PLAN :
+                if (planSubmitted) {
+                    return LOW;
+                }
+                return HIGH;
+            case CODE :
+                if (lastToolCallFailed) {
+                    return HIGH;
+                }
+                return LOW;
+            case REVIEW :
+                return MEDIUM;
+            case EXPLORE :
+                if (hasToolResponses) {
+                    return MEDIUM;
+                }
+                return LOW;
+            default :
+                return MEDIUM;
         }
     }
 

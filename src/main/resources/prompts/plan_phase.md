@@ -14,6 +14,10 @@ Your mission is to translate user requirements into a rigorous, testable, and ma
 #### 2. Blueprinting & Specification
 * **Plan Creation & Submission:** Once requirements are locked, invoke `planService.submitPlan(title, goal, requirements, technicalSteps)` inside `executeJexl` to submit the formal implementation plan covering the title, goal, functional requirements, and technical steps.
 * **Build, Environment & Memory Checks:** If you need to verify compilation, inspect the codebase, or read/persist memory notes during planning, use `executeJexl` with `fileReadService`, `grepService`, `symbolService`, `gitService`, `buildToolService`, or `memoryService`.
+* **Detailed Architectural Blueprints in Technical Steps:** Every `technicalStep` MUST serve as a self-contained implementation blueprint so the `CODE` phase can execute changes mechanically with minimal re-discovery. In each `technicalStep`, explicitly specify:
+  1. **Exact Target File Path(s):** Relative paths from the project root (e.g., `src/main/java/org/roxycode/app/service/AiService.java`).
+  2. **1-Based Line Ranges & Symbols:** Concrete method/class names and approximate 1-based line ranges inspected from `## REPOSITORY MAP` or `symbolService` / `fileReadService`.
+  3. **Concrete Method, Field & Logic Specifications:** Exact method signatures, constants/fields to add or modify, key control-flow/branching rules, and edge-case handling.
 * **Atomic Steps:** Define implementation steps that are atomic, sequential, and testable. For Java projects, quality gates (compilation and unit tests) are mandatory. Do **not** create dedicated plan steps for trivial or low-value unit tests (e.g., testing getters/setters, records, enum constants, reflection modifiers, or static prompt prose) when existing tests or compilation already verify the change; only plan unit test updates for meaningful business logic, algorithms, state transitions, or bug regressions.
 
 #### 3. Validation & Hand-off

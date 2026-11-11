@@ -416,20 +416,39 @@ class GenericBuildToolServiceTest {
 
         String rustAndJavacRegex = "^(" + bs + "[ERROR" + bs + "].*" + bs + "[" + bs + "d+," + bs + "d+" + bs
                 + "]|error" + bs + "[E" + bs + "d+" + bs + "]:)";
-        List<String> javacAndRustErrors = BuildOutputParser.extractWithRipGrep(rustAndJavacRegex, logFile, 4);
-        assertEquals(2, javacAndRustErrors.size());
-        assertContainsAll(javacAndRustErrors.get(0), "[ERROR] /workspace/src/Foo.java:[42,15] cannot find symbol",
-                "  symbol:   method bar()", "  location: class com.example.Foo");
-        assertContainsAll(javacAndRustErrors.get(1), "error[E0308]: mismatched types", "  --> src/main.rs:14:9",
-                "   |         ^^^^^^^ expected 'i32', found '&str'");
+        String rgCombinedOutput = String.join(nl, "[ERROR] /workspace/src/Foo.java:[42,15] cannot find symbol",
+                "  symbol:   method bar()", "  location: class com.example.Foo", "[INFO] 1 error",
+                "[INFO] Building next module", "--", "error[E0308]: mismatched types", "  --> src/main.rs:14:9", "   |",
+                "14 |     foo('hello')", "   |         ^^^^^^^ expected 'i32', found '&str'") + nl;
+        try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
+            runner.when(() -> ProcessRunner.run(
+                    eq(List.of("rg", "--color=never", "-N", "-A", "4", "-e", rustAndJavacRegex, logFile.toString())),
+                    isNull(), eq(false))).thenReturn(new ProcessResult(0, rgCombinedOutput, "", false));
+            runner.when(() -> ProcessRunner.run(
+                    eq(List.of("rg", "--color=never", "-N", "-A", "1", "-e", "^--- FAIL:", logFile.toString())),
+                    isNull(), eq(false)))
+                    .thenReturn(new ProcessResult(0,
+                            "--- FAIL: TestAuth (0.01s)" + nl + "    auth_test.go:42: expected 200, got 401" + nl, "",
+                            false));
+            runner.when(() -> ProcessRunner.run(
+                    eq(List.of("rg", "--color=never", "-N", "-e", "^--- FAIL:", logFile.toString())), isNull(),
+                    eq(false))).thenReturn(new ProcessResult(0, "--- FAIL: TestAuth (0.01s)" + nl, "", false));
 
-        List<String> goFailures = BuildOutputParser.extractWithRipGrep("^--- FAIL:", logFile, 1);
-        assertEquals(1, goFailures.size());
-        assertEquals("--- FAIL: TestAuth (0.01s)" + nl + "    auth_test.go:42: expected 200, got 401",
-                goFailures.get(0));
+            List<String> javacAndRustErrors = BuildOutputParser.extractWithRipGrep(rustAndJavacRegex, logFile, 4);
+            assertEquals(2, javacAndRustErrors.size());
+            assertContainsAll(javacAndRustErrors.get(0), "[ERROR] /workspace/src/Foo.java:[42,15] cannot find symbol",
+                    "  symbol:   method bar()", "  location: class com.example.Foo");
+            assertContainsAll(javacAndRustErrors.get(1), "error[E0308]: mismatched types", "  --> src/main.rs:14:9",
+                    "   |         ^^^^^^^ expected 'i32', found '&str'");
 
-        List<String> singleLineOnly = BuildOutputParser.extractWithRipGrep("^--- FAIL:", logFile, 0);
-        assertEquals(List.of("--- FAIL: TestAuth (0.01s)"), singleLineOnly);
+            List<String> goFailures = BuildOutputParser.extractWithRipGrep("^--- FAIL:", logFile, 1);
+            assertEquals(1, goFailures.size());
+            assertEquals("--- FAIL: TestAuth (0.01s)" + nl + "    auth_test.go:42: expected 200, got 401",
+                    goFailures.get(0));
+
+            List<String> singleLineOnly = BuildOutputParser.extractWithRipGrep("^--- FAIL:", logFile, 0);
+            assertEquals(List.of("--- FAIL: TestAuth (0.01s)"), singleLineOnly);
+        }
 
         // Verify deduplication and MAX_EXTRACTED_BLOCKS cap in parseRipGrepOutput
         StringBuilder manyBlocks = new StringBuilder();
@@ -481,7 +500,16 @@ class GenericBuildToolServiceTest {
                 + "test_failure_regex = '^FAIL:'" + nl + "context_lines = 2" + nl + "junit_xml_paths = ["
                 + "\"target/surefire-reports\"]" + nl);
 
-        BuildResult testResult = buildToolService.runTests();
+        BuildResult testResult;
+        try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
+            runner.when(() -> ProcessRunner.run(anyList(), eq(projectRoot), anyMap(), any(), eq(true), any()))
+                    .thenReturn(new ProcessResult(1,
+                            esc + "[31mFAIL: console failure" + esc + "[0m" + nl + "  at ConsoleTest.java:12" + nl, "",
+                            false));
+            runner.when(() -> ProcessRunner.run(anyList(), isNull(), eq(false))).thenReturn(
+                    new ProcessResult(0, "FAIL: console failure" + nl + "  at ConsoleTest.java:12" + nl, "", false));
+            testResult = buildToolService.runTests();
+        }
         assertFalse(testResult.isSuccess());
         assertFalse(testResult.getOutput().contains(esc));
         assertEquals(3, testResult.getFailedTests().size());

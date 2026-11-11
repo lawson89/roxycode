@@ -55,6 +55,7 @@ public class AiConfig {
     public static final double DEFAULT_BACKOFF_MULTIPLIER = 2.0;
     public static final Duration DEFAULT_MAX_BACKOFF = Duration.ofSeconds(30);
     public static final Duration DEFAULT_BACKOFF_JITTER = Duration.ofMillis(500);
+    public static final Duration DEFAULT_RATE_LIMIT_COOLDOWN = Duration.ofSeconds(60);
 
     private static final int HTTP_BAD_REQUEST = 400;
     private static final int HTTP_REQUEST_TIMEOUT = 408;
@@ -67,11 +68,15 @@ public class AiConfig {
             "403 FORBIDDEN", "404 NOT FOUND", "INVALID_ARGUMENT", "PERMISSION_DENIED", "UNAUTHENTICATED",
             "API_KEY_INVALID");
 
+    private static final List<String> RATE_LIMIT_MARKERS = List.of("429", "RESOURCE_EXHAUSTED", "TOO MANY REQUESTS",
+            "RATE LIMIT", "RATE_LIMIT", "QUOTA EXCEEDED", "QUOTA_EXCEEDED");
+
     private static final List<String> TRANSIENT_STATUS_MARKERS = List.of("429", "499", "RESOURCE_EXHAUSTED",
-            "TOO MANY REQUESTS", "RATE LIMIT", "500 INTERNAL", "502 BAD GATEWAY", "503 SERVICE UNAVAILABLE",
-            "504 GATEWAY TIMEOUT", "INTERNAL", "UNAVAILABLE", "OVERLOADED", "TRY AGAIN LATER", "DEADLINE_EXCEEDED",
-            "SOCKET TIMEOUT", "READ TIMED OUT", "CONNECTION RESET", "CONNECTION CLOSED", "REMOTELY CLOSED",
-            "BROKEN PIPE", "UNEXPECTED END OF STREAM", "EOF", "GOAWAY");
+            "TOO MANY REQUESTS", "RATE LIMIT", "RATE_LIMIT", "QUOTA EXCEEDED", "QUOTA_EXCEEDED", "500 INTERNAL",
+            "502 BAD GATEWAY", "503 SERVICE UNAVAILABLE", "504 GATEWAY TIMEOUT", "INTERNAL", "UNAVAILABLE",
+            "OVERLOADED", "TRY AGAIN LATER", "DEADLINE_EXCEEDED", "SOCKET TIMEOUT", "READ TIMED OUT",
+            "CONNECTION RESET", "CONNECTION CLOSED", "REMOTELY CLOSED", "BROKEN PIPE", "UNEXPECTED END OF STREAM",
+            "EOF", "GOAWAY");
 
     public static final ObjectMapper SHARED_OBJECT_MAPPER = (ObjectMapper) new ObjectMapper().findAndRegisterModules();
 
@@ -261,6 +266,36 @@ public class AiConfig {
 
     private static boolean hasNonRetryableClientMessage(String msg) {
         return containsAnyMarker(msg, NON_RETRYABLE_MARKERS);
+    }
+
+    /**
+     * Determines whether a throwable represents a Gemini API rate-limit or quota exhaustion error (HTTP 429 /
+     * {@code RESOURCE_EXHAUSTED}).
+     *
+     * @param t
+     *            the throwable to inspect
+     * @return {@code true} if the error is a retryable rate-limit or quota exhaustion error
+     */
+    public static boolean isRateLimitError(Throwable t) {
+        if (!isTransientAiError(t)) {
+            return false;
+        }
+        for (Throwable curr = t; curr != null; curr = curr.getCause()) {
+            if (curr instanceof ApiException apiEx) {
+                if (apiEx.code() == HTTP_TOO_MANY_REQUESTS || hasRateLimitMessage(apiEx.status())
+                        || hasRateLimitMessage(apiEx.getMessage())) {
+                    return true;
+                }
+            }
+            if (hasRateLimitMessage(curr.getMessage())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean hasRateLimitMessage(String msg) {
+        return containsAnyMarker(msg, RATE_LIMIT_MARKERS);
     }
 
     private static boolean hasTransientStatusMessage(String msg) {

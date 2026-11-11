@@ -41,7 +41,9 @@ import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
+import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.model.ThinkingLevel;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.google.genai.common.GoogleGenAiThinkingLevel;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
@@ -189,7 +191,7 @@ class AiServiceTest {
         AiService service = new AiService(ChatClient.builder(mockChatModel), settingsService, null, promptService,
                 jexlTool, planService, realMemory, customToolManager, eventPublisher);
         service.setRetryTemplate(AiConfig.createRetryTemplate(3, Duration.ofMillis(5), 2.0), 3);
-        when(promptService.buildSystemPrompt(WorkflowPhase.EXPLORE)).thenReturn("EXPLORE PROMPT");
+        lenient().when(promptService.buildSystemPrompt(WorkflowPhase.EXPLORE)).thenReturn("EXPLORE PROMPT");
         return service;
     }
 
@@ -233,6 +235,14 @@ class AiServiceTest {
                 new ClientException(400, "Bad Request", "INVALID_ARGUMENT"))));
         assertFalse(AiConfig.isTransientAiError(new NonTransientAiException("Invalid API key")));
         assertFalse(AiConfig.isTransientAiError(new CancellationException("Stopped")));
+
+        assertTrue(AiConfig.isRateLimitError(new ClientException(429, "Too Many Requests", "RESOURCE_EXHAUSTED")));
+        assertTrue(AiConfig.isRateLimitError(new TransientAiException("429 Quota exceeded for quota metric")));
+        assertTrue(AiConfig
+                .isRateLimitError(new RuntimeException("Wrapper", new TransientAiException("Rate limit exceeded"))));
+        assertFalse(AiConfig.isRateLimitError(new ServerException(503, "Service Unavailable", "UNAVAILABLE")));
+        assertFalse(AiConfig.isRateLimitError(new SocketTimeoutException("Read timed out")));
+        assertFalse(AiConfig.isRateLimitError(new ClientException(400, "Bad Request", "INVALID_ARGUMENT")));
 
         AtomicInteger noOpAttempts = new AtomicInteger();
         Exception noOpEx = assertThrows(Exception.class, () -> config.retryTemplate().execute(() -> {
@@ -519,5 +529,104 @@ class AiServiceTest {
         assertEquals(4, modelCalls.get());
         assertTrue(capturedPrompts.get(2).getInstructions().stream()
                 .anyMatch(m -> m instanceof UserMessage && AiService.AUTO_NUDGE_PROMPT.equals(m.getText())));
+    }
+
+    @Test
+    void testAdaptiveThinkingEscalatesOnCodeFailureDropsAfterPlanSubmitAndWaitsOnRateLimit() {
+        ChatModel mockChatModel = mock(ChatModel.class);
+        ToolCallingManager customToolManager = mock(ToolCallingManager.class);
+        AiService serviceWithRealClient = createRealClientService(mockChatModel, customToolManager);
+        serviceWithRealClient.setRateLimitCooldown(Duration.ofMillis(10));
+        settings.setThinkingLevel("ADAPTIVE");
+        when(promptService.buildSystemPrompt(any())).thenReturn("SYSTEM PROMPT");
+
+        AssistantMessage toolCall1 = createToolCallMessage();
+        ChatResponse call1Resp = createToolCallResponse(toolCall1);
+        AssistantMessage toolCall2 = createToolCallMessage();
+        ChatResponse call2Resp = createToolCallResponse(toolCall2);
+        ChatResponse finalCodeResp = buildChatResponse("Code done", "STOP", null);
+
+        List<GoogleGenAiThinkingLevel> capturedCodeThinkingLevels = new ArrayList<>();
+        AtomicInteger codeCallCounter = new AtomicInteger();
+        when(mockChatModel.call(any(Prompt.class))).thenAnswer(inv -> {
+            Prompt p = inv.getArgument(0);
+            if (p.getOptions() instanceof GoogleGenAiChatOptions genAiOpts) {
+                capturedCodeThinkingLevels.add(genAiOpts.getThinkingLevel());
+            }
+            int callNum = codeCallCounter.incrementAndGet();
+            if (callNum == 1) {
+                return call1Resp;
+            }
+            if (callNum == 2) {
+                throw new ClientException(429, "Too Many Requests", "RESOURCE_EXHAUSTED");
+            }
+            if (callNum == 3) {
+                return call2Resp;
+            }
+            return finalCodeResp;
+        });
+
+        ToolResponseMessage failedToolMsg = ToolResponseMessage.builder()
+                .responses(List.of(new ToolResponseMessage.ToolResponse("call-1", "executeJexl", """
+                        {"success":false,"errorHint":"Compile failed"}"""))).build();
+        ToolResponseMessage successToolMsg = ToolResponseMessage.builder()
+                .responses(List.of(new ToolResponseMessage.ToolResponse("call-1", "executeJexl", """
+                        {"success":true,"content":"OK"}"""))).build();
+
+        AtomicInteger toolExecCounter = new AtomicInteger();
+        when(customToolManager.executeToolCalls(any(Prompt.class), any(ChatResponse.class))).thenAnswer(inv -> {
+            int execNum = toolExecCounter.incrementAndGet();
+            ToolResponseMessage toolMsg;
+            if (execNum == 1) {
+                toolMsg = failedToolMsg;
+            } else {
+                toolMsg = successToolMsg;
+            }
+            return DefaultToolExecutionResult.builder()
+                    .conversationHistory(List.of(new UserMessage("Implement feature"), toolCall1, toolMsg))
+                    .returnDirect(false).build();
+        });
+
+        clearInvocations(eventPublisher);
+        assertEquals("Code done",
+                serviceWithRealClient.chat("task:code", WorkflowPhase.CODE, "Implement feature", null));
+        assertEquals(List.of(GoogleGenAiThinkingLevel.LOW, GoogleGenAiThinkingLevel.HIGH, GoogleGenAiThinkingLevel.HIGH,
+                GoogleGenAiThinkingLevel.LOW), capturedCodeThinkingLevels);
+
+        ArgumentCaptor<Object> eventsCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher, atLeastOnce()).publishEvent(eventsCaptor.capture());
+        List<String> statusMessages = eventsCaptor.getAllValues().stream().filter(AgentActivityEvent.class::isInstance)
+                .map(AgentActivityEvent.class::cast).map(AgentActivityEvent::statusText).toList();
+        assertTrue(statusMessages.stream().anyMatch(s -> s.contains("Thinking with ") && s.contains("(Low)")));
+        assertTrue(statusMessages.stream().anyMatch(s -> s.contains("Thinking with ") && s.contains("(High)")));
+        assertTrue(statusMessages.stream().anyMatch(s -> s.contains("API rate limit (429) — waiting ")
+                && s.contains("for quota window to reset (attempt 2/3)")));
+
+        // Verify PLAN phase adaptive transition: HIGH before plan exists -> LOW after submitPlan
+        List<GoogleGenAiThinkingLevel> capturedPlanThinkingLevels = new ArrayList<>();
+        AtomicInteger planCallCounter = new AtomicInteger();
+        when(planService.getCurrentPlan()).thenReturn(null);
+        when(mockChatModel.call(any(Prompt.class))).thenAnswer(inv -> {
+            Prompt p = inv.getArgument(0);
+            if (p.getOptions() instanceof GoogleGenAiChatOptions genAiOpts) {
+                capturedPlanThinkingLevels.add(genAiOpts.getThinkingLevel());
+            }
+            int callNum = planCallCounter.incrementAndGet();
+            if (callNum == 1) {
+                return call1Resp;
+            }
+            return buildChatResponse("Plan submitted", "STOP", null);
+        });
+        ImplementationPlan mockPlan = mock(ImplementationPlan.class);
+        when(customToolManager.executeToolCalls(any(Prompt.class), any(ChatResponse.class))).thenAnswer(inv -> {
+            when(planService.getCurrentPlan()).thenReturn(mockPlan);
+            return DefaultToolExecutionResult.builder()
+                    .conversationHistory(List.of(new UserMessage("Create plan"), toolCall1, successToolMsg))
+                    .returnDirect(false).build();
+        });
+
+        assertEquals("Plan submitted",
+                serviceWithRealClient.chat("task:plan", WorkflowPhase.PLAN, "Create plan", null));
+        assertEquals(List.of(GoogleGenAiThinkingLevel.HIGH, GoogleGenAiThinkingLevel.LOW), capturedPlanThinkingLevels);
     }
 }

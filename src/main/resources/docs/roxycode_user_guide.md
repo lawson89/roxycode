@@ -15,7 +15,7 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
 
 ### Feature Development (PLAN -> CODE -> REVIEW Lifecycle)
 - **1. Plan (PLAN — Lead Architect)**:
-  - Roxy explores the codebase (read-only) and submits a structured implementation plan (planService.submitPlan) with a title, goal, requirements, and technical steps (plus automatic quality gates: "Code compiles successfully", "Unit tests pass", and "Automated code review passes").
+  - Roxy explores the codebase (read-only) and submits a structured implementation plan (planService.submitPlan) with a title, goal, requirements, and detailed blueprint technical steps containing exact file paths, 1-based line ranges, and method/logic specifications (plus automatic quality gates: "Code compiles successfully", "Unit tests pass", and "Automated code review passes").
   - Roxy calls planService.requestDevelopment(reason), displaying an **Approval Banner** (Approve / Reject). No files are modified until the user clicks **Approve**.
 - **2. Code (CODE — Senior Developer)**:
   - Unlocks fileEditorService (writeFile, replaceBlock, replaceBlocks, replaceLines, replaceSymbol, insertAtLine, revertFile, deleteFile, moveFile, copyFile, mkdirs).
@@ -50,7 +50,7 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
 ## 3. Configuration & System Tools
 
 ### Project Settings & build.toml (Project Settings Sidebar View)
-- **AI Model & Thinking Overrides**: Optionally override the Global Settings Gemini model and thinking level (NONE, LOW, MEDIUM, HIGH, or model default) for the active project.
+- **AI Model & Thinking Overrides**: Optionally override the Global Settings Gemini model and thinking level (ADAPTIVE, MINIMAL/NONE, LOW, MEDIUM, HIGH, or model default) for the active project. When **Adaptive (Phase-Aware)** is selected, Roxy dynamically adjusts thinking per sub-turn (PLAN: HIGH while designing the blueprint -> LOW after submitPlan; CODE: LOW for fast execution -> HIGH after any tool/build/test failure; REVIEW: MEDIUM; EXPLORE: LOW on initial discovery -> MEDIUM on synthesis).
 - **Build Configuration (<projectDataDir>/build.toml)**:
   - Must be reviewed and confirmed (**Confirm & Save Settings**) before workspace chat is unlocked for a project. Built-in templates are provided for Maven, Gradle, npm/Node, Python, Rust, Go, CMake, and Default.
   - **[commands]**: Shell commands executed from the project root:

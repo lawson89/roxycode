@@ -2,6 +2,7 @@ package org.roxycode.app.service;
 
 import com.google.genai.Client;
 import com.google.genai.types.GenerateContentResponseUsageMetadata;
+import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -29,8 +30,11 @@ import org.springframework.ai.chat.client.advisor.ToolCallingAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisor;
 import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.google.genai.GoogleGenAiChatModel;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
@@ -58,6 +62,10 @@ public class AiService implements AutoCloseable {
     public static final int TEST_CONNECTION_TIMEOUT_MS = 15_000;
     public static final String AUTO_NUDGE_PROMPT = "You completed the turn without returning any text response. Please summarize what you just did or provide your final response to the user.";
     static final String GROUNDED_SEARCH_SYSTEM_PROMPT = "You are a technical research assistant. Use Google Search to provide accurate, up-to-date facts, synthesis, and source URLs or citations when available.";
+    private static final List<String> TOOL_FAILURE_MARKERS = List.of("""
+            "success":false""", """
+            "success": false""", """
+            "error":""");
 
     @FunctionalInterface
     interface ConnectionTester {
@@ -79,6 +87,7 @@ public class AiService implements AutoCloseable {
     private ConnectionTester connectionTester = this::executeConnectionTest;
     private volatile RetryTemplate retryTemplate = AiConfig.createRetryTemplate();
     private volatile int maxRetryAttempts = AiConfig.DEFAULT_MAX_RETRY_ATTEMPTS;
+    private volatile Duration rateLimitCooldown = AiConfig.DEFAULT_RATE_LIMIT_COOLDOWN;
 
     /**
      * Constructs a new AiService.
@@ -264,6 +273,10 @@ public class AiService implements AutoCloseable {
         this.maxRetryAttempts = Math.max(1, maxRetryAttempts);
     }
 
+    void setRateLimitCooldown(Duration rateLimitCooldown) {
+        this.rateLimitCooldown = Objects.requireNonNull(rateLimitCooldown, "rateLimitCooldown must not be null");
+    }
+
     /**
      * Executes a chat turn with the AI model, including prompt construction, model call, and tool execution
      * orchestration.
@@ -317,7 +330,12 @@ public class AiService implements AutoCloseable {
         ExceptionUtils.checkInterrupted("Web search interrupted before start");
         GoogleGenAiChatOptions.Builder optionsBuilder = GoogleGenAiChatOptions.builder()
                 .model(resolveEffectiveGeminiModel()).googleSearchRetrieval(true);
-        resolveEffectiveThinkingLevel().applyTo(optionsBuilder);
+        ThinkingLevel effectiveThinking = resolveEffectiveThinkingLevel();
+        if (effectiveThinking == ThinkingLevel.ADAPTIVE) {
+            ThinkingLevel.LOW.applyTo(optionsBuilder);
+        } else {
+            effectiveThinking.applyTo(optionsBuilder);
+        }
         try {
             ChatResponse chatResponse = chatClient.prompt().system(GROUNDED_SEARCH_SYSTEM_PROMPT).user(trimmedQuery)
                     .options(optionsBuilder).call().chatResponse();
@@ -357,33 +375,153 @@ public class AiService implements AutoCloseable {
         public ChatClientResponse adviseCall(ChatClientRequest chatClientRequest, CallAdvisorChain callAdvisorChain) {
             String conversationId = resolveConversationId(chatClientRequest);
             String modelName = resolveRequestModelName(chatClientRequest);
+            WorkflowPhase currentPhase = resolveWorkflowPhase(chatClientRequest);
+            ThinkingLevel configuredLevel = resolveEffectiveThinkingLevel();
+            ThinkingLevel activeSubTurnLevel = resolveActiveSubTurnThinkingLevel(configuredLevel, currentPhase,
+                    chatClientRequest);
+            ChatClientRequest effectiveRequest = applySubTurnThinkingLevel(chatClientRequest, configuredLevel,
+                    activeSubTurnLevel);
+            String thinkingActivityMessage = formatThinkingActivityMessage(modelName, configuredLevel,
+                    activeSubTurnLevel);
             int maxAttempts = maxRetryAttempts;
             AtomicInteger attemptCounter = new AtomicInteger(0);
             ChatClientResponse response = RetryUtils.execute(retryTemplate, () -> {
                 ExceptionUtils.checkInterrupted("Chat turn interrupted before model call");
                 int retryCount = attemptCounter.getAndIncrement();
                 if (retryCount == 0) {
-                    publishActivity(conversationId, "Thinking with " + modelName + "...");
+                    publishActivity(conversationId, thinkingActivityMessage);
                 } else {
                     publishActivity(conversationId, "Transient API error — retrying model call (attempt "
                             + (retryCount + 1) + "/" + maxAttempts + ")...");
                 }
                 try {
-                    return callAdvisorChain.copy(this).nextCall(chatClientRequest);
+                    return callAdvisorChain.copy(this).nextCall(effectiveRequest);
                 } catch (RuntimeException ex) {
                     if (AiConfig.isTransientAiError(ex) && (retryCount + 1) < maxAttempts) {
-                        publishActivity(conversationId, "Transient API error — backing off before retry (attempt "
-                                + (retryCount + 2) + "/" + maxAttempts + ")...");
+                        int nextAttempt = retryCount + 2;
+                        if (AiConfig.isRateLimitError(ex)) {
+                            waitForRateLimitCooldown(conversationId, nextAttempt, maxAttempts);
+                        } else {
+                            publishActivity(conversationId, "Transient API error — backing off before retry (attempt "
+                                    + nextAttempt + "/" + maxAttempts + ")...");
+                        }
                     }
                     throw ex;
                 }
             });
             if (response != null) {
-                publishTokenUsageIfPresent(conversationId, modelName, resolveWorkflowPhase(chatClientRequest),
-                        response.chatResponse());
+                publishTokenUsageIfPresent(conversationId, modelName, currentPhase, response.chatResponse());
             }
             return response;
         }
+    }
+
+    private void waitForRateLimitCooldown(String conversationId, int nextAttempt, int maxAttempts) {
+        Duration cooldown = rateLimitCooldown;
+        long cooldownSeconds = 60L;
+        if (cooldown != null && !cooldown.isNegative() && !cooldown.isZero()) {
+            cooldownSeconds = Math.max(1L, cooldown.toSeconds());
+        }
+        publishActivity(conversationId, "API rate limit (429) — waiting " + cooldownSeconds
+                + "s for quota window to reset (attempt " + nextAttempt + "/" + maxAttempts + ")...");
+        if (cooldown != null && !cooldown.isNegative() && !cooldown.isZero()) {
+            try {
+                Thread.sleep(cooldown.toMillis());
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw ExceptionUtils.asCancellationException(ie, "Rate-limit cooldown interrupted");
+            }
+        }
+    }
+
+    ThinkingLevel resolveActiveSubTurnThinkingLevel(ThinkingLevel configuredLevel, @Nullable WorkflowPhase phase,
+            @Nullable ChatClientRequest request) {
+        ThinkingLevel resolvedConfigured = Objects.requireNonNullElse(configuredLevel, ThinkingLevel.DEFAULT);
+        if (resolvedConfigured != ThinkingLevel.ADAPTIVE) {
+            return resolvedConfigured;
+        }
+        boolean planSubmitted = planService != null && planService.getCurrentPlan() != null;
+        ToolResponseState toolState = inspectPromptToolResponses(request);
+        return resolvedConfigured.resolveSubTurnLevel(phase, planSubmitted, toolState.hasToolResponses(),
+                toolState.lastToolCallFailed());
+    }
+
+    private record ToolResponseState(boolean hasToolResponses, boolean lastToolCallFailed) {
+    }
+
+    private static ToolResponseState inspectPromptToolResponses(@Nullable ChatClientRequest request) {
+        if (request == null || request.prompt() == null || request.prompt().getInstructions() == null) {
+            return new ToolResponseState(false, false);
+        }
+        List<Message> instructions = request.prompt().getInstructions();
+        ToolResponseMessage lastToolMessage = null;
+        for (Message msg : instructions) {
+            if (msg instanceof ToolResponseMessage toolMsg) {
+                lastToolMessage = toolMsg;
+            }
+        }
+        if (lastToolMessage == null) {
+            return new ToolResponseState(false, false);
+        }
+        boolean failed = containsToolFailure(lastToolMessage);
+        return new ToolResponseState(true, failed);
+    }
+
+    static boolean containsToolFailure(@Nullable ToolResponseMessage toolResponseMessage) {
+        if (toolResponseMessage == null || toolResponseMessage.getResponses() == null) {
+            return false;
+        }
+        for (ToolResponseMessage.ToolResponse resp : toolResponseMessage.getResponses()) {
+            if (resp != null && containsToolFailureText(resp.responseData())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    static boolean containsToolFailureText(@Nullable String responseData) {
+        if (StringUtils.isBlank(responseData)) {
+            return false;
+        }
+        for (String marker : TOOL_FAILURE_MARKERS) {
+            if (StringUtils.containsIgnoreCase(responseData, marker)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static ChatClientRequest applySubTurnThinkingLevel(ChatClientRequest request, ThinkingLevel configuredLevel,
+            ThinkingLevel activeSubTurnLevel) {
+        if (configuredLevel != ThinkingLevel.ADAPTIVE || request == null || request.prompt() == null) {
+            return request;
+        }
+        ChatOptions options = request.prompt().getOptions();
+        if (options instanceof GoogleGenAiChatOptions genAiOptions) {
+            GoogleGenAiChatOptions.Builder builder = GoogleGenAiChatOptions.builder().model(genAiOptions.getModel())
+                    .thinkingLevel(activeSubTurnLevel.getGenAiThinkingLevel());
+            if (genAiOptions.getToolCallbacks() != null) {
+                builder.toolCallbacks(genAiOptions.getToolCallbacks());
+            }
+            if (genAiOptions.getToolContext() != null) {
+                builder.toolContext(genAiOptions.getToolContext());
+            }
+            if (genAiOptions.getGoogleSearchRetrieval() != null) {
+                builder.googleSearchRetrieval(genAiOptions.getGoogleSearchRetrieval());
+            }
+            Prompt updatedPrompt = request.prompt().mutate().chatOptions(builder.build()).build();
+            return request.mutate().prompt(updatedPrompt).build();
+        }
+        return request;
+    }
+
+    private static String formatThinkingActivityMessage(String modelName, ThinkingLevel configuredLevel,
+            ThinkingLevel activeSubTurnLevel) {
+        if (configuredLevel == ThinkingLevel.ADAPTIVE && activeSubTurnLevel != null
+                && activeSubTurnLevel != ThinkingLevel.DEFAULT) {
+            return "Thinking with " + modelName + " (" + activeSubTurnLevel.getDisplayName() + ")...";
+        }
+        return "Thinking with " + modelName + "...";
     }
 
     private void publishActivity(String conversationId, String statusText) {
