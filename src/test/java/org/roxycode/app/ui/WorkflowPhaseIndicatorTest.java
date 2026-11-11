@@ -8,8 +8,10 @@ import java.awt.event.MouseListener;
 import javax.swing.ToolTipManager;
 import org.junit.jupiter.api.Test;
 import org.kordamp.ikonli.swing.FontIcon;
+import java.util.List;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.PlanService;
+import org.roxycode.app.model.ImplementationPlan;
 
 class WorkflowPhaseIndicatorTest {
 
@@ -32,6 +34,25 @@ class WorkflowPhaseIndicatorTest {
         TaskWorkspacePanel taskWorkspace = SwingTestUtils
                 .callOnEdt(() -> new TaskWorkspacePanel(null, planService, null, null));
         assertNotNull(taskWorkspace.workflowInfoIcon);
+        assertSame(taskWorkspace.planLabel, taskWorkspace.topBar.getComponent(0));
+        assertSame(taskWorkspace.progressTracker, taskWorkspace.topBar.getComponent(1));
+        assertSame(taskWorkspace.workflowInfoIcon, taskWorkspace.topBar.getComponent(2));
+
+        String fiftyCharTitle = "12345678901234567890123456789012345678901234567890";
+        assertEquals(fiftyCharTitle, TaskWorkspacePanel.formatPlanTitleDisplay(fiftyCharTitle));
+        String seventyCharTitle = "1234567890123456789012345678901234567890123456789012345678901234567890";
+        String truncatedTitle = TaskWorkspacePanel.formatPlanTitleDisplay(seventyCharTitle);
+        assertEquals(60, truncatedTitle.length());
+        assertTrue(truncatedTitle.endsWith("..."));
+
+        ImplementationPlan activePlan = new ImplementationPlan(fiftyCharTitle, "Goal", List.of(), List.of(), false,
+                null, null, null, null, List.of());
+        when(planService.getCurrentPlan()).thenReturn(activePlan);
+        SwingTestUtils.runOnEdt(() -> taskWorkspace.updateActivePhase(WorkflowPhase.CODE));
+        assertTrue(taskWorkspace.planLabel.isVisible());
+        assertEquals(fiftyCharTitle, taskWorkspace.planLabel.getText());
+        assertEquals(fiftyCharTitle + " (Click to view Plan)", taskWorkspace.planLabel.getToolTipText());
+
         assertEquals("Plan", taskWorkspace.taskTabs.getTitleAt(1));
         assertEquals(0, taskWorkspace.taskTabs.getSelectedIndex());
         SwingTestUtils.runOnEdt(() -> {

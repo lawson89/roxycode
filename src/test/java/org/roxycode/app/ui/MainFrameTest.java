@@ -265,8 +265,8 @@ class MainFrameTest {
                             false, null, null, null, null, List.of()));
             taskWorkspacePanel.updateActivePhase(WorkflowPhase.CODE);
             assertTrue(taskWorkspacePanel.planLabel.isVisible());
-            assertEquals(longTitle.substring(0, 37) + "...", taskWorkspacePanel.planLabel.getText());
-            assertEquals(longTitle, taskWorkspacePanel.planLabel.getToolTipText());
+            assertEquals(longTitle.substring(0, 57) + "...", taskWorkspacePanel.planLabel.getText());
+            assertEquals(longTitle + " (Click to view Plan)", taskWorkspacePanel.planLabel.getToolTipText());
             assertEquals("Plan (1/2)", taskWorkspacePanel.taskTabs.getTitleAt(1));
 
             frame.onWorkflowTransition(

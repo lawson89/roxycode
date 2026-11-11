@@ -39,7 +39,7 @@ final class TaskWorkspacePanel extends JPanel {
     private static final String LAYOUT_CENTER = "center";
     static final String PLAN_TAB_BASE_TITLE = "Plan";
     static final String PAST_PLANS_TAB_TITLE = "Past Plans";
-    static final int MAX_PLAN_TITLE_LENGTH = 40;
+    static final int MAX_PLAN_TITLE_LENGTH = 60;
     static final String WORKFLOW_LIFECYCLE_TOOLTIP_HTML = """
             <html><div style='width: 340px;'>
             <b>Feature Development Lifecycle</b><br>
@@ -69,19 +69,8 @@ final class TaskWorkspacePanel extends JPanel {
         this.taskChatPanel = taskChatPanel;
         this.pastPlansPanel = new ArchiveBrowserPanel(memoryService, ArchiveMode.PLANS);
 
-        topBar = new JPanel(new MigLayout("insets 0 12 0 16, fill", "[right, grow]", LAYOUT_CENTER));
+        topBar = new JPanel(new MigLayout("insets 0 16 0 16, fill", "[left, grow][right]", LAYOUT_CENTER));
         topBar.setOpaque(false);
-
-        progressTracker = new JPanel(new MigLayout("insets 0, gapx 2", "[]", LAYOUT_CENTER));
-        applyPhaseTrackerStyling();
-
-        for (WorkflowPhase phase : WorkflowPhase.values()) {
-            if (phase != WorkflowPhase.EXPLORE) {
-                indicators.add(new WorkflowPhaseIndicator(phase));
-            }
-        }
-        topBar.add(progressTracker, "split 3, right, center");
-        topBar.add(workflowInfoIcon, "gapleft 8, center");
 
         planLabel.setIconTextGap(6);
         planLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
@@ -94,7 +83,18 @@ final class TaskWorkspacePanel extends JPanel {
             }
         });
         applyPlanBadgeStyling();
-        topBar.add(planLabel, "gapleft 16, right, center, hidemode 3");
+        topBar.add(planLabel, "left, center, hidemode 3");
+
+        progressTracker = new JPanel(new MigLayout("insets 0, gapx 2", "[]", LAYOUT_CENTER));
+        applyPhaseTrackerStyling();
+
+        for (WorkflowPhase phase : WorkflowPhase.values()) {
+            if (phase != WorkflowPhase.EXPLORE) {
+                indicators.add(new WorkflowPhaseIndicator(phase));
+            }
+        }
+        topBar.add(progressTracker, "split 2, right, center");
+        topBar.add(workflowInfoIcon, "gapleft 8, center");
 
         this.taskTabs = UiComponents.createUnderlinedTabbedPane(topBar);
         Color accent = SwingHtmlUtils.getAccentColor();
@@ -211,7 +211,7 @@ final class TaskWorkspacePanel extends JPanel {
         if (hasTitle) {
             String trimmedTitle = plan.title().trim();
             planLabel.setText(formatPlanTitleDisplay(trimmedTitle));
-            planLabel.setToolTipText(trimmedTitle);
+            planLabel.setToolTipText(trimmedTitle + " (Click to view Plan)");
         } else {
             planLabel.setText("");
             planLabel.setToolTipText(null);
