@@ -685,6 +685,7 @@ final class UiComponents {
             btn.setMargin(margin);
         }
         if (borderless) {
+            btn.setFocusable(false);
             btn.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
         }
         if (style != null) {

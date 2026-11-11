@@ -61,7 +61,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     static final String DEFAULT_PLACEHOLDER_TEXT = "Type a message... (Enter to send, Shift+Enter for newline, @ to mention files, / to run commands, Ctrl+V to paste image)";
     static final String NO_PROJECT_PLACEHOLDER_TEXT = "Select a project folder in the top bar (Change Project...) to start chatting...";
     static final String BUSY_PLACEHOLDER_TEXT = "Roxy is working... Press Esc or click Stop to interrupt.";
-    private static final String TOOLBAR_BUTTON_STYLE = "arc: 8; font: -1; foreground: $Label.disabledForeground";
+    private static final String TOOLBAR_BUTTON_STYLE = "font: -1; foreground: $Label.disabledForeground; focusWidth: 0; innerFocusWidth: 0";
     private static final String GROW_FILL_COL = "[grow, fill]";
     private static final String HIDEMODE_3 = "hidemode 3";
     static final int THUMBNAIL_SIZE = 64;
@@ -589,6 +589,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         inputArea.setEnabled(enableComposer);
         sendButton.setEnabled(enableComposer);
         attachImageButton.setEnabled(enableComposer);
+        resetSessionButton.setEnabled(enableComposer);
         mentionButton.setEnabled(enableComposer);
         if (commandsButton != null) {
             commandsButton.setEnabled(enableComposer);

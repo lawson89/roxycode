@@ -491,9 +491,15 @@ class ChatControllerTest extends ChatTestFixture {
         when(settingsService.getSettings()).thenReturn(appSettings);
 
         ChatPanel chatPanel = createFeatureChatPanel(directExecutor);
+        assertFalse(chatPanel.attachImageButton.isFocusable());
+        assertFalse(chatPanel.resetSessionButton.isFocusable());
+        assertFalse(chatPanel.mentionButton.isFocusable());
+        assertFalse(chatPanel.commandsButton.isFocusable());
+        assertTrue(chatPanel.sendButton.isFocusable());
         when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
         chatPanel.setLoading(true);
         assertFalse(chatPanel.sendButton.isVisible());
+        assertFalse(chatPanel.resetSessionButton.isEnabled());
         assertTrue(chatPanel.stopButton.isVisible());
         assertFalse(chatPanel.approveButton.isEnabled());
         assertEquals("Image", chatPanel.attachImageButton.getText());
@@ -547,6 +553,7 @@ class ChatControllerTest extends ChatTestFixture {
         assertFalse(chatPanel.activityElapsedTimer.isRunning());
         assertEquals("", chatPanel.getActivityStatusText());
         assertTrue(chatPanel.sendButton.isVisible());
+        assertTrue(chatPanel.resetSessionButton.isEnabled());
         assertTrue(chatPanel.approveButton.isEnabled());
         assertEquals(ChatPanel.DEFAULT_PLACEHOLDER_TEXT,
                 chatPanel.inputArea.getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT));
@@ -593,6 +600,7 @@ class ChatControllerTest extends ChatTestFixture {
         when(projectService.hasActiveProject()).thenReturn(false);
         chatPanel.setProjectService(projectService);
         assertFalse(chatPanel.inputArea.isEnabled());
+        assertFalse(chatPanel.resetSessionButton.isEnabled());
         assertEquals(ChatPanel.NO_PROJECT_PLACEHOLDER_TEXT,
                 chatPanel.inputArea.getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT));
 
@@ -600,6 +608,7 @@ class ChatControllerTest extends ChatTestFixture {
         chatPanel.controller.onProjectChanged(new ProjectChangedEvent(Path.of(".")));
         flushEdt();
         assertTrue(chatPanel.inputArea.isEnabled());
+        assertTrue(chatPanel.resetSessionButton.isEnabled());
     }
 
     @Test
