@@ -135,6 +135,31 @@ class SystemToolServiceTest {
     }
 
     @Test
+    void testDetectBubblewrapToolStatusTransitions() {
+        SystemTool okTool = SystemToolService.detectBubblewrapTool(
+                () -> new ProcessRunner.ProcessResult(0, "bubblewrap 0.10.0\n", "", false),
+                () -> new ProcessRunner.ProcessResult(0, "", "", false));
+        assertEquals(SystemTool.TOOL_BUBBLEWRAP, okTool.name());
+        assertEquals(SystemToolService.STATUS_DETECTED, okTool.status());
+        assertEquals("bubblewrap 0.10.0", okTool.version());
+        assertTrue(SystemToolService.isNativeSandboxDetected(List.of(okTool)));
+
+        SystemTool missingTool = SystemToolService.detectBubblewrapTool(
+                () -> new ProcessRunner.ProcessResult(127, "", "bwrap: not found", false),
+                () -> new ProcessRunner.ProcessResult(0, "", "", false));
+        assertEquals(SystemToolService.STATUS_MISSING, missingTool.status());
+        assertEquals(SystemToolService.VERSION_NOT_FOUND, missingTool.version());
+        assertFalse(SystemToolService.isNativeSandboxDetected(List.of(missingTool)));
+
+        SystemTool errTool = SystemToolService.detectBubblewrapTool(
+                () -> new ProcessRunner.ProcessResult(0, "bubblewrap 0.9.0\n", "", false),
+                () -> new ProcessRunner.ProcessResult(1, "", "bwrap: setting up uid map: Permission denied\n", false));
+        assertEquals(SystemToolService.STATUS_ERROR, errTool.status());
+        assertEquals("bwrap: setting up uid map: Permission denied", errTool.version());
+        assertFalse(SystemToolService.isNativeSandboxDetected(List.of(errTool)));
+    }
+
+    @Test
     void testTomlPersistenceAndInMemoryCacheHitsVsForcedRefresh() throws Exception {
         TomlMapper mapper = AiConfig.SHARED_TOML_MAPPER;
         SettingsService settingsService = new SettingsService(mapper, null);

@@ -58,13 +58,15 @@ class NativeSandboxHardeningIntegrationTest {
         List<String> writeCmd = buildContainerService.buildNativeSandboxCommand(projectRoot, config,
                 "touch /usr/roxy_test_token");
         ProcessResult writeRes = ProcessRunner.run(writeCmd, projectRoot, Map.of());
-        assertNotEquals(0, writeRes.exitCode(), "Writing to system path should be denied");
+        assertNotEquals(0, writeRes.exitCode(), "Writing to system path should be denied. Output: " + writeRes.output()
+                + ", Error: " + writeRes.errorOutput());
 
         // 3. Verify Build Success (simple command)
         List<String> successCmd = buildContainerService.buildNativeSandboxCommand(projectRoot, config,
                 "echo 'hello from sandbox'");
         ProcessResult successRes = ProcessRunner.run(successCmd, projectRoot, Map.of());
-        assertEquals(0, successRes.exitCode());
+        assertEquals(0, successRes.exitCode(),
+                "Sandbox execution failed. Output: " + successRes.output() + ", Error: " + successRes.errorOutput());
         assertTrue(successRes.output().contains("hello from sandbox"));
     }
 }

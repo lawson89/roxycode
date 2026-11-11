@@ -244,12 +244,17 @@ public class SystemToolService {
     }
 
     public boolean checkNativeSandboxAvailable() {
-        try {
-            return isNativeSandboxDetected(detectTools().join());
-        } catch (Exception e) {
-            log.debug("Failed to check native sandbox availability: {}", e.getMessage());
-            return false;
+        List<SystemTool> tools = getCachedTools();
+        if (!tools.isEmpty()) {
+            return isNativeSandboxDetected(tools);
         }
+        if (SystemUtils.IS_OS_LINUX) {
+            return STATUS_DETECTED.equals(detectBubblewrapTool().status());
+        }
+        if (SystemUtils.IS_OS_MAC) {
+            return STATUS_DETECTED.equals(detectSeatbeltTool().status());
+        }
+        return false;
     }
 
     public static boolean isNativeSandboxDetected(List<SystemTool> tools) {
@@ -326,7 +331,29 @@ public class SystemToolService {
     }
 
     SystemTool detectBubblewrapTool() {
-        return detectTool(BUBBLEWRAP, "bwrap", ARG_VERSION);
+        return detectBubblewrapTool(() -> ProcessRunner.run(List.of("bwrap", ARG_VERSION)),
+                () -> ProcessRunner.run(List.of("bwrap", "--ro-bind", "/", "/", "true")));
+    }
+
+    static SystemTool detectBubblewrapTool(Supplier<ProcessResult> versionRunner,
+            Supplier<ProcessResult> sandboxProbeRunner) {
+        ProcessResult versionResult = versionRunner.get();
+        if (!versionResult.isSuccess()) {
+            log.warn("Tool {} detection failed with exit code {}", BUBBLEWRAP, versionResult.exitCode());
+            return SystemTool.ofKnownTool(BUBBLEWRAP, VERSION_NOT_FOUND, STATUS_MISSING);
+        }
+        ProcessResult probeResult = sandboxProbeRunner.get();
+        if (probeResult.isSuccess()) {
+            return SystemTool.ofKnownTool(BUBBLEWRAP, parseVersion(versionResult.output()), STATUS_DETECTED);
+        }
+        String rawError = StringUtils.defaultIfBlank(probeResult.errorOutput(), probeResult.output());
+        String errorMessage = "Bubblewrap sandbox check failed (exit code " + probeResult.exitCode() + ")";
+        if (StringUtils.isNotBlank(rawError)) {
+            errorMessage = StringUtils.abbreviate(StringUtils.normalizeSpace(rawError), MAX_DOCKER_ERROR_LENGTH);
+        }
+        log.warn("Bubblewrap installed ({}) but sandbox probe failed: {}", parseVersion(versionResult.output()),
+                errorMessage);
+        return SystemTool.ofKnownTool(BUBBLEWRAP, errorMessage, STATUS_ERROR);
     }
 
     SystemTool detectSeatbeltTool() {
