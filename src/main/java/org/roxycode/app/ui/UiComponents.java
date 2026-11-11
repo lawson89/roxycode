@@ -472,10 +472,8 @@ final class UiComponents {
             return;
         }
         Color infoColor = resolveInfoIconColor();
-        String hex = SwingHtmlUtils.toHex(infoColor);
         iconLabel.setIcon(FontIcon.of(Codicons.INFO, 16, infoColor));
-        iconLabel.putClientProperty(FlatClientProperties.STYLE,
-                "arc: 999; background: fade(" + hex + ", 14%); border: 2,5,2,5,fade(" + hex + ", 38%),1,999");
+        iconLabel.putClientProperty(FlatClientProperties.STYLE, null);
         iconLabel.setOpaque(false);
     }
 

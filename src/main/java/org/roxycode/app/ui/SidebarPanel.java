@@ -23,8 +23,8 @@ final class SidebarPanel extends JPanel {
     static final String CARD_SETTINGS = MainFrame.SETTINGS_VIEW;
     static final String CARD_JEXL_API = MainFrame.API_VIEW;
     static final String CARD_TOOLS = MainFrame.TOOLS_VIEW;
-    static final int LOGO_SIZE = 88;
-    static final int LOGO_ARC = 20;
+    static final int LOGO_SIZE = 56;
+    static final int LOGO_ARC = 14;
     static final String ASK_ROXY_LABEL = "Ask Roxy";
     static final String BUILD_FEATURE_LABEL = "Build Feature";
     static final String CONTEXT_PROMPTS_LABEL = "Context & Prompts";
@@ -94,20 +94,23 @@ final class SidebarPanel extends JPanel {
     }
 
     private JPanel createBrandingHeader() {
-        JPanel brandingPanel = new JPanel(
-                new MigLayout("insets 4 4 8 4, wrap 1, gapy 4", "[grow, center]", "[]6[]3[]"));
+        JPanel brandingPanel = new JPanel(new MigLayout("insets 4 4 6 4", "[]10[grow]", "[center]"));
         brandingPanel.setOpaque(false);
 
+        JPanel textStack = new JPanel(new MigLayout("insets 0, wrap 1, gapy 3", "[left]", "[][]"));
+        textStack.setOpaque(false);
+
         JLabel titleLabel = new JLabel("RoxyCode");
-        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 16f));
+        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 15f));
         JLabel subtitleBadge = new JLabel(SUBTITLE_BADGE_TEXT);
         subtitleBadge.putClientProperty(FlatClientProperties.STYLE,
                 "font: bold -2; foreground: $Label.disabledForeground; background: darken($Panel.background, 5%); arc: 8; border: 2,8,2,8");
+        textStack.add(titleLabel);
+        textStack.add(subtitleBadge);
 
         brandingPanel.add(UiComponents.createRoundedImagePanel(UiComponents.ROXY_LOGO_RESOURCE, LOGO_SIZE, LOGO_ARC),
-                "w " + LOGO_SIZE + "!, h " + LOGO_SIZE + "!, center");
-        brandingPanel.add(titleLabel, "center");
-        brandingPanel.add(subtitleBadge, "center");
+                "w " + LOGO_SIZE + "!, h " + LOGO_SIZE + "!");
+        brandingPanel.add(textStack, "growx");
         return brandingPanel;
     }
 
