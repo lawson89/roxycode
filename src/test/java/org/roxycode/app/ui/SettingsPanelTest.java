@@ -134,7 +134,8 @@ class SettingsPanelTest {
         verifyNoInteractions(aiService);
 
         CompletableFuture<String> gate = new CompletableFuture<>();
-        when(aiService.testConnection(eq("valid-key"), anyString())).thenAnswer(inv -> gate.join());
+        when(aiService.testConnection(eq(GenAiConnectionConfig.forApiKey("valid-key")), anyString()))
+                .thenAnswer(inv -> gate.join());
         settingsPanel.geminiApiKeyField.setText("valid-key");
         SwingTestUtils.runOnEdt(settingsPanel.testConnectionButton::doClick);
         SwingTestUtils.runOnEdt(() -> {
@@ -153,7 +154,7 @@ class SettingsPanelTest {
         assertTrue(settingsPanel.testConnectionStatusLabel.isVisible());
         assertEquals(SettingsPanel.CONNECTION_SUCCESS_TEXT, settingsPanel.testConnectionStatusLabel.getText());
 
-        when(aiService.testConnection(eq("invalid-key"), anyString()))
+        when(aiService.testConnection(eq(GenAiConnectionConfig.forApiKey("invalid-key")), anyString()))
                 .thenThrow(new IllegalStateException("401 UNAUTHORIZED: API key not valid"));
         settingsPanel.geminiApiKeyField.setText("invalid-key");
         SwingTestUtils.clickOnEdt(settingsPanel.testConnectionButton);

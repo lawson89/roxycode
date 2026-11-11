@@ -33,10 +33,6 @@ public final class ChatHtmlTemplates {
     private ChatHtmlTemplates() {
     }
 
-    public static String renderMoveToActionHtml(int messageIndex) {
-        return renderMoveToActionHtml(messageIndex, false);
-    }
-
     public static String renderMoveToActionHtml(int messageIndex, boolean moved) {
         if (moved) {
             return "<span class='copy-feedback'>&#10003; Sent to Feature Development</span>";
@@ -49,7 +45,7 @@ public final class ChatHtmlTemplates {
                 || !renderedHtml.contains("[Move to Feature Request]")) {
             return StringUtils.defaultString(renderedHtml);
         }
-        String linkHtml = renderMoveToActionHtml(messageIndex);
+        String linkHtml = renderMoveToActionHtml(messageIndex, false);
         return MOVE_TO_FEATURE_MENTION_PATTERN.matcher(renderedHtml).replaceAll(Matcher.quoteReplacement(linkHtml));
     }
 
@@ -73,16 +69,6 @@ public final class ChatHtmlTemplates {
             return "<span class='copy-feedback'>&#10003; Copied!</span>";
         }
         return "<a class='copy-action' href='copy:" + messageIndex + "'>[Copy]</a>";
-    }
-
-    public static String renderMessageActionCellContent(String role, int messageIndex, boolean copied,
-            boolean showMoveAction) {
-        return renderMessageActionCellContent(role, messageIndex, copied, showMoveAction, false, false, false);
-    }
-
-    public static String renderMessageActionCellContent(String role, int messageIndex, boolean copied,
-            boolean showMoveAction, boolean movedToFeature) {
-        return renderMessageActionCellContent(role, messageIndex, copied, showMoveAction, movedToFeature, false, false);
     }
 
     public static String renderMessageActionCellContent(String role, int messageIndex, boolean copied,
@@ -126,23 +112,6 @@ public final class ChatHtmlTemplates {
             return trimmed.substring(3, trimmed.length() - 4).trim();
         }
         return trimmed;
-    }
-
-    public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,
-            boolean copied, boolean showMoveAction) {
-        return renderChatEntry(role, content, timestamp, messageIndex, copied, showMoveAction, List.of());
-    }
-
-    public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,
-            boolean copied, boolean showMoveAction, List<String> thumbnailBase64List) {
-        return renderChatEntry(role, content, timestamp, messageIndex, copied, showMoveAction, false,
-                thumbnailBase64List);
-    }
-
-    public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,
-            boolean copied, boolean showMoveAction, boolean movedToFeature, List<String> thumbnailBase64List) {
-        return renderChatEntry(role, content, timestamp, messageIndex, copied, showMoveAction, movedToFeature, false,
-                false, thumbnailBase64List);
     }
 
     public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,
@@ -266,10 +235,6 @@ public final class ChatHtmlTemplates {
     private static String stripHtmlTagsAndUnescape(String input) {
         String withoutTags = HTML_TAG_PATTERN.matcher(input).replaceAll("");
         return StringEscapeUtils.unescapeHtml4(withoutTags);
-    }
-
-    public static String renderToolLog(String output, boolean success, String error, String timestamp) {
-        return renderToolLog(output, success, error, timestamp, -1, shouldDefaultToolExpanded(output, success));
     }
 
     public static String renderToolLog(String output, boolean success, String error, String timestamp, int messageIndex,

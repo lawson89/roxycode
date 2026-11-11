@@ -232,14 +232,14 @@ public final class MainFrame extends JPanel {
     }
 
     void updateOnboardingAndNavigationState() {
-        boolean hasApiKey = settingsService != null && settingsService.hasConfiguredApiKey();
+        boolean hasCredentials = settingsService != null && settingsService.hasConfiguredCredentials();
         boolean hasProject = projectService != null && projectService.hasActiveProject();
         boolean buildConfirmed = hasProject && projectService.isBuildConfirmed();
         if (sidebar != null) {
-            sidebar.updateNavigationAccess(hasApiKey, hasProject, buildConfirmed);
+            sidebar.updateNavigationAccess(hasCredentials, hasProject, buildConfirmed);
         }
         syncMenuAccessWithSidebar();
-        if (!hasApiKey) {
+        if (!hasCredentials) {
             showCard(SETTINGS_VIEW);
         } else if (hasProject && !buildConfirmed && TASK_VIEW.equals(currentCard)) {
             showCard(BUILD_CONFIG_VIEW);
@@ -650,7 +650,6 @@ public final class MainFrame extends JPanel {
                 } else {
                     currentCard = BUILD_CONFIG_VIEW;
                 }
-                refreshHubTabIcons();
             });
         }
 
@@ -967,8 +966,8 @@ public final class MainFrame extends JPanel {
     }
 
     private void evaluateStartupSetupAlert() {
-        boolean hasApiKey = settingsService != null && settingsService.hasConfiguredApiKey();
-        if (!hasApiKey) {
+        boolean hasCredentials = settingsService != null && settingsService.hasConfiguredCredentials();
+        if (!hasCredentials) {
             return;
         }
         List<String> missingToolNames = List.of();
@@ -996,29 +995,11 @@ public final class MainFrame extends JPanel {
     }
 
     private void refreshHubTabIcons() {
-        updateSingleHubTabIcons(contextHubTabs, List.of(Codicons.FILE, Codicons.DATABASE, Codicons.CODE));
-        updateSingleHubTabIcons(settingsHubTabs, List.of(Codicons.SETTINGS_GEAR, Codicons.TOOLS));
+        UiComponents.updateSelectedTabIcons(contextHubTabs, List.of(Codicons.FILE, Codicons.DATABASE, Codicons.CODE));
+        UiComponents.updateSelectedTabIcons(settingsHubTabs, List.of(Codicons.SETTINGS_GEAR, Codicons.TOOLS));
         if (buildConfigPanel != null) {
-            updateSingleHubTabIcons(buildConfigPanel.settingsTabs, List.of(Codicons.PACKAGE, Codicons.HUBOT));
+            buildConfigPanel.updateTabIcons();
         }
-    }
-
-    private static void updateSingleHubTabIcons(JTabbedPane tabs, List<Codicons> icons) {
-        if (tabs == null || tabs.getTabCount() != icons.size()) {
-            return;
-        }
-        java.awt.Color accent = SwingHtmlUtils.getAccentColor();
-        java.awt.Color muted = SwingHtmlUtils.getMutedForegroundColor();
-        int selectedIndex = tabs.getSelectedIndex();
-        List<java.awt.Color> colors = new ArrayList<>(icons.size());
-        for (int i = 0; i < icons.size(); i++) {
-            if (i == selectedIndex) {
-                colors.add(accent);
-            } else {
-                colors.add(muted);
-            }
-        }
-        UiComponents.updateTabIcons(tabs, icons, colors);
     }
 
     void showCard(String cardName) {

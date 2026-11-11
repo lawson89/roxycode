@@ -25,7 +25,6 @@ import javax.swing.text.DefaultEditorKit;
 import javax.swing.undo.UndoManager;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
-import org.kordamp.ikonli.fontawesome5.FontAwesomeSolid;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.GitService;
@@ -71,8 +70,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     private static final int AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 80;
     private static final int ACTIVITY_ANIMATION_DELAY_MS = 500;
     private static final int ACTIVITY_ELAPSED_DELAY_MS = 1000;
-    private static final FontAwesomeSolid[] HOURGLASS_FRAMES = {FontAwesomeSolid.HOURGLASS_START,
-            FontAwesomeSolid.HOURGLASS_HALF, FontAwesomeSolid.HOURGLASS_END};
+    private static final Codicons[] HOURGLASS_FRAMES = {Codicons.SYNC, Codicons.PULSE, Codicons.WATCH};
 
     public record NewTopicChoice(boolean proceed, boolean saveTopic, String topicName) {
     }

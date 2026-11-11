@@ -677,6 +677,20 @@ final class UiComponents {
         }
     }
 
+    static void clearStatusMessage(@Nullable JLabel statusLabel, @Nullable Timer statusTimer, boolean hideLabel) {
+        if (statusTimer != null && statusTimer.isRunning()) {
+            statusTimer.stop();
+        }
+        if (statusLabel == null) {
+            return;
+        }
+        statusLabel.setText("");
+        statusLabel.setToolTipText(null);
+        if (hideLabel) {
+            statusLabel.setVisible(false);
+        }
+    }
+
     static Color resolveActionButtonIconColor(@Nullable String style) {
         if (style != null && style.contains("foreground: #ffffff")) {
             return Color.WHITE;
@@ -748,6 +762,24 @@ final class UiComponents {
         for (int i = 0; i < count; i++) {
             tabbedPane.setIconAt(i, FontIcon.of(icons.get(i), 15, colors.get(i)));
         }
+    }
+
+    static void updateSelectedTabIcons(JTabbedPane tabbedPane, List<Codicons> icons) {
+        if (tabbedPane == null || icons == null || tabbedPane.getTabCount() != icons.size()) {
+            return;
+        }
+        Color accent = SwingHtmlUtils.getAccentColor();
+        Color muted = SwingHtmlUtils.getMutedForegroundColor();
+        int selectedIndex = tabbedPane.getSelectedIndex();
+        List<Color> colors = new ArrayList<>(icons.size());
+        for (int i = 0; i < icons.size(); i++) {
+            if (i == selectedIndex) {
+                colors.add(accent);
+            } else {
+                colors.add(muted);
+            }
+        }
+        updateTabIcons(tabbedPane, icons, colors);
     }
 
     @SuppressWarnings("PMD.UnusedAssignment")

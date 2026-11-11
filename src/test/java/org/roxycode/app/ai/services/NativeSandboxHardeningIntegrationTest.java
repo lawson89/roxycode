@@ -40,7 +40,7 @@ class NativeSandboxHardeningIntegrationTest {
                 "Native sandbox (bwrap or seatbelt) must be available");
 
         Path projectRoot = Files.createDirectories(tempDir.resolve("project"));
-        SandboxConfig config = new SandboxConfig("native", List.of(), "unused", "/workspace");
+        SandboxConfig config = new SandboxConfig("native", List.of(), List.of(), "unused", "/workspace");
 
         // 1. Verify Read Denied for sensitive host path
         Path hostFile = Files.writeString(tempDir.resolve("host-sensitive.txt"), "secret");

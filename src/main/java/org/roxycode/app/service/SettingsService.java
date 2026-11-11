@@ -184,10 +184,6 @@ public class SettingsService {
         return hasConfiguredCredentials(getSettings());
     }
 
-    public synchronized boolean hasConfiguredApiKey() {
-        return hasConfiguredCredentials();
-    }
-
     public synchronized AppSettings getSettings() {
         if (settings == null) {
             settings = loadFromDisk(getSettingsPath(), mapper);

@@ -476,18 +476,18 @@ public final class SettingsPanel extends JPanel {
         }
     }
 
-    boolean isApiKeyConfigured() {
+    boolean hasConfiguredCredentials() {
         if (settingsService == null) {
             return false;
         }
-        if (settingsService.hasConfiguredApiKey()) {
+        if (settingsService.hasConfiguredCredentials()) {
             return true;
         }
         return SettingsService.hasConfiguredCredentials(settingsService.getSettings());
     }
 
     void updateOnboardingBannerState() {
-        onboardingBanner.setVisibleState(!isApiKeyConfigured(), ONBOARDING_API_KEY_NOTICE_TEXT);
+        onboardingBanner.setVisibleState(!hasConfiguredCredentials(), ONBOARDING_API_KEY_NOTICE_TEXT);
     }
 
     @EventListener
@@ -615,10 +615,7 @@ public final class SettingsPanel extends JPanel {
             if (aiService == null) {
                 throw new IllegalStateException("AI service is unavailable");
             }
-            if (vertexSelected) {
-                return aiService.testConnection(connectionConfig, modelName);
-            }
-            return aiService.testConnection(apiKey, modelName);
+            return aiService.testConnection(connectionConfig, modelName);
         }, response -> {
             restoreTestConnectionButtonState();
             showTestConnectionStatus(CONNECTION_SUCCESS_TEXT, true);
@@ -643,12 +640,7 @@ public final class SettingsPanel extends JPanel {
     }
 
     void clearTestConnectionStatus() {
-        if (testConnectionStatusTimer != null && testConnectionStatusTimer.isRunning()) {
-            testConnectionStatusTimer.stop();
-        }
-        testConnectionStatusLabel.setText("");
-        testConnectionStatusLabel.setToolTipText(null);
-        testConnectionStatusLabel.setVisible(false);
+        UiComponents.clearStatusMessage(testConnectionStatusLabel, testConnectionStatusTimer, true);
     }
 
     private void showStatusMessage(String message, boolean success) {
@@ -659,7 +651,7 @@ public final class SettingsPanel extends JPanel {
         commitSpinnerEdit(maxAgentToolTurnsSpinner);
         commitSpinnerEdit(maxMessagesSpinner);
 
-        boolean wasApiKeyConfigured = isApiKeyConfigured();
+        boolean hadConfiguredCredentials = hasConfiguredCredentials();
         AppSettings settings = settingsService.getSettings();
         String newApiKey = new String(geminiApiKeyField.getPassword());
         boolean vertexEnabled = isVertexAiSelected();
@@ -689,7 +681,7 @@ public final class SettingsPanel extends JPanel {
         updateOnboardingBannerState();
 
         showStatusMessage(SAVED_APPLIED_TEXT, true);
-        if (!wasApiKeyConfigured && isApiKeyConfigured() && onInitialApiKeyConfiguredCallback != null) {
+        if (!hadConfiguredCredentials && hasConfiguredCredentials() && onInitialApiKeyConfiguredCallback != null) {
             onInitialApiKeyConfiguredCallback.run();
         }
     }

@@ -87,10 +87,6 @@ class BuildContainerService {
             workdir = StringUtils.defaultIfBlank(workdir, DEFAULT_CONTAINER_WORKDIR).trim();
         }
 
-        public SandboxConfig(String mode, List<String> writablePaths, String image, String workdir) {
-            this(mode, List.of(), writablePaths, image, workdir);
-        }
-
         public SandboxMode resolvedMode() {
             return SandboxMode.fromString(mode);
         }
@@ -255,10 +251,6 @@ class BuildContainerService {
         return List.copyOf(resolvedSet);
     }
 
-    static List<String> buildBubblewrapCommand(Path projectRoot, List<Path> writablePaths, String command) {
-        return buildBubblewrapCommand(projectRoot, List.of(), writablePaths, command);
-    }
-
     static List<String> buildBubblewrapCommand(Path projectRoot, List<Path> readablePaths, List<Path> writablePaths,
             String command) {
         String rootStr = projectRoot.toAbsolutePath().normalize().toString();
@@ -294,10 +286,6 @@ class BuildContainerService {
         Collections.addAll(args, "--bind", rootStr, rootStr, "--chdir", rootStr, "--die-with-parent", "sh", "-c",
                 command);
         return List.copyOf(args);
-    }
-
-    static String buildSeatbeltProfile(Path projectRoot, List<Path> writablePaths) {
-        return buildSeatbeltProfile(projectRoot, List.of(), writablePaths);
     }
 
     static String buildSeatbeltProfile(Path projectRoot, List<Path> readablePaths, List<Path> writablePaths) {
@@ -365,10 +353,6 @@ class BuildContainerService {
 
     private static String escapeSeatbeltPath(String path) {
         return path.replace(BS, BS + BS).replace(DQ, BS + DQ);
-    }
-
-    static List<String> buildSeatbeltCommand(Path projectRoot, List<Path> writablePaths, String command) {
-        return buildSeatbeltCommand(projectRoot, List.of(), writablePaths, command);
     }
 
     static List<String> buildSeatbeltCommand(Path projectRoot, List<Path> readablePaths, List<Path> writablePaths,

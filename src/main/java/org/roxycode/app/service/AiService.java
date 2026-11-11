@@ -63,26 +63,10 @@ public class AiService implements AutoCloseable {
     public static final int TEST_CONNECTION_TIMEOUT_MS = 15_000;
     public static final String AUTO_NUDGE_PROMPT = "You completed the turn without returning any text response. Please summarize what you just did or provide your final response to the user.";
     static final String GROUNDED_SEARCH_SYSTEM_PROMPT = "You are a technical research assistant. Use Google Search to provide accurate, up-to-date facts, synthesis, and source URLs or citations when available.";
-    static final String BUILD_TOML_GENERATOR_SYSTEM_PROMPT = """
-            You are Roxy, an expert build and sandbox configuration engineer for RoxyCode.
-            Your task is to generate a complete, valid, well-commented build.toml file tailored to the user's project and host environment.
-
-            Rules:
-            1. Return ONLY valid TOML (no explanatory prose before or after).
-            2. Preserve all standard sections: timeout_seconds, [commands] (install, clean, compile, build, test_all, test_single, lint, format), [env], [parse] (error_regex, test_failure_regex, context_lines, optional junit_xml_paths), and [sandbox] (mode, readable_paths, writable_paths, image, workdir).
-            3. Inspect the project build files (e.g., pom.xml, build.gradle, package.json, pyproject.toml, Cargo.toml, go.mod, CMakeLists.txt, version files) and configure [commands] (including lint and format if plugins like Spotless, Checkstyle, PMD, ESLint, Biome, Prettier, Ruff, Clippy, etc. are present). Prefer project wrappers (./mvnw, ./gradlew) when present in the project root.
-            4. If the project specifies a Java/language version (e.g., <java.version>, maven.compiler.release, .sdkmanrc, .java-version) and a matching JDK is listed under "Installed Host JDKs" in the host environment context, set JAVA_HOME in [env] to that exact host JDK path (and keep helpful comments).
-            5. In [sandbox], populate readable_paths with relevant read-only toolchain/SDK directories (using ~/ where appropriate, e.g., ~/.sdkman, ~/.jdks, ~/.nvm, ~/.pyenv, ~/.rustup) and writable_paths with package/build cache directories (e.g., ~/.m2, ~/.gradle, ~/.npm, ~/.cargo, ~/.cache/pip). Keep mode from the current config if already set to "native" or "docker", or default to "native" if Native Sandbox is available, otherwise "none".
-            6. Use single-quoted TOML literal strings ('...') for error_regex and test_failure_regex so regex backslashes do not require double-escaping.""";
     private static final List<String> TOOL_FAILURE_MARKERS = List.of("""
             "success":false""", """
             "success": false""", """
             "error":""");
-
-    @FunctionalInterface
-    interface ConnectionTester {
-        String verifyConnection(String apiKey, String modelName) throws Exception;
-    }
 
     @FunctionalInterface
     interface ConnectionConfigTester {
@@ -213,10 +197,6 @@ public class AiService implements AutoCloseable {
         reloadChatClient(newConfig);
     }
 
-    synchronized void reloadChatClient(String apiKey) {
-        reloadChatClient(GenAiConnectionConfig.forApiKey(apiKey));
-    }
-
     synchronized void reloadChatClient(GenAiConnectionConfig config) {
         if (config == null || !config.isConfigured()) {
             return;
@@ -230,19 +210,6 @@ public class AiService implements AutoCloseable {
         } else {
             log.info("Hot-reloaded Gemini ChatClient with updated API key");
         }
-    }
-
-    /**
-     * Tests the connection to the Gemini API using the provided API key and model name.
-     *
-     * @param apiKey
-     *            the Gemini API key to test
-     * @param modelName
-     *            the name of the model to test (optional, defaults to configured model)
-     * @return the result of the connection test (typically the model name if successful)
-     */
-    public String testConnection(String apiKey, String modelName) {
-        return testConnection(GenAiConnectionConfig.forApiKey(apiKey), modelName);
     }
 
     /**
@@ -291,29 +258,12 @@ public class AiService implements AutoCloseable {
         }
     }
 
-    void setChatClientBuilderFactory(Function<String, ChatClient.Builder> factory) {
-        Objects.requireNonNull(factory, "factory must not be null");
-        this.connectionChatClientBuilderFactory = cfg -> factory.apply(cfg.apiKey());
-    }
-
     void setConnectionChatClientBuilderFactory(Function<GenAiConnectionConfig, ChatClient.Builder> factory) {
         this.connectionChatClientBuilderFactory = Objects.requireNonNull(factory, "factory must not be null");
     }
 
-    void setConnectionTester(ConnectionTester connectionTester) {
-        Objects.requireNonNull(connectionTester, "connectionTester must not be null");
-        this.connectionTester = (cfg, model) -> connectionTester.verifyConnection(cfg.apiKey(), model);
-    }
-
     void setConnectionConfigTester(ConnectionConfigTester connectionTester) {
         this.connectionTester = Objects.requireNonNull(connectionTester, "connectionTester must not be null");
-    }
-
-    String getActiveApiKey() {
-        if (activeConnectionConfig == null) {
-            return "";
-        }
-        return activeConnectionConfig.apiKey();
     }
 
     GenAiConnectionConfig getActiveConnectionConfig() {
@@ -411,42 +361,6 @@ public class AiService implements AutoCloseable {
                 throw re;
             }
             throw new RuntimeException("Unexpected error during grounded web search", e);
-        }
-    }
-
-    /**
-     * Generates a tailored {@code build.toml} configuration from collected project and host environment context.
-     *
-     * @param projectBuildContext
-     *            the collected project files, template, and host toolchain context
-     * @return the raw TOML response generated by the model
-     */
-    @SuppressWarnings("PMD.PreserveStackTrace")
-    public String generateBuildToml(String projectBuildContext) {
-        String trimmedContext = StringUtils.trimToEmpty(projectBuildContext);
-        if (trimmedContext.isEmpty()) {
-            throw new IllegalArgumentException("Project build context must not be blank.");
-        }
-        ExceptionUtils.checkInterrupted("Build config generation interrupted before start");
-        GoogleGenAiChatOptions.Builder optionsBuilder = GoogleGenAiChatOptions.builder()
-                .model(resolveEffectiveGeminiModel());
-        ThinkingLevel effectiveThinking = resolveEffectiveThinkingLevel();
-        if (effectiveThinking == ThinkingLevel.ADAPTIVE) {
-            ThinkingLevel.LOW.applyTo(optionsBuilder);
-        } else {
-            effectiveThinking.applyTo(optionsBuilder);
-        }
-        try {
-            ChatResponse chatResponse = chatClient.prompt().system(BUILD_TOML_GENERATOR_SYSTEM_PROMPT)
-                    .user(trimmedContext).options(optionsBuilder).call().chatResponse();
-            ExceptionUtils.checkInterrupted("Build config generation interrupted after model call");
-            return StringUtils.trimToEmpty(ChatResponseFormatter.extractResponseText(chatResponse));
-        } catch (Exception e) {
-            ExceptionUtils.rethrowIfCancelled(e, "Build config generation cancelled");
-            if (e instanceof RuntimeException re) {
-                throw re;
-            }
-            throw new RuntimeException("Unexpected error while generating build.toml", e);
         }
     }
 

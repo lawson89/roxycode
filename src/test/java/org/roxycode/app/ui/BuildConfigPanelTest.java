@@ -6,8 +6,6 @@ import static org.mockito.Mockito.*;
 import com.formdev.flatlaf.FlatClientProperties;
 import java.io.IOException;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.JComboBox;
 import javax.swing.SwingUtilities;
@@ -292,10 +290,7 @@ class BuildConfigPanelTest {
 
     @Test
     void testConfigureWithRoxyShowsProgressIndicatorPopulatesEditorAndPromptsOnUnsavedEdits() throws Exception {
-        org.roxycode.app.service.AiService aiService = mock(org.roxycode.app.service.AiService.class);
         when(buildToolService.detectTemplate()).thenReturn("maven");
-        when(buildToolService.collectBuildConfigurationContext(eq("maven"), anyString()))
-                .thenReturn("## Maven Context");
         String tailoredToml = """
                 [commands]
                 compile = "./mvnw test-compile"
@@ -307,68 +302,16 @@ class BuildConfigPanelTest {
                 readable_paths = ["~/.sdkman"]
                 writable_paths = ["~/.m2"]
                 """;
-        CountDownLatch inFlightLatch = new CountDownLatch(1);
-        CountDownLatch releaseLatch = new CountDownLatch(1);
-        when(aiService.generateBuildToml("## Maven Context")).thenAnswer(inv -> {
-            inFlightLatch.countDown();
-            releaseLatch.await(5, TimeUnit.SECONDS);
-            return tailoredToml;
-        });
-        when(buildToolService.extractAndValidateGeneratedToml(tailoredToml)).thenReturn(tailoredToml);
 
         BuildConfigPanel panel = SwingTestUtils
-                .callOnEdt(() -> new BuildConfigPanel(buildToolService, settingsService, projectService, aiService));
+                .callOnEdt(() -> new BuildConfigPanel(buildToolService, settingsService, projectService));
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
-        assertFalse(panel.configureProgressBar.isVisible());
-        assertFalse(panel.configureStatusLabel.isVisible());
 
+        // When callback is not wired yet, clicking Configure with Roxy shows an unavailable status
         SwingTestUtils.clickOnEdt(panel.configureWithRoxyButton);
-        assertTrue(inFlightLatch.await(5, TimeUnit.SECONDS));
+        assertEquals("Roxy AI service is not available.", panel.statusLabel.getText());
 
-        // Verify progress bar and inline status label are visible while Roxy is configuring
-        SwingTestUtils.runOnEdt(() -> {
-            assertFalse(panel.configureWithRoxyButton.isEnabled());
-            assertEquals(BuildConfigPanel.CONFIGURING_WITH_ROXY_TEXT, panel.configureWithRoxyButton.getText());
-            assertTrue(panel.configureProgressBar.isVisible());
-            assertTrue(panel.configureProgressBar.isIndeterminate());
-            assertTrue(panel.configureStatusLabel.isVisible());
-            assertEquals(BuildConfigPanel.CONFIGURING_WITH_ROXY_STATUS, panel.configureStatusLabel.getText());
-        });
-
-        releaseLatch.countDown();
-        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
-
-        assertEquals(tailoredToml, panel.textArea.getText());
-        assertTrue(panel.hasUnsavedChanges());
-        assertTrue(panel.configureWithRoxyButton.isEnabled());
-        assertEquals(BuildConfigPanel.CONFIGURE_WITH_ROXY_TEXT, panel.configureWithRoxyButton.getText());
-        assertFalse(panel.configureProgressBar.isVisible());
-        assertFalse(panel.configureProgressBar.isIndeterminate());
-        assertFalse(panel.configureStatusLabel.isVisible());
-        assertEquals("Roxy configured build.toml! Review and click 'Confirm & Save Settings'.",
-                panel.statusLabel.getText());
-
-        // Verify unsaved-edit confirmation prompt and error handling
-        SwingTestUtils.runOnEdt(() -> {
-            panel.textArea.setText("# Unsaved user edit");
-            panel.configureWithRoxyButton.doClick();
-        });
-        assertTrue(panel.templateConfirmBar.isPromptVisible());
-        assertEquals("Replace unsaved build.toml edits with Roxy's auto-generated configuration?",
-                panel.templateConfirmBar.getMessage());
-
-        when(buildToolService.extractAndValidateGeneratedToml(anyString()))
-                .thenThrow(new IOException("Invalid TOML syntax"));
-        SwingTestUtils.clickOnEdt(panel.templateConfirmBar.confirmButton);
-        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
-
-        assertTrue(panel.configureWithRoxyButton.isEnabled());
-        assertFalse(panel.configureProgressBar.isVisible());
-        assertFalse(panel.configureStatusLabel.isVisible());
-        assertEquals("Roxy configuration failed: Invalid TOML syntax", panel.statusLabel.getText());
-        assertEquals("# Unsaved user edit", panel.textArea.getText());
-
-        // Verify interactive callback routing and applyGeneratedBuildToml switches back to Build Configuration tab
+        // Verify interactive callback routing and error handling
         String[] interactivePromptCaptured = new String[1];
         when(buildToolService.buildInteractiveConfigurationPrompt(eq("maven"), anyString()))
                 .thenReturn("Interactive prompt for Ask Roxy");
@@ -377,6 +320,13 @@ class BuildConfigPanelTest {
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
         assertEquals("Interactive prompt for Ask Roxy", interactivePromptCaptured[0]);
 
+        when(buildToolService.buildInteractiveConfigurationPrompt(eq("maven"), anyString()))
+                .thenThrow(new IllegalStateException("Prompt preparation error"));
+        SwingTestUtils.clickOnEdt(panel.configureWithRoxyButton);
+        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
+        assertEquals("Roxy configuration failed: Prompt preparation error", panel.statusLabel.getText());
+
+        // Verify applyGeneratedBuildToml switches back to Build Configuration tab
         SwingTestUtils.runOnEdt(() -> {
             panel.selectAiModelTab();
             assertEquals(BuildConfigPanel.TAB_INDEX_AI_MODEL, panel.settingsTabs.getSelectedIndex());

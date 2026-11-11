@@ -100,11 +100,13 @@ final class TaskWorkspacePanel extends JPanel {
         Color accent = SwingHtmlUtils.getAccentColor();
         Color muted = SwingHtmlUtils.getMutedForegroundColor();
         taskTabs.addTab("Chat", FontIcon.of(Codicons.COMMENT_DISCUSSION, 15, accent), taskChatPanel);
-        taskTabs.addTab(PLAN_TAB_BASE_TITLE, FontIcon.of(Codicons.LIST_ORDERED, 15, accent), planPanel);
+        taskTabs.addTab(PLAN_TAB_BASE_TITLE, FontIcon.of(Codicons.LIST_ORDERED, 15, muted), planPanel);
         taskTabs.addTab(PAST_PLANS_TAB_TITLE, FontIcon.of(Codicons.HISTORY, 15, muted), pastPlansPanel);
 
         updateActivePhase(planService.getCurrentPhase());
         taskTabs.addChangeListener(e -> {
+            UiComponents.updateSelectedTabIcons(taskTabs,
+                    List.of(Codicons.COMMENT_DISCUSSION, Codicons.LIST_ORDERED, Codicons.HISTORY));
             if (taskChatPanel != null && taskChatPanel.equals(taskTabs.getSelectedComponent())) {
                 SwingUtilities.invokeLater(taskChatPanel::focusInput);
             } else if (planPanel != null && planPanel.equals(taskTabs.getSelectedComponent())) {
@@ -167,10 +169,8 @@ final class TaskWorkspacePanel extends JPanel {
         planLabel.setForeground(accent);
         planLabel.putClientProperty(FlatClientProperties.STYLE,
                 "font: bold -2; background: " + SwingHtmlUtils.toHex(tintedBg) + "; arc: 10; border: 3,8,3,8");
-        Color muted = SwingHtmlUtils.getMutedForegroundColor();
-        UiComponents.updateTabIcons(taskTabs,
-                List.of(Codicons.COMMENT_DISCUSSION, Codicons.LIST_ORDERED, Codicons.HISTORY),
-                List.of(accent, accent, muted));
+        UiComponents.updateSelectedTabIcons(taskTabs,
+                List.of(Codicons.COMMENT_DISCUSSION, Codicons.LIST_ORDERED, Codicons.HISTORY));
     }
 
     @EventListener

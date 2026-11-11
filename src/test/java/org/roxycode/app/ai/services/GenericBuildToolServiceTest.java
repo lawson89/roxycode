@@ -681,17 +681,18 @@ class GenericBuildToolServiceTest {
                 writable_paths = ["~/.m2"]
                 ~~~
                 """;
-        String validated = buildToolService.extractAndValidateGeneratedToml(fencedResponse);
+        String validated = GenericBuildToolService.extractValidBuildTomlBlock(fencedResponse);
+        assertNotNull(validated);
         assertTrue(validated.endsWith(System.lineSeparator()));
-        GenericBuildToolService.BuildConfig parsed = buildToolService.parseConfig(validated);
+        GenericBuildToolService.BuildConfig parsed = buildToolService.validateConfig(validated);
         assertEquals("./mvnw test-compile", parsed.commands().compile());
         assertEquals("/opt/jdk-21", parsed.env().get("JAVA_HOME"));
         assertEquals("native", parsed.sandbox().mode());
         assertEquals(List.of("~/.sdkman"), parsed.sandbox().readablePaths());
         assertEquals(List.of("~/.m2"), parsed.sandbox().writablePaths());
 
-        assertThrows(IOException.class, () -> buildToolService.extractAndValidateGeneratedToml("   "));
-        assertThrows(IOException.class, () -> buildToolService.extractAndValidateGeneratedToml("not = [valid toml"));
+        assertNull(GenericBuildToolService.extractValidBuildTomlBlock("   "));
+        assertThrows(IOException.class, () -> buildToolService.validateConfig("not = [valid toml"));
 
         String interactivePrompt = buildToolService.buildInteractiveConfigurationPrompt("maven", currentToml);
         assertContainsAll(interactivePrompt, "### Interactive Configuration Instructions", "userInputService",
@@ -714,6 +715,17 @@ class GenericBuildToolServiceTest {
         assertNotNull(extractedBlock);
         assertTrue(extractedBlock.endsWith(System.lineSeparator()));
         assertContainsAll(extractedBlock, "[commands]", "compile = './mvnw test-compile'", "mode = 'native'");
+
+        String nestedBlockquoteMarkdown = """
+                > Recommended setup:
+                > ~~~toml
+                > [commands]
+                > compile = './mvnw compile'
+                > ~~~
+                """;
+        String nestedBlock = GenericBuildToolService.extractValidBuildTomlBlock(nestedBlockquoteMarkdown);
+        assertNotNull(nestedBlock);
+        assertContainsAll(nestedBlock, "[commands]", "compile = './mvnw compile'");
 
         assertNull(GenericBuildToolService.extractValidBuildTomlBlock("No code blocks here."));
         assertNull(GenericBuildToolService.extractValidBuildTomlBlock("""
@@ -799,7 +811,7 @@ class GenericBuildToolServiceTest {
                 () -> buildToolService.saveConfigContent(nativeToml));
         assertContainsAll(nativeUnavailableEx.getMessage(), "Unsupported [sandbox] mode 'native'",
                 "Bubblewrap or Seatbelt");
-        assertThrows(IOException.class, () -> buildToolService.extractAndValidateGeneratedToml(nativeToml));
+        assertThrows(IOException.class, () -> buildToolService.validateConfig(nativeToml));
         assertFalse(Files.exists(configPath));
 
         when(systemToolService.checkNativeSandboxAvailable()).thenReturn(true);
@@ -818,7 +830,7 @@ class GenericBuildToolServiceTest {
         IOException dockerUnavailableEx = assertThrows(IOException.class,
                 () -> buildToolService.saveConfigContent(dockerToml));
         assertContainsAll(dockerUnavailableEx.getMessage(), "Unsupported [sandbox] mode 'docker'", "Docker");
-        assertThrows(IOException.class, () -> buildToolService.extractAndValidateGeneratedToml(dockerToml));
+        assertThrows(IOException.class, () -> buildToolService.validateConfig(dockerToml));
         assertEquals(nativeToml, Files.readString(configPath), "Failed save must not overwrite existing build.toml");
 
         stubDockerAvailable(true);

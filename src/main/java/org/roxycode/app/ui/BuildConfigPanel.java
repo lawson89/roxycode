@@ -22,7 +22,6 @@ import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.model.ThinkingLevel;
 import org.roxycode.app.model.ThinkingLevelOption;
-import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.util.Edt;
@@ -53,8 +52,6 @@ final class BuildConfigPanel extends JPanel {
     static final String SECTION_BUILD_CONFIG_TITLE = "Build Configuration (build.toml)";
     static final String BUILD_CONFIG_HINT_TEXT = "Need help customizing build.toml or regexes for your stack? Ask Roxy!";
     static final String CONFIGURE_WITH_ROXY_TEXT = "Configure with Roxy";
-    static final String CONFIGURING_WITH_ROXY_TEXT = "Configuring...";
-    static final String CONFIGURING_WITH_ROXY_STATUS = "Roxy is inspecting project files and configuring build.toml...";
     static final String APPLIED_FROM_ASK_ROXY_STATUS = "Applied build.toml from Ask Roxy! Review and click 'Confirm & Save Settings'.";
     static final String SAVE_BUTTON_TEXT = "Confirm & Save Settings";
     static final String SAVED_FEEDBACK_BUTTON_TEXT = "Confirmed & Saved!";
@@ -80,7 +77,6 @@ final class BuildConfigPanel extends JPanel {
     private final transient GenericBuildToolService buildToolService;
     private final transient SettingsService settingsService;
     private final transient ProjectService projectService;
-    private final transient AiService aiService;
     final JTabbedPane settingsTabs;
     final JPanel buildTabPanel;
     final JPanel modelTabPanel;
@@ -104,9 +100,6 @@ final class BuildConfigPanel extends JPanel {
     final JLabel buildConfigInfoIcon;
     final JLabel buildConfigHintLabel;
     final JButton configureWithRoxyButton;
-    final UiComponents.InlineConfirmBar templateConfirmBar;
-    final JProgressBar configureProgressBar;
-    final JLabel configureStatusLabel;
     final UiComponents.WarningBanner unconfirmedBanner;
     final RSyntaxTextArea textArea;
     final JButton saveButton;
@@ -127,19 +120,13 @@ final class BuildConfigPanel extends JPanel {
     private transient Consumer<String> onConfigureWithRoxyCallback;
     transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
 
-    public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
-            @Nullable ProjectService projectService) {
-        this(buildToolService, settingsService, projectService, null);
-    }
-
     @Autowired
     public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
-            @Nullable ProjectService projectService, @Nullable AiService aiService) {
+            @Nullable ProjectService projectService) {
         super(new BorderLayout());
         this.buildToolService = buildToolService;
         this.settingsService = settingsService;
         this.projectService = projectService;
-        this.aiService = aiService;
         setOpaque(true);
 
         // --- Tab 1: Build Configuration (build.toml) ---
@@ -166,7 +153,7 @@ final class BuildConfigPanel extends JPanel {
         buildTabPanel.add(UiComponents.createPageHeader(titleLabel, subtitleLabel, saveButton), "growx, wmin 0, wrap");
 
         buildCardPanel = new JPanel(
-                new MigLayout("fill, insets 16 18 16 18, hidemode 3", GROW_FILL, "[][][][]" + GROW_FILL));
+                new MigLayout("fill, insets 16 18 16 18, hidemode 3", GROW_FILL, "[][]" + GROW_FILL));
         UiComponents.styleCardPanel(buildCardPanel);
 
         buildSectionHeaderLabel = UiComponents.createSectionHeader(SECTION_BUILD_CONFIG_TITLE, Codicons.PACKAGE,
@@ -189,22 +176,6 @@ final class BuildConfigPanel extends JPanel {
         buildHeaderRow.add(buildConfigHintLabel, "cell 2 0, wmin 0, hidemode 3");
         buildHeaderRow.add(configureWithRoxyButton, "cell 3 0");
         buildCardPanel.add(buildHeaderRow, "growx, wmin 0, wrap, gapbottom 8");
-
-        templateConfirmBar = new UiComponents.InlineConfirmBar();
-        buildCardPanel.add(templateConfirmBar, "growx, wmin 0, wrap, gapbottom 8, hidemode 3");
-
-        configureProgressBar = new JProgressBar();
-        configureProgressBar.setVisible(false);
-        configureStatusLabel = new JLabel("");
-        configureStatusLabel.setFont(configureStatusLabel.getFont().deriveFont(Font.BOLD, 11.5f));
-        configureStatusLabel.setVisible(false);
-
-        JPanel configureProgressRow = new JPanel(
-                new MigLayout("fillx, insets 0, gapx 10, hidemode 3", "[180:220:260][grow]", "[center]"));
-        configureProgressRow.setOpaque(false);
-        configureProgressRow.add(configureProgressBar, "growx, hidemode 3");
-        configureProgressRow.add(configureStatusLabel, "growx, wmin 0, hidemode 3");
-        buildCardPanel.add(configureProgressRow, "growx, wmin 0, wrap, gapbottom 8, hidemode 3");
 
         refreshDetectedTemplate();
 
@@ -324,21 +295,7 @@ final class BuildConfigPanel extends JPanel {
     }
 
     void updateTabIcons() {
-        if (settingsTabs == null || settingsTabs.getTabCount() < 2) {
-            return;
-        }
-        Color accent = SwingHtmlUtils.getAccentColor();
-        Color muted = SwingHtmlUtils.getMutedForegroundColor();
-        int selectedIndex = settingsTabs.getSelectedIndex();
-        Color buildTabColor = muted;
-        Color modelTabColor = muted;
-        if (selectedIndex == TAB_INDEX_BUILD_CONFIG) {
-            buildTabColor = accent;
-        } else if (selectedIndex == TAB_INDEX_AI_MODEL) {
-            modelTabColor = accent;
-        }
-        UiComponents.updateTabIcons(settingsTabs, List.of(Codicons.PACKAGE, Codicons.HUBOT),
-                List.of(buildTabColor, modelTabColor));
+        UiComponents.updateSelectedTabIcons(settingsTabs, List.of(Codicons.PACKAGE, Codicons.HUBOT));
     }
 
     void refreshDetectedTemplate() {
@@ -373,12 +330,7 @@ final class BuildConfigPanel extends JPanel {
     }
 
     void clearBuildStatus() {
-        if (statusTimer != null && statusTimer.isRunning()) {
-            statusTimer.stop();
-        }
-        statusLabel.setText("");
-        statusLabel.setToolTipText(null);
-        statusLabel.setVisible(false);
+        UiComponents.clearStatusMessage(statusLabel, statusTimer, true);
         buildConfigHintLabel.setVisible(true);
     }
 
@@ -387,28 +339,14 @@ final class BuildConfigPanel extends JPanel {
     }
 
     void clearModelStatus() {
-        if (modelStatusTimer != null && modelStatusTimer.isRunning()) {
-            modelStatusTimer.stop();
-        }
-        modelStatusLabel.setText("");
+        UiComponents.clearStatusMessage(modelStatusLabel, modelStatusTimer, false);
     }
 
     void configureWithRoxy() {
-        if (buildToolService == null || (onConfigureWithRoxyCallback == null && aiService == null)) {
+        if (buildToolService == null || onConfigureWithRoxyCallback == null) {
             showBuildStatus("Roxy AI service is not available.", false);
             return;
         }
-        if (onConfigureWithRoxyCallback != null) {
-            templateConfirmBar.cancel();
-            performConfigureWithRoxy();
-            return;
-        }
-        if (textEditedByUser) {
-            templateConfirmBar.prompt("Replace unsaved build.toml edits with Roxy's auto-generated configuration?",
-                    "Confirm", false, this::performConfigureWithRoxy);
-            return;
-        }
-        templateConfirmBar.cancel();
         performConfigureWithRoxy();
     }
 
@@ -416,58 +354,16 @@ final class BuildConfigPanel extends JPanel {
         refreshDetectedTemplate();
         final String templateId = detectedTemplateId;
         final String currentEditorText = textArea.getText();
-
-        if (onConfigureWithRoxyCallback != null) {
-            final Consumer<String> callback = onConfigureWithRoxyCallback;
-            CompletableFuture<String> future = Edt.supplyAsync(
-                    () -> buildToolService.buildInteractiveConfigurationPrompt(templateId, currentEditorText),
-                    callback::accept, ex -> {
-                        Throwable cause = ExceptionUtils.getRootCause(ex);
-                        log.error("Failed to prepare interactive build.toml prompt: {}", cause.getMessage());
-                        showBuildStatus("Roxy configuration failed: " + cause.getMessage(), false);
-                    });
-            lastAsyncFuture = future;
-            return future;
-        }
-
-        configureWithRoxyButton.setEnabled(false);
-        configureWithRoxyButton.setText(CONFIGURING_WITH_ROXY_TEXT);
-        configureProgressBar.setIndeterminate(true);
-        configureProgressBar.setVisible(true);
-        configureStatusLabel.setForeground(SwingHtmlUtils.getAccentColor());
-        configureStatusLabel.setText(CONFIGURING_WITH_ROXY_STATUS);
-        configureStatusLabel.setVisible(true);
-        clearBuildStatus();
-
-        CompletableFuture<String> future = Edt.supplyAsync(() -> {
-            try {
-                String context = buildToolService.collectBuildConfigurationContext(templateId, currentEditorText);
-                String rawResponse = aiService.generateBuildToml(context);
-                return buildToolService.extractAndValidateGeneratedToml(rawResponse);
-            } catch (IOException e) {
-                throw new UncheckedIOException(e);
-            }
-        }, generatedToml -> {
-            restoreConfigureWithRoxyButtonState();
-            setEditorContentProgrammatically(generatedToml, false);
-            showBuildStatus("Roxy configured build.toml! Review and click 'Confirm & Save Settings'.", true);
-        }, ex -> {
-            restoreConfigureWithRoxyButtonState();
-            Throwable cause = ExceptionUtils.getRootCause(ex);
-            log.error("Failed to configure build.toml with Roxy: {}", cause.getMessage());
-            showBuildStatus("Roxy configuration failed: " + cause.getMessage(), false);
-        });
+        final Consumer<String> callback = onConfigureWithRoxyCallback;
+        CompletableFuture<String> future = Edt.supplyAsync(
+                () -> buildToolService.buildInteractiveConfigurationPrompt(templateId, currentEditorText),
+                callback::accept, ex -> {
+                    Throwable cause = ExceptionUtils.getRootCause(ex);
+                    log.error("Failed to prepare interactive build.toml prompt: {}", cause.getMessage());
+                    showBuildStatus("Roxy configuration failed: " + cause.getMessage(), false);
+                });
         lastAsyncFuture = future;
         return future;
-    }
-
-    private void restoreConfigureWithRoxyButtonState() {
-        configureWithRoxyButton.setEnabled(true);
-        configureWithRoxyButton.setText(CONFIGURE_WITH_ROXY_TEXT);
-        configureProgressBar.setIndeterminate(false);
-        configureProgressBar.setVisible(false);
-        configureStatusLabel.setText("");
-        configureStatusLabel.setVisible(false);
     }
 
     void loadModelOptions() {
@@ -679,7 +575,6 @@ final class BuildConfigPanel extends JPanel {
             textEditedByUser = !Objects.equals(currentText, savedTomlContent);
             cancelSaveFeedback();
             clearBuildStatus();
-            templateConfirmBar.cancel();
             updateBannerState();
         }
     }
@@ -703,7 +598,6 @@ final class BuildConfigPanel extends JPanel {
     }
 
     CompletableFuture<String> loadConfig() {
-        templateConfirmBar.cancel();
         if (buildToolService == null) {
             CompletableFuture<String> done = CompletableFuture.completedFuture("");
             lastAsyncFuture = done;
@@ -722,7 +616,6 @@ final class BuildConfigPanel extends JPanel {
     }
 
     CompletableFuture<Void> saveConfig() {
-        templateConfirmBar.cancel();
         cancelSaveFeedback();
         if (buildToolService == null && projectService == null) {
             CompletableFuture<Void> done = CompletableFuture.completedFuture(null);

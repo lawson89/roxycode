@@ -71,6 +71,7 @@ final class QaWorkspacePanel extends JPanel {
         qaTabs.addTab(PAST_TOPICS_TAB_TITLE,
                 FontIcon.of(Codicons.HISTORY, 15, SwingHtmlUtils.getMutedForegroundColor()), pastTopicsPanel);
         qaTabs.addChangeListener(e -> {
+            UiComponents.updateSelectedTabIcons(qaTabs, List.of(Codicons.COMMENT_DISCUSSION, Codicons.HISTORY));
             if (qaChatPanel != null && qaChatPanel.equals(qaTabs.getSelectedComponent())) {
                 SwingUtilities.invokeLater(qaChatPanel::focusInput);
             } else if (pastTopicsPanel.equals(qaTabs.getSelectedComponent())) {
@@ -109,9 +110,7 @@ final class QaWorkspacePanel extends JPanel {
         mentorModeLabel.setForeground(accent);
         mentorModeLabel.putClientProperty(FlatClientProperties.STYLE,
                 "font: bold -1; background: " + bgHex + "; arc: 999; border: 4,12,4,12");
-        Color muted = SwingHtmlUtils.getMutedForegroundColor();
-        UiComponents.updateTabIcons(qaTabs, List.of(Codicons.COMMENT_DISCUSSION, Codicons.HISTORY),
-                List.of(accent, muted));
+        UiComponents.updateSelectedTabIcons(qaTabs, List.of(Codicons.COMMENT_DISCUSSION, Codicons.HISTORY));
     }
 
     public void setOnMoveToFeatureListener(java.util.function.Consumer<String> listener) {

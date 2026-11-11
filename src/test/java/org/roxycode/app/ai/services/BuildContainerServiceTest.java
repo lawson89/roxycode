@@ -126,7 +126,8 @@ class BuildContainerServiceTest {
             };
         });
 
-        SandboxConfig config = new SandboxConfig("docker", List.of(), "eclipse-temurin:25-jdk", "/workspace");
+        SandboxConfig config = new SandboxConfig("docker", List.of(), List.of(), "eclipse-temurin:25-jdk",
+                "/workspace");
         ContainerExecResult res1 = buildContainerService.executeCommand(tempDir, config, Map.of("A", "1"),
                 "./mvnw compile", java.time.Duration.ofMinutes(1));
         assertEquals(0, res1.exitCode());
@@ -151,7 +152,8 @@ class BuildContainerServiceTest {
             throw new IllegalStateException("client version 1.32 is too old. Minimum supported API version is 1.44");
         });
 
-        SandboxConfig config = new SandboxConfig("docker", List.of(), "eclipse-temurin:25-jdk", "/workspace");
+        SandboxConfig config = new SandboxConfig("docker", List.of(), List.of(), "eclipse-temurin:25-jdk",
+                "/workspace");
         assertTrue(
                 assertThrows(IllegalStateException.class,
                         () -> buildContainerService.executeCommand(tempDir, config, Map.of(), "./mvnw compile",
@@ -188,7 +190,8 @@ class BuildContainerServiceTest {
             };
         });
 
-        SandboxConfig config = new SandboxConfig("docker", List.of(), "eclipse-temurin:25-jdk", "/workspace");
+        SandboxConfig config = new SandboxConfig("docker", List.of(), List.of(), "eclipse-temurin:25-jdk",
+                "/workspace");
         assertThrows(InterruptedException.class, () -> buildContainerService.executeCommand(tempDir, config, Map.of(),
                 "./mvnw test", java.time.Duration.ofMinutes(1)));
         assertTrue(sessionClosed.get(), "Active container session must be stopped when interrupted");
@@ -223,7 +226,8 @@ class BuildContainerServiceTest {
             };
         });
 
-        SandboxConfig config = new SandboxConfig("docker", List.of(), "eclipse-temurin:25-jdk", "/workspace");
+        SandboxConfig config = new SandboxConfig("docker", List.of(), List.of(), "eclipse-temurin:25-jdk",
+                "/workspace");
         ContainerExecResult res = buildContainerService.executeCommand(tempDir, config, Map.of(), "./mvnw test",
                 java.time.Duration.ofMinutes(1));
         assertTrue(res.timedOut());
@@ -252,9 +256,10 @@ class BuildContainerServiceTest {
         assertEquals(SandboxMode.DOCKER, SandboxMode.fromString("docker"));
         assertEquals(SandboxMode.DOCKER, SandboxMode.fromString(" DOCKER "));
 
-        SandboxConfig defaultCfg = new SandboxConfig(null, null, "  ", null);
+        SandboxConfig defaultCfg = new SandboxConfig(null, null, null, "  ", null);
         assertEquals("none", defaultCfg.mode());
         assertEquals(SandboxMode.NONE, defaultCfg.resolvedMode());
+        assertTrue(defaultCfg.readablePaths().isEmpty());
         assertTrue(defaultCfg.writablePaths().isEmpty());
         assertEquals(BuildContainerService.DEFAULT_CONTAINER_IMAGE, defaultCfg.image());
         assertEquals(BuildContainerService.DEFAULT_CONTAINER_WORKDIR, defaultCfg.workdir());
@@ -332,10 +337,12 @@ class BuildContainerServiceTest {
                             "(allow file-read* file-write* (subpath " + dq + rootStr + dq + "))",
                             "dir" + bs + dq + "quote" + bs + bs + "slash");
 
-            List<String> seatbeltCmd = BuildContainerService.buildSeatbeltCommand(projectRoot, resolved, "./mvnw test");
+            List<String> seatbeltCmd = BuildContainerService.buildSeatbeltCommand(projectRoot, List.of(), resolved,
+                    "./mvnw test");
             assertEquals("/usr/bin/sandbox-exec", seatbeltCmd.get(0));
             assertEquals("-p", seatbeltCmd.get(1));
-            assertEquals(BuildContainerService.buildSeatbeltProfile(projectRoot, resolved), seatbeltCmd.get(2));
+            assertEquals(BuildContainerService.buildSeatbeltProfile(projectRoot, List.of(), resolved),
+                    seatbeltCmd.get(2));
             assertEquals("sh", seatbeltCmd.get(3));
             assertEquals("-c", seatbeltCmd.get(4));
             assertEquals("./mvnw test", seatbeltCmd.get(5));

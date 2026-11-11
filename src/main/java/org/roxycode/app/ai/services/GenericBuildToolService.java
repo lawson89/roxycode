@@ -6,6 +6,8 @@ import com.fasterxml.jackson.core.JsonLocation;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
+import com.vladsch.flexmark.ast.FencedCodeBlock;
+import com.vladsch.flexmark.util.ast.Node;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -33,6 +35,7 @@ import org.apache.commons.text.StringSubstitutor;
 import org.jspecify.annotations.Nullable;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
+import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerExecResult;
 import org.roxycode.app.ai.services.BuildContainerService.SandboxConfig;
@@ -46,6 +49,7 @@ import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.ui.SwingHtmlUtils;
 import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
@@ -581,13 +585,17 @@ public class GenericBuildToolService {
     }
 
     BuildConfig parseConfig(String rawToml) throws IOException {
+        return parseConfig(rawToml, tomlMapper);
+    }
+
+    static BuildConfig parseConfig(String rawToml, TomlMapper mapper) throws IOException {
         String content = StringUtils.defaultString(rawToml);
         if (isBlankOrCommentsOnlyToml(content)) {
             throw new IOException("Invalid build.toml: configuration cannot be empty.");
         }
         BuildConfig config;
         try {
-            config = tomlMapper.readValue(BuildOutputParser.sanitizeTomlEscapes(content), BuildConfig.class);
+            config = mapper.readValue(BuildOutputParser.sanitizeTomlEscapes(content), BuildConfig.class);
         } catch (JacksonException e) {
             throw new IOException(formatTomlValidationError(e), e);
         }
@@ -794,8 +802,6 @@ public class GenericBuildToolService {
     private static final int MAX_BUILD_CONTEXT_FILE_CHARS = 8_000;
     private static final int MAX_DISCOVERED_JDKS = 25;
     private static final int MAX_ROOT_LISTING_ENTRIES = 60;
-    private static final int FENCE_MARKER_LENGTH = 3;
-    private static final char NEWLINE_CHAR = (char) 10;
     private static final List<String> BUILD_CONTEXT_FILES = List.of("pom.xml", "build.gradle", "build.gradle.kts",
             "settings.gradle", "settings.gradle.kts", "gradle.properties", ".mvn/jvm.config", "package.json",
             "pyproject.toml", "requirements.txt", "Cargo.toml", "rust-toolchain.toml", "go.mod", "CMakeLists.txt",
@@ -1022,7 +1028,6 @@ public class GenericBuildToolService {
         if (blocks.isEmpty()) {
             return null;
         }
-        TomlMapper mapper = new TomlMapper();
         String nl = System.lineSeparator();
         String validToml = null;
         for (String block : blocks) {
@@ -1031,14 +1036,11 @@ public class GenericBuildToolService {
                 continue;
             }
             try {
-                BuildConfig parsed = mapper.readValue(BuildOutputParser.sanitizeTomlEscapes(trimmed),
-                        BuildConfig.class);
-                if (parsed != null && SandboxMode.isValidMode(parsed.sandbox().mode())) {
-                    if (trimmed.endsWith(nl)) {
-                        validToml = trimmed;
-                    } else {
-                        validToml = trimmed + nl;
-                    }
+                parseConfig(trimmed, AiConfig.SHARED_TOML_MAPPER);
+                if (trimmed.endsWith(nl)) {
+                    validToml = trimmed;
+                } else {
+                    validToml = trimmed + nl;
                 }
             } catch (IOException ignored) {
                 // Not a valid build.toml block
@@ -1059,90 +1061,22 @@ public class GenericBuildToolService {
 
     private static List<String> extractFencedCodeBlocks(String markdown) {
         List<String> blocks = new ArrayList<>();
-        List<String> lines = markdown.lines().toList();
-        String activeFence = "";
-        StringBuilder currentBlock = new StringBuilder();
-        String backtickFence = "~~~".replace('~', (char) 96);
-        String nl = System.lineSeparator();
-
-        for (String line : lines) {
-            String trimmed = line.trim();
-            if (activeFence.isEmpty()) {
-                String fenceType = "";
-                if (trimmed.startsWith(backtickFence)) {
-                    fenceType = backtickFence;
-                } else if (trimmed.startsWith("~~~")) {
-                    fenceType = "~~~";
-                }
-                if (!fenceType.isEmpty()) {
-                    String info = trimmed.substring(fenceType.length()).trim().toLowerCase(java.util.Locale.ROOT);
-                    if (info.isEmpty() || "toml".equals(info) || "ini".equals(info) || "build.toml".equals(info)) {
-                        activeFence = fenceType;
-                        currentBlock.setLength(0);
-                    }
-                }
-            } else if (trimmed.startsWith(activeFence) && trimmed.substring(activeFence.length()).trim().isEmpty()) {
-                blocks.add(currentBlock.toString());
-                activeFence = "";
-            } else {
-                if (currentBlock.length() > 0) {
-                    currentBlock.append(nl);
-                }
-                currentBlock.append(line);
-            }
-        }
+        Node document = SwingHtmlUtils.getMarkdownParser().parse(markdown);
+        collectFencedCodeBlocks(document, blocks);
         return blocks;
     }
 
-    /**
-     * Extracts raw TOML content from an AI response (stripping optional Markdown code fences) and validates that it
-     * parses cleanly into a {@link BuildConfig}.
-     *
-     * @param rawResponse
-     *            the raw text returned by the model
-     * @return the validated TOML string
-     * @throws IOException
-     *             if the response is blank or cannot be parsed as a valid {@code build.toml}
-     */
-    public String extractAndValidateGeneratedToml(String rawResponse) throws IOException {
-        String extracted = extractTomlFromResponse(rawResponse);
-        if (extracted.isBlank()) {
-            throw new IOException("Roxy returned an empty build.toml configuration.");
-        }
-        validateConfig(extracted);
-        String nl = System.lineSeparator();
-        if (extracted.endsWith(nl)) {
-            return extracted;
-        }
-        return extracted + nl;
-    }
-
-    static String extractTomlFromResponse(@Nullable String rawResponse) {
-        String trimmed = StringUtils.trimToEmpty(rawResponse);
-        if (trimmed.isEmpty()) {
-            return "";
-        }
-        String backtickFence = "~~~".replace('~', (char) 96);
-        String fence = null;
-        int fenceStart = trimmed.indexOf(backtickFence);
-        if (fenceStart >= 0) {
-            fence = backtickFence;
-        } else {
-            fenceStart = trimmed.indexOf("~~~");
-            if (fenceStart >= 0) {
-                fence = "~~~";
-            }
-        }
-        if (fence != null && fenceStart >= 0) {
-            int firstNewline = trimmed.indexOf(NEWLINE_CHAR, fenceStart + FENCE_MARKER_LENGTH);
-            if (firstNewline > fenceStart) {
-                int fenceEnd = trimmed.indexOf(fence, firstNewline + 1);
-                if (fenceEnd > firstNewline) {
-                    return trimmed.substring(firstNewline + 1, fenceEnd).trim();
+    private static void collectFencedCodeBlocks(Node parent, List<String> blocks) {
+        for (Node child = parent.getFirstChild(); child != null; child = child.getNext()) {
+            if (child instanceof FencedCodeBlock fenced) {
+                String info = fenced.getInfo().toString().trim().toLowerCase(java.util.Locale.ROOT);
+                if (info.isEmpty() || "toml".equals(info) || "ini".equals(info) || "build.toml".equals(info)) {
+                    blocks.add(fenced.getContentChars().toString());
                 }
+            } else {
+                collectFencedCodeBlocks(child, blocks);
             }
         }
-        return trimmed;
     }
 
     public void saveConfigContent(String content) throws IOException {

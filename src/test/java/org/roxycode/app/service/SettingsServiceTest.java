@@ -46,12 +46,12 @@ class SettingsServiceTest {
         service.setSettingsPathOverride(settingsFile);
         assertEquals(tempDir.resolve("custom-roxy"), service.getRoxyHomeDir());
         assertFalse(service.hasSettingsFile());
-        assertFalse(service.hasConfiguredApiKey());
+        assertFalse(service.hasConfiguredCredentials());
 
         service.getSettings().setGeminiApiKey("   ");
         service.saveSettings();
         assertTrue(service.hasSettingsFile());
-        assertFalse(service.hasConfiguredApiKey());
+        assertFalse(service.hasConfiguredCredentials());
 
         AppSettings settings = service.getSettings();
         settings.setTheme("Darcula");
@@ -63,7 +63,7 @@ class SettingsServiceTest {
 
         assertTrue(listenerCalled.get(), "SettingsChangedEvent should be published when settings are saved");
         assertTrue(service.hasSettingsFile());
-        assertTrue(service.hasConfiguredApiKey());
+        assertTrue(service.hasConfiguredCredentials());
         assertEquals(ThinkingLevel.HIGH, SettingsService.resolveGlobalThinkingLevel(service));
 
         SettingsService service2 = new SettingsService(null, null);
@@ -119,19 +119,16 @@ class SettingsServiceTest {
         assertEquals(AppSettings.DEFAULT_VERTEX_LOCATION, settings.getVertexLocation());
         assertEquals("", settings.getVertexCredentialsPath());
         assertFalse(service.hasConfiguredCredentials());
-        assertFalse(service.hasConfiguredApiKey());
         assertFalse(SettingsService.hasConfiguredCredentials(null));
 
         settings.setVertexAiEnabled(true);
         assertFalse(service.hasConfiguredCredentials(), "Vertex AI mode without projectId should not be ready");
-        assertFalse(service.hasConfiguredApiKey());
 
         settings.setVertexProjectId("my-gcp-project");
         settings.setVertexLocation("us-central1");
         Path credsFile = tempDir.resolve("sa-key.json");
         settings.setVertexCredentialsPath(credsFile.toString());
         assertTrue(service.hasConfiguredCredentials());
-        assertTrue(service.hasConfiguredApiKey());
 
         settings.setVertexLocation("   ");
         assertEquals(AppSettings.DEFAULT_VERTEX_LOCATION, settings.getVertexLocation());

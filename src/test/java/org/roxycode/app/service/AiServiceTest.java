@@ -316,19 +316,19 @@ class AiServiceTest {
         assertEquals(msg, aiService.chat("default", null, "Hello", null));
         assertEquals(2, captureTurnCompleteEvent().totalTurns());
 
-        AtomicReference<String> reloadedKeyRef = new AtomicReference<>();
-        aiService.setChatClientBuilderFactory(key -> {
-            reloadedKeyRef.set(key);
+        AtomicReference<AiConfig.GenAiConnectionConfig> reloadedKeyRef = new AtomicReference<>();
+        aiService.setConnectionChatClientBuilderFactory(cfg -> {
+            reloadedKeyRef.set(cfg);
             return chatClientBuilder;
         });
         settings.setGeminiApiKey("  hot-reloaded-key-123  ");
         aiService.onSettingsChanged(new SettingsChangedEvent(settings));
-        assertEquals("hot-reloaded-key-123", reloadedKeyRef.get());
-        assertEquals("hot-reloaded-key-123", aiService.getActiveApiKey());
+        assertEquals("hot-reloaded-key-123", reloadedKeyRef.get().apiKey());
+        assertEquals("hot-reloaded-key-123", aiService.getActiveConnectionConfig().apiKey());
 
         settings.setGeminiApiKey("   ");
         aiService.onSettingsChanged(new SettingsChangedEvent(settings));
-        assertEquals("", aiService.getActiveApiKey());
+        assertEquals("", aiService.getActiveConnectionConfig().apiKey());
 
         AiMemoryConfig memoryConfig = new AiMemoryConfig();
         ChatMemory dynamicMemory = memoryConfig.chatMemory(memoryConfig.chatMemoryRepository(), settingsService);
@@ -350,9 +350,11 @@ class AiServiceTest {
         assertTrue(shrunkOnAdd.get(0) instanceof SystemMessage);
         assertEquals("u3", shrunkOnAdd.get(1).getText());
 
-        assertThrows(IllegalArgumentException.class, () -> aiService.testConnection("   ", "gemini-3.5-flash"));
-        aiService.setConnectionTester((key, model) -> key + ":" + model);
-        assertEquals("my-key:gemini-3.5-pro", aiService.testConnection("  my-key  ", " gemini-3.5-pro "));
+        assertThrows(IllegalArgumentException.class,
+                () -> aiService.testConnection(AiConfig.GenAiConnectionConfig.forApiKey("   "), "gemini-3.5-flash"));
+        aiService.setConnectionConfigTester((cfg, model) -> cfg.apiKey() + ":" + model);
+        assertEquals("my-key:gemini-3.5-pro",
+                aiService.testConnection(AiConfig.GenAiConnectionConfig.forApiKey("  my-key  "), " gemini-3.5-pro "));
 
         AtomicReference<AiConfig.GenAiConnectionConfig> reloadedConfigRef = new AtomicReference<>();
         aiService.setConnectionChatClientBuilderFactory(cfg -> {
@@ -412,17 +414,6 @@ class AiServiceTest {
         verify(requestSpec, never()).tools(any(Object[].class));
         GoogleGenAiChatOptions searchOptions = searchOptionsCaptor.getValue().build();
         assertTrue(searchOptions.getGoogleSearchRetrieval());
-
-        clearInvocations(requestSpec);
-        String rawTomlResp = """
-                  [commands]
-                compile = './mvnw test-compile'  """;
-        when(responseSpec.chatResponse()).thenReturn(buildChatResponse(rawTomlResp, "STOP", null));
-        assertThrows(IllegalArgumentException.class, () -> aiService.generateBuildToml("   "));
-        String generatedToml = aiService.generateBuildToml("  ## Target Build Template (maven)  ");
-        assertTrue(generatedToml.contains("compile = './mvnw test-compile'"));
-        verify(requestSpec).system(AiService.BUILD_TOML_GENERATOR_SYSTEM_PROMPT);
-        verify(requestSpec).user("## Target Build Template (maven)");
     }
 
     static Stream<Arguments> finishReasonFormattingCases() {

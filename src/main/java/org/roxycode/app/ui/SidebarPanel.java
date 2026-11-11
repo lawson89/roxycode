@@ -163,10 +163,10 @@ final class SidebarPanel extends JPanel {
         return settingsBtn.isWaitingApproval();
     }
 
-    public void updateNavigationAccess(boolean hasApiKey, boolean hasProject, boolean buildConfirmed) {
+    public void updateNavigationAccess(boolean hasCredentials, boolean hasProject, boolean buildConfirmed) {
         applyButtonAccess(settingsBtn, true, null);
 
-        if (!hasApiKey) {
+        if (!hasCredentials) {
             applyButtonAccess(qaBtn, false, MISSING_API_KEY_TOOLTIP);
             applyButtonAccess(taskBtn, false, MISSING_API_KEY_TOOLTIP);
             applyButtonAccess(contextMgrBtn, false, MISSING_API_KEY_TOOLTIP);
