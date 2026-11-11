@@ -20,6 +20,7 @@ final class SidebarPanel extends JPanel {
     static final String CARD_CONTEXT = MainFrame.CONTEXT_MGR_VIEW;
     static final String CARD_MEMORY = MainFrame.MEMORY_VIEW;
     static final String CARD_BUILD = MainFrame.BUILD_CONFIG_VIEW;
+    static final String CARD_PROJECT_MODEL = MainFrame.PROJECT_MODEL_VIEW;
     static final String CARD_SETTINGS = MainFrame.SETTINGS_VIEW;
     static final String CARD_JEXL_API = MainFrame.API_VIEW;
     static final String CARD_TOOLS = MainFrame.TOOLS_VIEW;
@@ -74,6 +75,7 @@ final class SidebarPanel extends JPanel {
 
         add(createSectionHeader("SETTINGS"), "gaptop 12");
         buildConfigBtn = createNavButton(PROJECT_SETTINGS_LABEL, MainFrame.BUILD_CONFIG_VIEW, Codicons.PACKAGE);
+        cardButtons.put(MainFrame.PROJECT_MODEL_VIEW, buildConfigBtn);
         add(buildConfigBtn);
         settingsBtn = createNavButton(SETTINGS_TOOLS_LABEL, MainFrame.SETTINGS_VIEW, Codicons.SETTINGS_GEAR);
         settingsBtn.setAttentionTooltip(TOOLS_ATTENTION_TOOLTIP);

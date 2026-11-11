@@ -194,10 +194,22 @@ class MainFrameTest {
             assertNull(taskBtn.getToolTipText());
 
             frame.showCard(MainFrame.BUILD_CONFIG_VIEW);
+            assertEquals(BuildConfigPanel.TAB_INDEX_BUILD_CONFIG, buildConfigPanel.settingsTabs.getSelectedIndex());
             SwingTestUtils.clickOnEdt(buildConfigPanel.saveButton);
             SwingTestUtils.awaitFuture(buildConfigPanel.lastAsyncFuture);
             assertEquals(MainFrame.BUILD_CONFIG_VIEW, frame.currentCard,
                     "Subsequent saves on an already-confirmed project should stay on Project Settings");
+
+            // Navigating to PROJECT_MODEL_VIEW selects the AI Model Override tab and keeps Project Settings selected
+            frame.showCard(MainFrame.PROJECT_MODEL_VIEW);
+            assertEquals(MainFrame.PROJECT_MODEL_VIEW, frame.currentCard);
+            assertEquals(BuildConfigPanel.TAB_INDEX_AI_MODEL, buildConfigPanel.settingsTabs.getSelectedIndex());
+            assertTrue(buildConfigBtn.isSelected());
+
+            // Switching back to Tab 1 in BuildConfigPanel updates currentCard to BUILD_CONFIG_VIEW
+            SwingTestUtils.runOnEdt(() -> buildConfigPanel.selectBuildConfigTab());
+            assertEquals(MainFrame.BUILD_CONFIG_VIEW, frame.currentCard);
+            assertEquals(BuildConfigPanel.TAB_INDEX_BUILD_CONFIG, buildConfigPanel.settingsTabs.getSelectedIndex());
 
             frame.showCard(MainFrame.SETTINGS_VIEW);
             SwingTestUtils.clickOnEdt(settingsPanel.saveButton);

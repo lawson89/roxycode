@@ -83,8 +83,8 @@ class HeaderPanelTest {
                 "Active Gemini model: gemini-4-argon (Thinking: Model Default) — Click to configure AI model & thinking level",
                 header.modelLabel.getToolTipText());
 
-        // With active project and API key, clicking modelLabel navigates to BUILD_CONFIG, and groundingLabel to
-        // SETTINGS
+        // With active project and credentials, clicking modelLabel navigates to PROJECT_MODEL_VIEW, and groundingLabel
+        // to SETTINGS
         SwingTestUtils.runOnEdt(() -> {
             MouseEvent modelClick = new MouseEvent(header.modelLabel, MouseEvent.MOUSE_CLICKED,
                     System.currentTimeMillis(), 0, 4, 4, 1, false);
@@ -92,7 +92,7 @@ class HeaderPanelTest {
                 listener.mouseClicked(modelClick);
             }
         });
-        assertEquals(MainFrame.BUILD_CONFIG_VIEW, navigatedCard.get());
+        assertEquals(MainFrame.PROJECT_MODEL_VIEW, navigatedCard.get());
 
         SwingTestUtils.runOnEdt(() -> {
             MouseEvent groundingClick = new MouseEvent(header.groundingLabel, MouseEvent.MOUSE_CLICKED,

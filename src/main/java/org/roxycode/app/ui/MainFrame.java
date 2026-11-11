@@ -76,6 +76,7 @@ public final class MainFrame extends JPanel {
     static final String TOOLS_VIEW = "TOOLS";
     static final String SETTINGS_VIEW = "SETTINGS";
     static final String BUILD_CONFIG_VIEW = "BUILD_CONFIG";
+    static final String PROJECT_MODEL_VIEW = "PROJECT_MODEL";
     static final String CONTEXT_MGR_VIEW = "CONTEXT_MGR";
     static final String MEMORY_VIEW = "MEMORY";
     static final int MIN_WINDOW_WIDTH = 800;
@@ -94,6 +95,7 @@ public final class MainFrame extends JPanel {
     private final QaWorkspacePanel qaWorkspacePanel;
     private final TaskWorkspacePanel taskWorkspacePanel;
     private final CodebaseCachePanel codebaseCachePanel;
+    private final BuildConfigPanel buildConfigPanel;
     private final AgentMemoryPanel agentMemoryPanel;
     private final transient PlanService planService;
     private final transient UiComponents.UiGuard hubTabGuard = new UiComponents.UiGuard();
@@ -123,6 +125,7 @@ public final class MainFrame extends JPanel {
         this.qaWorkspacePanel = qaWorkspacePanel;
         this.taskWorkspacePanel = taskWorkspacePanel;
         this.codebaseCachePanel = codebaseCachePanel;
+        this.buildConfigPanel = buildConfigPanel;
         this.agentMemoryPanel = agentMemoryPanel;
         if (taskWorkspacePanel != null) {
             this.planService = taskWorkspacePanel.planService;
@@ -247,7 +250,7 @@ public final class MainFrame extends JPanel {
 
     static boolean isProjectDependentCard(String cardName) {
         return QA_VIEW.equals(cardName) || TASK_VIEW.equals(cardName) || CACHE_VIEW.equals(cardName)
-                || BUILD_CONFIG_VIEW.equals(cardName);
+                || BUILD_CONFIG_VIEW.equals(cardName) || PROJECT_MODEL_VIEW.equals(cardName);
     }
 
     @EventListener
@@ -637,6 +640,20 @@ public final class MainFrame extends JPanel {
             refreshHubTabIcons();
         });
 
+        if (buildConfigPanel != null && buildConfigPanel.settingsTabs != null) {
+            buildConfigPanel.settingsTabs.addChangeListener(e -> {
+                if (hubTabGuard.isActive()) {
+                    return;
+                }
+                if (buildConfigPanel.settingsTabs.getSelectedIndex() == BuildConfigPanel.TAB_INDEX_AI_MODEL) {
+                    currentCard = PROJECT_MODEL_VIEW;
+                } else {
+                    currentCard = BUILD_CONFIG_VIEW;
+                }
+                refreshHubTabIcons();
+            });
+        }
+
         contentArea.add(qaWorkspacePanel, QA_VIEW);
         contentArea.add(taskWorkspacePanel, TASK_VIEW);
         contentArea.add(contextHubTabs, CONTEXT_MGR_VIEW);
@@ -981,6 +998,9 @@ public final class MainFrame extends JPanel {
     private void refreshHubTabIcons() {
         updateSingleHubTabIcons(contextHubTabs, List.of(Codicons.FILE, Codicons.DATABASE, Codicons.CODE));
         updateSingleHubTabIcons(settingsHubTabs, List.of(Codicons.SETTINGS_GEAR, Codicons.TOOLS));
+        if (buildConfigPanel != null) {
+            updateSingleHubTabIcons(buildConfigPanel.settingsTabs, List.of(Codicons.PACKAGE, Codicons.HUBOT));
+        }
     }
 
     private static void updateSingleHubTabIcons(JTabbedPane tabs, List<Codicons> icons) {
@@ -1028,6 +1048,9 @@ public final class MainFrame extends JPanel {
         if (TOOLS_VIEW.equals(cardName) || SETTINGS_VIEW.equals(cardName)) {
             return SETTINGS_VIEW;
         }
+        if (PROJECT_MODEL_VIEW.equals(cardName) || BUILD_CONFIG_VIEW.equals(cardName)) {
+            return BUILD_CONFIG_VIEW;
+        }
         return cardName;
     }
 
@@ -1047,6 +1070,13 @@ public final class MainFrame extends JPanel {
                     settingsHubTabs.setSelectedIndex(TAB_INDEX_FIRST);
                 } else if (TOOLS_VIEW.equals(cardName) && settingsHubTabs.getTabCount() > TAB_INDEX_SECOND) {
                     settingsHubTabs.setSelectedIndex(TAB_INDEX_SECOND);
+                }
+            }
+            if (buildConfigPanel != null) {
+                if (BUILD_CONFIG_VIEW.equals(cardName)) {
+                    buildConfigPanel.selectBuildConfigTab();
+                } else if (PROJECT_MODEL_VIEW.equals(cardName)) {
+                    buildConfigPanel.selectAiModelTab();
                 }
             }
         });

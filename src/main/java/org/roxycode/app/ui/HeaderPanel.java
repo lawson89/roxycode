@@ -286,9 +286,9 @@ final class HeaderPanel extends JPanel {
             return;
         }
         boolean hasProject = projectService != null && projectService.hasActiveProject();
-        boolean hasApiKey = settingsService != null && settingsService.hasConfiguredApiKey();
-        if (hasProject && hasApiKey) {
-            onNavigateToCard.accept(MainFrame.BUILD_CONFIG_VIEW);
+        boolean hasCredentials = settingsService != null && settingsService.hasConfiguredCredentials();
+        if (hasProject && hasCredentials) {
+            onNavigateToCard.accept(MainFrame.PROJECT_MODEL_VIEW);
         } else {
             onNavigateToCard.accept(MainFrame.SETTINGS_VIEW);
         }

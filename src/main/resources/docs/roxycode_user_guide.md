@@ -55,9 +55,11 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
 ## 3. Configuration & Settings & Tools Hub
 
 ### Project Settings & build.toml (Project Settings Sidebar View)
-- **AI Model & Thinking Overrides**: Optionally override the Global Settings Gemini model and thinking level (ADAPTIVE, MINIMAL/NONE, LOW, MEDIUM, HIGH, or model default) for the active project. When **Adaptive (Phase-Aware)** is selected, Roxy dynamically adjusts thinking per sub-turn (PLAN: HIGH while designing the blueprint -> LOW after submitPlan; CODE: LOW for fast execution -> HIGH after any tool/build/test failure; REVIEW: MEDIUM; EXPLORE: LOW on initial discovery -> MEDIUM on synthesis).
-  - **Build Configuration (<projectDataDir>/build.toml)**:
+- **Two-Tabbed Project Settings Hub**:
+  - **Build Configuration (<projectDataDir>/build.toml — Tab 1)**:
     - Must be reviewed and confirmed (**Confirm & Save Settings**) before Build Feature chat is unlocked for a project. Built-in templates are provided for Maven, Gradle, npm/Node, Python, Rust, Go, CMake, and Default, or click **Configure with Roxy** to open an interactive **Ask Roxy** session where Roxy inspects your project files and installed host toolchains, asks clarifying questions if needed, and generates a tailored `build.toml` with a one-click **[Apply to build.toml]** action.
+  - **AI Model Override (Tab 2 — or click the active model pill in the top header bar)**:
+    - Optionally override the Global Settings Gemini model and thinking level (ADAPTIVE, MINIMAL/NONE, LOW, MEDIUM, HIGH, or model default) for the active project and save independently via **Save Model Settings**. When **Adaptive (Phase-Aware)** is selected, Roxy dynamically adjusts thinking per sub-turn (PLAN: HIGH while designing the blueprint -> LOW after submitPlan; CODE: LOW for fast execution -> HIGH after any tool/build/test failure; REVIEW: MEDIUM; EXPLORE: LOW on initial discovery -> MEDIUM on synthesis).
     - **[commands]**: Shell commands executed from the project root:
       - install: Sync dependencies (e.g., './mvnw dependency:resolve', 'npm install').
       - clean: Clean build artifacts.

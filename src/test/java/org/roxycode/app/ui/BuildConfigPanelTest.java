@@ -61,7 +61,7 @@ class BuildConfigPanelTest {
     }
 
     @Test
-    void testLoadAndSaveConfigRunOffEdtAndSaveProjectModelOverride() throws Exception {
+    void testTabbedLayoutIndependentBuildConfigAndModelOverrideSaves() throws Exception {
         AtomicBoolean loadCalledOnEdt = new AtomicBoolean(false);
         AtomicBoolean saveCalledOnEdt = new AtomicBoolean(false);
         AtomicBoolean modelSaveCalledOnEdt = new AtomicBoolean(false);
@@ -87,11 +87,21 @@ class BuildConfigPanelTest {
 
         BuildConfigPanel panel = createPanelOnEdt();
         assertFalse(loadCalledOnEdt.get());
+
+        // Verify two-tab layout structure
+        assertEquals(2, panel.settingsTabs.getTabCount());
+        assertEquals(BuildConfigPanel.TAB_BUILD_CONFIG_TITLE,
+                panel.settingsTabs.getTitleAt(BuildConfigPanel.TAB_INDEX_BUILD_CONFIG));
+        assertEquals(BuildConfigPanel.TAB_AI_MODEL_TITLE,
+                panel.settingsTabs.getTitleAt(BuildConfigPanel.TAB_INDEX_AI_MODEL));
+        assertEquals(BuildConfigPanel.TAB_INDEX_BUILD_CONFIG, panel.settingsTabs.getSelectedIndex());
+        assertSame(panel.buildTabPanel, panel.settingsTabs.getComponentAt(BuildConfigPanel.TAB_INDEX_BUILD_CONFIG));
+        assertSame(panel.modelTabPanel, panel.settingsTabs.getComponentAt(BuildConfigPanel.TAB_INDEX_AI_MODEL));
+
+        // Tab 1: Build Configuration header & controls
         assertEquals(BuildConfigPanel.TITLE_TEXT, panel.titleLabel.getText());
         assertEquals(UiComponents.formatWrappingHtml(BuildConfigPanel.SUBTITLE_TEXT), panel.subtitleLabel.getText());
         assertEquals(BuildConfigPanel.BUILD_CONFIG_HINT_TEXT, panel.buildConfigHintLabel.getText());
-        assertNotNull(panel.thinkingLevelInfoIcon.getToolTipText());
-        assertNull(panel.thinkingLevelInfoIcon.getClientProperty(FlatClientProperties.STYLE));
         assertSame(panel.buildSectionHeaderLabel.getParent(), panel.buildConfigHintLabel.getParent());
         assertSame(panel.buildSectionHeaderLabel.getParent(), panel.configureWithRoxyButton.getParent());
         assertSame(panel.buildSectionHeaderLabel.getParent(), panel.statusLabel.getParent());
@@ -106,6 +116,16 @@ class BuildConfigPanelTest {
         assertEquals(UiComponents.formatWrappingHtml(BuildConfigPanel.UNCONFIRMED_BUILD_NOTICE_TEXT),
                 panel.unconfirmedBanner.messageLabel.getText());
 
+        // Tab 2: AI Model Override header & controls
+        assertEquals(BuildConfigPanel.MODEL_TITLE_TEXT, panel.modelTitleLabel.getText());
+        assertEquals(UiComponents.formatWrappingHtml(BuildConfigPanel.MODEL_SUBTITLE_TEXT),
+                panel.modelSubtitleLabel.getText());
+        assertEquals(BuildConfigPanel.MODEL_SAVE_BUTTON_TEXT, panel.modelSaveButton.getText());
+        assertSame(panel.modelSaveButton.getParent(), panel.modelStatusLabel.getParent());
+        assertSame(panel.modelTitleLabel.getParent().getParent(), panel.modelSaveButton.getParent().getParent());
+        assertNotNull(panel.thinkingLevelInfoIcon.getToolTipText());
+        assertNull(panel.thinkingLevelInfoIcon.getClientProperty(FlatClientProperties.STYLE));
+
         JComboBox<GeminiModelConfig> modelCombo = panel.modelCombo;
         assertEquals(3, modelCombo.getItemCount());
         assertEquals("", modelCombo.getItemAt(0).apiName());
@@ -119,6 +139,8 @@ class BuildConfigPanelTest {
         java.util.concurrent.atomic.AtomicInteger confirmCallbackCount = new java.util.concurrent.atomic.AtomicInteger();
         panel.setOnConfirmSavedCallback(confirmCallbackCount::incrementAndGet);
 
+        // Save Tab 1 (Build Configuration) -> saves build.toml & sets buildConfirmed=true WITHOUT touching model
+        // overrides
         String updatedToml = """
                 [commands]
                 compile = 'mvn test'
@@ -128,13 +150,16 @@ class BuildConfigPanelTest {
             UiComponents.selectThinkingLevelOptionById(thinkingCombo, "HIGH");
             assertEquals("gemini-3.5-pro", panel.modelApiBadgeLabel.getText());
             assertEquals("Advanced reasoning model", panel.modelDescriptionArea.getText());
+            assertTrue(panel.hasUnsavedModelChanges());
+            assertFalse(panel.hasUnsavedChanges(), "Model dropdown changes must not mark build.toml dirty");
+
             panel.textArea.setText(updatedToml);
+            assertTrue(panel.hasUnsavedChanges());
             panel.saveButton.doClick();
         });
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
 
         assertFalse(saveCalledOnEdt.get());
-        assertFalse(modelSaveCalledOnEdt.get());
         assertTrue(panel.saveButton.isEnabled());
         assertEquals(BuildConfigPanel.SAVED_FEEDBACK_BUTTON_TEXT, panel.saveButton.getText());
         assertFalse(panel.unconfirmedBanner.isVisible());
@@ -142,10 +167,37 @@ class BuildConfigPanelTest {
         assertTrue(panel.statusLabel.isVisible());
         assertFalse(panel.buildConfigHintLabel.isVisible());
         assertEquals(1, confirmCallbackCount.get());
-        verify(projectService).setProjectGeminiModel("gemini-3.5-pro");
-        verify(projectService).setProjectThinkingLevel("HIGH");
         verify(projectService).setBuildConfirmed(true);
         verify(buildToolService).saveConfigContent(updatedToml);
+        verify(projectService, never()).setProjectGeminiModel(anyString());
+        verify(projectService, never()).setProjectThinkingLevel(anyString());
+        assertTrue(panel.hasUnsavedModelChanges(), "Unsaved model changes remain until modelSaveButton is clicked");
+
+        // Save Tab 2 (AI Model Override) -> saves model & thinking level WITHOUT touching build.toml
+        clearInvocations(buildToolService);
+        SwingTestUtils.runOnEdt(() -> {
+            panel.selectAiModelTab();
+            assertEquals(BuildConfigPanel.TAB_INDEX_AI_MODEL, panel.settingsTabs.getSelectedIndex());
+            panel.modelSaveButton.doClick();
+        });
+        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
+
+        assertFalse(modelSaveCalledOnEdt.get());
+        assertTrue(panel.modelSaveButton.isEnabled());
+        assertEquals(BuildConfigPanel.MODEL_SAVED_FEEDBACK_BUTTON_TEXT, panel.modelSaveButton.getText());
+        assertEquals(BuildConfigPanel.MODEL_SAVED_STATUS_TEXT, panel.modelStatusLabel.getText());
+        assertFalse(panel.hasUnsavedModelChanges());
+        verify(projectService).setProjectGeminiModel("gemini-3.5-pro");
+        verify(projectService).setProjectThinkingLevel("HIGH");
+        verify(buildToolService, never()).saveConfigContent(anyString());
+
+        // Firing modelSaveFeedbackTimer restores "Save Model Settings" button text
+        SwingTestUtils.runOnEdt(() -> {
+            for (java.awt.event.ActionListener listener : panel.modelSaveFeedbackTimer.getActionListeners()) {
+                listener.actionPerformed(null);
+            }
+        });
+        assertEquals(BuildConfigPanel.MODEL_SAVE_BUTTON_TEXT, panel.modelSaveButton.getText());
 
         SwingTestUtils.clickOnEdt(panel.saveButton);
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
@@ -191,6 +243,7 @@ class BuildConfigPanelTest {
         BuildConfigPanel panel = createPanelOnEdt();
         assertEquals(BuildConfigPanel.SAVE_BUTTON_TEXT, panel.saveButton.getText());
         assertFalse(panel.hasUnsavedChanges());
+        assertFalse(panel.hasUnsavedModelChanges());
 
         // Clicking save transitions to immediate post-save feedback state ("Confirmed & Saved!")
         SwingTestUtils.clickOnEdt(panel.saveButton);
@@ -208,9 +261,9 @@ class BuildConfigPanelTest {
         assertEquals(BuildConfigPanel.CONFIRMED_BUTTON_TEXT, panel.saveButton.getText());
         assertFalse(panel.hasUnsavedChanges());
 
-        // Editing TOML marks panel dirty and transitions button back to "Confirm & Save Settings"
+        // Editing TOML marks build tab dirty and transitions button back to "Confirm & Save Settings"
         String originalToml = SwingTestUtils.callOnEdt(panel.textArea::getText);
-        SwingTestUtils.runOnEdt(() -> panel.textArea.setText(originalToml + "\n# dirty edit"));
+        SwingTestUtils.runOnEdt(() -> panel.textArea.setText(originalToml + "# dirty edit"));
         assertTrue(panel.hasUnsavedChanges());
         assertEquals(BuildConfigPanel.SAVE_BUTTON_TEXT, panel.saveButton.getText());
 
@@ -219,23 +272,22 @@ class BuildConfigPanelTest {
         assertFalse(panel.hasUnsavedChanges());
         assertEquals(BuildConfigPanel.CONFIRMED_BUTTON_TEXT, panel.saveButton.getText());
 
-        // Changing modelCombo marks panel dirty
+        // Changing modelCombo or thinkingLevelCombo marks model tab dirty without affecting build tab confirmed state
         SwingTestUtils.runOnEdt(() -> panel.modelCombo.setSelectedIndex(1));
-        assertTrue(panel.hasUnsavedChanges());
-        assertEquals(BuildConfigPanel.SAVE_BUTTON_TEXT, panel.saveButton.getText());
+        assertTrue(panel.hasUnsavedModelChanges());
+        assertFalse(panel.hasUnsavedChanges());
+        assertEquals(BuildConfigPanel.CONFIRMED_BUTTON_TEXT, panel.saveButton.getText());
 
         SwingTestUtils.runOnEdt(() -> panel.modelCombo.setSelectedIndex(0));
+        assertFalse(panel.hasUnsavedModelChanges());
+
+        SwingTestUtils.runOnEdt(() -> UiComponents.selectThinkingLevelOptionById(panel.thinkingLevelCombo, "HIGH"));
+        assertTrue(panel.hasUnsavedModelChanges());
         assertFalse(panel.hasUnsavedChanges());
         assertEquals(BuildConfigPanel.CONFIRMED_BUTTON_TEXT, panel.saveButton.getText());
-
-        // Changing thinkingLevelCombo marks panel dirty
-        SwingTestUtils.runOnEdt(() -> UiComponents.selectThinkingLevelOptionById(panel.thinkingLevelCombo, "HIGH"));
-        assertTrue(panel.hasUnsavedChanges());
-        assertEquals(BuildConfigPanel.SAVE_BUTTON_TEXT, panel.saveButton.getText());
 
         SwingTestUtils.runOnEdt(() -> UiComponents.selectThinkingLevelOptionById(panel.thinkingLevelCombo, ""));
-        assertFalse(panel.hasUnsavedChanges());
-        assertEquals(BuildConfigPanel.CONFIRMED_BUTTON_TEXT, panel.saveButton.getText());
+        assertFalse(panel.hasUnsavedModelChanges());
     }
 
     @Test
@@ -316,7 +368,7 @@ class BuildConfigPanelTest {
         assertEquals("Roxy configuration failed: Invalid TOML syntax", panel.statusLabel.getText());
         assertEquals("# Unsaved user edit", panel.textArea.getText());
 
-        // Verify interactive callback routing and applyGeneratedBuildToml
+        // Verify interactive callback routing and applyGeneratedBuildToml switches back to Build Configuration tab
         String[] interactivePromptCaptured = new String[1];
         when(buildToolService.buildInteractiveConfigurationPrompt(eq("maven"), anyString()))
                 .thenReturn("Interactive prompt for Ask Roxy");
@@ -325,7 +377,12 @@ class BuildConfigPanelTest {
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
         assertEquals("Interactive prompt for Ask Roxy", interactivePromptCaptured[0]);
 
-        SwingTestUtils.runOnEdt(() -> panel.applyGeneratedBuildToml(tailoredToml));
+        SwingTestUtils.runOnEdt(() -> {
+            panel.selectAiModelTab();
+            assertEquals(BuildConfigPanel.TAB_INDEX_AI_MODEL, panel.settingsTabs.getSelectedIndex());
+            panel.applyGeneratedBuildToml(tailoredToml);
+        });
+        assertEquals(BuildConfigPanel.TAB_INDEX_BUILD_CONFIG, panel.settingsTabs.getSelectedIndex());
         assertEquals(tailoredToml, panel.textArea.getText());
         assertTrue(panel.hasUnsavedChanges());
         assertEquals(BuildConfigPanel.APPLIED_FROM_ASK_ROXY_STATUS, panel.statusLabel.getText());

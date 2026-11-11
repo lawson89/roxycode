@@ -41,8 +41,14 @@ final class BuildConfigPanel extends JPanel {
 
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(BuildConfigPanel.class);
-    static final String TITLE_TEXT = "Project Settings";
-    static final String SUBTITLE_TEXT = "Configure project-specific Gemini model override and build execution commands (build.toml).";
+    static final int TAB_INDEX_BUILD_CONFIG = 0;
+    static final int TAB_INDEX_AI_MODEL = 1;
+    static final String TAB_BUILD_CONFIG_TITLE = "Build Configuration";
+    static final String TAB_AI_MODEL_TITLE = "AI Model Override";
+    static final String TITLE_TEXT = "Build Configuration (build.toml)";
+    static final String SUBTITLE_TEXT = "Configure project-specific build, test, lint, and sandbox execution commands (build.toml).";
+    static final String MODEL_TITLE_TEXT = "AI Model Override";
+    static final String MODEL_SUBTITLE_TEXT = "Override the default Global Settings Gemini model and thinking level specifically for the active project.";
     static final String SECTION_AI_MODEL_TITLE = "AI Model Override";
     static final String SECTION_BUILD_CONFIG_TITLE = "Build Configuration (build.toml)";
     static final String BUILD_CONFIG_HINT_TEXT = "Need help customizing build.toml or regexes for your stack? Ask Roxy!";
@@ -53,9 +59,13 @@ final class BuildConfigPanel extends JPanel {
     static final String SAVE_BUTTON_TEXT = "Confirm & Save Settings";
     static final String SAVED_FEEDBACK_BUTTON_TEXT = "Confirmed & Saved!";
     static final String CONFIRMED_BUTTON_TEXT = "Settings Confirmed";
+    static final String MODEL_SAVE_BUTTON_TEXT = "Save Model Settings";
+    static final String MODEL_SAVED_FEEDBACK_BUTTON_TEXT = "Saved!";
+    static final String MODEL_SAVED_STATUS_TEXT = "Model override settings saved!";
     private static final String DEFAULT_TEMPLATE_ID = "default";
     private static final String HEADER_FONT_STYLE = "font: bold +2";
     private static final String SAVE_BUTTON_BASE_STYLE = "arc: 8; font: bold; ";
+    private static final String GROW_FILL = "[grow, fill]";
     static final String UNCONFIRMED_BUILD_NOTICE_TEXT = "Build configuration was initialized from the auto-detected template. Please review the commands below (or click 'Configure with Roxy') and click 'Confirm & Save Settings'.";
     static final String BUILD_TOML_GUIDE_TOOLTIP_HTML = """
             <html><div style='width: 390px;'>
@@ -71,8 +81,13 @@ final class BuildConfigPanel extends JPanel {
     private final transient SettingsService settingsService;
     private final transient ProjectService projectService;
     private final transient AiService aiService;
+    final JTabbedPane settingsTabs;
+    final JPanel buildTabPanel;
+    final JPanel modelTabPanel;
     final JLabel titleLabel;
     final JLabel subtitleLabel;
+    final JLabel modelTitleLabel;
+    final JLabel modelSubtitleLabel;
     final JPanel modelCardPanel;
     final JPanel buildCardPanel;
     final JLabel modelSectionHeaderLabel;
@@ -81,6 +96,10 @@ final class BuildConfigPanel extends JPanel {
     final JLabel thinkingLevelInfoIcon;
     final JLabel modelApiBadgeLabel;
     final JTextArea modelDescriptionArea;
+    final JButton modelSaveButton;
+    final JLabel modelStatusLabel;
+    final Timer modelStatusTimer;
+    final Timer modelSaveFeedbackTimer;
     final JLabel buildSectionHeaderLabel;
     final JLabel buildConfigInfoIcon;
     final JLabel buildConfigHintLabel;
@@ -98,6 +117,7 @@ final class BuildConfigPanel extends JPanel {
     private final transient UiComponents.UiGuard textUpdateGuard = new UiComponents.UiGuard();
     private boolean textEditedByUser = false;
     private boolean saveFeedbackActive = false;
+    private boolean modelSaveFeedbackActive = false;
     private boolean lastStatusSuccess = true;
     private String savedTomlContent = "";
     private String savedModelApiName = "";
@@ -115,12 +135,16 @@ final class BuildConfigPanel extends JPanel {
     @Autowired
     public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
             @Nullable ProjectService projectService, @Nullable AiService aiService) {
+        super(new BorderLayout());
         this.buildToolService = buildToolService;
         this.settingsService = settingsService;
         this.projectService = projectService;
         this.aiService = aiService;
-        setLayout(new MigLayout("fill, insets 20, hidemode 3", "[grow, fill]", "[]12[]14[grow, fill]"));
         setOpaque(true);
+
+        // --- Tab 1: Build Configuration (build.toml) ---
+        buildTabPanel = new JPanel(new MigLayout("fill, insets 20, hidemode 3", GROW_FILL, "[]14" + GROW_FILL));
+        buildTabPanel.setOpaque(true);
 
         titleLabel = new JLabel(TITLE_TEXT);
         subtitleLabel = new JLabel(SUBTITLE_TEXT);
@@ -139,52 +163,10 @@ final class BuildConfigPanel extends JPanel {
         });
         saveFeedbackTimer.setRepeats(false);
 
-        add(UiComponents.createPageHeader(titleLabel, subtitleLabel, saveButton), "growx, wmin 0, wrap");
-
-        modelCardPanel = new JPanel(new MigLayout("fillx, wrap 1, insets 16 18 16 18, gapy 8", "[grow, fill]", ""));
-        UiComponents.styleCardPanel(modelCardPanel);
-
-        modelSectionHeaderLabel = UiComponents.createSectionHeader(SECTION_AI_MODEL_TITLE, Codicons.HUBOT,
-                HEADER_FONT_STYLE);
-        modelCardPanel.add(modelSectionHeaderLabel, "growx, wmin 0, gapbottom 2");
-
-        modelCombo = new JComboBox<>();
-        modelApiBadgeLabel = new JLabel();
-        UiComponents.styleCodePillBadge(modelApiBadgeLabel);
-
-        modelDescriptionArea = UiComponents.createReadOnlyTextArea();
-
-        JPanel modelControlBox = UiComponents.createModelControlBox(modelApiBadgeLabel, modelCombo, "w 240:280:340");
-
-        modelCardPanel.add(UiComponents.createFieldRow(
-                UiComponents.createFieldTextBlock("Project Gemini Model",
-                        "Override the default Global Settings Gemini model specifically for the active project.", null),
-                modelControlBox, ""), "growx, wmin 0");
-
-        modelCardPanel.add(modelDescriptionArea, "growx, wmin 0, gaptop 2, hidemode 3");
-
-        thinkingLevelCombo = new JComboBox<>();
-        thinkingLevelInfoIcon = UiComponents.createInfoIcon(UiComponents.THINKING_LEVEL_TOOLTIP_HTML);
-        JSeparator modelCardSeparator = new JSeparator(SwingConstants.HORIZONTAL);
-        modelCardSeparator.setOpaque(false);
-        modelCardPanel.add(modelCardSeparator, "growx, gaptop 2, gapbottom 2");
-        modelCardPanel.add(UiComponents.createFieldRow(UiComponents.createFieldTextBlock("Project Thinking Level",
-                "Override the default Global Settings thinking level specifically for the active project.",
-                thinkingLevelInfoIcon), thinkingLevelCombo, "w 240:280:340"), "growx, wmin 0");
-
-        add(modelCardPanel, "growx, wmin 0, wrap");
-
-        loadModelOptions();
-        loadThinkingLevelOptions();
-        modelCombo.addActionListener(e -> {
-            updateSelectedModelDetails();
-            onComboSelectionChanged();
-        });
-        thinkingLevelCombo.addActionListener(e -> onComboSelectionChanged());
-        updateSelectedModelDetails();
+        buildTabPanel.add(UiComponents.createPageHeader(titleLabel, subtitleLabel, saveButton), "growx, wmin 0, wrap");
 
         buildCardPanel = new JPanel(
-                new MigLayout("fill, insets 16 18 16 18, hidemode 3", "[grow, fill]", "[][][][][grow, fill]"));
+                new MigLayout("fill, insets 16 18 16 18, hidemode 3", GROW_FILL, "[][][][]" + GROW_FILL));
         UiComponents.styleCardPanel(buildCardPanel);
 
         buildSectionHeaderLabel = UiComponents.createSectionHeader(SECTION_BUILD_CONFIG_TITLE, Codicons.PACKAGE,
@@ -235,14 +217,128 @@ final class BuildConfigPanel extends JPanel {
         updateTextAreaTheme();
 
         buildCardPanel.add(new RTextScrollPane(textArea), "grow, push");
-        add(buildCardPanel, "grow, push, wmin 0");
+        buildTabPanel.add(buildCardPanel, "grow, push, wmin 0");
+
+        // --- Tab 2: AI Model Override ---
+        modelTabPanel = new JPanel(new MigLayout("fill, insets 20, hidemode 3", GROW_FILL, "[]14" + GROW_FILL));
+        modelTabPanel.setOpaque(true);
+
+        modelTitleLabel = new JLabel(MODEL_TITLE_TEXT);
+        modelSubtitleLabel = new JLabel(MODEL_SUBTITLE_TEXT);
+        modelStatusLabel = new JLabel("");
+        modelStatusLabel.setFont(modelStatusLabel.getFont().deriveFont(Font.BOLD, 11.5f));
+
+        modelSaveButton = UiComponents.createActionButton(MODEL_SAVE_BUTTON_TEXT, Codicons.SAVE,
+                new Insets(6, 14, 6, 14), false, SAVE_BUTTON_BASE_STYLE + UiComponents.ACCENT_BUTTON_STYLE,
+                e -> saveModelConfig());
+        modelSaveButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        modelSaveButton.setIconTextGap(6);
+
+        modelSaveFeedbackTimer = new Timer(2500, e -> {
+            modelSaveFeedbackActive = false;
+            updateModelSaveButtonState();
+        });
+        modelSaveFeedbackTimer.setRepeats(false);
+
+        JPanel modelHeaderActions = new JPanel(new MigLayout("insets 0, gapx 12", "[][]", "[center]"));
+        modelHeaderActions.setOpaque(false);
+        modelHeaderActions.add(modelStatusLabel);
+        modelHeaderActions.add(modelSaveButton);
+
+        modelTabPanel.add(UiComponents.createPageHeader(modelTitleLabel, modelSubtitleLabel, modelHeaderActions),
+                "growx, wmin 0, wrap");
+
+        modelCardPanel = new JPanel(new MigLayout("fillx, wrap 1, insets 16 18 16 18, gapy 8", GROW_FILL, ""));
+        UiComponents.styleCardPanel(modelCardPanel);
+
+        modelSectionHeaderLabel = UiComponents.createSectionHeader(SECTION_AI_MODEL_TITLE, Codicons.HUBOT,
+                HEADER_FONT_STYLE);
+        modelCardPanel.add(modelSectionHeaderLabel, "growx, wmin 0, gapbottom 2");
+
+        modelCombo = new JComboBox<>();
+        modelApiBadgeLabel = new JLabel();
+        UiComponents.styleCodePillBadge(modelApiBadgeLabel);
+
+        modelDescriptionArea = UiComponents.createReadOnlyTextArea();
+
+        JPanel modelControlBox = UiComponents.createModelControlBox(modelApiBadgeLabel, modelCombo, "w 240:280:340");
+
+        modelCardPanel.add(UiComponents.createFieldRow(
+                UiComponents.createFieldTextBlock("Project Gemini Model",
+                        "Override the default Global Settings Gemini model specifically for the active project.", null),
+                modelControlBox, ""), "growx, wmin 0");
+
+        modelCardPanel.add(modelDescriptionArea, "growx, wmin 0, gaptop 2, hidemode 3");
+
+        thinkingLevelCombo = new JComboBox<>();
+        thinkingLevelInfoIcon = UiComponents.createInfoIcon(UiComponents.THINKING_LEVEL_TOOLTIP_HTML);
+        JSeparator modelCardSeparator = new JSeparator(SwingConstants.HORIZONTAL);
+        modelCardSeparator.setOpaque(false);
+        modelCardPanel.add(modelCardSeparator, "growx, gaptop 2, gapbottom 2");
+        modelCardPanel.add(UiComponents.createFieldRow(UiComponents.createFieldTextBlock("Project Thinking Level",
+                "Override the default Global Settings thinking level specifically for the active project.",
+                thinkingLevelInfoIcon), thinkingLevelCombo, "w 240:280:340"), "growx, wmin 0");
+
+        JPanel modelCardsContainer = UiComponents
+                .createScrollableCardsPanel(new MigLayout("fillx, wrap 1, insets 4 2 16 6, gapy 14", GROW_FILL, ""));
+        modelCardsContainer.add(modelCardPanel, "growx, wmin 0");
+        modelTabPanel.add(UiComponents.createBorderlessScrollPane(modelCardsContainer), "grow, wmin 0");
+
+        loadModelOptions();
+        loadThinkingLevelOptions();
+        modelCombo.addActionListener(e -> {
+            updateSelectedModelDetails();
+            onComboSelectionChanged();
+        });
+        thinkingLevelCombo.addActionListener(e -> onComboSelectionChanged());
+        updateSelectedModelDetails();
+
+        settingsTabs = UiComponents.createUnderlinedTabbedPane(null);
+        settingsTabs.addTab(TAB_BUILD_CONFIG_TITLE, FontIcon.of(Codicons.PACKAGE, 15, SwingHtmlUtils.getAccentColor()),
+                buildTabPanel);
+        settingsTabs.addTab(TAB_AI_MODEL_TITLE,
+                FontIcon.of(Codicons.HUBOT, 15, SwingHtmlUtils.getMutedForegroundColor()), modelTabPanel);
+        settingsTabs.addChangeListener(e -> updateTabIcons());
+
+        add(settingsTabs, BorderLayout.CENTER);
 
         statusTimer = new Timer(3000, e -> clearBuildStatus());
         statusTimer.setRepeats(false);
+        modelStatusTimer = UiComponents.createStatusTimer(modelStatusLabel, 3000);
 
         applySectionStyling();
         lastAsyncFuture = loadConfig();
         updateBannerState();
+    }
+
+    void selectBuildConfigTab() {
+        if (settingsTabs != null && settingsTabs.getTabCount() > TAB_INDEX_BUILD_CONFIG) {
+            settingsTabs.setSelectedIndex(TAB_INDEX_BUILD_CONFIG);
+        }
+    }
+
+    void selectAiModelTab() {
+        if (settingsTabs != null && settingsTabs.getTabCount() > TAB_INDEX_AI_MODEL) {
+            settingsTabs.setSelectedIndex(TAB_INDEX_AI_MODEL);
+        }
+    }
+
+    void updateTabIcons() {
+        if (settingsTabs == null || settingsTabs.getTabCount() < 2) {
+            return;
+        }
+        Color accent = SwingHtmlUtils.getAccentColor();
+        Color muted = SwingHtmlUtils.getMutedForegroundColor();
+        int selectedIndex = settingsTabs.getSelectedIndex();
+        Color buildTabColor = muted;
+        Color modelTabColor = muted;
+        if (selectedIndex == TAB_INDEX_BUILD_CONFIG) {
+            buildTabColor = accent;
+        } else if (selectedIndex == TAB_INDEX_AI_MODEL) {
+            modelTabColor = accent;
+        }
+        UiComponents.updateTabIcons(settingsTabs, List.of(Codicons.PACKAGE, Codicons.HUBOT),
+                List.of(buildTabColor, modelTabColor));
     }
 
     void refreshDetectedTemplate() {
@@ -284,6 +380,17 @@ final class BuildConfigPanel extends JPanel {
         statusLabel.setToolTipText(null);
         statusLabel.setVisible(false);
         buildConfigHintLabel.setVisible(true);
+    }
+
+    void showModelStatus(String message, boolean success) {
+        UiComponents.showStatusMessage(modelStatusLabel, modelStatusTimer, message, success);
+    }
+
+    void clearModelStatus() {
+        if (modelStatusTimer != null && modelStatusTimer.isRunning()) {
+            modelStatusTimer.stop();
+        }
+        modelStatusLabel.setText("");
     }
 
     void configureWithRoxy() {
@@ -389,6 +496,7 @@ final class BuildConfigPanel extends JPanel {
             UiComponents.selectModelByApiName(modelCombo, targetModel);
             savedModelApiName = resolveSelectedModelApiName();
         });
+        updateModelSaveButtonState();
     }
 
     void loadThinkingLevelOptions() {
@@ -409,6 +517,7 @@ final class BuildConfigPanel extends JPanel {
             UiComponents.selectThinkingLevelOptionById(thinkingLevelCombo, targetThinking);
             savedThinkingLevelId = resolveSelectedThinkingLevelId();
         });
+        updateModelSaveButtonState();
     }
 
     void updateSelectedModelDetails() {
@@ -443,9 +552,10 @@ final class BuildConfigPanel extends JPanel {
         if (textArea != null) {
             currentText = StringUtils.defaultString(textArea.getText());
         }
-        if (textEditedByUser || !Objects.equals(currentText, savedTomlContent)) {
-            return true;
-        }
+        return textEditedByUser || !Objects.equals(currentText, savedTomlContent);
+    }
+
+    boolean hasUnsavedModelChanges() {
         if (!Objects.equals(resolveSelectedModelApiName(), savedModelApiName)) {
             return true;
         }
@@ -454,8 +564,9 @@ final class BuildConfigPanel extends JPanel {
 
     private void onComboSelectionChanged() {
         if (!textUpdateGuard.isActive()) {
-            cancelSaveFeedback();
-            updateSaveButtonState();
+            cancelModelSaveFeedback();
+            clearModelStatus();
+            updateModelSaveButtonState();
         }
     }
 
@@ -466,30 +577,50 @@ final class BuildConfigPanel extends JPanel {
         saveFeedbackActive = false;
     }
 
+    private void cancelModelSaveFeedback() {
+        if (modelSaveFeedbackTimer != null && modelSaveFeedbackTimer.isRunning()) {
+            modelSaveFeedbackTimer.stop();
+        }
+        modelSaveFeedbackActive = false;
+    }
+
     void updateSaveButtonState() {
         if (saveButton == null) {
             return;
         }
         if (saveFeedbackActive) {
-            applySaveButtonPresentation(SAVED_FEEDBACK_BUTTON_TEXT, Codicons.CHECK,
+            applyButtonPresentation(saveButton, SAVED_FEEDBACK_BUTTON_TEXT, Codicons.CHECK,
                     SAVE_BUTTON_BASE_STYLE + UiComponents.GREEN_BUTTON_STYLE);
             return;
         }
         boolean confirmed = projectService != null && projectService.hasActiveProject()
                 && projectService.isBuildConfirmed();
         if (confirmed && !hasUnsavedChanges()) {
-            applySaveButtonPresentation(CONFIRMED_BUTTON_TEXT, Codicons.CHECK,
+            applyButtonPresentation(saveButton, CONFIRMED_BUTTON_TEXT, Codicons.CHECK,
                     SAVE_BUTTON_BASE_STYLE + UiComponents.SUBTLE_GREEN_BUTTON_STYLE);
         } else {
-            applySaveButtonPresentation(SAVE_BUTTON_TEXT, Codicons.SAVE,
+            applyButtonPresentation(saveButton, SAVE_BUTTON_TEXT, Codicons.SAVE,
                     SAVE_BUTTON_BASE_STYLE + UiComponents.ACCENT_BUTTON_STYLE);
         }
     }
 
-    private void applySaveButtonPresentation(String text, Codicons icon, String style) {
-        saveButton.setText(text);
-        saveButton.putClientProperty(FlatClientProperties.STYLE, style);
-        saveButton.setIcon(FontIcon.of(icon, 16, UiComponents.resolveActionButtonIconColor(style)));
+    void updateModelSaveButtonState() {
+        if (modelSaveButton == null) {
+            return;
+        }
+        if (modelSaveFeedbackActive) {
+            applyButtonPresentation(modelSaveButton, MODEL_SAVED_FEEDBACK_BUTTON_TEXT, Codicons.CHECK,
+                    SAVE_BUTTON_BASE_STYLE + UiComponents.GREEN_BUTTON_STYLE);
+        } else {
+            applyButtonPresentation(modelSaveButton, MODEL_SAVE_BUTTON_TEXT, Codicons.SAVE,
+                    SAVE_BUTTON_BASE_STYLE + UiComponents.ACCENT_BUTTON_STYLE);
+        }
+    }
+
+    private static void applyButtonPresentation(JButton button, String text, Codicons icon, String style) {
+        button.setText(text);
+        button.putClientProperty(FlatClientProperties.STYLE, style);
+        button.setIcon(FontIcon.of(icon, 16, UiComponents.resolveActionButtonIconColor(style)));
     }
 
     private void applySectionStyling() {
@@ -503,7 +634,9 @@ final class BuildConfigPanel extends JPanel {
         UiComponents.updateInfoIconTheme(thinkingLevelInfoIcon);
         UiComponents.updateInfoIconTheme(buildConfigInfoIcon);
         UiComponents.refreshActionButtonIcons(this);
+        updateTabIcons();
         updateSaveButtonState();
+        updateModelSaveButtonState();
 
         if (lastStatusSuccess) {
             statusLabel.setForeground(SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green"));
@@ -528,7 +661,9 @@ final class BuildConfigPanel extends JPanel {
     public void onProjectChanged(ProjectChangedEvent event) {
         Edt.run(() -> {
             cancelSaveFeedback();
+            cancelModelSaveFeedback();
             clearBuildStatus();
+            clearModelStatus();
             loadModelOptions();
             loadThinkingLevelOptions();
             updateSelectedModelDetails();
@@ -595,8 +730,6 @@ final class BuildConfigPanel extends JPanel {
             return done;
         }
         String contentToSave = StringUtils.defaultString(textArea.getText());
-        final String modelOverrideToSave = resolveSelectedModelApiName();
-        final String thinkingOverrideToSave = resolveSelectedThinkingLevelId();
         final boolean wasBuildConfirmed = projectService != null && projectService.isBuildConfirmed();
         saveButton.setEnabled(false);
         CompletableFuture<Void> future = Edt.runAsync(() -> {
@@ -605,8 +738,6 @@ final class BuildConfigPanel extends JPanel {
                     buildToolService.saveConfigContent(contentToSave);
                 }
                 if (projectService != null && projectService.hasActiveProject()) {
-                    projectService.setProjectGeminiModel(modelOverrideToSave);
-                    projectService.setProjectThinkingLevel(thinkingOverrideToSave);
                     projectService.setBuildConfirmed(true);
                 }
             } catch (IOException e) {
@@ -615,8 +746,6 @@ final class BuildConfigPanel extends JPanel {
         }, () -> {
             saveButton.setEnabled(true);
             savedTomlContent = contentToSave;
-            savedModelApiName = modelOverrideToSave;
-            savedThinkingLevelId = thinkingOverrideToSave;
             textEditedByUser = false;
             saveFeedbackActive = true;
             saveFeedbackTimer.restart();
@@ -636,6 +765,40 @@ final class BuildConfigPanel extends JPanel {
         return future;
     }
 
+    CompletableFuture<Void> saveModelConfig() {
+        cancelModelSaveFeedback();
+        if (projectService == null) {
+            CompletableFuture<Void> done = CompletableFuture.completedFuture(null);
+            lastAsyncFuture = done;
+            return done;
+        }
+        final String modelOverrideToSave = resolveSelectedModelApiName();
+        final String thinkingOverrideToSave = resolveSelectedThinkingLevelId();
+        modelSaveButton.setEnabled(false);
+        CompletableFuture<Void> future = Edt.runAsync(() -> {
+            if (projectService.hasActiveProject()) {
+                projectService.setProjectGeminiModel(modelOverrideToSave);
+                projectService.setProjectThinkingLevel(thinkingOverrideToSave);
+            }
+        }, () -> {
+            modelSaveButton.setEnabled(true);
+            savedModelApiName = modelOverrideToSave;
+            savedThinkingLevelId = thinkingOverrideToSave;
+            modelSaveFeedbackActive = true;
+            modelSaveFeedbackTimer.restart();
+            updateModelSaveButtonState();
+            showModelStatus(MODEL_SAVED_STATUS_TEXT, true);
+        }, ex -> {
+            modelSaveButton.setEnabled(true);
+            updateModelSaveButtonState();
+            Throwable cause = ExceptionUtils.getRootCause(ex);
+            log.error("Failed to save project model override: {}", cause.getMessage());
+            showModelStatus("Error saving model settings: " + cause.getMessage(), false);
+        });
+        lastAsyncFuture = future;
+        return future;
+    }
+
     void setOnConfirmSavedCallback(Runnable callback) {
         this.onConfirmSavedCallback = callback;
     }
@@ -645,6 +808,7 @@ final class BuildConfigPanel extends JPanel {
     }
 
     void applyGeneratedBuildToml(String toml) {
+        selectBuildConfigTab();
         setEditorContentProgrammatically(toml, false);
         showBuildStatus(APPLIED_FROM_ASK_ROXY_STATUS, true);
     }
