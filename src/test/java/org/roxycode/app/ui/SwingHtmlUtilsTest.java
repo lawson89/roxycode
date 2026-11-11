@@ -34,22 +34,84 @@ class SwingHtmlUtilsTest {
 
     @Test
     void testStyleMarkdownTablesViaFlexmarkAttributeProviderDoesNotMutateCodeOrInlineHtml() {
-        String rendered = SwingHtmlUtils.renderMarkdownToHtml("""
-                | Col A | Col B |
-                | :--- | ---: |
-                | Val 1 | Val 2 |
+        String rendered = SwingHtmlUtils.renderMarkdownToHtml(
+                """
+                        | Timestamp | User | Message |
+                        | :--- | ---: | :--- |
+                        | 2026-11-11 10:17:17 | lawson89 | PLAN -> CODE (User Approved): Implementation plan for fixing crushed narrow columns in Swing Markdown tables. |
 
-                <table><tr><td>Inline raw HTML table</td></tr></table>
+                        <table><tr><td>Inline raw HTML table</td></tr></table>
 
-                ~~~html
-                <table>
-                  <tr><th>Header</th><td>Cell</td></tr>
-                </table>
-                ~~~
-                """);
-        assertContainsAll(rendered, "md-table", "md-th", "md-td", "right",
+                        ~~~html
+                        <table>
+                          <tr><th>Header</th><td>Cell</td></tr>
+                        </table>
+                        ~~~
+                        """);
+        assertContainsAll(rendered, "md-table", """
+                <th align="left" class="md-th" valign="top" nowrap="nowrap">Timestamp</th>""", """
+                <th align="right" class="md-th" valign="top" nowrap="nowrap">User</th>""", """
+                <th align="left" class="md-th" valign="top" nowrap="nowrap">Message</th>""", """
+                <td align="left" class="md-td" valign="top" nowrap="nowrap">2026-11-11 10:17:17</td>""", """
+                <td align="right" class="md-td" valign="top" nowrap="nowrap">lawson89</td>""", """
+                <td align="left" class="md-td" valign="top">PLAN -&gt; CODE (User Approved):""",
                 "&lt;table&gt;&lt;tr&gt;&lt;td&gt;Inline raw HTML table&lt;/td&gt;&lt;/tr&gt;&lt;/table&gt;",
                 "&lt;table&gt;");
+        String compactTdAttr = """
+                class="md-td" valign="top" nowrap="nowrap">""";
+        assertFalse(SwingHtmlUtils.isCompactTableCell(null));
+        assertFalse(SwingHtmlUtils.renderMarkdownToHtml("""
+                | Empty |
+                | --- |
+                |   |
+                """).contains(compactTdAttr));
+        assertFalse(SwingHtmlUtils.renderMarkdownToHtml("""
+                | Three Words |
+                | --- |
+                | one two three |
+                """).contains(compactTdAttr));
+        assertFalse(SwingHtmlUtils.renderMarkdownToHtml("""
+                | TooLongSingleToken |
+                | --- |
+                | 1234567890123456789012345 |
+                """).contains(compactTdAttr));
+    }
+
+    @Test
+    void testMarkdownTablePreservesMinimumSpanOnCompactColumnsInNarrowViewport() {
+        String handoffMarkdown = """
+                | Timestamp | User | Message |
+                | :--- | :--- | :--- |
+                | 2026-11-11 10:17:17 | lawson89 | PLAN -> CODE (User Approved): Implementation plan for fixing crushed narrow columns in Swing Markdown tables is complete and ready for development. |
+                """;
+        String html = "<html><body>" + SwingHtmlUtils.renderMarkdownToHtml(handoffMarkdown) + "</body></html>";
+
+        org.roxycode.app.util.Edt.runAndWait(() -> {
+            javax.swing.JEditorPane pane = SwingHtmlUtils.createHtmlEditorPane();
+            SwingHtmlUtils.applyTheme(pane, 10);
+            pane.setText(html);
+            pane.setSize(550, 400);
+            pane.doLayout();
+
+            javax.swing.text.View rootView = pane.getUI().getRootView(pane);
+            java.util.List<javax.swing.text.View> tdViews = new java.util.ArrayList<>();
+            collectTdViews(rootView, tdViews);
+            assertEquals(3, tdViews.size());
+
+            float timestampMinSpan = tdViews.get(0).getMinimumSpan(javax.swing.text.View.X_AXIS);
+            float userMinSpan = tdViews.get(1).getMinimumSpan(javax.swing.text.View.X_AXIS);
+            float messageMinSpan = tdViews.get(2).getMinimumSpan(javax.swing.text.View.X_AXIS);
+
+            assertTrue(timestampMinSpan > 50f,
+                    "Compact Timestamp column should preserve positive minimumSpan but was " + timestampMinSpan);
+            assertTrue(userMinSpan > 30f,
+                    "Compact User column should preserve positive minimumSpan but was " + userMinSpan);
+            assertEquals(0f, tdViews.get(2).getView(0).getMinimumSpan(javax.swing.text.View.X_AXIS),
+                    "Long prose Message paragraph should retain zero content minimumSpan so it wraps cleanly");
+            assertTrue(messageMinSpan < 20f && messageMinSpan < userMinSpan,
+                    "Long prose Message cell minimumSpan should only include cell padding/insets (" + messageMinSpan
+                            + ")");
+        });
     }
 
     @Test
@@ -206,6 +268,21 @@ class SwingHtmlUtilsTest {
         java.awt.image.BufferedImage scaled = UiComponents.createThumbnail(large, 50);
         assertEquals(50, scaled.getWidth());
         assertEquals(25, scaled.getHeight());
+    }
+
+    private static void collectTdViews(javax.swing.text.View view, java.util.List<javax.swing.text.View> result) {
+        if (view == null) {
+            return;
+        }
+        javax.swing.text.Element elem = view.getElement();
+        if (elem != null && "td".equalsIgnoreCase(elem.getName())) {
+            result.add(view);
+            return;
+        }
+        int count = view.getViewCount();
+        for (int i = 0; i < count; i++) {
+            collectTdViews(view.getView(i), result);
+        }
     }
 
     private static SwingHtmlUtils.ResponsiveImageView findResponsiveImageView(javax.swing.text.View view) {

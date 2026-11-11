@@ -82,6 +82,8 @@ public final class SwingHtmlUtils {
     private static final HtmlRenderer MARKDOWN_RENDERER = HtmlRenderer.builder(FLEXMARK_OPTIONS).build();
     private static final Color TRANSPARENT_CARET_COLOR = new Color(0, 0, 0, 0);
     static final int IMAGE_HORIZONTAL_PADDING = 48;
+    private static final int MAX_COMPACT_CELL_LENGTH = 24;
+    private static final int MAX_COMPACT_WHITESPACE_RUNS = 1;
     private static final String RESPONSIVE_RESIZE_LISTENER_KEY = "roxycode.responsiveResizeListener";
     private static volatile boolean testMode = Boolean.getBoolean("roxycode.testMode");
 
@@ -141,7 +143,37 @@ public final class SwingHtmlUtils {
                 cellClass = "md-td";
             }
             attributes.addValue("class", cellClass);
+            attributes.replaceValue("valign", "top");
+            if (cell.isHeader() || isCompactTableCell(cell)) {
+                attributes.replaceValue("nowrap", "nowrap");
+            }
         }
+    }
+
+    static boolean isCompactTableCell(TableCell cell) {
+        if (cell == null) {
+            return false;
+        }
+        String text = cell.getText().unescape().trim();
+        if (text.isEmpty() || text.length() > MAX_COMPACT_CELL_LENGTH) {
+            return false;
+        }
+        int whitespaceRuns = 0;
+        boolean inWhitespace = false;
+        for (int i = 0; i < text.length(); i++) {
+            if (Character.isWhitespace(text.charAt(i))) {
+                if (!inWhitespace) {
+                    whitespaceRuns++;
+                    if (whitespaceRuns > MAX_COMPACT_WHITESPACE_RUNS) {
+                        return false;
+                    }
+                    inWhitespace = true;
+                }
+            } else {
+                inWhitespace = false;
+            }
+        }
+        return true;
     }
 
     static String renderMarkdownToHtml(String markdown) {
