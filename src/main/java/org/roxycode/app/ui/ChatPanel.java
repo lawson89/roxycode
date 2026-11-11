@@ -60,12 +60,13 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     static final String NEW_TOPIC_TOOLTIP = "Archive current conversation and start a new Q&A topic";
     static final String DEFAULT_PLACEHOLDER_TEXT = "Type a message... (Enter to send, Shift+Enter for newline, @ to mention files, / to run commands, Ctrl+V to paste image)";
     static final String NO_PROJECT_PLACEHOLDER_TEXT = "Select a project folder in the top bar (Change Project...) to start chatting...";
+    static final String BUSY_PLACEHOLDER_TEXT = "Roxy is working... Press Esc or click Stop to interrupt.";
     private static final String TOOLBAR_BUTTON_STYLE = "arc: 8; font: -1; foreground: $Label.disabledForeground";
     private static final String GROW_FILL_COL = "[grow, fill]";
     private static final String HIDEMODE_3 = "hidemode 3";
     static final int THUMBNAIL_SIZE = 64;
-    static final int COMPOSER_MIN_HEIGHT = 215;
-    static final int COMPOSER_PREFERRED_HEIGHT = 225;
+    static final int COMPOSER_MIN_HEIGHT = 120;
+    static final int COMPOSER_PREFERRED_HEIGHT = 140;
     static final double SPLIT_PANE_RESIZE_WEIGHT = 0.85;
     private static final int AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 80;
     private static final int ACTIVITY_ANIMATION_DELAY_MS = 500;
@@ -267,7 +268,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         JPanel composerCard = new JPanel(new BorderLayout());
         updateComposerCardBorder(composerCard, false);
 
-        inputArea = new JTextArea(8, 0);
+        inputArea = new JTextArea(4, 0);
         inputArea.setLineWrap(true);
         inputArea.setWrapStyleWord(true);
         inputArea.setOpaque(false);
@@ -603,8 +604,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         }
         String placeholder;
         if (loading) {
-            placeholder = "Roxy is working (" + controller.formatCurrentTurnStatus()
-                    + ")... Press Esc or click Stop to cancel";
+            placeholder = BUSY_PLACEHOLDER_TEXT;
         } else {
             placeholder = defaultPlaceholderText;
         }
@@ -631,19 +631,43 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         }
     }
 
+    static String stripTrailingMoveToFeatureCta(String content) {
+        if (StringUtils.isBlank(content)) {
+            return "";
+        }
+        List<String> lines = new ArrayList<>(content.lines().toList());
+        while (!lines.isEmpty() && isTrailingMoveToFeatureCtaLine(lines.get(lines.size() - 1))) {
+            lines.remove(lines.size() - 1);
+        }
+        String cleaned = String.join(System.lineSeparator(), lines).trim();
+        if (cleaned.isEmpty()) {
+            return content.trim();
+        }
+        return cleaned;
+    }
+
+    private static boolean isTrailingMoveToFeatureCtaLine(String line) {
+        String trimmed = StringUtils.defaultString(line).trim();
+        if (trimmed.isEmpty() || "---".equals(trimmed) || "***".equals(trimmed)) {
+            return true;
+        }
+        return trimmed.contains("[Move to Feature Request]");
+    }
+
     public boolean submitMovedFeatureRequest(String content) {
         if (StringUtils.isBlank(content)) {
             return false;
         }
+        String cleanedContent = stripTrailingMoveToFeatureCta(content);
         boolean canAutoSubmit = isProjectReady() && !isLoading() && !isWaitingUserInput()
                 && !controller.hasPendingPhase() && !inlineActionPanel.isVisible();
         if (canAutoSubmit) {
             fileMentionPopup.hidePopup();
             clearInputText();
-            controller.sendMessage(content);
+            controller.sendMessage(cleanedContent);
             return true;
         }
-        setInputText(content);
+        setInputText(cleanedContent);
         return false;
     }
 

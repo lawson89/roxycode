@@ -151,7 +151,12 @@ final class TaskWorkspacePanel extends JPanel {
 
     void applyPhaseTrackerStyling() {
         Color accent = SwingHtmlUtils.getAccentColor();
-        SwingHtmlUtils.applyTintedBannerStyle(progressTracker, accent, 3, 10, 8);
+        Color tintedBg = SwingHtmlUtils.getTintedBackground(accent, 0.08);
+        progressTracker.setOpaque(true);
+        progressTracker.setBackground(tintedBg);
+        progressTracker.setBorder(javax.swing.BorderFactory.createEmptyBorder(3, 10, 3, 10));
+        progressTracker.putClientProperty(FlatClientProperties.STYLE,
+                "arc: 12; background: " + SwingHtmlUtils.toHex(tintedBg));
         UiComponents.updateInfoIconTheme(workflowInfoIcon);
     }
 

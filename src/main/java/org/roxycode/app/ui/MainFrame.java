@@ -1,26 +1,43 @@
 package org.roxycode.app.ui;
 
+import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.CardLayout;
+import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.Frame;
 import java.awt.GraphicsConfiguration;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.Image;
+import java.awt.KeyboardFocusManager;
 import java.awt.Rectangle;
 import java.awt.Taskbar;
+import java.awt.Toolkit;
+import java.awt.desktop.QuitResponse;
+import java.awt.event.ActionEvent;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowFocusListener;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
-import org.roxycode.app.model.AppSettings;
+import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import javax.swing.Action;
 import javax.swing.JFrame;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
+import javax.swing.KeyStroke;
 import javax.swing.Timer;
+import javax.swing.text.JTextComponent;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
@@ -31,6 +48,7 @@ import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
+import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.SystemTool;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
@@ -79,6 +97,8 @@ public final class MainFrame extends JPanel {
     private final AgentMemoryPanel agentMemoryPanel;
     private final transient PlanService planService;
     private final transient UiComponents.UiGuard hubTabGuard = new UiComponents.UiGuard();
+    private final Map<String, List<JMenuItem>> cardMenuItems = new LinkedHashMap<>();
+    JMenuBar menuBar;
     JTabbedPane contextHubTabs;
     JTabbedPane settingsHubTabs;
     SidebarPanel sidebar;
@@ -119,6 +139,8 @@ public final class MainFrame extends JPanel {
         setupWindow();
         initComponents(statusBar, codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel,
                 contextManagerPanel, agentMemoryPanel);
+        setupMenuBar();
+        registerDesktopHandlers();
         if (settingsPanel != null) {
             settingsPanel.setOnInitialApiKeyConfiguredCallback(() -> {
                 updateOnboardingAndNavigationState();
@@ -203,6 +225,7 @@ public final class MainFrame extends JPanel {
         if (sidebar != null) {
             sidebar.updateNavigationAccess(hasApiKey, hasProject, buildConfirmed);
         }
+        syncMenuAccessWithSidebar();
         if (!hasApiKey) {
             showCard(SETTINGS_VIEW);
         } else if (hasProject && !buildConfirmed && TASK_VIEW.equals(currentCard)) {
@@ -598,6 +621,250 @@ public final class MainFrame extends JPanel {
         add(sidebar, "grow");
         add(workspace, "grow");
         showCard(QA_VIEW);
+    }
+
+    private void setupMenuBar() {
+        int shortcutMask = resolveMenuShortcutMask();
+        menuBar = new JMenuBar();
+        menuBar.putClientProperty(FlatClientProperties.MENU_BAR_EMBEDDED, Boolean.TRUE);
+
+        JMenu fileMenu = new JMenu("File");
+        JMenuItem openProjectItem = new JMenuItem("Open Project...");
+        openProjectItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_O, shortcutMask));
+        openProjectItem.addActionListener(e -> {
+            if (header != null) {
+                header.chooseProject();
+            }
+        });
+        fileMenu.add(openProjectItem);
+
+        JMenuItem settingsItem = new JMenuItem("Settings...");
+        settingsItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_COMMA, shortcutMask));
+        settingsItem.addActionListener(e -> navigateIfAccessible(SidebarPanel.CARD_SETTINGS));
+        registerCardMenuItem(SidebarPanel.CARD_SETTINGS, settingsItem);
+        fileMenu.add(settingsItem);
+
+        if (!isMacOs()) {
+            fileMenu.addSeparator();
+            JMenuItem exitItem = new JMenuItem("Exit");
+            exitItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_Q, shortcutMask));
+            exitItem.addActionListener(e -> exitApplication());
+            fileMenu.add(exitItem);
+        }
+
+        JMenu editMenu = new JMenu("Edit");
+        editMenu.add(createEditMenuItem("Undo", KeyStroke.getKeyStroke(KeyEvent.VK_Z, shortcutMask),
+                this::performFocusedUndo));
+        editMenu.add(createEditMenuItem("Redo",
+                KeyStroke.getKeyStroke(KeyEvent.VK_Z, shortcutMask | InputEvent.SHIFT_DOWN_MASK),
+                this::performFocusedRedo));
+        editMenu.addSeparator();
+        editMenu.add(
+                createEditMenuItem("Cut", KeyStroke.getKeyStroke(KeyEvent.VK_X, shortcutMask), JTextComponent::cut));
+        editMenu.add(
+                createEditMenuItem("Copy", KeyStroke.getKeyStroke(KeyEvent.VK_C, shortcutMask), JTextComponent::copy));
+        editMenu.add(createEditMenuItem("Paste", KeyStroke.getKeyStroke(KeyEvent.VK_V, shortcutMask),
+                JTextComponent::paste));
+        editMenu.addSeparator();
+        editMenu.add(createEditMenuItem("Select All", KeyStroke.getKeyStroke(KeyEvent.VK_A, shortcutMask),
+                JTextComponent::selectAll));
+
+        JMenu viewMenu = new JMenu("View");
+        addViewCardMenuItem(viewMenu, SidebarPanel.ASK_ROXY_LABEL, SidebarPanel.CARD_QA,
+                KeyStroke.getKeyStroke(KeyEvent.VK_1, shortcutMask));
+        addViewCardMenuItem(viewMenu, SidebarPanel.BUILD_FEATURE_LABEL, SidebarPanel.CARD_TASK,
+                KeyStroke.getKeyStroke(KeyEvent.VK_2, shortcutMask));
+        addViewCardMenuItem(viewMenu, SidebarPanel.CONTEXT_PROMPTS_LABEL, SidebarPanel.CARD_CONTEXT,
+                KeyStroke.getKeyStroke(KeyEvent.VK_3, shortcutMask));
+        addViewCardMenuItem(viewMenu, SidebarPanel.AGENT_MEMORY_LABEL, SidebarPanel.CARD_MEMORY,
+                KeyStroke.getKeyStroke(KeyEvent.VK_4, shortcutMask));
+        addViewCardMenuItem(viewMenu, SidebarPanel.PROJECT_SETTINGS_LABEL, SidebarPanel.CARD_BUILD,
+                KeyStroke.getKeyStroke(KeyEvent.VK_5, shortcutMask));
+        addViewCardMenuItem(viewMenu, SidebarPanel.SETTINGS_TOOLS_LABEL, SidebarPanel.CARD_SETTINGS,
+                KeyStroke.getKeyStroke(KeyEvent.VK_6, shortcutMask));
+        viewMenu.addSeparator();
+        JMenuItem toggleThemeItem = new JMenuItem("Toggle Theme");
+        toggleThemeItem
+                .setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_T, shortcutMask | InputEvent.SHIFT_DOWN_MASK));
+        toggleThemeItem.addActionListener(e -> {
+            if (header != null) {
+                header.toggleTheme();
+            }
+        });
+        viewMenu.add(toggleThemeItem);
+
+        JMenu helpMenu = new JMenu("Help");
+        JMenuItem jexlApiItem = new JMenuItem("JEXL API Reference");
+        jexlApiItem.addActionListener(e -> navigateIfAccessible(SidebarPanel.CARD_JEXL_API));
+        registerCardMenuItem(SidebarPanel.CARD_JEXL_API, jexlApiItem);
+        helpMenu.add(jexlApiItem);
+
+        JMenuItem systemToolsItem = new JMenuItem("System Tools");
+        systemToolsItem.addActionListener(e -> navigateIfAccessible(SidebarPanel.CARD_TOOLS));
+        registerCardMenuItem(SidebarPanel.CARD_TOOLS, systemToolsItem);
+        helpMenu.add(systemToolsItem);
+
+        helpMenu.addSeparator();
+        JMenuItem aboutItem = new JMenuItem("About RoxyCode");
+        aboutItem.addActionListener(e -> showAboutDialog());
+        helpMenu.add(aboutItem);
+
+        menuBar.add(fileMenu);
+        menuBar.add(editMenu);
+        menuBar.add(viewMenu);
+        menuBar.add(helpMenu);
+
+        if (hostFrame != null) {
+            hostFrame.setJMenuBar(menuBar);
+        }
+        syncMenuAccessWithSidebar();
+    }
+
+    private void addViewCardMenuItem(JMenu viewMenu, String label, String cardName, KeyStroke accelerator) {
+        JMenuItem item = new JMenuItem(label);
+        item.setAccelerator(accelerator);
+        item.addActionListener(e -> navigateIfAccessible(cardName));
+        registerCardMenuItem(cardName, item);
+        viewMenu.add(item);
+    }
+
+    private void registerCardMenuItem(String cardName, JMenuItem item) {
+        List<JMenuItem> items = cardMenuItems.computeIfAbsent(cardName, k -> new ArrayList<>());
+        items.add(item);
+    }
+
+    private void syncMenuAccessWithSidebar() {
+        if (sidebar == null) {
+            return;
+        }
+        for (Map.Entry<String, List<JMenuItem>> entry : cardMenuItems.entrySet()) {
+            NavButton btn = sidebar.getCardButton(entry.getKey());
+            boolean enabled = btn == null || btn.isEnabled();
+            for (JMenuItem item : entry.getValue()) {
+                item.setEnabled(enabled);
+            }
+        }
+    }
+
+    void navigateIfAccessible(String cardName) {
+        if (sidebar != null) {
+            NavButton btn = sidebar.getCardButton(cardName);
+            if (btn != null && !btn.isEnabled()) {
+                return;
+            }
+        }
+        showCard(cardName);
+    }
+
+    private static JMenuItem createEditMenuItem(String label, KeyStroke accelerator,
+            java.util.function.Consumer<JTextComponent> action) {
+        JMenuItem item = new JMenuItem(label);
+        item.setAccelerator(accelerator);
+        item.addActionListener(e -> {
+            JTextComponent target = resolveFocusedTextComponent();
+            if (target != null) {
+                action.accept(target);
+            }
+        });
+        return item;
+    }
+
+    static JTextComponent resolveFocusedTextComponent() {
+        java.awt.Component focusOwner = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+        if (focusOwner instanceof JTextComponent textComponent) {
+            return textComponent;
+        }
+        java.awt.Component permanentOwner = KeyboardFocusManager.getCurrentKeyboardFocusManager()
+                .getPermanentFocusOwner();
+        if (permanentOwner instanceof JTextComponent textComponent) {
+            return textComponent;
+        }
+        return null;
+    }
+
+    void performFocusedUndo(JTextComponent target) {
+        invokeTextComponentAction(target, "Undo", "undo");
+    }
+
+    void performFocusedRedo(JTextComponent target) {
+        invokeTextComponentAction(target, "Redo", "redo");
+    }
+
+    private static void invokeTextComponentAction(JTextComponent target, String primaryKey, String fallbackKey) {
+        if (target == null || !target.isEditable()) {
+            return;
+        }
+        Action action = target.getActionMap().get(primaryKey);
+        if (action == null) {
+            action = target.getActionMap().get(fallbackKey);
+        }
+        if (action != null && action.isEnabled()) {
+            action.actionPerformed(new ActionEvent(target, ActionEvent.ACTION_PERFORMED, primaryKey));
+        }
+    }
+
+    private static int resolveMenuShortcutMask() {
+        if (GraphicsEnvironment.isHeadless()) {
+            return InputEvent.CTRL_DOWN_MASK;
+        }
+        return Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+    }
+
+    static boolean isMacOs() {
+        String osName = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        return osName.contains("mac") || osName.contains("darwin");
+    }
+
+    void exitApplication() {
+        saveWindowStateOnClose();
+        dispose();
+    }
+
+    void handleDesktopQuitRequest(@Nullable QuitResponse response) {
+        saveWindowStateOnClose();
+        if (response != null) {
+            response.performQuit();
+        }
+    }
+
+    private void registerDesktopHandlers() {
+        if (GraphicsEnvironment.isHeadless() || !Desktop.isDesktopSupported()) {
+            return;
+        }
+        try {
+            Desktop desktop = Desktop.getDesktop();
+            if (desktop.isSupported(Desktop.Action.APP_PREFERENCES)) {
+                desktop.setPreferencesHandler(e -> Edt.run(() -> navigateIfAccessible(SidebarPanel.CARD_SETTINGS)));
+            }
+            if (desktop.isSupported(Desktop.Action.APP_ABOUT)) {
+                desktop.setAboutHandler(e -> Edt.run(this::showAboutDialog));
+            }
+            if (desktop.isSupported(Desktop.Action.APP_QUIT_HANDLER)) {
+                desktop.setQuitHandler((e, response) -> handleDesktopQuitRequest(response));
+            }
+        } catch (UnsupportedOperationException | SecurityException e) {
+            log.debug("Desktop handlers not supported: {}", e.getMessage());
+        } catch (Exception e) {
+            log.debug("Failed to register desktop handlers: {}", e.getMessage());
+        }
+    }
+
+    static String buildAboutMessage() {
+        String javaVersion = System.getProperty("java.version", "Unknown");
+        String osName = System.getProperty("os.name", "Unknown OS");
+        String osArch = System.getProperty("os.arch", "");
+        return String.join(System.lineSeparator(), "RoxyCode — High-Autonomy AI Development Workspace", "",
+                "Plan • Code • Review Lifecycle", "Runtime: Java " + javaVersion + " (" + osName + " " + osArch + ")");
+    }
+
+    void showAboutDialog() {
+        if (GraphicsEnvironment.isHeadless()) {
+            return;
+        }
+        Image iconImage = AppIconRenderer.renderAppIcon(64, getActiveProjectName(), AppIconRenderer.AgentStatus.IDLE,
+                false);
+        JOptionPane.showMessageDialog(hostFrame, buildAboutMessage(), "About RoxyCode", JOptionPane.INFORMATION_MESSAGE,
+                new javax.swing.ImageIcon(iconImage));
     }
 
     void handleStartupSettingsCheck() {

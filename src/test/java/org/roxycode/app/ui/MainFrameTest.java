@@ -420,4 +420,121 @@ class MainFrameTest {
             frame.dispose();
         }
     }
+
+    @Test
+    void testDesktopPropertiesMenuBarAccessGatingAndPhaseTrackerPill() throws Exception {
+        org.roxycode.app.RoxyCode.configureDesktopSystemProperties();
+        assertEquals("RoxyCode", System.getProperty("apple.awt.application.name"));
+        assertEquals("true", System.getProperty("apple.laf.useScreenMenuBar"));
+        assertEquals("system", System.getProperty("apple.awt.application.appearance"));
+        assertEquals("true", System.getProperty("flatlaf.useWindowDecorations"));
+        assertEquals("true", System.getProperty("flatlaf.menuBarEmbedded"));
+
+        SettingsService settingsService = new SettingsService(null, event -> {
+        });
+        settingsService.setSettingsPathOverride(tempDir.resolve("missing-menu-roxy").resolve("settings.toml"));
+
+        List<SystemTool> allDetectedTools = List.of(SystemTool.ofKnownTool("Ripgrep", "14.1.0", "Detected"),
+                SystemTool.ofKnownTool("Git", "2.43.0", "Detected"),
+                SystemTool.ofKnownTool("Universal Ctags", "6.0.0", "Detected"));
+
+        MainFrame frame = createMainFrame(settingsService, CompletableFuture.completedFuture(allDetectedTools));
+        try {
+            SwingTestUtils.flushEdt();
+            assertNotNull(frame.menuBar);
+            assertEquals(Boolean.TRUE,
+                    frame.menuBar.getClientProperty(com.formdev.flatlaf.FlatClientProperties.MENU_BAR_EMBEDDED));
+            assertEquals(4, frame.menuBar.getMenuCount());
+            assertEquals("File", frame.menuBar.getMenu(0).getText());
+            assertEquals("Edit", frame.menuBar.getMenu(1).getText());
+            assertEquals("View", frame.menuBar.getMenu(2).getText());
+            assertEquals("Help", frame.menuBar.getMenu(3).getText());
+
+            javax.swing.JMenu viewMenu = frame.menuBar.getMenu(2);
+            javax.swing.JMenuItem askRoxyItem = viewMenu.getItem(0);
+            javax.swing.JMenuItem buildFeatureItem = viewMenu.getItem(1);
+            javax.swing.JMenuItem settingsViewItem = viewMenu.getItem(5);
+            javax.swing.JMenuItem toggleThemeItem = viewMenu.getItem(7);
+
+            // Without API key configured, Ask Roxy & Build Feature menu items are gated disabled
+            assertFalse(askRoxyItem.isEnabled());
+            assertFalse(buildFeatureItem.isEnabled());
+            assertTrue(settingsViewItem.isEnabled());
+            frame.navigateIfAccessible(SidebarPanel.CARD_QA);
+            assertEquals(MainFrame.SETTINGS_VIEW, frame.currentCard);
+
+            // Configure API key and confirm build -> View menu items unlock and navigate
+            when(projectService.isBuildConfirmed()).thenReturn(true);
+            SwingTestUtils.runOnEdt(() -> {
+                settingsPanel.geminiApiKeyField.setText("valid-api-key");
+                settingsPanel.saveButton.doClick();
+            });
+            SwingTestUtils.flushEdt();
+
+            assertTrue(askRoxyItem.isEnabled());
+            assertTrue(buildFeatureItem.isEnabled());
+
+            SwingTestUtils.runOnEdt(() -> {
+                buildFeatureItem.doClick();
+                assertEquals(MainFrame.TASK_VIEW, frame.currentCard);
+                toggleThemeItem.doClick();
+            });
+            SwingTestUtils.flushEdt();
+
+            // Verify Help menu items & About message
+            javax.swing.JMenu helpMenu = frame.menuBar.getMenu(3);
+            SwingTestUtils.runOnEdt(() -> {
+                helpMenu.getItem(0).doClick();
+                assertEquals(MainFrame.API_VIEW, frame.currentCard);
+                helpMenu.getItem(1).doClick();
+                assertEquals(MainFrame.TOOLS_VIEW, frame.currentCard);
+            });
+            assertTrue(MainFrame.buildAboutMessage().contains("RoxyCode"));
+
+            // Verify Edit menu undo/redo actions on a JTextComponent
+            javax.swing.JTextArea sampleArea = new javax.swing.JTextArea("initial");
+            boolean[] undoInvoked = new boolean[1];
+            boolean[] redoInvoked = new boolean[1];
+            sampleArea.getActionMap().put("Undo", new javax.swing.AbstractAction() {
+                @Override
+                public void actionPerformed(java.awt.event.ActionEvent e) {
+                    undoInvoked[0] = true;
+                }
+            });
+            sampleArea.getActionMap().put("Redo", new javax.swing.AbstractAction() {
+                @Override
+                public void actionPerformed(java.awt.event.ActionEvent e) {
+                    redoInvoked[0] = true;
+                }
+            });
+            frame.performFocusedUndo(sampleArea);
+            frame.performFocusedRedo(sampleArea);
+            assertTrue(undoInvoked[0]);
+            assertTrue(redoInvoked[0]);
+
+            // Verify Quit handler saves window state before calling performQuit
+            boolean[] quitPerformed = new boolean[1];
+            frame.setBounds(120, 140, 1100, 720);
+            frame.lastNormalBounds = new java.awt.Rectangle(120, 140, 1100, 720);
+            frame.handleDesktopQuitRequest(new java.awt.desktop.QuitResponse() {
+                @Override
+                public void performQuit() {
+                    quitPerformed[0] = true;
+                }
+
+                @Override
+                public void cancelQuit() {
+                }
+            });
+            assertTrue(quitPerformed[0]);
+            assertEquals(120, settingsService.getSettings().getWindowX());
+            // Verify phase tracker pill uses clean EmptyBorder and arc: 12 instead of left matte bar
+            assertTrue(taskWorkspacePanel.progressTracker.getBorder() instanceof javax.swing.border.EmptyBorder);
+            String trackerStyle = String.valueOf(taskWorkspacePanel.progressTracker
+                    .getClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE));
+            assertTrue(trackerStyle.contains("arc: 12"));
+        } finally {
+            frame.dispose();
+        }
+    }
 }

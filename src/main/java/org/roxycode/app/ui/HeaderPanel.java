@@ -218,7 +218,7 @@ final class HeaderPanel extends JPanel {
         Edt.run(this::updateModelDisplay);
     }
 
-    private void toggleTheme() {
+    void toggleTheme() {
         AppSettings settings = settingsService.getSettings();
         String currentTheme = settings.getTheme();
         boolean isDark;
@@ -300,7 +300,7 @@ final class HeaderPanel extends JPanel {
         }
     }
 
-    private void chooseProject() {
+    void chooseProject() {
         File file = UiComponents.chooseDirectory(this, "Select Project Directory",
                 projectService.getCurrentProjectRoot());
         if (file != null) {

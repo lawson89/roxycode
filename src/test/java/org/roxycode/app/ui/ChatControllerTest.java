@@ -501,7 +501,8 @@ class ChatControllerTest extends ChatTestFixture {
         assertEquals("Stop active turn (Esc)", chatPanel.stopButton.getToolTipText());
         String workingPlaceholder = String
                 .valueOf(chatPanel.inputArea.getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT));
-        assertContainsAll(workingPlaceholder, "Roxy is working", "Press Esc or click Stop to cancel");
+        assertEquals(ChatPanel.BUSY_PLACEHOLDER_TEXT, workingPlaceholder);
+        assertEquals(4, chatPanel.inputArea.getRows());
 
         assertTrue(chatPanel.activityStripPanel.isVisible());
         assertTrue(chatPanel.activityAnimationTimer.isRunning());
@@ -521,9 +522,8 @@ class ChatControllerTest extends ChatTestFixture {
         flushEdt();
         assertEquals("Turn 2/5 • 1/2 steps", chatPanel.telemetryBar.turnLabel.getText());
         assertEquals("Running tool (Turn 2): fileReadService.readFiles (1 line)", chatPanel.getActivityStatusText());
-        assertContainsAll(String.valueOf(chatPanel.inputArea.getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT)),
-                "Turn 2/5 • 1/2 steps");
-
+        assertEquals(ChatPanel.BUSY_PLACEHOLDER_TEXT,
+                String.valueOf(chatPanel.inputArea.getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT)));
         chatPanel.controller.activeTurnId = 1L;
         chatPanel.controller
                 .onAgentActivity(new AgentActivityEvent("task:default", "Thinking with gemini-3.1-pro-preview..."));
@@ -945,9 +945,10 @@ class ChatControllerTest extends ChatTestFixture {
         clearInvocations(aiService);
         SwingTestUtils.runOnEdt(() -> {
             taskPanel.setInputText("leftover draft");
-            assertTrue(taskPanel.submitMovedFeatureRequest("Implement feature X"));
+            String movedPrompt = String.join(System.lineSeparator(), "Implement feature X", "", "---",
+                    "Click **[Move to Feature Request]** to kick off the plan:");
+            assertTrue(taskPanel.submitMovedFeatureRequest(movedPrompt));
         });
-        flushEdt();
         assertEquals("", taskPanel.inputArea.getText());
         verify(aiService).chat(eq("task:default"), any(), eq("Implement feature X"), any());
 

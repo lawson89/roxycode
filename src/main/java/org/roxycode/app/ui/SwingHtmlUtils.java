@@ -17,6 +17,7 @@ import com.vladsch.flexmark.parser.Parser;
 import com.vladsch.flexmark.ast.Code;
 import com.vladsch.flexmark.ast.FencedCodeBlock;
 import com.vladsch.flexmark.ast.IndentedCodeBlock;
+import com.vladsch.flexmark.ast.ThematicBreak;
 import com.vladsch.flexmark.html.HtmlWriter;
 import com.vladsch.flexmark.html.renderer.NodeRenderer;
 import com.vladsch.flexmark.html.renderer.NodeRendererContext;
@@ -715,14 +716,21 @@ public final class SwingHtmlUtils {
         public Set<NodeRenderingHandler<?>> getNodeRenderingHandlers() {
             return Set.of(new NodeRenderingHandler<>(FencedCodeBlock.class, this::render),
                     new NodeRenderingHandler<>(IndentedCodeBlock.class, this::render),
-                    new NodeRenderingHandler<>(Code.class, this::renderInlineCode));
+                    new NodeRenderingHandler<>(Code.class, this::renderInlineCode),
+                    new NodeRenderingHandler<>(ThematicBreak.class, this::renderThematicBreak));
         }
 
         @SuppressWarnings("PMD.UnusedFormalParameter")
         private void renderInlineCode(Code node, NodeRendererContext context, HtmlWriter html) {
-            html.raw("<code>&nbsp;");
+            html.raw("<code>");
             html.text(node.getText().normalizeEOL());
-            html.raw("&nbsp;</code>");
+            html.raw("</code>");
+        }
+
+        @SuppressWarnings("PMD.UnusedFormalParameter")
+        private void renderThematicBreak(ThematicBreak node, NodeRendererContext context, HtmlWriter html) {
+            html.raw(
+                    "<table width='100%' border='0' cellpadding='0' cellspacing='0' style='margin-top: 8px; margin-bottom: 8px;'><tr><td class='hr-line' height='1'></td></tr></table>");
         }
 
         @SuppressWarnings("PMD.UnusedFormalParameter")

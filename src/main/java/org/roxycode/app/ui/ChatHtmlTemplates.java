@@ -25,11 +25,22 @@ public final class ChatHtmlTemplates {
     private static final Pattern HTML_TAG_PATTERN = Pattern.compile("<[^>]+>");
     private static final Pattern SERVICE_CALL_PATTERN = Pattern
             .compile("([a-zA-Z_][a-zA-Z0-9_]*Service[.][a-zA-Z_][a-zA-Z0-9_]*)[ 	]*[(]");
+    private static final Pattern MOVE_TO_FEATURE_MENTION_PATTERN = Pattern.compile(
+            "(?:<strong>|<b>|<code>)?" + Pattern.quote("[Move to Feature Request]") + "(?:</code>|</b>|</strong>)?");
     private ChatHtmlTemplates() {
     }
 
     public static String renderMoveToActionHtml(int messageIndex) {
         return "<a class='feature-action' href='feature:" + messageIndex + "'>[Move to Feature Request]</a>";
+    }
+
+    static String linkifyMoveToFeatureMentions(String renderedHtml, int messageIndex) {
+        if (StringUtils.isBlank(renderedHtml) || messageIndex < 0
+                || !renderedHtml.contains("[Move to Feature Request]")) {
+            return StringUtils.defaultString(renderedHtml);
+        }
+        String linkHtml = renderMoveToActionHtml(messageIndex);
+        return MOVE_TO_FEATURE_MENTION_PATTERN.matcher(renderedHtml).replaceAll(Matcher.quoteReplacement(linkHtml));
     }
 
     public static String renderCopyActionHtml(int messageIndex, boolean copied) {
@@ -110,6 +121,10 @@ public final class ChatHtmlTemplates {
         if (ROLE_USER.equals(normalizedRole)) {
             attachmentsHtml = renderUserAttachmentsHtml(thumbnailBase64List);
         }
+        String renderedBody = StringUtils.defaultString(content);
+        if (ROLE_AI.equals(normalizedRole) && showMoveAction && messageIndex >= 0) {
+            renderedBody = linkifyMoveToFeatureMentions(renderedBody, messageIndex);
+        }
 
         return """
                 <table class="%s-entry" width="100%%" cellpadding="0" cellspacing="0" border="0">
@@ -132,7 +147,7 @@ public final class ChatHtmlTemplates {
                 """
                 .formatted(safeRole, safeRole, indicator,
                         SwingHtmlUtils.escapeHtml(StringUtils.defaultString(timestamp)), actionCell, attachmentsHtml,
-                        StringUtils.defaultString(content));
+                        renderedBody);
     }
 
     public static int countToolScriptLines(String script) {

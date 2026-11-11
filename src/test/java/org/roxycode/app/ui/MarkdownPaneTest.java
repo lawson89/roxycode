@@ -19,16 +19,18 @@ class MarkdownPaneTest {
         String[] movedContent = new String[1];
         pane.setOnMoveToFeatureListener(content -> movedContent[0] = content);
 
-        pane.appendMessage("ai", "Feature suggestion");
+        String aiContent = String.join(System.lineSeparator(), "Feature suggestion", "",
+                "Click **[Move to Feature Request]** below.");
+        pane.appendMessage("ai", aiContent);
         String text = pane.getText();
         assertTrue(text.contains("feature:0"));
         assertTrue(text.contains("[Move to Feature") && text.contains("Request]"));
+        assertEquals(2, org.apache.commons.lang3.StringUtils.countMatches(text, "feature:0"));
 
         pane.fireHyperlinkUpdate(new HyperlinkEvent(pane, HyperlinkEvent.EventType.ACTIVATED, null, "feature:0"));
-        assertEquals("Feature suggestion", movedContent[0]);
-
+        assertEquals(aiContent, movedContent[0]);
         MarkdownPane taskPane = new MarkdownPane(true);
-        taskPane.appendMessage("ai", "Task response");
+        taskPane.appendMessage("ai", "Task response mentioning [Move to Feature Request]");
         assertFalse(taskPane.getText().contains("feature:0"));
     }
 

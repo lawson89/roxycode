@@ -42,6 +42,8 @@ public class RoxyCode {
      *            command line arguments
      */
     public static void main(String[] args) {
+        configureDesktopSystemProperties();
+
         String theme = AppSettings.DEFAULT_THEME;
         AppSettings settings = null;
         try {
@@ -99,6 +101,17 @@ public class RoxyCode {
                 throw e;
             }
         });
+    }
+
+    /**
+     * Configures macOS and FlatLaf desktop system properties before AWT or Swing initialization.
+     */
+    public static void configureDesktopSystemProperties() {
+        System.setProperty("apple.awt.application.name", "RoxyCode");
+        System.setProperty("apple.laf.useScreenMenuBar", "true");
+        System.setProperty("apple.awt.application.appearance", "system");
+        System.setProperty("flatlaf.useWindowDecorations", "true");
+        System.setProperty("flatlaf.menuBarEmbedded", "true");
     }
 
     private static ApplicationContextInitializer<ConfigurableApplicationContext> createSettingsInitializer(

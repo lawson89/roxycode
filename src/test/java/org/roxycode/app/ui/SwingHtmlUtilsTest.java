@@ -21,12 +21,15 @@ class SwingHtmlUtilsTest {
                 | :--- | ---: |
                 | Key | 42 |
 
+                ---
+
                 ~~~java
                 public class Demo {}
                 ~~~
                 """);
-        assertContainsAll(html, "<h1>Heading</h1>", "<code>&nbsp;inline&lt;Code&gt;&nbsp;</code>", "md-table",
+        assertContainsAll(html, "<h1>Heading</h1>", "<code>inline&lt;Code&gt;</code>", "class='hr-line'", "md-table",
                 "cellpadding", "md-th", "md-td", "<span class='mtk-keyword'>public</span>");
+        assertFalse(html.contains("<hr"));
     }
 
     @Test
