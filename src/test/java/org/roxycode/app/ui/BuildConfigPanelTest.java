@@ -3,8 +3,11 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.formdev.flatlaf.FlatClientProperties;
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.JComboBox;
 import javax.swing.SwingUtilities;
@@ -88,8 +91,10 @@ class BuildConfigPanelTest {
         assertEquals(UiComponents.formatWrappingHtml(BuildConfigPanel.SUBTITLE_TEXT), panel.subtitleLabel.getText());
         assertEquals(BuildConfigPanel.BUILD_CONFIG_HINT_TEXT, panel.buildConfigHintLabel.getText());
         assertSame(panel.buildSectionHeaderLabel.getParent(), panel.buildConfigHintLabel.getParent());
+        assertSame(panel.buildSectionHeaderLabel.getParent(), panel.configureWithRoxyButton.getParent());
         assertNotNull(panel.buildCardPanel);
         assertSame(panel.saveButton.getParent(), panel.statusLabel.getParent());
+        assertEquals(BuildConfigPanel.SAVE_BUTTON_TEXT, panel.saveButton.getText());
         assertTrue(panel.textArea.getText().contains("./mvnw test-compile"));
         assertTrue(panel.unconfirmedBanner.isVisible());
         assertEquals(UiComponents.formatWrappingHtml(BuildConfigPanel.UNCONFIRMED_BUILD_NOTICE_TEXT),
@@ -125,6 +130,7 @@ class BuildConfigPanelTest {
         assertFalse(saveCalledOnEdt.get());
         assertFalse(modelSaveCalledOnEdt.get());
         assertTrue(panel.saveButton.isEnabled());
+        assertEquals(BuildConfigPanel.SAVED_FEEDBACK_BUTTON_TEXT, panel.saveButton.getText());
         assertFalse(panel.unconfirmedBanner.isVisible());
         assertEquals("Configuration saved successfully!", panel.statusLabel.getText());
         assertEquals(1, confirmCallbackCount.get());
@@ -152,74 +158,72 @@ class BuildConfigPanelTest {
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
 
         assertTrue(panel.saveButton.isEnabled());
+        assertEquals(BuildConfigPanel.SAVE_BUTTON_TEXT, panel.saveButton.getText());
         assertEquals("Error saving config: Disk full", panel.statusLabel.getText());
         assertEquals("Error saving config: Disk full", panel.statusLabel.getToolTipText());
         verify(projectService, never()).setBuildConfirmed(true);
     }
 
     @Test
-    void testTemplateSelectorAndApplyTemplate() throws Exception {
-        when(buildToolService.getAvailableTemplates()).thenReturn(GenericBuildToolService.AVAILABLE_TEMPLATES);
-        when(buildToolService.detectTemplate()).thenReturn("maven");
-        when(buildToolService.loadTemplateContent("rust")).thenReturn("""
-                [commands]
-                compile = 'cargo check'
-                """);
+    void testSaveButtonConfirmedAndDirtyStateTransitions() throws Exception {
+        doAnswer(inv -> {
+            when(projectService.isBuildConfirmed()).thenReturn(inv.getArgument(0, Boolean.class));
+            return null;
+        }).when(projectService).setBuildConfirmed(anyBoolean());
 
         BuildConfigPanel panel = createPanelOnEdt();
+        assertEquals(BuildConfigPanel.SAVE_BUTTON_TEXT, panel.saveButton.getText());
+        assertFalse(panel.hasUnsavedChanges());
 
-        GenericBuildToolService.BuildTemplateInfo selected = (GenericBuildToolService.BuildTemplateInfo) panel.templateCombo
-                .getSelectedItem();
-        assertNotNull(selected);
-        assertEquals("maven", selected.id());
-        assertEquals("Maven (auto-detected)", panel.formatTemplateDisplayText(selected));
+        // Clicking save transitions to immediate post-save feedback state ("Confirmed & Saved!")
+        SwingTestUtils.clickOnEdt(panel.saveButton);
+        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
+        assertEquals(BuildConfigPanel.SAVED_FEEDBACK_BUTTON_TEXT, panel.saveButton.getText());
+        assertTrue(String.valueOf(panel.saveButton.getClientProperty(FlatClientProperties.STYLE))
+                .contains("$Actions.Green"));
 
+        // Firing the feedback timer transitions to the persistent clean confirmed state ("Settings Confirmed")
         SwingTestUtils.runOnEdt(() -> {
-            for (int i = 0; i < panel.templateCombo.getItemCount(); i++) {
-                GenericBuildToolService.BuildTemplateInfo item = panel.templateCombo.getItemAt(i);
-                if ("rust".equals(item.id())) {
-                    panel.templateCombo.setSelectedIndex(i);
-                    break;
-                }
+            for (java.awt.event.ActionListener listener : panel.saveFeedbackTimer.getActionListeners()) {
+                listener.actionPerformed(null);
             }
-            panel.applyTemplateButton.doClick();
         });
-        assertTrue(panel.textArea.getText().contains("cargo check"));
+        assertEquals(BuildConfigPanel.CONFIRMED_BUTTON_TEXT, panel.saveButton.getText());
+        assertFalse(panel.hasUnsavedChanges());
 
-        when(buildToolService.loadTemplateContent("maven")).thenReturn("""
-                [commands]
-                compile = './mvnw test-compile'
-                """);
-        SwingTestUtils.runOnEdt(() -> {
-            panel.textArea.setText("# User edited build.toml");
-            panel.templateCombo.setSelectedIndex(0);
-            panel.applyTemplateButton.doClick();
-        });
+        // Editing TOML marks panel dirty and transitions button back to "Confirm & Save Settings"
+        String originalToml = SwingTestUtils.callOnEdt(panel.textArea::getText);
+        SwingTestUtils.runOnEdt(() -> panel.textArea.setText(originalToml + "\n# dirty edit"));
+        assertTrue(panel.hasUnsavedChanges());
+        assertEquals(BuildConfigPanel.SAVE_BUTTON_TEXT, panel.saveButton.getText());
 
-        UiComponents.InlineConfirmBar confirmBar = panel.templateConfirmBar;
-        assertTrue(confirmBar.isPromptVisible());
-        assertEquals("Replace unsaved build.toml edits with 'Maven'?", confirmBar.getMessage());
-        SwingTestUtils.clickOnEdt(confirmBar.cancelButton);
-        assertFalse(confirmBar.isPromptVisible());
-        assertEquals("# User edited build.toml", panel.textArea.getText());
+        // Reverting TOML to saved baseline restores "Settings Confirmed"
+        SwingTestUtils.runOnEdt(() -> panel.textArea.setText(originalToml));
+        assertFalse(panel.hasUnsavedChanges());
+        assertEquals(BuildConfigPanel.CONFIRMED_BUTTON_TEXT, panel.saveButton.getText());
 
-        SwingTestUtils.clickOnEdt(panel.applyTemplateButton);
-        assertTrue(confirmBar.isPromptVisible());
-        SwingTestUtils.runOnEdt(() -> panel.textArea.setText("# User edited build.toml again"));
-        assertFalse(confirmBar.isPromptVisible());
+        // Changing modelCombo marks panel dirty
+        SwingTestUtils.runOnEdt(() -> panel.modelCombo.setSelectedIndex(1));
+        assertTrue(panel.hasUnsavedChanges());
+        assertEquals(BuildConfigPanel.SAVE_BUTTON_TEXT, panel.saveButton.getText());
 
-        SwingTestUtils.clickOnEdt(panel.applyTemplateButton);
-        assertTrue(confirmBar.isPromptVisible());
-        SwingTestUtils.clickOnEdt(confirmBar.confirmButton);
-        assertFalse(confirmBar.isPromptVisible());
-        assertTrue(panel.textArea.getText().contains("./mvnw test-compile"));
-        assertEquals("Applied 'Maven' template.", panel.statusLabel.getText());
+        SwingTestUtils.runOnEdt(() -> panel.modelCombo.setSelectedIndex(0));
+        assertFalse(panel.hasUnsavedChanges());
+        assertEquals(BuildConfigPanel.CONFIRMED_BUTTON_TEXT, panel.saveButton.getText());
+
+        // Changing thinkingLevelCombo marks panel dirty
+        SwingTestUtils.runOnEdt(() -> UiComponents.selectThinkingLevelOptionById(panel.thinkingLevelCombo, "HIGH"));
+        assertTrue(panel.hasUnsavedChanges());
+        assertEquals(BuildConfigPanel.SAVE_BUTTON_TEXT, panel.saveButton.getText());
+
+        SwingTestUtils.runOnEdt(() -> UiComponents.selectThinkingLevelOptionById(panel.thinkingLevelCombo, ""));
+        assertFalse(panel.hasUnsavedChanges());
+        assertEquals(BuildConfigPanel.CONFIRMED_BUTTON_TEXT, panel.saveButton.getText());
     }
 
     @Test
-    void testConfigureWithRoxyPopulatesEditorAndPromptsOnUnsavedEdits() throws Exception {
+    void testConfigureWithRoxyShowsProgressIndicatorPopulatesEditorAndPromptsOnUnsavedEdits() throws Exception {
         org.roxycode.app.service.AiService aiService = mock(org.roxycode.app.service.AiService.class);
-        when(buildToolService.getAvailableTemplates()).thenReturn(GenericBuildToolService.AVAILABLE_TEMPLATES);
         when(buildToolService.detectTemplate()).thenReturn("maven");
         when(buildToolService.collectBuildConfigurationContext(eq("maven"), anyString()))
                 .thenReturn("## Maven Context");
@@ -234,19 +238,44 @@ class BuildConfigPanelTest {
                 readable_paths = ["~/.sdkman"]
                 writable_paths = ["~/.m2"]
                 """;
-        when(aiService.generateBuildToml("## Maven Context")).thenReturn(tailoredToml);
+        CountDownLatch inFlightLatch = new CountDownLatch(1);
+        CountDownLatch releaseLatch = new CountDownLatch(1);
+        when(aiService.generateBuildToml("## Maven Context")).thenAnswer(inv -> {
+            inFlightLatch.countDown();
+            releaseLatch.await(5, TimeUnit.SECONDS);
+            return tailoredToml;
+        });
         when(buildToolService.extractAndValidateGeneratedToml(tailoredToml)).thenReturn(tailoredToml);
 
         BuildConfigPanel panel = SwingTestUtils
                 .callOnEdt(() -> new BuildConfigPanel(buildToolService, settingsService, projectService, aiService));
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
+        assertFalse(panel.configureProgressBar.isVisible());
+        assertFalse(panel.configureStatusLabel.isVisible());
 
         SwingTestUtils.clickOnEdt(panel.configureWithRoxyButton);
+        assertTrue(inFlightLatch.await(5, TimeUnit.SECONDS));
+
+        // Verify progress bar and inline status label are visible while Roxy is configuring
+        SwingTestUtils.runOnEdt(() -> {
+            assertFalse(panel.configureWithRoxyButton.isEnabled());
+            assertEquals(BuildConfigPanel.CONFIGURING_WITH_ROXY_TEXT, panel.configureWithRoxyButton.getText());
+            assertTrue(panel.configureProgressBar.isVisible());
+            assertTrue(panel.configureProgressBar.isIndeterminate());
+            assertTrue(panel.configureStatusLabel.isVisible());
+            assertEquals(BuildConfigPanel.CONFIGURING_WITH_ROXY_STATUS, panel.configureStatusLabel.getText());
+        });
+
+        releaseLatch.countDown();
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
 
         assertEquals(tailoredToml, panel.textArea.getText());
+        assertTrue(panel.hasUnsavedChanges());
         assertTrue(panel.configureWithRoxyButton.isEnabled());
         assertEquals(BuildConfigPanel.CONFIGURE_WITH_ROXY_TEXT, panel.configureWithRoxyButton.getText());
+        assertFalse(panel.configureProgressBar.isVisible());
+        assertFalse(panel.configureProgressBar.isIndeterminate());
+        assertFalse(panel.configureStatusLabel.isVisible());
         assertEquals("Roxy configured build.toml! Review and click 'Confirm & Save Settings'.",
                 panel.statusLabel.getText());
 
@@ -265,6 +294,8 @@ class BuildConfigPanelTest {
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
 
         assertTrue(panel.configureWithRoxyButton.isEnabled());
+        assertFalse(panel.configureProgressBar.isVisible());
+        assertFalse(panel.configureStatusLabel.isVisible());
         assertEquals("Roxy configuration failed: Invalid TOML syntax", panel.statusLabel.getText());
         assertEquals("# Unsaved user edit", panel.textArea.getText());
     }

@@ -5,6 +5,7 @@ import java.awt.*;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
@@ -15,7 +16,6 @@ import org.fife.ui.rtextarea.RTextScrollPane;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GenericBuildToolService;
-import org.roxycode.app.ai.services.GenericBuildToolService.BuildTemplateInfo;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.GeminiModelConfig;
@@ -45,13 +45,15 @@ final class BuildConfigPanel extends JPanel {
     static final String SECTION_AI_MODEL_TITLE = "AI Model Override";
     static final String SECTION_BUILD_CONFIG_TITLE = "Build Configuration (build.toml)";
     static final String BUILD_CONFIG_HINT_TEXT = "Need help customizing build.toml or regexes for your stack? Ask Roxy!";
-    static final String APPLY_TEMPLATE_TEXT = "Apply Template";
     static final String CONFIGURE_WITH_ROXY_TEXT = "Configure with Roxy";
     static final String CONFIGURING_WITH_ROXY_TEXT = "Configuring...";
     static final String CONFIGURING_WITH_ROXY_STATUS = "Roxy is inspecting project files and configuring build.toml...";
     static final String SAVE_BUTTON_TEXT = "Confirm & Save Settings";
+    static final String SAVED_FEEDBACK_BUTTON_TEXT = "Confirmed & Saved!";
+    static final String CONFIRMED_BUTTON_TEXT = "Settings Confirmed";
     private static final String DEFAULT_TEMPLATE_ID = "default";
     private static final String HEADER_FONT_STYLE = "font: bold +2";
+    private static final String SAVE_BUTTON_BASE_STYLE = "arc: 8; font: bold; ";
     static final String UNCONFIRMED_BUILD_NOTICE_TEXT = "Build configuration was initialized from the auto-detected template. Please review the commands below (or click 'Configure with Roxy') and click 'Confirm & Save Settings'.";
     static final String BUILD_TOML_GUIDE_TOOLTIP_HTML = """
             <html><div style='width: 390px;'>
@@ -79,18 +81,23 @@ final class BuildConfigPanel extends JPanel {
     final JLabel buildSectionHeaderLabel;
     final JLabel buildConfigInfoIcon;
     final JLabel buildConfigHintLabel;
-    final JComboBox<BuildTemplateInfo> templateCombo;
-    final JButton applyTemplateButton;
     final JButton configureWithRoxyButton;
     final UiComponents.InlineConfirmBar templateConfirmBar;
+    final JProgressBar configureProgressBar;
+    final JLabel configureStatusLabel;
     final UiComponents.WarningBanner unconfirmedBanner;
     final RSyntaxTextArea textArea;
     final JButton saveButton;
     final JLabel statusLabel;
     private final Timer statusTimer;
+    final Timer saveFeedbackTimer;
 
     private final transient UiComponents.UiGuard textUpdateGuard = new UiComponents.UiGuard();
     private boolean textEditedByUser = false;
+    private boolean saveFeedbackActive = false;
+    private String savedTomlContent = "";
+    private String savedModelApiName = "";
+    private String savedThinkingLevelId = "";
     String detectedTemplateId = DEFAULT_TEMPLATE_ID;
     private transient Runnable onConfirmSavedCallback;
     transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
@@ -116,9 +123,15 @@ final class BuildConfigPanel extends JPanel {
         statusLabel.setFont(statusLabel.getFont().deriveFont(Font.BOLD, 11.5f));
 
         saveButton = UiComponents.createActionButton(SAVE_BUTTON_TEXT, Codicons.SAVE, new Insets(6, 14, 6, 14), false,
-                "arc: 8; font: bold; " + UiComponents.ACCENT_BUTTON_STYLE, e -> saveConfig());
+                SAVE_BUTTON_BASE_STYLE + UiComponents.ACCENT_BUTTON_STYLE, e -> saveConfig());
         saveButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         saveButton.setIconTextGap(6);
+
+        saveFeedbackTimer = new Timer(2500, e -> {
+            saveFeedbackActive = false;
+            updateSaveButtonState();
+        });
+        saveFeedbackTimer.setRepeats(false);
 
         JPanel headerActions = new JPanel(new MigLayout("insets 0, gapx 12", "[][]", "[center]"));
         headerActions.setOpaque(false);
@@ -161,11 +174,15 @@ final class BuildConfigPanel extends JPanel {
 
         loadModelOptions();
         loadThinkingLevelOptions();
-        modelCombo.addActionListener(e -> updateSelectedModelDetails());
+        modelCombo.addActionListener(e -> {
+            updateSelectedModelDetails();
+            onComboSelectionChanged();
+        });
+        thinkingLevelCombo.addActionListener(e -> onComboSelectionChanged());
         updateSelectedModelDetails();
 
         buildCardPanel = new JPanel(
-                new MigLayout("fill, insets 16 18 16 18, hidemode 3", "[grow, fill]", "[][][][grow, fill]"));
+                new MigLayout("fill, insets 16 18 16 18, hidemode 3", "[grow, fill]", "[][][][][grow, fill]"));
         UiComponents.styleCardPanel(buildCardPanel);
 
         buildSectionHeaderLabel = UiComponents.createSectionHeader(SECTION_BUILD_CONFIG_TITLE, Codicons.PACKAGE,
@@ -174,47 +191,37 @@ final class BuildConfigPanel extends JPanel {
         buildConfigHintLabel = new JLabel(BUILD_CONFIG_HINT_TEXT);
         buildConfigHintLabel.putClientProperty(FlatClientProperties.STYLE,
                 "font: -1; foreground: $Label.disabledForeground");
-        JPanel buildHeaderRow = new JPanel(new MigLayout("fillx, insets 0, gapx 8", "[][][grow][right]", "[center]"));
-        buildHeaderRow.setOpaque(false);
-        buildHeaderRow.add(buildSectionHeaderLabel);
-        buildHeaderRow.add(buildConfigInfoIcon);
-        buildHeaderRow.add(buildConfigHintLabel, "skip 1");
-        buildCardPanel.add(buildHeaderRow, "growx, wmin 0, wrap, gapbottom 8");
-
-        JPanel templateToolbar = new JPanel(new MigLayout("fillx, insets 0, hidemode 3", "[][][][][grow]", "[]"));
-        templateToolbar.setOpaque(false);
-        JLabel templateLabel = new JLabel("Build Template:");
-        templateCombo = new JComboBox<>();
-        templateCombo.setRenderer(new DefaultListCellRenderer() {
-            private static final long serialVersionUID = 1L;
-
-            @Override
-            public java.awt.Component getListCellRendererComponent(JList<?> list, Object value, int index,
-                    boolean isSelected, boolean cellHasFocus) {
-                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-                if (value instanceof BuildTemplateInfo info) {
-                    setText(formatTemplateDisplayText(info));
-                }
-                return this;
-            }
-        });
-        templateConfirmBar = new UiComponents.InlineConfirmBar();
-        templateCombo.addActionListener(e -> templateConfirmBar.cancel());
-        applyTemplateButton = new JButton(APPLY_TEMPLATE_TEXT);
-        applyTemplateButton.addActionListener(e -> applySelectedTemplate());
         configureWithRoxyButton = UiComponents.createActionButton(CONFIGURE_WITH_ROXY_TEXT, Codicons.HUBOT, null, false,
                 null, e -> configureWithRoxy());
         configureWithRoxyButton.setToolTipText(
                 "Inspect project build files and installed host toolchains to automatically generate build.toml with Roxy");
 
-        templateToolbar.add(templateLabel, "gapright 6");
-        templateToolbar.add(templateCombo, "w 220:280:360, gapright 8");
-        templateToolbar.add(applyTemplateButton, "gapright 8");
-        templateToolbar.add(configureWithRoxyButton, "gapright 8");
-        templateToolbar.add(templateConfirmBar);
-        buildCardPanel.add(templateToolbar, "growx, wmin 0, wrap, gapbottom 8");
+        JPanel buildHeaderRow = new JPanel(
+                new MigLayout("fillx, insets 0, gapx 8", "[][][grow][right][right]", "[center]"));
+        buildHeaderRow.setOpaque(false);
+        buildHeaderRow.add(buildSectionHeaderLabel);
+        buildHeaderRow.add(buildConfigInfoIcon);
+        buildHeaderRow.add(buildConfigHintLabel, "skip 1");
+        buildHeaderRow.add(configureWithRoxyButton);
+        buildCardPanel.add(buildHeaderRow, "growx, wmin 0, wrap, gapbottom 8");
 
-        loadTemplateOptions();
+        templateConfirmBar = new UiComponents.InlineConfirmBar();
+        buildCardPanel.add(templateConfirmBar, "growx, wmin 0, wrap, gapbottom 8, hidemode 3");
+
+        configureProgressBar = new JProgressBar();
+        configureProgressBar.setVisible(false);
+        configureStatusLabel = new JLabel("");
+        configureStatusLabel.setFont(configureStatusLabel.getFont().deriveFont(Font.BOLD, 11.5f));
+        configureStatusLabel.setVisible(false);
+
+        JPanel configureProgressRow = new JPanel(
+                new MigLayout("fillx, insets 0, gapx 10, hidemode 3", "[180:220:260][grow]", "[center]"));
+        configureProgressRow.setOpaque(false);
+        configureProgressRow.add(configureProgressBar, "growx, hidemode 3");
+        configureProgressRow.add(configureStatusLabel, "growx, wmin 0, hidemode 3");
+        buildCardPanel.add(configureProgressRow, "growx, wmin 0, wrap, gapbottom 8, hidemode 3");
+
+        refreshDetectedTemplate();
 
         unconfirmedBanner = new UiComponents.WarningBanner(UNCONFIRMED_BUILD_NOTICE_TEXT);
         buildCardPanel.add(unconfirmedBanner, "growx, wmin 0, wrap, gapbottom 8, hidemode 3");
@@ -234,73 +241,27 @@ final class BuildConfigPanel extends JPanel {
         updateBannerState();
     }
 
-    String formatTemplateDisplayText(BuildTemplateInfo info) {
-        if (info == null) {
-            return "";
-        }
-        if (info.id().equals(detectedTemplateId) && !DEFAULT_TEMPLATE_ID.equals(info.id())) {
-            return info.displayName() + " (auto-detected)";
-        }
-        return info.displayName();
-    }
-
-    void loadTemplateOptions() {
-        DefaultComboBoxModel<BuildTemplateInfo> comboModel = new DefaultComboBoxModel<>();
-        List<BuildTemplateInfo> templates = GenericBuildToolService.AVAILABLE_TEMPLATES;
+    void refreshDetectedTemplate() {
         if (buildToolService != null) {
-            List<BuildTemplateInfo> fromService = buildToolService.getAvailableTemplates();
-            if (fromService != null && !fromService.isEmpty()) {
-                templates = fromService;
-            }
             detectedTemplateId = StringUtils.defaultIfBlank(buildToolService.detectTemplate(), DEFAULT_TEMPLATE_ID);
         } else {
             detectedTemplateId = DEFAULT_TEMPLATE_ID;
         }
-        BuildTemplateInfo toSelect = null;
-        for (BuildTemplateInfo info : templates) {
-            comboModel.addElement(info);
-            if (info.id().equals(detectedTemplateId)) {
-                toSelect = info;
-            }
-        }
-        templateCombo.setModel(comboModel);
-        if (toSelect != null) {
-            templateCombo.setSelectedItem(toSelect);
-        } else if (comboModel.getSize() > 0) {
-            templateCombo.setSelectedIndex(0);
-        }
     }
 
-    void applySelectedTemplate() {
-        BuildTemplateInfo selected = (BuildTemplateInfo) templateCombo.getSelectedItem();
-        if (selected == null || buildToolService == null) {
-            return;
-        }
-        if (textEditedByUser) {
-            templateConfirmBar.prompt("Replace unsaved build.toml edits with '" + selected.displayName() + "'?",
-                    "Confirm", false, () -> performApplyTemplate(selected));
-            return;
-        }
-        templateConfirmBar.cancel();
-        performApplyTemplate(selected);
-    }
-
-    private void setEditorContentProgrammatically(String content) {
+    private void setEditorContentProgrammatically(String content, boolean updateSavedBaseline) {
+        String normalizedContent = StringUtils.defaultString(content);
         textUpdateGuard.run(() -> {
-            textArea.setText(content);
+            textArea.setText(normalizedContent);
             textArea.setCaretPosition(0);
-            textEditedByUser = false;
+            if (updateSavedBaseline) {
+                savedTomlContent = normalizedContent;
+                textEditedByUser = false;
+            } else {
+                textEditedByUser = !Objects.equals(normalizedContent, savedTomlContent);
+            }
         });
         updateBannerState();
-    }
-
-    private void performApplyTemplate(BuildTemplateInfo selected) {
-        String content = buildToolService.loadTemplateContent(selected.id());
-        if (content != null) {
-            setEditorContentProgrammatically(content);
-            UiComponents.showStatusMessage(statusLabel, statusTimer,
-                    "Applied '" + selected.displayName() + "' template.", true);
-        }
     }
 
     void configureWithRoxy() {
@@ -318,17 +279,17 @@ final class BuildConfigPanel extends JPanel {
     }
 
     CompletableFuture<String> performConfigureWithRoxy() {
-        BuildTemplateInfo selected = (BuildTemplateInfo) templateCombo.getSelectedItem();
-        String selectedTemplateId = detectedTemplateId;
-        if (selected != null && StringUtils.isNotBlank(selected.id())) {
-            selectedTemplateId = selected.id();
-        }
-        final String templateId = selectedTemplateId;
+        refreshDetectedTemplate();
+        final String templateId = detectedTemplateId;
         final String currentEditorText = textArea.getText();
 
         configureWithRoxyButton.setEnabled(false);
         configureWithRoxyButton.setText(CONFIGURING_WITH_ROXY_TEXT);
-        applyTemplateButton.setEnabled(false);
+        configureProgressBar.setIndeterminate(true);
+        configureProgressBar.setVisible(true);
+        configureStatusLabel.setForeground(SwingHtmlUtils.getAccentColor());
+        configureStatusLabel.setText(CONFIGURING_WITH_ROXY_STATUS);
+        configureStatusLabel.setVisible(true);
         statusTimer.stop();
         statusLabel.setForeground(SwingHtmlUtils.getAccentColor());
         statusLabel.setText(CONFIGURING_WITH_ROXY_STATUS);
@@ -344,7 +305,7 @@ final class BuildConfigPanel extends JPanel {
             }
         }, generatedToml -> {
             restoreConfigureWithRoxyButtonState();
-            setEditorContentProgrammatically(generatedToml);
+            setEditorContentProgrammatically(generatedToml, false);
             UiComponents.showStatusMessage(statusLabel, statusTimer,
                     "Roxy configured build.toml! Review and click 'Confirm & Save Settings'.", true);
         }, ex -> {
@@ -361,7 +322,10 @@ final class BuildConfigPanel extends JPanel {
     private void restoreConfigureWithRoxyButtonState() {
         configureWithRoxyButton.setEnabled(true);
         configureWithRoxyButton.setText(CONFIGURE_WITH_ROXY_TEXT);
-        applyTemplateButton.setEnabled(true);
+        configureProgressBar.setIndeterminate(false);
+        configureProgressBar.setVisible(false);
+        configureStatusLabel.setText("");
+        configureStatusLabel.setVisible(false);
     }
 
     void loadModelOptions() {
@@ -380,13 +344,16 @@ final class BuildConfigPanel extends JPanel {
                 comboModel.addElement(cfg);
             }
         }
-        modelCombo.setModel(comboModel);
-
         String projectModel = "";
         if (projectService != null && projectService.hasActiveProject()) {
-            projectModel = projectService.getProjectGeminiModel();
+            projectModel = StringUtils.defaultString(projectService.getProjectGeminiModel());
         }
-        UiComponents.selectModelByApiName(modelCombo, projectModel);
+        final String targetModel = projectModel;
+        textUpdateGuard.run(() -> {
+            modelCombo.setModel(comboModel);
+            UiComponents.selectModelByApiName(modelCombo, targetModel);
+            savedModelApiName = resolveSelectedModelApiName();
+        });
     }
 
     void loadThinkingLevelOptions() {
@@ -396,18 +363,98 @@ final class BuildConfigPanel extends JPanel {
         for (ThinkingLevel level : ThinkingLevel.values()) {
             comboModel.addElement(ThinkingLevelOption.fromThinkingLevel(level));
         }
-        thinkingLevelCombo.setModel(comboModel);
 
         String projectThinking = "";
         if (projectService != null && projectService.hasActiveProject()) {
-            projectThinking = projectService.getProjectThinkingLevel();
+            projectThinking = StringUtils.defaultString(projectService.getProjectThinkingLevel());
         }
-        UiComponents.selectThinkingLevelOptionById(thinkingLevelCombo, projectThinking);
+        final String targetThinking = projectThinking;
+        textUpdateGuard.run(() -> {
+            thinkingLevelCombo.setModel(comboModel);
+            UiComponents.selectThinkingLevelOptionById(thinkingLevelCombo, targetThinking);
+            savedThinkingLevelId = resolveSelectedThinkingLevelId();
+        });
     }
 
     void updateSelectedModelDetails() {
         UiComponents.updateModelSelectionDetails(modelCombo, modelApiBadgeLabel, modelDescriptionArea,
                 SettingsService.resolveGlobalGeminiModel(settingsService));
+    }
+
+    private String resolveSelectedModelApiName() {
+        if (modelCombo == null) {
+            return "";
+        }
+        GeminiModelConfig selectedModel = (GeminiModelConfig) modelCombo.getSelectedItem();
+        if (selectedModel != null && selectedModel.apiName() != null) {
+            return selectedModel.apiName();
+        }
+        return "";
+    }
+
+    private String resolveSelectedThinkingLevelId() {
+        if (thinkingLevelCombo == null) {
+            return "";
+        }
+        ThinkingLevelOption selectedThinking = (ThinkingLevelOption) thinkingLevelCombo.getSelectedItem();
+        if (selectedThinking != null && selectedThinking.id() != null) {
+            return selectedThinking.id();
+        }
+        return "";
+    }
+
+    boolean hasUnsavedChanges() {
+        String currentText = "";
+        if (textArea != null) {
+            currentText = StringUtils.defaultString(textArea.getText());
+        }
+        if (textEditedByUser || !Objects.equals(currentText, savedTomlContent)) {
+            return true;
+        }
+        if (!Objects.equals(resolveSelectedModelApiName(), savedModelApiName)) {
+            return true;
+        }
+        return !Objects.equals(resolveSelectedThinkingLevelId(), savedThinkingLevelId);
+    }
+
+    private void onComboSelectionChanged() {
+        if (!textUpdateGuard.isActive()) {
+            cancelSaveFeedback();
+            updateSaveButtonState();
+        }
+    }
+
+    private void cancelSaveFeedback() {
+        if (saveFeedbackTimer != null && saveFeedbackTimer.isRunning()) {
+            saveFeedbackTimer.stop();
+        }
+        saveFeedbackActive = false;
+    }
+
+    void updateSaveButtonState() {
+        if (saveButton == null) {
+            return;
+        }
+        if (saveFeedbackActive) {
+            applySaveButtonPresentation(SAVED_FEEDBACK_BUTTON_TEXT, Codicons.CHECK,
+                    SAVE_BUTTON_BASE_STYLE + UiComponents.GREEN_BUTTON_STYLE);
+            return;
+        }
+        boolean confirmed = projectService != null && projectService.hasActiveProject()
+                && projectService.isBuildConfirmed();
+        if (confirmed && !hasUnsavedChanges()) {
+            applySaveButtonPresentation(CONFIRMED_BUTTON_TEXT, Codicons.CHECK,
+                    SAVE_BUTTON_BASE_STYLE + UiComponents.SUBTLE_GREEN_BUTTON_STYLE);
+        } else {
+            applySaveButtonPresentation(SAVE_BUTTON_TEXT, Codicons.SAVE,
+                    SAVE_BUTTON_BASE_STYLE + UiComponents.ACCENT_BUTTON_STYLE);
+        }
+    }
+
+    private void applySaveButtonPresentation(String text, Codicons icon, String style) {
+        saveButton.setText(text);
+        saveButton.putClientProperty(FlatClientProperties.STYLE, style);
+        saveButton.setIcon(FontIcon.of(icon, 16, UiComponents.resolveActionButtonIconColor(style)));
     }
 
     private void applySectionStyling() {
@@ -420,6 +467,7 @@ final class BuildConfigPanel extends JPanel {
         buildSectionHeaderLabel.setIcon(FontIcon.of(Codicons.PACKAGE, 18, accentColor));
         UiComponents.updateInfoIconTheme(buildConfigInfoIcon);
         UiComponents.refreshActionButtonIcons(this);
+        updateSaveButtonState();
 
         statusLabel.setForeground(SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green"));
     }
@@ -439,10 +487,11 @@ final class BuildConfigPanel extends JPanel {
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
         Edt.run(() -> {
+            cancelSaveFeedback();
             loadModelOptions();
             loadThinkingLevelOptions();
             updateSelectedModelDetails();
-            loadTemplateOptions();
+            refreshDetectedTemplate();
             loadConfig();
             updateBannerState();
         });
@@ -450,7 +499,9 @@ final class BuildConfigPanel extends JPanel {
 
     private void onTomlTextEdited() {
         if (!textUpdateGuard.isActive()) {
-            textEditedByUser = true;
+            String currentText = StringUtils.defaultString(textArea.getText());
+            textEditedByUser = !Objects.equals(currentText, savedTomlContent);
+            cancelSaveFeedback();
             templateConfirmBar.cancel();
             updateBannerState();
         }
@@ -471,6 +522,7 @@ final class BuildConfigPanel extends JPanel {
         boolean showUnconfirmedNotice = projectService != null && projectService.hasActiveProject()
                 && !projectService.isBuildConfirmed();
         unconfirmedBanner.setVisibleState(showUnconfirmedNotice, UNCONFIRMED_BUILD_NOTICE_TEXT);
+        updateSaveButtonState();
     }
 
     CompletableFuture<String> loadConfig() {
@@ -487,31 +539,22 @@ final class BuildConfigPanel extends JPanel {
                 log.error("Failed to load build config", e);
                 return "# Error loading config: " + e.getMessage();
             }
-        }, this::setEditorContentProgrammatically);
+        }, content -> setEditorContentProgrammatically(content, true));
         lastAsyncFuture = future;
         return future;
     }
 
     CompletableFuture<Void> saveConfig() {
         templateConfirmBar.cancel();
+        cancelSaveFeedback();
         if (buildToolService == null && projectService == null) {
             CompletableFuture<Void> done = CompletableFuture.completedFuture(null);
             lastAsyncFuture = done;
             return done;
         }
-        String contentToSave = textArea.getText();
-        GeminiModelConfig selectedModel = (GeminiModelConfig) modelCombo.getSelectedItem();
-        String selectedModelApiName = "";
-        if (selectedModel != null && selectedModel.apiName() != null) {
-            selectedModelApiName = selectedModel.apiName();
-        }
-        final String modelOverrideToSave = selectedModelApiName;
-        ThinkingLevelOption selectedThinking = (ThinkingLevelOption) thinkingLevelCombo.getSelectedItem();
-        String selectedThinkingId = "";
-        if (selectedThinking != null && selectedThinking.id() != null) {
-            selectedThinkingId = selectedThinking.id();
-        }
-        final String thinkingOverrideToSave = selectedThinkingId;
+        String contentToSave = StringUtils.defaultString(textArea.getText());
+        final String modelOverrideToSave = resolveSelectedModelApiName();
+        final String thinkingOverrideToSave = resolveSelectedThinkingLevelId();
         final boolean wasBuildConfirmed = projectService != null && projectService.isBuildConfirmed();
         saveButton.setEnabled(false);
         CompletableFuture<Void> future = Edt.runAsync(() -> {
@@ -529,7 +572,12 @@ final class BuildConfigPanel extends JPanel {
             }
         }, () -> {
             saveButton.setEnabled(true);
+            savedTomlContent = contentToSave;
+            savedModelApiName = modelOverrideToSave;
+            savedThinkingLevelId = thinkingOverrideToSave;
             textEditedByUser = false;
+            saveFeedbackActive = true;
+            saveFeedbackTimer.restart();
             updateBannerState();
             UiComponents.showStatusMessage(statusLabel, statusTimer, "Configuration saved successfully!", true);
             if (!wasBuildConfirmed && onConfirmSavedCallback != null) {
@@ -537,6 +585,7 @@ final class BuildConfigPanel extends JPanel {
             }
         }, ex -> {
             saveButton.setEnabled(true);
+            updateSaveButtonState();
             Throwable cause = ExceptionUtils.getRootCause(ex);
             log.error("Failed to save build config: {}", cause.getMessage());
             UiComponents.showStatusMessage(statusLabel, statusTimer, "Error saving config: " + cause.getMessage(),
