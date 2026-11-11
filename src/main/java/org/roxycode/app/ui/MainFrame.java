@@ -639,6 +639,7 @@ public final class MainFrame extends JPanel {
         int shortcutMask = resolveMenuShortcutMask();
         menuBar = new JMenuBar();
         menuBar.putClientProperty(FlatClientProperties.MENU_BAR_EMBEDDED, Boolean.TRUE);
+        applyMenuBarStyling();
 
         JMenu fileMenu = new JMenu("File");
         JMenuItem openProjectItem = new JMenuItem("Open Project...");
@@ -945,7 +946,16 @@ public final class MainFrame extends JPanel {
     @Override
     public void updateUI() {
         super.updateUI();
+        applyMenuBarStyling();
         refreshHubTabIcons();
+    }
+
+    void applyMenuBarStyling() {
+        if (menuBar == null) {
+            return;
+        }
+        menuBar.putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
+        menuBar.setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));
     }
 
     private void refreshHubTabIcons() {

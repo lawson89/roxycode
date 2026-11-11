@@ -444,6 +444,11 @@ class MainFrameTest {
             assertNotNull(frame.menuBar);
             assertEquals(Boolean.TRUE,
                     frame.menuBar.getClientProperty(com.formdev.flatlaf.FlatClientProperties.MENU_BAR_EMBEDDED));
+            assertEquals("background: darken($Panel.background, 2%)",
+                    frame.menuBar.getClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE));
+            assertInstanceOf(javax.swing.border.MatteBorder.class, frame.menuBar.getBorder());
+            assertEquals(new java.awt.Insets(0, 0, 1, 0),
+                    ((javax.swing.border.MatteBorder) frame.menuBar.getBorder()).getBorderInsets());
             assertEquals(4, frame.menuBar.getMenuCount());
             assertEquals("File", frame.menuBar.getMenu(0).getText());
             assertEquals("Edit", frame.menuBar.getMenu(1).getText());
@@ -478,8 +483,14 @@ class MainFrameTest {
                 buildFeatureItem.doClick();
                 assertEquals(MainFrame.TASK_VIEW, frame.currentCard);
                 toggleThemeItem.doClick();
+                frame.updateUI();
             });
             SwingTestUtils.flushEdt();
+            assertEquals("background: darken($Panel.background, 2%)",
+                    frame.menuBar.getClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE));
+            assertInstanceOf(javax.swing.border.MatteBorder.class, frame.menuBar.getBorder());
+            assertEquals(new java.awt.Insets(0, 0, 1, 0),
+                    ((javax.swing.border.MatteBorder) frame.menuBar.getBorder()).getBorderInsets());
 
             // Verify Help menu items & About message
             javax.swing.JMenu helpMenu = frame.menuBar.getMenu(3);
