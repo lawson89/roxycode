@@ -1,6 +1,5 @@
 package org.roxycode.app.ai.services;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.github.dockerjava.api.command.CreateContainerCmd;
 import jakarta.annotation.PreDestroy;
@@ -15,6 +14,7 @@ import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.SystemUtils;
+import org.jspecify.annotations.Nullable;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SystemToolService;
 import org.slf4j.Logger;
@@ -50,8 +50,17 @@ class BuildContainerService {
     public enum SandboxMode {
         NONE, NATIVE, DOCKER;
 
+        private static final String MODE_NONE = "none";
         private static final String MODE_NATIVE = "native";
         private static final String MODE_DOCKER = "docker";
+
+        public static boolean isValidMode(@Nullable String value) {
+            String trimmed = StringUtils.trimToEmpty(value);
+            if (trimmed.isEmpty() || MODE_NONE.equalsIgnoreCase(trimmed)) {
+                return true;
+            }
+            return MODE_NATIVE.equalsIgnoreCase(trimmed) || MODE_DOCKER.equalsIgnoreCase(trimmed);
+        }
 
         public static SandboxMode fromString(String value) {
             String trimmed = StringUtils.trimToEmpty(value);
@@ -65,7 +74,6 @@ class BuildContainerService {
         }
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
     public record SandboxConfig(String mode, @JsonProperty("readable_paths") List<String> readablePaths,
             @JsonProperty("writable_paths") List<String> writablePaths, String image, String workdir) {
         public static final SandboxConfig DEFAULT = new SandboxConfig("none", List.of(), List.of(),

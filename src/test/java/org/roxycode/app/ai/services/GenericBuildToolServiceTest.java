@@ -727,5 +727,102 @@ class GenericBuildToolServiceTest {
                 compile = [invalid
                 ~~~
                 """));
+        assertNull(GenericBuildToolService.extractValidBuildTomlBlock("""
+                ~~~toml
+                [commands]
+                compile = './mvnw compile'
+                [sandbox]
+                mode = 'podman'
+                ~~~
+                """));
+    }
+
+    @Test
+    void testSaveAndValidateConfigRejectInvalidTomlAndUnsupportedSandboxes() throws IOException {
+        Path configPath = projectDataDir.resolve("build.toml");
+
+        // 1. Empty or comment-only TOML is rejected
+        IOException emptyEx = assertThrows(IOException.class, () -> buildToolService.saveConfigContent("   "));
+        assertContainsAll(emptyEx.getMessage(), "Invalid build.toml", "empty");
+        IOException commentsOnlyEx = assertThrows(IOException.class, () -> buildToolService.saveConfigContent("""
+                # comment 1
+                  # comment 2
+                """));
+        assertContainsAll(commentsOnlyEx.getMessage(), "Invalid build.toml", "empty");
+        assertFalse(Files.exists(configPath));
+
+        // 2. Syntax errors, unknown sections/keys, and invalid value types are rejected
+        IOException syntaxEx = assertThrows(IOException.class, () -> buildToolService.saveConfigContent("""
+                [commands]
+                compile = [unterminated
+                """));
+        assertContainsAll(syntaxEx.getMessage(), "Invalid build.toml");
+        IOException unknownSectionEx = assertThrows(IOException.class, () -> buildToolService.saveConfigContent("""
+                [commands]
+                compile = './mvnw test-compile'
+                [unknown_section]
+                foo = 'bar'
+                """));
+        assertContainsAll(unknownSectionEx.getMessage(), "Invalid build.toml", "unknown_section");
+
+        IOException unknownCommandKeyEx = assertThrows(IOException.class, () -> buildToolService.saveConfigContent("""
+                [commands]
+                compil = './mvnw test-compile'
+                """));
+        assertContainsAll(unknownCommandKeyEx.getMessage(), "Invalid build.toml", "compil");
+
+        IOException unknownSandboxKeyEx = assertThrows(IOException.class, () -> buildToolService.saveConfigContent("""
+                [sandbox]
+                mode = 'none'
+                extra_flag = true
+                """));
+        assertContainsAll(unknownSandboxKeyEx.getMessage(), "Invalid build.toml", "extra_flag");
+
+        // 3. Unknown [sandbox] mode is rejected
+        IOException unknownModeEx = assertThrows(IOException.class, () -> buildToolService.saveConfigContent("""
+                [commands]
+                compile = './mvnw test-compile'
+                [sandbox]
+                mode = 'podman'
+                """));
+        assertContainsAll(unknownModeEx.getMessage(), "Invalid build.toml", "podman", "'none', 'native', or 'docker'");
+
+        // 4. [sandbox] mode = "native" requires native sandbox tool to be detected
+        String nativeToml = """
+                [commands]
+                compile = './mvnw test-compile'
+                [sandbox]
+                mode = 'native'
+                """;
+        when(systemToolService.checkNativeSandboxAvailable()).thenReturn(false);
+        IOException nativeUnavailableEx = assertThrows(IOException.class,
+                () -> buildToolService.saveConfigContent(nativeToml));
+        assertContainsAll(nativeUnavailableEx.getMessage(), "Unsupported [sandbox] mode 'native'",
+                "Bubblewrap or Seatbelt");
+        assertThrows(IOException.class, () -> buildToolService.extractAndValidateGeneratedToml(nativeToml));
+        assertFalse(Files.exists(configPath));
+
+        when(systemToolService.checkNativeSandboxAvailable()).thenReturn(true);
+        buildToolService.saveConfigContent(nativeToml);
+        assertEquals(nativeToml, Files.readString(configPath));
+
+        // 5. [sandbox] mode = "docker" requires Docker to be available
+        String dockerToml = """
+                [commands]
+                compile = './mvnw test-compile'
+                [sandbox]
+                mode = 'docker'
+                image = 'eclipse-temurin:25-jdk'
+                """;
+        stubDockerAvailable(false);
+        IOException dockerUnavailableEx = assertThrows(IOException.class,
+                () -> buildToolService.saveConfigContent(dockerToml));
+        assertContainsAll(dockerUnavailableEx.getMessage(), "Unsupported [sandbox] mode 'docker'", "Docker");
+        assertThrows(IOException.class, () -> buildToolService.extractAndValidateGeneratedToml(dockerToml));
+        assertEquals(nativeToml, Files.readString(configPath), "Failed save must not overwrite existing build.toml");
+
+        stubDockerAvailable(true);
+        buildToolService.saveConfigContent(dockerToml);
+        assertEquals(dockerToml, Files.readString(configPath));
     }
 }

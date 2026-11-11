@@ -1,7 +1,10 @@
 package org.roxycode.app.ai.services;
 
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.core.JacksonException;
+import com.fasterxml.jackson.core.JsonLocation;
+import com.fasterxml.jackson.databind.exc.MismatchedInputException;
+import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -120,14 +123,12 @@ public class GenericBuildToolService {
         return AVAILABLE_TEMPLATES;
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
     public record CommandsSection(String install, String clean, String compile, String build,
             @JsonProperty("test_all") String testAll, @JsonProperty("test_single") String testSingle, String lint,
             String format) {
         public static final CommandsSection EMPTY = new CommandsSection(null, null, null, null, null, null, null, null);
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
     public record ParseSection(@JsonProperty("error_regex") String errorRegex,
             @JsonProperty("test_failure_regex") String testFailureRegex,
             @JsonProperty("context_lines") Integer contextLines,
@@ -158,7 +159,6 @@ public class GenericBuildToolService {
         }
     }
 
-    @JsonIgnoreProperties(ignoreUnknown = true)
     public record BuildConfig(CommandsSection commands, Map<String, String> env, ParseSection parse,
             SandboxConfig sandbox, @JsonProperty("timeout_seconds") Integer timeoutSeconds) {
         public BuildConfig {
@@ -582,7 +582,78 @@ public class GenericBuildToolService {
 
     BuildConfig parseConfig(String rawToml) throws IOException {
         String content = StringUtils.defaultString(rawToml);
-        return tomlMapper.readValue(BuildOutputParser.sanitizeTomlEscapes(content), BuildConfig.class);
+        if (isBlankOrCommentsOnlyToml(content)) {
+            throw new IOException("Invalid build.toml: configuration cannot be empty.");
+        }
+        BuildConfig config;
+        try {
+            config = tomlMapper.readValue(BuildOutputParser.sanitizeTomlEscapes(content), BuildConfig.class);
+        } catch (JacksonException e) {
+            throw new IOException(formatTomlValidationError(e), e);
+        }
+        if (config == null) {
+            throw new IOException("Invalid build.toml: configuration cannot be empty.");
+        }
+        String rawMode = config.sandbox().mode();
+        if (!SandboxMode.isValidMode(rawMode)) {
+            throw new IOException("Invalid build.toml: unknown [sandbox] mode '" + rawMode
+                    + "'. Expected 'none', 'native', or 'docker'.");
+        }
+        return config;
+    }
+
+    BuildConfig validateConfig(String rawToml) throws IOException {
+        BuildConfig config = parseConfig(rawToml);
+        validateSandboxSupport(config);
+        return config;
+    }
+
+    private void validateSandboxSupport(BuildConfig config) throws IOException {
+        if (buildContainerService == null) {
+            return;
+        }
+        SandboxMode mode = config.sandbox().resolvedMode();
+        if (mode == SandboxMode.NATIVE && !buildContainerService.isNativeSandboxAvailable()) {
+            throw new IOException("Unsupported [sandbox] mode 'native': native OS sandbox tool (Bubblewrap or Seatbelt)"
+                    + " is not installed or detected. Install the tool or use mode = 'none'.");
+        }
+        if (mode == SandboxMode.DOCKER && !buildContainerService.isDockerAvailable()) {
+            throw new IOException("Unsupported [sandbox] mode 'docker': Docker is not installed or the Docker daemon"
+                    + " is not running. Start Docker or use mode = 'none'.");
+        }
+    }
+
+    static boolean isBlankOrCommentsOnlyToml(@Nullable String content) {
+        if (StringUtils.isBlank(content)) {
+            return true;
+        }
+        for (String line : content.lines().toList()) {
+            String trimmed = line.trim();
+            if (!trimmed.isEmpty() && !trimmed.startsWith("#")) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static String formatTomlValidationError(JacksonException e) {
+        if (e instanceof UnrecognizedPropertyException unrecognized) {
+            return "Invalid build.toml: unrecognized property '" + unrecognized.getPropertyName() + "'"
+                    + formatLocationSuffix(unrecognized.getLocation()) + ".";
+        }
+        if (e instanceof MismatchedInputException mismatched) {
+            String originalMessage = StringUtils.defaultIfBlank(mismatched.getOriginalMessage(), "invalid value type");
+            return "Invalid build.toml: " + originalMessage + formatLocationSuffix(mismatched.getLocation());
+        }
+        String originalMessage = StringUtils.defaultIfBlank(e.getOriginalMessage(), e.getMessage());
+        return "Invalid build.toml syntax" + formatLocationSuffix(e.getLocation()) + ": " + originalMessage;
+    }
+
+    private static String formatLocationSuffix(@Nullable JsonLocation location) {
+        if (location != null && location.getLineNr() > 0) {
+            return " (line " + location.getLineNr() + ", column " + location.getColumnNr() + ")";
+        }
+        return "";
     }
 
     @SuppressWarnings("PMD.PreserveStackTrace")
@@ -960,11 +1031,14 @@ public class GenericBuildToolService {
                 continue;
             }
             try {
-                mapper.readValue(BuildOutputParser.sanitizeTomlEscapes(trimmed), BuildConfig.class);
-                if (trimmed.endsWith(nl)) {
-                    validToml = trimmed;
-                } else {
-                    validToml = trimmed + nl;
+                BuildConfig parsed = mapper.readValue(BuildOutputParser.sanitizeTomlEscapes(trimmed),
+                        BuildConfig.class);
+                if (parsed != null && SandboxMode.isValidMode(parsed.sandbox().mode())) {
+                    if (trimmed.endsWith(nl)) {
+                        validToml = trimmed;
+                    } else {
+                        validToml = trimmed + nl;
+                    }
                 }
             } catch (IOException ignored) {
                 // Not a valid build.toml block
@@ -1035,7 +1109,7 @@ public class GenericBuildToolService {
         if (extracted.isBlank()) {
             throw new IOException("Roxy returned an empty build.toml configuration.");
         }
-        parseConfig(extracted);
+        validateConfig(extracted);
         String nl = System.lineSeparator();
         if (extracted.endsWith(nl)) {
             return extracted;
@@ -1076,7 +1150,7 @@ public class GenericBuildToolService {
             return;
         }
         String normalizedContent = StringUtils.defaultString(content);
-        parseConfig(normalizedContent);
+        validateConfig(normalizedContent);
         stopActiveContainer();
         Path configPath = getConfigPath();
         PathUtils.createParentDirectories(configPath);

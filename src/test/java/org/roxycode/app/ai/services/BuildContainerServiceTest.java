@@ -232,6 +232,17 @@ class BuildContainerServiceTest {
 
     @Test
     void testSandboxModeAndSandboxConfigNormalization() {
+        assertTrue(SandboxMode.isValidMode(null));
+        assertTrue(SandboxMode.isValidMode(""));
+        assertTrue(SandboxMode.isValidMode("  none  "));
+        assertTrue(SandboxMode.isValidMode("  NONE  "));
+        assertTrue(SandboxMode.isValidMode("native"));
+        assertTrue(SandboxMode.isValidMode("  NATIVE "));
+        assertTrue(SandboxMode.isValidMode("docker"));
+        assertTrue(SandboxMode.isValidMode(" DOCKER "));
+        assertFalse(SandboxMode.isValidMode("unknown"));
+        assertFalse(SandboxMode.isValidMode("podman"));
+
         assertEquals(SandboxMode.NONE, SandboxMode.fromString(null));
         assertEquals(SandboxMode.NONE, SandboxMode.fromString(""));
         assertEquals(SandboxMode.NONE, SandboxMode.fromString("  none  "));

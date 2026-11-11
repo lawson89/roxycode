@@ -154,15 +154,16 @@ class BuildConfigPanelTest {
 
         clearInvocations(projectService);
         when(projectService.isBuildConfirmed()).thenReturn(false);
-        doThrow(new IOException("Disk full")).when(buildToolService).saveConfigContent(anyString());
+        String unsupportedSandboxMsg = "Unsupported [sandbox] mode 'docker': Docker is not installed or the Docker daemon is not running.";
+        doThrow(new IOException(unsupportedSandboxMsg)).when(buildToolService).saveConfigContent(anyString());
 
         SwingTestUtils.clickOnEdt(panel.saveButton);
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
 
         assertTrue(panel.saveButton.isEnabled());
         assertEquals(BuildConfigPanel.SAVE_BUTTON_TEXT, panel.saveButton.getText());
-        assertEquals("Error saving config: Disk full", panel.statusLabel.getText());
-        assertEquals("Error saving config: Disk full", panel.statusLabel.getToolTipText());
+        assertEquals("Error saving config: " + unsupportedSandboxMsg, panel.statusLabel.getText());
+        assertEquals("Error saving config: " + unsupportedSandboxMsg, panel.statusLabel.getToolTipText());
         verify(projectService, never()).setBuildConfirmed(true);
     }
 
