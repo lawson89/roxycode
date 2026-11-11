@@ -164,11 +164,19 @@ class BuildContainerService {
     }
 
     public List<String> buildNativeSandboxCommand(Path projectRoot, SandboxConfig sandboxConfig, String command) {
-        List<String> rawReadable = List.of();
+        List<String> rawReadable = new ArrayList<>();
         List<String> rawWritable = List.of();
         if (sandboxConfig != null) {
-            rawReadable = sandboxConfig.readablePaths();
+            rawReadable.addAll(sandboxConfig.readablePaths());
             rawWritable = sandboxConfig.writablePaths();
+        }
+        String javaHomeEnv = System.getenv("JAVA_HOME");
+        if (javaHomeEnv != null && !javaHomeEnv.isBlank()) {
+            rawReadable.add(javaHomeEnv.trim());
+        }
+        String javaHomeProp = System.getProperty("java.home");
+        if (javaHomeProp != null && !javaHomeProp.isBlank()) {
+            rawReadable.add(javaHomeProp.trim());
         }
         List<Path> readablePaths = resolveReadablePaths(rawReadable, projectRoot);
         List<Path> writablePaths = resolveWritablePaths(rawWritable, projectRoot);

@@ -431,6 +431,14 @@ public final class MainFrame extends JPanel {
         return getBounds();
     }
 
+    void setWindowBounds(int x, int y, int width, int height) {
+        setBounds(x, y, width, height);
+        if (hostFrame != null) {
+            hostFrame.setBounds(x, y, width, height);
+        }
+        recordNormalWindowBounds();
+    }
+
     void recordNormalWindowBounds() {
         if ((getWindowExtendedState() & Frame.MAXIMIZED_BOTH) == 0) {
             Rectangle bounds = getCurrentWindowBounds();

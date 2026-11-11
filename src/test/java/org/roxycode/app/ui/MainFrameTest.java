@@ -381,8 +381,8 @@ class MainFrameTest {
         settingsService.getSettings().setGeminiApiKey("valid-gemini-key");
         settingsService.getSettings().setWindowX(150);
         settingsService.getSettings().setWindowY(90);
-        settingsService.getSettings().setWindowWidth(1360);
-        settingsService.getSettings().setWindowHeight(860);
+        settingsService.getSettings().setWindowWidth(960);
+        settingsService.getSettings().setWindowHeight(680);
         settingsService.getSettings().setWindowMaximized(false);
         settingsService.saveSettingsSync();
 
@@ -393,8 +393,8 @@ class MainFrameTest {
         MainFrame frame = createMainFrame(settingsService, CompletableFuture.completedFuture(allDetectedTools));
         try {
             SwingTestUtils.flushEdt();
-            assertEquals(1360, frame.getWidth());
-            assertEquals(860, frame.getHeight());
+            assertEquals(960, frame.getWidth());
+            assertEquals(680, frame.getHeight());
             assertNotNull(frame.lastNormalBounds);
 
             // Simulate user moving/resizing the normal window
@@ -514,8 +514,7 @@ class MainFrameTest {
 
             // Verify Quit handler saves window state before calling performQuit
             boolean[] quitPerformed = new boolean[1];
-            frame.setBounds(120, 140, 1100, 720);
-            frame.lastNormalBounds = new java.awt.Rectangle(120, 140, 1100, 720);
+            frame.setWindowBounds(120, 140, 1100, 720);
             frame.handleDesktopQuitRequest(new java.awt.desktop.QuitResponse() {
                 @Override
                 public void performQuit() {
