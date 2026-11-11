@@ -81,27 +81,27 @@ public enum ThinkingLevel {
         if (phase == null) {
             return MEDIUM;
         }
-        switch (phase) {
-            case PLAN :
+        return switch (phase) {
+            case PLAN -> {
                 if (planSubmitted) {
-                    return LOW;
+                    yield LOW;
                 }
-                return HIGH;
-            case CODE :
+                yield HIGH;
+            }
+            case CODE -> {
                 if (lastToolCallFailed) {
-                    return HIGH;
+                    yield HIGH;
                 }
-                return LOW;
-            case REVIEW :
-                return MEDIUM;
-            case EXPLORE :
+                yield LOW;
+            }
+            case REVIEW -> MEDIUM;
+            case EXPLORE -> {
                 if (hasToolResponses) {
-                    return MEDIUM;
+                    yield MEDIUM;
                 }
-                return LOW;
-            default :
-                return MEDIUM;
-        }
+                yield LOW;
+            }
+        };
     }
 
     public static ThinkingLevel fromString(@Nullable String raw) {

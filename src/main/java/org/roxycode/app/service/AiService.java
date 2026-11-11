@@ -391,8 +391,8 @@ public class AiService implements AutoCloseable {
                 if (retryCount == 0) {
                     publishActivity(conversationId, thinkingActivityMessage);
                 } else {
-                    publishActivity(conversationId, "Transient API error — retrying model call (attempt "
-                            + (retryCount + 1) + "/" + maxAttempts + ")...");
+                    publishActivity(conversationId, "Transient API error — retrying model call"
+                            + formatRetryAttemptSuffix(retryCount + 1, maxAttempts));
                 }
                 try {
                     return callAdvisorChain.copy(this).nextCall(effectiveRequest);
@@ -402,8 +402,8 @@ public class AiService implements AutoCloseable {
                         if (AiConfig.isRateLimitError(ex)) {
                             waitForRateLimitCooldown(conversationId, nextAttempt, maxAttempts);
                         } else {
-                            publishActivity(conversationId, "Transient API error — backing off before retry (attempt "
-                                    + nextAttempt + "/" + maxAttempts + ")...");
+                            publishActivity(conversationId, "Transient API error — backing off before retry"
+                                    + formatRetryAttemptSuffix(nextAttempt, maxAttempts));
                         }
                     }
                     throw ex;
@@ -423,7 +423,7 @@ public class AiService implements AutoCloseable {
             cooldownSeconds = Math.max(1L, cooldown.toSeconds());
         }
         publishActivity(conversationId, "API rate limit (429) — waiting " + cooldownSeconds
-                + "s for quota window to reset (attempt " + nextAttempt + "/" + maxAttempts + ")...");
+                + "s for quota window to reset" + formatRetryAttemptSuffix(nextAttempt, maxAttempts));
         if (cooldown != null && !cooldown.isNegative() && !cooldown.isZero()) {
             try {
                 Thread.sleep(cooldown.toMillis());
@@ -515,11 +515,17 @@ public class AiService implements AutoCloseable {
         return request;
     }
 
+    private static final String ACTIVITY_ELLIPSIS_SUFFIX = ")...";
+
+    private static String formatRetryAttemptSuffix(int attempt, int maxAttempts) {
+        return " (attempt " + attempt + "/" + maxAttempts + ACTIVITY_ELLIPSIS_SUFFIX;
+    }
+
     private static String formatThinkingActivityMessage(String modelName, ThinkingLevel configuredLevel,
             ThinkingLevel activeSubTurnLevel) {
         if (configuredLevel == ThinkingLevel.ADAPTIVE && activeSubTurnLevel != null
                 && activeSubTurnLevel != ThinkingLevel.DEFAULT) {
-            return "Thinking with " + modelName + " (" + activeSubTurnLevel.getDisplayName() + ")...";
+            return "Thinking with " + modelName + " (" + activeSubTurnLevel.getDisplayName() + ACTIVITY_ELLIPSIS_SUFFIX;
         }
         return "Thinking with " + modelName + "...";
     }
