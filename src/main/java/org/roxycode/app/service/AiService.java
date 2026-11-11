@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AiConfig;
+import org.roxycode.app.ai.AiConfig.GenAiConnectionConfig;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.TurnToolContext;
 import org.roxycode.app.ai.WorkflowPhase;
@@ -83,6 +84,11 @@ public class AiService implements AutoCloseable {
         String verifyConnection(String apiKey, String modelName) throws Exception;
     }
 
+    @FunctionalInterface
+    interface ConnectionConfigTester {
+        String verifyConnection(GenAiConnectionConfig config, String modelName) throws Exception;
+    }
+
     private volatile ChatClient chatClient;
     private final SettingsService settingsService;
     private final ProjectService projectService;
@@ -92,10 +98,10 @@ public class AiService implements AutoCloseable {
     private final ApplicationEventPublisher eventPublisher;
     private final ChatMemory chatMemory;
     private final ToolCallingManager toolCallingManager;
-    private volatile String activeApiKey;
+    private volatile GenAiConnectionConfig activeConnectionConfig;
     private volatile Client managedClient;
-    private Function<String, ChatClient.Builder> chatClientBuilderFactory = this::createChatClientBuilderForApiKey;
-    private ConnectionTester connectionTester = this::executeConnectionTest;
+    private Function<GenAiConnectionConfig, ChatClient.Builder> connectionChatClientBuilderFactory = this::createChatClientBuilderForConnection;
+    private ConnectionConfigTester connectionTester = this::executeConnectionTest;
     private volatile RetryTemplate retryTemplate = AiConfig.createRetryTemplate();
     private volatile int maxRetryAttempts = AiConfig.DEFAULT_MAX_RETRY_ATTEMPTS;
     private volatile Duration rateLimitCooldown = AiConfig.DEFAULT_RATE_LIMIT_COOLDOWN;
@@ -135,7 +141,7 @@ public class AiService implements AutoCloseable {
         this.eventPublisher = eventPublisher;
         this.chatMemory = chatMemory;
         this.toolCallingManager = toolCallingManager;
-        this.activeApiKey = resolveConfiguredApiKey();
+        this.activeConnectionConfig = resolveConfiguredConnection();
         this.chatClient = buildChatClient(chatClientBuilder);
     }
 
@@ -143,17 +149,17 @@ public class AiService implements AutoCloseable {
         return builder.defaultAdvisors(new ModelCallRetryAdvisor()).build();
     }
 
-    private String resolveConfiguredApiKey() {
+    private GenAiConnectionConfig resolveConfiguredConnection() {
         if (settingsService != null && settingsService.getSettings() != null) {
-            return StringUtils.trimToEmpty(settingsService.getSettings().getGeminiApiKey());
+            return GenAiConnectionConfig.fromSettings(settingsService.getSettings());
         }
-        return "";
+        return GenAiConnectionConfig.forApiKey("");
     }
 
     @SuppressWarnings("PMD.CloseResource")
-    private ChatClient.Builder createChatClientBuilderForApiKey(String apiKey) {
+    private ChatClient.Builder createChatClientBuilderForConnection(GenAiConnectionConfig config) {
         Client oldClient = this.managedClient;
-        Client newClient = AiConfig.createGenAiClient(apiKey, AiConfig.DEFAULT_HTTP_TIMEOUT_MS);
+        Client newClient = AiConfig.createGenAiClient(config, AiConfig.DEFAULT_HTTP_TIMEOUT_MS);
         this.managedClient = newClient;
         closeClientQuietly(oldClient);
         GoogleGenAiChatModel chatModel = AiConfig.createChatModel(newClient, resolveEffectiveGeminiModel(),
@@ -190,33 +196,40 @@ public class AiService implements AutoCloseable {
      */
     @EventListener
     public synchronized void onSettingsChanged(SettingsChangedEvent event) {
-        String newApiKey;
+        GenAiConnectionConfig newConfig;
         if (event != null && event.settings() != null) {
-            newApiKey = event.settings().getGeminiApiKey();
+            newConfig = GenAiConnectionConfig.fromSettings(event.settings());
         } else {
-            newApiKey = resolveConfiguredApiKey();
+            newConfig = resolveConfiguredConnection();
         }
-        String trimmedKey = StringUtils.trimToEmpty(newApiKey);
-        if (Objects.equals(trimmedKey, this.activeApiKey)) {
+        if (Objects.equals(newConfig, this.activeConnectionConfig)) {
             return;
         }
-        if (trimmedKey.isEmpty()) {
-            this.activeApiKey = "";
+        if (!newConfig.isConfigured()) {
+            this.activeConnectionConfig = newConfig;
             close();
             return;
         }
-        reloadChatClient(trimmedKey);
+        reloadChatClient(newConfig);
     }
 
     synchronized void reloadChatClient(String apiKey) {
-        String trimmed = StringUtils.trimToEmpty(apiKey);
-        if (trimmed.isEmpty()) {
+        reloadChatClient(GenAiConnectionConfig.forApiKey(apiKey));
+    }
+
+    synchronized void reloadChatClient(GenAiConnectionConfig config) {
+        if (config == null || !config.isConfigured()) {
             return;
         }
-        ChatClient.Builder builder = chatClientBuilderFactory.apply(trimmed);
+        ChatClient.Builder builder = connectionChatClientBuilderFactory.apply(config);
         this.chatClient = buildChatClient(builder);
-        this.activeApiKey = trimmed;
-        log.info("Hot-reloaded Gemini ChatClient with updated API key");
+        this.activeConnectionConfig = config;
+        if (config.vertexAi()) {
+            log.info("Hot-reloaded Gemini ChatClient with Vertex AI configuration (project={}, location={})",
+                    config.projectId(), config.location());
+        } else {
+            log.info("Hot-reloaded Gemini ChatClient with updated API key");
+        }
     }
 
     /**
@@ -229,8 +242,31 @@ public class AiService implements AutoCloseable {
      * @return the result of the connection test (typically the model name if successful)
      */
     public String testConnection(String apiKey, String modelName) {
-        String trimmedKey = StringUtils.trimToEmpty(apiKey);
-        if (trimmedKey.isEmpty()) {
+        return testConnection(GenAiConnectionConfig.forApiKey(apiKey), modelName);
+    }
+
+    /**
+     * Tests the connection to Google GenAI (Gemini API Key or Vertex AI) using the provided connection configuration
+     * and model name.
+     *
+     * @param config
+     *            the connection configuration to test
+     * @param modelName
+     *            the name of the model to test (optional, defaults to configured model)
+     * @return the result of the connection test
+     */
+    public String testConnection(GenAiConnectionConfig config, String modelName) {
+        if (config == null) {
+            throw new IllegalArgumentException("Connection configuration must not be null.");
+        }
+        if (config.vertexAi()) {
+            if (config.projectId().isEmpty()) {
+                throw new IllegalArgumentException("Please enter a GCP Project ID first.");
+            }
+            if (config.location().isEmpty()) {
+                throw new IllegalArgumentException("Please enter a Vertex Location first.");
+            }
+        } else if (config.apiKey().isEmpty()) {
             throw new IllegalArgumentException("Please enter a Gemini API Key first.");
         }
         String effectiveModel = resolveEffectiveGeminiModel();
@@ -238,7 +274,7 @@ public class AiService implements AutoCloseable {
             effectiveModel = modelName.trim();
         }
         try {
-            return connectionTester.verifyConnection(trimmedKey, effectiveModel);
+            return connectionTester.verifyConnection(config, effectiveModel);
         } catch (RuntimeException e) {
             throw e;
         } catch (Exception e) {
@@ -246,8 +282,8 @@ public class AiService implements AutoCloseable {
         }
     }
 
-    private String executeConnectionTest(String apiKey, String modelName) {
-        try (Client testClient = AiConfig.createGenAiClient(apiKey, TEST_CONNECTION_TIMEOUT_MS)) {
+    private String executeConnectionTest(GenAiConnectionConfig config, String modelName) {
+        try (Client testClient = AiConfig.createGenAiClient(config, TEST_CONNECTION_TIMEOUT_MS)) {
             GoogleGenAiChatModel testModel = AiConfig.createChatModel(testClient, modelName, toolCallingManager);
             ChatResponse response = testModel
                     .call(new Prompt("Reply with OK", GoogleGenAiChatOptions.builder().model(modelName).build()));
@@ -256,15 +292,32 @@ public class AiService implements AutoCloseable {
     }
 
     void setChatClientBuilderFactory(Function<String, ChatClient.Builder> factory) {
-        this.chatClientBuilderFactory = Objects.requireNonNull(factory, "factory must not be null");
+        Objects.requireNonNull(factory, "factory must not be null");
+        this.connectionChatClientBuilderFactory = cfg -> factory.apply(cfg.apiKey());
+    }
+
+    void setConnectionChatClientBuilderFactory(Function<GenAiConnectionConfig, ChatClient.Builder> factory) {
+        this.connectionChatClientBuilderFactory = Objects.requireNonNull(factory, "factory must not be null");
     }
 
     void setConnectionTester(ConnectionTester connectionTester) {
+        Objects.requireNonNull(connectionTester, "connectionTester must not be null");
+        this.connectionTester = (cfg, model) -> connectionTester.verifyConnection(cfg.apiKey(), model);
+    }
+
+    void setConnectionConfigTester(ConnectionConfigTester connectionTester) {
         this.connectionTester = Objects.requireNonNull(connectionTester, "connectionTester must not be null");
     }
 
     String getActiveApiKey() {
-        return activeApiKey;
+        if (activeConnectionConfig == null) {
+            return "";
+        }
+        return activeConnectionConfig.apiKey();
+    }
+
+    GenAiConnectionConfig getActiveConnectionConfig() {
+        return activeConnectionConfig;
     }
 
     String resolveEffectiveGeminiModel() {

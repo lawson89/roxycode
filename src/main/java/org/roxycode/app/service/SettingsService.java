@@ -156,8 +156,36 @@ public class SettingsService {
         return Files.exists(getSettingsPath());
     }
 
+    /**
+     * Checks whether the given settings have valid AI authentication credentials configured (either a non-blank Gemini
+     * API key when in API Key mode, or a non-blank GCP Project ID and Vertex Location when in Vertex AI mode).
+     *
+     * @param settings
+     *            the settings to inspect
+     * @return true if valid credentials are configured for the active authentication mode
+     */
+    public static boolean hasConfiguredCredentials(AppSettings settings) {
+        if (settings == null) {
+            return false;
+        }
+        if (settings.isVertexAiEnabled()) {
+            return StringUtils.isNotBlank(settings.getVertexProjectId())
+                    && StringUtils.isNotBlank(settings.getVertexLocation());
+        }
+        return StringUtils.isNotBlank(settings.getGeminiApiKey());
+    }
+
+    /**
+     * Checks whether the current settings have valid AI authentication credentials configured.
+     *
+     * @return true if valid credentials are configured for the active authentication mode
+     */
+    public synchronized boolean hasConfiguredCredentials() {
+        return hasConfiguredCredentials(getSettings());
+    }
+
     public synchronized boolean hasConfiguredApiKey() {
-        return StringUtils.isNotBlank(getSettings().getGeminiApiKey());
+        return hasConfiguredCredentials();
     }
 
     public synchronized AppSettings getSettings() {

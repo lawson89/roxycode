@@ -10,6 +10,8 @@ import com.google.genai.errors.ServerException;
 import com.google.genai.types.HttpOptions;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
@@ -38,7 +40,6 @@ import org.springframework.core.retry.RetryListener;
 import org.springframework.core.retry.RetryPolicy;
 import org.springframework.core.retry.RetryTemplate;
 import org.springframework.core.retry.Retryable;
-import org.springframework.util.Assert;
 import org.springframework.util.StringUtils;
 import org.springframework.web.client.ResourceAccessException;
 
@@ -49,6 +50,7 @@ public class AiConfig {
     private static final Logger log = LoggerFactory.getLogger(AiConfig.class);
 
     public static final int DEFAULT_HTTP_TIMEOUT_MS = 120_000;
+    public static final String UNCONFIGURED_API_KEY_PLACEHOLDER = "unconfigured-api-key";
     public static final int DEFAULT_MAX_TOOL_CALLS = 100;
     public static final int DEFAULT_MAX_RETRY_ATTEMPTS = 6;
     public static final Duration DEFAULT_INITIAL_BACKOFF = Duration.ofMillis(2000);
@@ -92,6 +94,95 @@ public class AiConfig {
         return SHARED_TOML_MAPPER;
     }
 
+    /**
+     * Normalized connection configuration for Google GenAI (either Gemini API Key mode or Google Cloud Vertex AI mode).
+     *
+     * @param vertexAi
+     *            {@code true} to connect via Google Cloud Vertex AI, {@code false} for Gemini Developer API
+     * @param apiKey
+     *            the Gemini API key (used when {@code vertexAi} is {@code false})
+     * @param projectId
+     *            the GCP Project ID (used when {@code vertexAi} is {@code true})
+     * @param location
+     *            the Vertex AI location/region (used when {@code vertexAi} is {@code true})
+     * @param credentialsPath
+     *            optional file path to a Service Account JSON key file for Vertex AI (blank uses ADC)
+     */
+    public record GenAiConnectionConfig(boolean vertexAi, String apiKey, String projectId, String location,
+            String credentialsPath) {
+
+        public GenAiConnectionConfig {
+            apiKey = trimToEmpty(apiKey);
+            projectId = trimToEmpty(projectId);
+            location = trimToEmpty(location);
+            credentialsPath = trimToEmpty(credentialsPath);
+        }
+
+        private static String trimToEmpty(String value) {
+            if (value == null) {
+                return "";
+            }
+            return value.trim();
+        }
+
+        /**
+         * Creates a connection configuration for Gemini Developer API Key mode.
+         *
+         * @param apiKey
+         *            the Gemini API key
+         * @return the connection configuration
+         */
+        public static GenAiConnectionConfig forApiKey(String apiKey) {
+            return new GenAiConnectionConfig(false, apiKey, "", "", "");
+        }
+
+        /**
+         * Creates a connection configuration for Google Cloud Vertex AI mode.
+         *
+         * @param projectId
+         *            the GCP project ID
+         * @param location
+         *            the Vertex AI location/region
+         * @param credentialsPath
+         *            optional path to a Service Account JSON key file (blank for ADC)
+         * @return the connection configuration
+         */
+        public static GenAiConnectionConfig forVertexAi(String projectId, String location, String credentialsPath) {
+            return new GenAiConnectionConfig(true, "", projectId, location, credentialsPath);
+        }
+
+        /**
+         * Extracts the connection configuration from {@link AppSettings}.
+         *
+         * @param settings
+         *            the application settings
+         * @return the normalized connection configuration
+         */
+        public static GenAiConnectionConfig fromSettings(AppSettings settings) {
+            if (settings == null) {
+                return forApiKey("");
+            }
+            if (settings.isVertexAiEnabled()) {
+                return new GenAiConnectionConfig(true, settings.getGeminiApiKey(), settings.getVertexProjectId(),
+                        settings.getVertexLocation(), settings.getVertexCredentialsPath());
+            }
+            return new GenAiConnectionConfig(false, settings.getGeminiApiKey(), settings.getVertexProjectId(),
+                    settings.getVertexLocation(), settings.getVertexCredentialsPath());
+        }
+
+        /**
+         * Checks whether required credentials for the selected mode are present.
+         *
+         * @return {@code true} if configured
+         */
+        public boolean isConfigured() {
+            if (vertexAi) {
+                return StringUtils.hasText(projectId) && StringUtils.hasText(location);
+            }
+            return StringUtils.hasText(apiKey);
+        }
+    }
+
     @Bean(destroyMethod = "close")
     public Client googleGenAiClient(GoogleGenAiConnectionProperties properties,
             @Value("${roxycode.ai.http-timeout-ms:120000}") int httpTimeoutMs) throws IOException {
@@ -106,28 +197,83 @@ public class AiConfig {
 
         if (properties.isVertexAi()) {
             if (!hasVertexConfig) {
-                throw new IllegalStateException(
-                        "Vertex AI mode requires both 'project-id' and 'location' to be configured.");
+                log.info(
+                        "Vertex AI enabled without complete project-id/location on startup; using placeholder client until configured in Settings.");
+                builder.apiKey(UNCONFIGURED_API_KEY_PLACEHOLDER);
+            } else {
+                configureVertexAi(builder, properties);
             }
-            configureVertexAi(builder, properties);
         } else if (hasApiKey) {
             builder.apiKey(properties.getApiKey());
         } else if (hasVertexConfig) {
             configureVertexAi(builder, properties);
         } else {
-            throw new IllegalStateException(
-                    "Incomplete Google GenAI configuration: Provide 'api-key' for Gemini API or 'project-id' and 'location' for Vertex AI.");
+            builder.apiKey(UNCONFIGURED_API_KEY_PLACEHOLDER);
         }
         return builder.build();
     }
 
+    /**
+     * Creates a Google GenAI {@link Client} for the given API key and HTTP timeout.
+     *
+     * @param apiKey
+     *            the Gemini API key
+     * @param httpTimeoutMs
+     *            the HTTP timeout in milliseconds
+     * @return the configured {@link Client}
+     */
     public static Client createGenAiClient(String apiKey, int httpTimeoutMs) {
+        return createGenAiClient(GenAiConnectionConfig.forApiKey(apiKey), httpTimeoutMs);
+    }
+
+    /**
+     * Creates a Google GenAI {@link Client} for the given {@link GenAiConnectionConfig} and HTTP timeout.
+     *
+     * @param config
+     *            the connection configuration (Gemini API Key or Vertex AI)
+     * @param httpTimeoutMs
+     *            the HTTP timeout in milliseconds
+     * @return the configured {@link Client}
+     */
+    public static Client createGenAiClient(GenAiConnectionConfig config, int httpTimeoutMs) {
+        if (config == null) {
+            throw new IllegalArgumentException("Connection configuration must not be null.");
+        }
         Client.Builder builder = Client.builder();
         if (httpTimeoutMs > 0) {
             builder.httpOptions(HttpOptions.builder().timeout(httpTimeoutMs).build());
         }
-        builder.apiKey(apiKey);
+        if (config.vertexAi()) {
+            if (!StringUtils.hasText(config.projectId())) {
+                throw new IllegalArgumentException("Please enter a GCP Project ID for Vertex AI.");
+            }
+            if (!StringUtils.hasText(config.location())) {
+                throw new IllegalArgumentException("Please enter a Vertex Location (e.g. global or us-central1).");
+            }
+            builder.project(config.projectId()).location(config.location()).vertexAI(true);
+            if (StringUtils.hasText(config.credentialsPath())) {
+                builder.credentials(loadCredentialsFromFile(Path.of(config.credentialsPath())));
+            }
+        } else {
+            String effectiveApiKey = config.apiKey();
+            if (!StringUtils.hasText(effectiveApiKey)) {
+                effectiveApiKey = UNCONFIGURED_API_KEY_PLACEHOLDER;
+            }
+            builder.apiKey(effectiveApiKey);
+        }
         return builder.build();
+    }
+
+    static GoogleCredentials loadCredentialsFromFile(Path credentialsFile) {
+        if (credentialsFile == null || !Files.isRegularFile(credentialsFile)) {
+            throw new IllegalArgumentException("Service Account JSON file not found: " + credentialsFile);
+        }
+        try (InputStream is = Files.newInputStream(credentialsFile)) {
+            return GoogleCredentials.fromStream(is);
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Failed to read Service Account JSON credentials from '"
+                    + credentialsFile + "': " + ExceptionUtils.getRootCauseMessage(e), e);
+        }
     }
 
     public static GoogleGenAiChatModel createChatModel(Client client, String defaultModel,
@@ -147,9 +293,7 @@ public class AiConfig {
 
     private static void configureVertexAi(Client.Builder builder, GoogleGenAiConnectionProperties props)
             throws IOException {
-        Assert.hasText(props.getProjectId(), "Google GenAI project-id must be set for Vertex AI mode!");
-        Assert.hasText(props.getLocation(), "Google GenAI location must be set for Vertex AI mode!");
-        builder.project(props.getProjectId()).location(props.getLocation()).vertexAI(true);
+        builder.project(props.getProjectId().trim()).location(props.getLocation().trim()).vertexAI(true);
         if (props.getCredentialsUri() != null) {
             try (InputStream is = props.getCredentialsUri().getInputStream()) {
                 builder.credentials(GoogleCredentials.fromStream(is));

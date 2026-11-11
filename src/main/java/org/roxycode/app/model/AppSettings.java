@@ -17,12 +17,17 @@ public class AppSettings {
     public static final String DEFAULT_THEME = "FlatLaf Light";
     public static final String DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
     public static final String DEFAULT_THINKING_LEVEL = ThinkingLevel.DEFAULT.getId();
+    public static final String DEFAULT_VERTEX_LOCATION = "global";
     public static final int DEFAULT_MAX_AGENT_TOOL_TURNS = 50;
     public static final int DEFAULT_WINDOW_WIDTH = 1200;
     public static final int DEFAULT_WINDOW_HEIGHT = 900;
 
     private String theme = DEFAULT_THEME;
     private String geminiApiKey = "";
+    private boolean vertexAiEnabled = false;
+    private String vertexProjectId = "";
+    private String vertexLocation = DEFAULT_VERTEX_LOCATION;
+    private String vertexCredentialsPath = "";
     private String currentProjectPath = "";
     private String geminiModel = DEFAULT_GEMINI_MODEL;
     private String thinkingLevel = DEFAULT_THINKING_LEVEL;
@@ -45,6 +50,10 @@ public class AppSettings {
         if (other != null) {
             this.theme = other.theme;
             this.geminiApiKey = other.geminiApiKey;
+            this.vertexAiEnabled = other.vertexAiEnabled;
+            this.vertexProjectId = other.vertexProjectId;
+            this.vertexLocation = other.vertexLocation;
+            this.vertexCredentialsPath = other.vertexCredentialsPath;
             this.currentProjectPath = other.currentProjectPath;
             this.geminiModel = other.geminiModel;
             this.thinkingLevel = other.thinkingLevel;
@@ -104,6 +113,82 @@ public class AppSettings {
      */
     public void setGeminiApiKey(String geminiApiKey) {
         this.geminiApiKey = geminiApiKey;
+    }
+
+    /**
+     * Checks if Google Cloud Vertex AI authentication is enabled.
+     *
+     * @return true if Vertex AI is enabled, false if using Gemini API key
+     */
+    public boolean isVertexAiEnabled() {
+        return vertexAiEnabled;
+    }
+
+    /**
+     * Sets whether Google Cloud Vertex AI authentication is enabled.
+     *
+     * @param vertexAiEnabled
+     *            true to use Vertex AI, false to use Gemini API key
+     */
+    public void setVertexAiEnabled(boolean vertexAiEnabled) {
+        this.vertexAiEnabled = vertexAiEnabled;
+    }
+
+    /**
+     * Gets the Google Cloud project ID for Vertex AI.
+     *
+     * @return the GCP project ID
+     */
+    public String getVertexProjectId() {
+        return StringUtils.defaultString(vertexProjectId);
+    }
+
+    /**
+     * Sets the Google Cloud project ID for Vertex AI.
+     *
+     * @param vertexProjectId
+     *            the GCP project ID to set
+     */
+    public void setVertexProjectId(String vertexProjectId) {
+        this.vertexProjectId = StringUtils.defaultString(vertexProjectId);
+    }
+
+    /**
+     * Gets the Google Cloud location/region for Vertex AI.
+     *
+     * @return the Vertex AI location (defaults to {@link #DEFAULT_VERTEX_LOCATION})
+     */
+    public String getVertexLocation() {
+        return StringUtils.defaultIfBlank(vertexLocation, DEFAULT_VERTEX_LOCATION);
+    }
+
+    /**
+     * Sets the Google Cloud location/region for Vertex AI.
+     *
+     * @param vertexLocation
+     *            the Vertex AI location to set
+     */
+    public void setVertexLocation(String vertexLocation) {
+        this.vertexLocation = StringUtils.defaultIfBlank(vertexLocation, DEFAULT_VERTEX_LOCATION);
+    }
+
+    /**
+     * Gets the optional file path to a Google Cloud service account JSON credentials file for Vertex AI.
+     *
+     * @return the service account JSON file path, or empty string to use Application Default Credentials (ADC)
+     */
+    public String getVertexCredentialsPath() {
+        return StringUtils.defaultString(vertexCredentialsPath);
+    }
+
+    /**
+     * Sets the optional file path to a Google Cloud service account JSON credentials file for Vertex AI.
+     *
+     * @param vertexCredentialsPath
+     *            the service account JSON file path, or empty string to use Application Default Credentials (ADC)
+     */
+    public void setVertexCredentialsPath(String vertexCredentialsPath) {
+        this.vertexCredentialsPath = StringUtils.defaultString(vertexCredentialsPath);
     }
 
     /**

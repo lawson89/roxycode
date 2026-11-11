@@ -14,12 +14,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.roxycode.app.RoxyCode;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ThinkingLevel;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.ai.google.genai.common.GoogleGenAiThinkingLevel;
+import org.springframework.context.support.GenericApplicationContext;
 
 class SettingsServiceTest {
 
@@ -103,6 +105,60 @@ class SettingsServiceTest {
         assertEquals(1440, syncedLoaded.getWindowWidth());
         assertEquals(960, syncedLoaded.getWindowHeight());
         assertTrue(syncedLoaded.isWindowMaximized());
+    }
+
+    @Test
+    void testVertexAiSettingsPersistenceCredentialReadinessAndStartupInitializer() {
+        SettingsService service = new SettingsService(null, null);
+        Path settingsFile = tempDir.resolve("vertex-roxy").resolve("settings.toml");
+        service.setSettingsPathOverride(settingsFile);
+
+        AppSettings settings = service.getSettings();
+        assertFalse(settings.isVertexAiEnabled());
+        assertEquals("", settings.getVertexProjectId());
+        assertEquals(AppSettings.DEFAULT_VERTEX_LOCATION, settings.getVertexLocation());
+        assertEquals("", settings.getVertexCredentialsPath());
+        assertFalse(service.hasConfiguredCredentials());
+        assertFalse(service.hasConfiguredApiKey());
+        assertFalse(SettingsService.hasConfiguredCredentials(null));
+
+        settings.setVertexAiEnabled(true);
+        assertFalse(service.hasConfiguredCredentials(), "Vertex AI mode without projectId should not be ready");
+        assertFalse(service.hasConfiguredApiKey());
+
+        settings.setVertexProjectId("my-gcp-project");
+        settings.setVertexLocation("us-central1");
+        Path credsFile = tempDir.resolve("sa-key.json");
+        settings.setVertexCredentialsPath(credsFile.toString());
+        assertTrue(service.hasConfiguredCredentials());
+        assertTrue(service.hasConfiguredApiKey());
+
+        settings.setVertexLocation("   ");
+        assertEquals(AppSettings.DEFAULT_VERTEX_LOCATION, settings.getVertexLocation());
+        assertTrue(service.hasConfiguredCredentials());
+
+        service.saveSettingsSync();
+
+        AppSettings reloaded = SettingsService.loadFromDisk(settingsFile, AiConfig.SHARED_TOML_MAPPER);
+        assertTrue(reloaded.isVertexAiEnabled());
+        assertEquals("my-gcp-project", reloaded.getVertexProjectId());
+        assertEquals("global", reloaded.getVertexLocation());
+        assertEquals(credsFile.toString(), reloaded.getVertexCredentialsPath());
+
+        AppSettings copied = reloaded.copy();
+        assertTrue(copied.isVertexAiEnabled());
+        assertEquals("my-gcp-project", copied.getVertexProjectId());
+        assertEquals("global", copied.getVertexLocation());
+        assertEquals(credsFile.toString(), copied.getVertexCredentialsPath());
+
+        try (GenericApplicationContext ctx = new GenericApplicationContext()) {
+            RoxyCode.createSettingsInitializer(reloaded).initialize(ctx);
+            assertEquals("true", ctx.getEnvironment().getProperty("spring.ai.google.genai.vertex-ai"));
+            assertEquals("my-gcp-project", ctx.getEnvironment().getProperty("spring.ai.google.genai.project-id"));
+            assertEquals("global", ctx.getEnvironment().getProperty("spring.ai.google.genai.location"));
+            assertEquals(credsFile.toUri().toString(),
+                    ctx.getEnvironment().getProperty("spring.ai.google.genai.credentials-uri"));
+        }
     }
 
     @Test

@@ -33,7 +33,7 @@ final class SidebarPanel extends JPanel {
     static final String SETTINGS_TOOLS_LABEL = "Settings & Tools";
     static final String SUBTITLE_BADGE_TEXT = "AI Workspace";
     static final String TOOLS_ATTENTION_TOOLTIP = "Required system tools are missing";
-    static final String MISSING_API_KEY_TOOLTIP = "Configure your Gemini API Key in Global Settings first";
+    static final String MISSING_API_KEY_TOOLTIP = "Configure your Gemini API Key or Vertex AI credentials in Global Settings first";
     static final String MISSING_PROJECT_TOOLTIP = "Select a project folder in the top bar first";
     static final String UNCONFIRMED_BUILD_TOOLTIP = "Confirm your project build configuration in Project Settings first";
 

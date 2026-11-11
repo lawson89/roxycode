@@ -1,6 +1,7 @@
 package org.roxycode.app;
 
 import java.awt.GraphicsEnvironment;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -31,8 +32,12 @@ public class RoxyCode {
     private static final Logger log = LoggerFactory.getLogger(RoxyCode.class);
 
     private static final String SETTINGS_PROPERTY_SOURCE = "roxycodeSettingsProperties";
-    private static final String PROP_GEMINI_API_KEY = "spring.ai.google.genai.api-key";
-    private static final String PROP_GEMINI_MODEL = "spring.ai.google.genai.chat.options.model";
+    static final String PROP_GEMINI_API_KEY = "spring.ai.google.genai.api-key";
+    static final String PROP_VERTEX_AI = "spring.ai.google.genai.vertex-ai";
+    static final String PROP_VERTEX_PROJECT_ID = "spring.ai.google.genai.project-id";
+    static final String PROP_VERTEX_LOCATION = "spring.ai.google.genai.location";
+    static final String PROP_VERTEX_CREDENTIALS_URI = "spring.ai.google.genai.credentials-uri";
+    static final String PROP_GEMINI_MODEL = "spring.ai.google.genai.chat.options.model";
     private static final String DEFAULT_GEMINI_MODEL = AppSettings.DEFAULT_GEMINI_MODEL;
 
     /**
@@ -114,7 +119,7 @@ public class RoxyCode {
         System.setProperty("flatlaf.menuBarEmbedded", "true");
     }
 
-    private static ApplicationContextInitializer<ConfigurableApplicationContext> createSettingsInitializer(
+    public static ApplicationContextInitializer<ConfigurableApplicationContext> createSettingsInitializer(
             AppSettings settings) {
         return applicationContext -> {
             ConfigurableEnvironment env = applicationContext.getEnvironment();
@@ -122,6 +127,19 @@ public class RoxyCode {
             if (settings != null) {
                 if (StringUtils.isNotBlank(settings.getGeminiApiKey())) {
                     props.put(PROP_GEMINI_API_KEY, settings.getGeminiApiKey());
+                }
+                if (settings.isVertexAiEnabled()) {
+                    props.put(PROP_VERTEX_AI, true);
+                    if (StringUtils.isNotBlank(settings.getVertexProjectId())) {
+                        props.put(PROP_VERTEX_PROJECT_ID, settings.getVertexProjectId().trim());
+                    }
+                    if (StringUtils.isNotBlank(settings.getVertexLocation())) {
+                        props.put(PROP_VERTEX_LOCATION, settings.getVertexLocation().trim());
+                    }
+                    if (StringUtils.isNotBlank(settings.getVertexCredentialsPath())) {
+                        String credentialsUri = Path.of(settings.getVertexCredentialsPath().trim()).toUri().toString();
+                        props.put(PROP_VERTEX_CREDENTIALS_URI, credentialsUri);
+                    }
                 }
                 String model = DEFAULT_GEMINI_MODEL;
                 if (StringUtils.isNotBlank(settings.getGeminiModel())) {

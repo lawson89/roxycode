@@ -79,5 +79,5 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
       - image & workdir: Container image (e.g., "eclipse-temurin:25-jdk") and working directory ("/workspace") when mode = "docker".
 
 ### Global Settings & System Tools (Settings & Tools Sidebar Hub)
-- **Global Settings**: Configures Light/Dark theme, Gemini API key, default Gemini model & thinking level, max tool turns per request, chat memory window, tool call logging, and Google Search grounding (webSearchService).
+- **Global Settings**: Configures Light/Dark theme, Authentication Provider (**Gemini API Key (Google AI Studio)** or **Google Cloud Vertex AI** with GCP Project ID, Vertex Location, and optional Service Account JSON key file or Application Default Credentials / ADC), default Gemini model & thinking level, max tool turns per request, chat memory window, tool call logging, and Google Search grounding (webSearchService).
 - **System Tools**: Checks status and install commands for required CLI tools (**Ripgrep**, **Universal Ctags**) and optional tools/sandbox runtimes (**Git**, **Bubblewrap** / **Seatbelt**, **Docker**).

@@ -95,7 +95,8 @@ RoxyCode checks for the following CLI tools on startup (and provides a **System 
   ```
 
 ### API Credentials
-- A **Google Gemini API key** (configured in the application **Settings** panel or via the `GOOGLE_API_KEY` environment variable).
+- **Google Gemini API key** (Google AI Studio — configured in the application **Global Settings** panel or via the `GOOGLE_API_KEY` environment variable), **or**
+- **Google Cloud Vertex AI** (configured in **Global Settings** with your GCP Project ID, Vertex Location such as `global` or `us-central1`, and either Application Default Credentials via `gcloud auth application-default login` or a Service Account JSON key file).
 
 ## Getting Started
 
@@ -136,7 +137,7 @@ RoxyCode stores user settings, caches, memory, and per-project metadata under `~
 
 ```text
 ~/.roxycode/
-├── settings.toml                # Theme, Gemini model, API key, turn/memory limits, global context folders
+├── settings.toml                # Theme, Gemini model, API key / Vertex AI credentials, turn/memory limits, global context folders
 ├── system-tools.toml            # Cached CLI tool detection results
 ├── logs/
 │   ├── roxy.log                 # Application log

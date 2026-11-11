@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import java.awt.event.ActionListener;
+import java.io.File;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.*;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.roxycode.app.ai.AiConfig.GenAiConnectionConfig;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
@@ -148,5 +150,62 @@ class SettingsPanelTest {
         SwingTestUtils.awaitFuture(settingsPanel.lastAsyncFuture);
         assertEquals(SettingsPanel.CONNECTION_FAILED_PREFIX + "401 UNAUTHORIZED: API key not valid",
                 settingsPanel.statusLabel.getText());
+    }
+
+    @Test
+    void testVertexAiProviderSelectionValidationBrowseAndSaveOnboarding() {
+        assertEquals(SettingsPanel.AUTH_PROVIDER_API_KEY, settingsPanel.authProviderCombo.getSelectedItem());
+        assertTrue(settingsPanel.apiKeyPanel.isVisible());
+        assertFalse(settingsPanel.vertexAiPanel.isVisible());
+
+        SwingTestUtils
+                .runOnEdt(() -> settingsPanel.authProviderCombo.setSelectedItem(SettingsPanel.AUTH_PROVIDER_VERTEX_AI));
+        assertFalse(settingsPanel.apiKeyPanel.isVisible());
+        assertTrue(settingsPanel.vertexAiPanel.isVisible());
+
+        settingsPanel.vertexProjectIdField.setText("   ");
+        settingsPanel.vertexLocationField.setText("us-central1");
+        SwingTestUtils.clickOnEdt(settingsPanel.testConnectionButton);
+        assertTrue(settingsPanel.statusLabel.getText().contains("Please enter a GCP Project ID first."));
+        verifyNoInteractions(aiService);
+
+        settingsPanel.vertexProjectIdField.setText("my-gcp-project");
+        settingsPanel.vertexLocationField.setText("   ");
+        SwingTestUtils.clickOnEdt(settingsPanel.testConnectionButton);
+        assertTrue(settingsPanel.statusLabel.getText().contains("Please enter a Vertex Location first."));
+        verifyNoInteractions(aiService);
+
+        settingsPanel.setCredentialsFileChooser(() -> new File("/tmp/service-account.json"));
+        SwingTestUtils.clickOnEdt(settingsPanel.browseCredentialsButton);
+        assertEquals(new File("/tmp/service-account.json").getAbsolutePath(),
+                settingsPanel.vertexCredentialsPathField.getText());
+
+        settingsPanel.vertexLocationField.setText("us-central1");
+        GenAiConnectionConfig expectedConfig = GenAiConnectionConfig.forVertexAi("my-gcp-project", "us-central1",
+                new File("/tmp/service-account.json").getAbsolutePath());
+        when(aiService.testConnection(eq(expectedConfig), anyString())).thenReturn("OK");
+        SwingTestUtils.clickOnEdt(settingsPanel.testConnectionButton);
+        SwingTestUtils.awaitFuture(settingsPanel.lastAsyncFuture);
+        assertEquals(SettingsPanel.CONNECTION_SUCCESS_TEXT, settingsPanel.statusLabel.getText());
+
+        java.util.concurrent.atomic.AtomicInteger initialCallbackCount = new java.util.concurrent.atomic.AtomicInteger();
+        settingsPanel.setOnInitialApiKeyConfiguredCallback(initialCallbackCount::incrementAndGet);
+        SwingTestUtils.clickOnEdt(settingsPanel.saveButton);
+
+        assertTrue(settings.isVertexAiEnabled());
+        assertEquals("my-gcp-project", settings.getVertexProjectId());
+        assertEquals("us-central1", settings.getVertexLocation());
+        assertEquals(new File("/tmp/service-account.json").getAbsolutePath(), settings.getVertexCredentialsPath());
+        assertFalse(settingsPanel.onboardingBanner.isVisible());
+        assertEquals(1, initialCallbackCount.get());
+
+        AppSettings eventSettings = new AppSettings();
+        eventSettings.setVertexAiEnabled(false);
+        eventSettings.setGeminiApiKey("switched-back-key");
+        settingsPanel.onSettingsChanged(new SettingsChangedEvent(eventSettings));
+        SwingTestUtils.flushEdt();
+        assertEquals(SettingsPanel.AUTH_PROVIDER_API_KEY, settingsPanel.authProviderCombo.getSelectedItem());
+        assertTrue(settingsPanel.apiKeyPanel.isVisible());
+        assertFalse(settingsPanel.vertexAiPanel.isVisible());
     }
 }

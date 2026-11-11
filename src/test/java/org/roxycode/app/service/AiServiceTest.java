@@ -214,6 +214,30 @@ class AiServiceTest {
             assertEquals("test-api-key", client.apiKey());
             assertFalse(client.vertexAI());
         }
+
+        GoogleGenAiConnectionProperties unconfiguredProps = new GoogleGenAiConnectionProperties();
+        try (Client placeholderClient = config.googleGenAiClient(unconfiguredProps, AiConfig.DEFAULT_HTTP_TIMEOUT_MS)) {
+            assertEquals(AiConfig.UNCONFIGURED_API_KEY_PLACEHOLDER, placeholderClient.apiKey());
+            assertFalse(placeholderClient.vertexAI());
+        }
+
+        GoogleGenAiConnectionProperties incompleteVertexProps = new GoogleGenAiConnectionProperties();
+        incompleteVertexProps.setVertexAi(true);
+        try (Client incompleteVertexClient = config.googleGenAiClient(incompleteVertexProps,
+                AiConfig.DEFAULT_HTTP_TIMEOUT_MS)) {
+            assertEquals(AiConfig.UNCONFIGURED_API_KEY_PLACEHOLDER, incompleteVertexClient.apiKey());
+            assertFalse(incompleteVertexClient.vertexAI());
+        }
+
+        assertThrows(IllegalArgumentException.class,
+                () -> AiConfig.createGenAiClient(AiConfig.GenAiConnectionConfig.forVertexAi("", "global", ""), 5000));
+        assertThrows(IllegalArgumentException.class,
+                () -> AiConfig.createGenAiClient(AiConfig.GenAiConnectionConfig.forVertexAi("proj-1", "", ""), 5000));
+        IllegalArgumentException missingFileEx = assertThrows(IllegalArgumentException.class,
+                () -> AiConfig.createGenAiClient(
+                        AiConfig.GenAiConnectionConfig.forVertexAi("proj-1", "global", "/nonexistent/sa-key.json"),
+                        5000));
+        assertTrue(missingFileEx.getMessage().contains("Service Account JSON file not found"));
         Thread.interrupted();
         assertTrue(AiConfig.isTransientAiError(new ClientException(429, "Too Many Requests", "RESOURCE_EXHAUSTED")));
         assertTrue(AiConfig.isTransientAiError(new ClientException(499, "Client Closed Request", "CANCELLED")));
@@ -329,6 +353,32 @@ class AiServiceTest {
         assertThrows(IllegalArgumentException.class, () -> aiService.testConnection("   ", "gemini-3.5-flash"));
         aiService.setConnectionTester((key, model) -> key + ":" + model);
         assertEquals("my-key:gemini-3.5-pro", aiService.testConnection("  my-key  ", " gemini-3.5-pro "));
+
+        AtomicReference<AiConfig.GenAiConnectionConfig> reloadedConfigRef = new AtomicReference<>();
+        aiService.setConnectionChatClientBuilderFactory(cfg -> {
+            reloadedConfigRef.set(cfg);
+            return chatClientBuilder;
+        });
+        settings.setVertexAiEnabled(true);
+        settings.setVertexProjectId("  vertex-proj-42 ");
+        settings.setVertexLocation(" us-central1 ");
+        settings.setVertexCredentialsPath(" /tmp/creds.json ");
+        aiService.onSettingsChanged(new SettingsChangedEvent(settings));
+        assertNotNull(reloadedConfigRef.get());
+        assertTrue(reloadedConfigRef.get().vertexAi());
+        assertEquals("vertex-proj-42", reloadedConfigRef.get().projectId());
+        assertEquals("us-central1", reloadedConfigRef.get().location());
+        assertEquals("/tmp/creds.json", reloadedConfigRef.get().credentialsPath());
+        assertEquals(reloadedConfigRef.get(), aiService.getActiveConnectionConfig());
+
+        assertThrows(IllegalArgumentException.class, () -> aiService
+                .testConnection(AiConfig.GenAiConnectionConfig.forVertexAi("", "global", ""), "gemini-3.5-flash"));
+        assertThrows(IllegalArgumentException.class, () -> aiService
+                .testConnection(AiConfig.GenAiConnectionConfig.forVertexAi("proj", "", ""), "gemini-3.5-flash"));
+        aiService.setConnectionConfigTester(
+                (cfg, model) -> cfg.vertexAi() + ":" + cfg.projectId() + ":" + cfg.location() + ":" + model);
+        assertEquals("true:vertex-proj-42:us-central1:gemini-3.5-flash", aiService.testConnection(
+                AiConfig.GenAiConnectionConfig.forVertexAi("vertex-proj-42", "us-central1", ""), "gemini-3.5-flash"));
     }
 
     @Test

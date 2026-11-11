@@ -8,16 +8,20 @@ import com.formdev.flatlaf.FlatLaf;
 import com.formdev.flatlaf.FlatLightLaf;
 import com.formdev.flatlaf.themes.FlatMacDarkLaf;
 import com.formdev.flatlaf.themes.FlatMacLightLaf;
+import com.formdev.flatlaf.util.SystemFileChooser;
 import java.awt.*;
+import java.io.File;
 import java.text.ParseException;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
+import org.roxycode.app.ai.AiConfig.GenAiConnectionConfig;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
@@ -42,9 +46,12 @@ public final class SettingsPanel extends JPanel {
 
     static final String SUBTITLE_TEXT = "Configure appearance, Gemini model credentials, agent execution limits, and diagnostics.";
     static final String SAVED_APPLIED_TEXT = "Settings saved and applied.";
-    static final String ONBOARDING_API_KEY_NOTICE_TEXT = "Welcome to RoxyCode! Enter your Gemini API Key below and click 'Save Settings' to get started.";
+    static final String ONBOARDING_API_KEY_NOTICE_TEXT = "Welcome to RoxyCode! Configure your Gemini API Key or Google Cloud Vertex AI credentials below and click 'Save Settings' to get started.";
+    static final String AUTH_PROVIDER_API_KEY = "Gemini API Key (Google AI Studio)";
+    static final String AUTH_PROVIDER_VERTEX_AI = "Google Cloud Vertex AI";
     static final String GET_API_KEY_BUTTON_TEXT = "Get a Gemini API Key";
     static final String GEMINI_API_KEY_URL = "https://aistudio.google.com/apikey";
+    static final String BROWSE_CREDENTIALS_TEXT = "Browse...";
     static final String TEST_CONNECTION_TEXT = "Test Connection";
     static final String TESTING_CONNECTION_TEXT = "Testing...";
     static final String CONNECTION_SUCCESS_TEXT = "Connection verified!";
@@ -75,8 +82,15 @@ public final class SettingsPanel extends JPanel {
     final JLabel modelApiBadgeLabel;
     final JTextArea modelDescriptionArea;
     final JSpinner maxMessagesSpinner;
+    final JComboBox<String> authProviderCombo;
+    final JPanel apiKeyPanel;
+    final JPanel vertexAiPanel;
     final JPasswordField geminiApiKeyField;
     final JButton getApiKeyLinkButton;
+    final JTextField vertexProjectIdField;
+    final JTextField vertexLocationField;
+    final JTextField vertexCredentialsPathField;
+    final JButton browseCredentialsButton;
     final JButton testConnectionButton;
     final JSpinner maxAgentToolTurnsSpinner;
     final JCheckBox logToolCallsCheckBox;
@@ -89,6 +103,7 @@ public final class SettingsPanel extends JPanel {
     private JLabel aiModelHeaderLabel;
     private JLabel agentExecutionHeaderLabel;
     private transient Consumer<String> urlOpener = UiComponents::openUrlOrCopyToClipboard;
+    private transient Supplier<File> credentialsFileChooser = this::chooseServiceAccountJsonFile;
     private transient Runnable onInitialApiKeyConfiguredCallback;
     transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
 
@@ -138,6 +153,20 @@ public final class SettingsPanel extends JPanel {
         thinkingLevelCombo = new JComboBox<>(ThinkingLevel.values());
         thinkingLevelCombo.setSelectedItem(SettingsService.resolveGlobalThinkingLevel(settingsService));
 
+        authProviderCombo = new JComboBox<>(new String[]{AUTH_PROVIDER_API_KEY, AUTH_PROVIDER_VERTEX_AI});
+        if (settingsService.getSettings().isVertexAiEnabled()) {
+            authProviderCombo.setSelectedItem(AUTH_PROVIDER_VERTEX_AI);
+        } else {
+            authProviderCombo.setSelectedItem(AUTH_PROVIDER_API_KEY);
+        }
+        authProviderCombo.addActionListener(e -> updateAuthProviderVisibility());
+
+        apiKeyPanel = new JPanel(new MigLayout("fillx, insets 0, wrap 1, gapy 8, hidemode 3", GROW_FILL, ""));
+        apiKeyPanel.setOpaque(false);
+
+        vertexAiPanel = new JPanel(new MigLayout("fillx, insets 0, wrap 1, gapy 10, hidemode 3", GROW_FILL, ""));
+        vertexAiPanel.setOpaque(false);
+
         geminiApiKeyField = new JPasswordField(24);
         geminiApiKeyField.setText(settingsService.getSettings().getGeminiApiKey());
         geminiApiKeyField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Enter your Gemini API key...");
@@ -152,6 +181,27 @@ public final class SettingsPanel extends JPanel {
         getApiKeyLinkButton.setIconTextGap(5);
         getApiKeyLinkButton.setToolTipText(GEMINI_API_KEY_URL);
         getApiKeyLinkButton.addActionListener(e -> urlOpener.accept(GEMINI_API_KEY_URL));
+
+        vertexProjectIdField = new JTextField(24);
+        vertexProjectIdField.setText(settingsService.getSettings().getVertexProjectId());
+        vertexProjectIdField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "e.g. my-gcp-project");
+        SwingHtmlUtils.installTextContextMenu(vertexProjectIdField);
+
+        vertexLocationField = new JTextField(18);
+        vertexLocationField.setText(settingsService.getSettings().getVertexLocation());
+        vertexLocationField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "e.g. global or us-central1");
+        SwingHtmlUtils.installTextContextMenu(vertexLocationField);
+
+        vertexCredentialsPathField = new JTextField(24);
+        vertexCredentialsPathField.setText(settingsService.getSettings().getVertexCredentialsPath());
+        vertexCredentialsPathField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT,
+                "Leave blank to use Google Cloud Application Default Credentials (ADC)");
+        SwingHtmlUtils.installTextContextMenu(vertexCredentialsPathField);
+
+        browseCredentialsButton = new JButton(BROWSE_CREDENTIALS_TEXT);
+        browseCredentialsButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        browseCredentialsButton.setIconTextGap(6);
+        browseCredentialsButton.addActionListener(e -> browseServiceAccountCredentials());
 
         testConnectionButton = new JButton(TEST_CONNECTION_TEXT);
         testConnectionButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
@@ -186,6 +236,7 @@ public final class SettingsPanel extends JPanel {
 
         statusTimer = UiComponents.createStatusTimer(statusLabel, 3000);
 
+        updateAuthProviderVisibility();
         applyThemeStyling();
         updateOnboardingBannerState();
     }
@@ -239,19 +290,44 @@ public final class SettingsPanel extends JPanel {
 
         card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
 
-        JPanel apiKeyRow = new JPanel(new MigLayout("fillx, insets 0, wrap 1, gapy 8", GROW_FILL, ""));
-        apiKeyRow.setOpaque(false);
-        apiKeyRow.add(UiComponents.createFieldRow(UiComponents.createFieldTextBlock("Gemini API Key",
+        card.add(UiComponents.createFieldRow(
+                UiComponents.createFieldTextBlock("Authentication Provider",
+                        "Choose between Google AI Studio (Gemini API Key) and Google Cloud Vertex AI.", null),
+                authProviderCombo, "w 260:280:300"), GROWX_WMIN_0);
+
+        apiKeyPanel.add(UiComponents.createFieldRow(UiComponents.createFieldTextBlock("Gemini API Key",
                 "Google GenAI API key used to authenticate model requests (applies immediately on save).", null),
                 getApiKeyLinkButton, ""), GROWX_WMIN_0);
+        apiKeyPanel.add(geminiApiKeyField, "w 280:420:520");
 
-        JPanel apiKeyInputRow = new JPanel(new MigLayout("insets 0, gapx 10", "[][]", "[center]"));
-        apiKeyInputRow.setOpaque(false);
-        apiKeyInputRow.add(geminiApiKeyField, "w 280:420:520");
-        apiKeyInputRow.add(testConnectionButton);
-        apiKeyRow.add(apiKeyInputRow, GROWX_WMIN_0);
+        vertexAiPanel.add(UiComponents.createFieldRow(
+                UiComponents.createFieldTextBlock("GCP Project ID",
+                        "Google Cloud project ID with the Vertex AI API enabled.", null),
+                vertexProjectIdField, "w 240:280:320"), GROWX_WMIN_0);
+        vertexAiPanel.add(UiComponents.createFieldRow(
+                UiComponents.createFieldTextBlock("Vertex Location",
+                        "Google Cloud region or 'global' endpoint for Vertex AI model calls.", null),
+                vertexLocationField, "w 240:280:320"), GROWX_WMIN_0);
 
-        card.add(apiKeyRow, GROWX_WMIN_0);
+        JPanel credentialsRow = new JPanel(new MigLayout("fillx, insets 0, wrap 1, gapy 6", GROW_FILL, ""));
+        credentialsRow.setOpaque(false);
+        credentialsRow.add(UiComponents.createFieldTextBlock("Service Account JSON (Optional)",
+                "Path to a GCP Service Account JSON key file. Leave blank to use Application Default Credentials (gcloud auth application-default login).",
+                null), GROWX_WMIN_0);
+        JPanel credentialsInputRow = new JPanel(new MigLayout("insets 0, gapx 8", "[grow, fill][]", "[center]"));
+        credentialsInputRow.setOpaque(false);
+        credentialsInputRow.add(vertexCredentialsPathField, "w 260:400:520");
+        credentialsInputRow.add(browseCredentialsButton);
+        credentialsRow.add(credentialsInputRow, GROWX_WMIN_0);
+        vertexAiPanel.add(credentialsRow, GROWX_WMIN_0);
+
+        card.add(apiKeyPanel, "growx, wmin 0, hidemode 3");
+        card.add(vertexAiPanel, "growx, wmin 0, hidemode 3");
+
+        JPanel testActionRow = new JPanel(new MigLayout("insets 2 0 0 0", "[]", "[center]"));
+        testActionRow.setOpaque(false);
+        testActionRow.add(testConnectionButton);
+        card.add(testActionRow, GROWX_WMIN_0);
         return card;
     }
 
@@ -327,12 +403,18 @@ public final class SettingsPanel extends JPanel {
         UiComponents.refreshActionButtonIcons(this);
 
         geminiApiKeyField.putClientProperty(FlatClientProperties.STYLE, "showRevealButton: true; arc: 8");
+        vertexProjectIdField.putClientProperty(FlatClientProperties.STYLE, "arc: 8");
+        vertexLocationField.putClientProperty(FlatClientProperties.STYLE, "arc: 8");
+        vertexCredentialsPathField.putClientProperty(FlatClientProperties.STYLE, "arc: 8");
 
         getApiKeyLinkButton.putClientProperty(FlatClientProperties.STYLE,
                 "font: -1; arc: 8; margin: 2,8,2,8; borderWidth: 0; background: null; hoverBackground: fade("
                         + accentHex + ", 14%); pressedBackground: fade(" + accentHex + ", 22%)");
         getApiKeyLinkButton.setForeground(accentColor);
         getApiKeyLinkButton.setIcon(FontIcon.of(Codicons.LINK_EXTERNAL, 13, accentColor));
+
+        browseCredentialsButton.setIcon(FontIcon.of(Codicons.FOLDER_OPENED, 14, accentColor));
+        browseCredentialsButton.putClientProperty(FlatClientProperties.STYLE, "arc: 8; margin: 5,10,5,10");
 
         testConnectionButton.setIcon(FontIcon.of(Codicons.PLUG, 14, accentColor));
         testConnectionButton.putClientProperty(FlatClientProperties.STYLE, "arc: 8; margin: 5,12,5,12");
@@ -349,6 +431,31 @@ public final class SettingsPanel extends JPanel {
         }
     }
 
+    boolean isVertexAiSelected() {
+        return AUTH_PROVIDER_VERTEX_AI.equals(authProviderCombo.getSelectedItem());
+    }
+
+    void updateAuthProviderVisibility() {
+        boolean vertexSelected = isVertexAiSelected();
+        apiKeyPanel.setVisible(!vertexSelected);
+        vertexAiPanel.setVisible(vertexSelected);
+        revalidate();
+        repaint();
+    }
+
+    private File chooseServiceAccountJsonFile() {
+        SystemFileChooser.FileNameExtensionFilter jsonFilter = new SystemFileChooser.FileNameExtensionFilter(
+                "Service Account JSON (*.json)", "json");
+        return UiComponents.chooseOpenFile(this, "Select GCP Service Account JSON Key", jsonFilter);
+    }
+
+    void browseServiceAccountCredentials() {
+        File selected = credentialsFileChooser.get();
+        if (selected != null) {
+            vertexCredentialsPathField.setText(selected.getAbsolutePath());
+        }
+    }
+
     boolean isApiKeyConfigured() {
         if (settingsService == null) {
             return false;
@@ -356,8 +463,7 @@ public final class SettingsPanel extends JPanel {
         if (settingsService.hasConfiguredApiKey()) {
             return true;
         }
-        AppSettings current = settingsService.getSettings();
-        return current != null && current.getGeminiApiKey() != null && !current.getGeminiApiKey().isBlank();
+        return SettingsService.hasConfiguredCredentials(settingsService.getSettings());
     }
 
     void updateOnboardingBannerState() {
@@ -374,10 +480,23 @@ public final class SettingsPanel extends JPanel {
             if (theme != null && !theme.equals(themeCombo.getSelectedItem())) {
                 settingsUpdateGuard.run(() -> themeCombo.setSelectedItem(theme));
             }
+            String targetProvider;
+            if (event.settings().isVertexAiEnabled()) {
+                targetProvider = AUTH_PROVIDER_VERTEX_AI;
+            } else {
+                targetProvider = AUTH_PROVIDER_API_KEY;
+            }
+            if (!targetProvider.equals(authProviderCombo.getSelectedItem())) {
+                authProviderCombo.setSelectedItem(targetProvider);
+            }
+            updateAuthProviderVisibility();
             String apiKey = event.settings().getGeminiApiKey();
             if (apiKey != null) {
                 geminiApiKeyField.setText(apiKey);
             }
+            vertexProjectIdField.setText(event.settings().getVertexProjectId());
+            vertexLocationField.setText(event.settings().getVertexLocation());
+            vertexCredentialsPathField.setText(event.settings().getVertexCredentialsPath());
             String modelId = event.settings().getGeminiModel();
             if (modelId != null) {
                 GeminiModelConfig selected = (GeminiModelConfig) modelCombo.getSelectedItem();
@@ -431,11 +550,26 @@ public final class SettingsPanel extends JPanel {
     }
 
     CompletableFuture<String> testConnection() {
+        boolean vertexSelected = isVertexAiSelected();
         String apiKey = new String(geminiApiKeyField.getPassword()).trim();
-        if (apiKey.isEmpty()) {
+        String projectId = vertexProjectIdField.getText().trim();
+        String location = vertexLocationField.getText().trim();
+        String credentialsPath = vertexCredentialsPathField.getText().trim();
+
+        if (vertexSelected) {
+            if (projectId.isEmpty()) {
+                showStatusMessage(CONNECTION_FAILED_PREFIX + "Please enter a GCP Project ID first.", false);
+                return CompletableFuture.completedFuture(null);
+            }
+            if (location.isEmpty()) {
+                showStatusMessage(CONNECTION_FAILED_PREFIX + "Please enter a Vertex Location first.", false);
+                return CompletableFuture.completedFuture(null);
+            }
+        } else if (apiKey.isEmpty()) {
             showStatusMessage(CONNECTION_FAILED_PREFIX + "Please enter a Gemini API Key first.", false);
             return CompletableFuture.completedFuture(null);
         }
+
         GeminiModelConfig selectedModel = (GeminiModelConfig) modelCombo.getSelectedItem();
         String modelName;
         if (selectedModel != null) {
@@ -444,12 +578,22 @@ public final class SettingsPanel extends JPanel {
             modelName = settingsService.getSettings().getGeminiModel();
         }
 
+        GenAiConnectionConfig connectionConfig;
+        if (vertexSelected) {
+            connectionConfig = GenAiConnectionConfig.forVertexAi(projectId, location, credentialsPath);
+        } else {
+            connectionConfig = GenAiConnectionConfig.forApiKey(apiKey);
+        }
+
         testConnectionButton.setEnabled(false);
         testConnectionButton.setText(TESTING_CONNECTION_TEXT);
 
         CompletableFuture<String> future = Edt.supplyAsync(() -> {
             if (aiService == null) {
                 throw new IllegalStateException("AI service is unavailable");
+            }
+            if (vertexSelected) {
+                return aiService.testConnection(connectionConfig, modelName);
             }
             return aiService.testConnection(apiKey, modelName);
         }, response -> {
@@ -476,9 +620,17 @@ public final class SettingsPanel extends JPanel {
         boolean wasApiKeyConfigured = isApiKeyConfigured();
         AppSettings settings = settingsService.getSettings();
         String newApiKey = new String(geminiApiKeyField.getPassword());
+        boolean vertexEnabled = isVertexAiSelected();
+        String newProjectId = vertexProjectIdField.getText().trim();
+        String newLocation = vertexLocationField.getText().trim();
+        String newCredentialsPath = vertexCredentialsPathField.getText().trim();
         int newMaxMessages = (Integer) maxMessagesSpinner.getValue();
 
         settings.setGeminiApiKey(newApiKey);
+        settings.setVertexAiEnabled(vertexEnabled);
+        settings.setVertexProjectId(newProjectId);
+        settings.setVertexLocation(newLocation);
+        settings.setVertexCredentialsPath(newCredentialsPath);
         GeminiModelConfig selectedModel = (GeminiModelConfig) modelCombo.getSelectedItem();
         if (selectedModel != null) {
             settings.setGeminiModel(selectedModel.apiName());
@@ -495,7 +647,7 @@ public final class SettingsPanel extends JPanel {
         updateOnboardingBannerState();
 
         showStatusMessage(SAVED_APPLIED_TEXT, true);
-        if (!wasApiKeyConfigured && !newApiKey.isBlank() && onInitialApiKeyConfiguredCallback != null) {
+        if (!wasApiKeyConfigured && isApiKeyConfigured() && onInitialApiKeyConfiguredCallback != null) {
             onInitialApiKeyConfiguredCallback.run();
         }
     }
@@ -506,6 +658,11 @@ public final class SettingsPanel extends JPanel {
 
     void setUrlOpener(Consumer<String> urlOpener) {
         this.urlOpener = Objects.requireNonNull(urlOpener, "urlOpener must not be null");
+    }
+
+    void setCredentialsFileChooser(Supplier<File> credentialsFileChooser) {
+        this.credentialsFileChooser = Objects.requireNonNull(credentialsFileChooser,
+                "credentialsFileChooser must not be null");
     }
 
     public static void applyTheme(String themeName) {
