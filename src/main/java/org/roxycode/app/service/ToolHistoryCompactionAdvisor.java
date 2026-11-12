@@ -1,7 +1,15 @@
 package org.roxycode.app.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
+import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.util.TokenUtils;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
@@ -24,6 +32,7 @@ final class ToolHistoryCompactionAdvisor implements CallAdvisor {
     static final int KEEP_RECENT_TOOL_TURNS = 6;
     static final long COMPACTION_EPOCH_TOKENS = 20_000L;
     static final int MIN_PAYLOAD_CHARS_TO_COMPACT = 1_200;
+    static final int MAX_COMPACTED_JSON_CHARS = 2_400;
     static final int COMPACT_HEAD_CHARS = 300;
     static final int COMPACT_TAIL_CHARS = 200;
 
@@ -172,6 +181,95 @@ final class ToolHistoryCompactionAdvisor implements CallAdvisor {
     }
 
     static String compactPayload(@Nullable String data) {
+        if (data == null || data.length() <= MIN_PAYLOAD_CHARS_TO_COMPACT) {
+            return data;
+        }
+        return compactJsonOrPlainText(data);
+    }
+
+    private static String compactJsonOrPlainText(String data) {
+        try {
+            JsonNode root = AiConfig.SHARED_OBJECT_MAPPER.readTree(data);
+            if (root == null) {
+                return compactPlainText(data);
+            }
+            if (root.isTextual()) {
+                String innerText = root.asText();
+                String compactedInner = compactJsonNodeOrPlainText(innerText);
+                return AiConfig.SHARED_OBJECT_MAPPER.writeValueAsString(compactedInner);
+            }
+            return compactJsonNode(root, data);
+        } catch (JsonProcessingException e) {
+            return compactPlainText(data);
+        }
+    }
+
+    private static String compactJsonNodeOrPlainText(String text) {
+        if (text.length() <= MIN_PAYLOAD_CHARS_TO_COMPACT) {
+            return text;
+        }
+        try {
+            JsonNode nested = AiConfig.SHARED_OBJECT_MAPPER.readTree(text);
+            if (nested != null && (nested.isObject() || nested.isArray())) {
+                return compactJsonNode(nested, text);
+            }
+        } catch (JsonProcessingException ignored) {
+            // Fall through to plain text compaction
+        }
+        return compactPlainText(text);
+    }
+
+    private static String compactJsonNode(JsonNode node, String rawJsonFallback) throws JsonProcessingException {
+        boolean modified = compactNodeStrings(node);
+        if (modified) {
+            String serialized = AiConfig.SHARED_OBJECT_MAPPER.writeValueAsString(node);
+            if (serialized.length() <= MAX_COMPACTED_JSON_CHARS) {
+                return serialized;
+            }
+        }
+        String summary = compactPlainText(rawJsonFallback);
+        return AiConfig.SHARED_OBJECT_MAPPER.writeValueAsString(Map.of("result", summary));
+    }
+
+    private static boolean compactNodeStrings(JsonNode node) {
+        boolean modified = false;
+        if (node instanceof ObjectNode objectNode) {
+            Iterator<Map.Entry<String, JsonNode>> fields = objectNode.fields();
+            while (fields.hasNext()) {
+                Map.Entry<String, JsonNode> entry = fields.next();
+                JsonNode child = entry.getValue();
+                if (child != null && child.isTextual()) {
+                    String text = child.asText();
+                    if (text.length() > MIN_PAYLOAD_CHARS_TO_COMPACT) {
+                        entry.setValue(TextNode.valueOf(compactPlainText(text)));
+                        modified = true;
+                    }
+                } else if (child != null && (child.isObject() || child.isArray())) {
+                    if (compactNodeStrings(child)) {
+                        modified = true;
+                    }
+                }
+            }
+        } else if (node instanceof ArrayNode arrayNode) {
+            for (int i = 0; i < arrayNode.size(); i++) {
+                JsonNode child = arrayNode.get(i);
+                if (child != null && child.isTextual()) {
+                    String text = child.asText();
+                    if (text.length() > MIN_PAYLOAD_CHARS_TO_COMPACT) {
+                        arrayNode.set(i, TextNode.valueOf(compactPlainText(text)));
+                        modified = true;
+                    }
+                } else if (child != null && (child.isObject() || child.isArray())) {
+                    if (compactNodeStrings(child)) {
+                        modified = true;
+                    }
+                }
+            }
+        }
+        return modified;
+    }
+
+    static String compactPlainText(String data) {
         if (data == null || data.length() <= MIN_PAYLOAD_CHARS_TO_COMPACT) {
             return data;
         }

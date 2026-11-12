@@ -1017,4 +1017,63 @@ class AiServiceTest {
             assertEquals(recentToolOutput, secondCallTools.get(i).getResponses().get(0).responseData());
         }
     }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void testToolHistoryCompactionAdvisorPreservesValidJsonForGoogleGenAiParser() throws Exception {
+        // 1. Multi-key JSON object with embedded newlines & quotes (reproducing the auditPlan + pom failure)
+        String auditPlanContent = "---\nid: \"20261111-145633-audit-cleanup\"\nprojectPath: \"/home/user/roxycode\"\n"
+                + "line: \"value with quotes\"\n".repeat(120) + "END_AUDIT_PLAN";
+        String pomContent = "<project>\n  <modelVersion>4.0.0</modelVersion>\n"
+                + "  <dependency><artifactId>spring-ai</artifactId></dependency>\n".repeat(120) + "</project>";
+        String multiKeyJson = AiConfig.SHARED_OBJECT_MAPPER
+                .writeValueAsString(Map.of("auditPlan", auditPlanContent, "pom", pomContent));
+
+        String compactedMultiKey = ToolHistoryCompactionAdvisor.compactPayload(multiKeyJson);
+        assertTrue(compactedMultiKey.length() < ToolHistoryCompactionAdvisor.MAX_COMPACTED_JSON_CHARS);
+        assertFalse(compactedMultiKey.contains("\n"), "Compacted JSON must not contain raw unescaped newlines");
+
+        Map<String, Object> parsedMultiKey = AiConfig.SHARED_OBJECT_MAPPER.readValue(compactedMultiKey, Map.class);
+        assertTrue(parsedMultiKey.containsKey("auditPlan"));
+        assertTrue(parsedMultiKey.containsKey("pom"));
+        String compactedAudit = (String) parsedMultiKey.get("auditPlan");
+        String compactedPom = (String) parsedMultiKey.get("pom");
+        assertTrue(compactedAudit.startsWith("---\nid: \"20261111-145633-audit-cleanup\""));
+        assertTrue(compactedAudit.endsWith("END_AUDIT_PLAN"));
+        assertTrue(compactedAudit.contains("...[compacted "));
+        assertTrue(compactedPom.startsWith("<project>\n  <modelVersion>4.0.0</modelVersion>"));
+        assertTrue(compactedPom.endsWith("</project>"));
+        assertTrue(compactedPom.contains("...[compacted "));
+
+        // 2. Double-encoded JSON string (as produced by Spring AI DefaultToolCallResultConverter on String return)
+        String doubleEncodedJson = AiConfig.SHARED_OBJECT_MAPPER.writeValueAsString(multiKeyJson);
+        String compactedDoubleEncoded = ToolHistoryCompactionAdvisor.compactPayload(doubleEncodedJson);
+        String unwrappedInnerJson = AiConfig.SHARED_OBJECT_MAPPER.readValue(compactedDoubleEncoded, String.class);
+        Map<String, Object> parsedFromDoubleEncoded = AiConfig.SHARED_OBJECT_MAPPER.readValue(unwrappedInnerJson,
+                Map.class);
+        assertTrue(parsedFromDoubleEncoded.containsKey("auditPlan"));
+        assertTrue(parsedFromDoubleEncoded.containsKey("pom"));
+
+        // 3. Escape sequences (quotes/backslashes/newlines) right around the 300-char head and 200-char tail boundaries
+        String boundaryValue = "A".repeat(298) + "\\n\"\\" + "B".repeat(1_500) + "\\n\"\\" + "C".repeat(198);
+        String boundaryJson = AiConfig.SHARED_OBJECT_MAPPER.writeValueAsString(Map.of("result", boundaryValue));
+        String compactedBoundary = ToolHistoryCompactionAdvisor.compactPayload(boundaryJson);
+        Map<String, Object> parsedBoundary = AiConfig.SHARED_OBJECT_MAPPER.readValue(compactedBoundary, Map.class);
+        String boundaryResult = (String) parsedBoundary.get("result");
+        assertTrue(boundaryResult.contains("...[compacted "));
+        assertTrue(boundaryResult.startsWith("A".repeat(298)));
+        assertTrue(boundaryResult.endsWith("C".repeat(198)));
+
+        // 4. JSON object / array composed of many small entries (no single string > 1200 chars, but total > 1200 chars)
+        List<Map<String, Object>> manySmallItems = new ArrayList<>();
+        for (int i = 0; i < 60; i++) {
+            manySmallItems.add(Map.of("name", "method" + i, "line", i * 10, "path", "src/main/App.java"));
+        }
+        String manySmallJson = AiConfig.SHARED_OBJECT_MAPPER.writeValueAsString(Map.of("result", manySmallItems));
+        assertTrue(manySmallJson.length() > ToolHistoryCompactionAdvisor.MIN_PAYLOAD_CHARS_TO_COMPACT);
+        String compactedManySmall = ToolHistoryCompactionAdvisor.compactPayload(manySmallJson);
+        Map<String, Object> parsedManySmall = AiConfig.SHARED_OBJECT_MAPPER.readValue(compactedManySmall, Map.class);
+        assertTrue(parsedManySmall.containsKey("result"));
+        assertTrue(((String) parsedManySmall.get("result")).contains("...[compacted "));
+    }
 }
