@@ -174,95 +174,72 @@ public final class JsPolyfillUberspect implements JexlUberspect {
     }
 
     private JexlMethod resolvePolyfillMethod(Object obj, String method, Object... args) {
-        if (obj == null || method == null) {
+        if (!isSupportedPolyfill(obj, method, args)) {
             return null;
+        }
+        return new PolyfillMethod(method, context);
+    }
+
+    static boolean isSupportedPolyfill(Object obj, String method, Object... args) {
+        if (obj == null || method == null) {
+            return false;
         }
         int argCount = NO_ARGS;
         if (args != null) {
             argCount = args.length;
         }
         if (obj instanceof CharSequence) {
-            return resolveCharSequenceMethod(method, argCount);
+            return isSupportedCharSequenceMethod(method, argCount);
         }
         if (obj instanceof Map<?, ?>) {
-            return resolveMapMethod(method, argCount);
+            return isSupportedMapMethod(method, argCount);
         }
         if (obj instanceof Collection<?> || obj.getClass().isArray()) {
-            return resolveSequenceMethod(obj, method, argCount, args);
+            return isSupportedSequenceMethod(obj, method, argCount, args);
         }
-        return null;
+        return false;
     }
 
-    private JexlMethod resolveCharSequenceMethod(String method, int argCount) {
+    private static boolean isSupportedCharSequenceMethod(String method, int argCount) {
         switch (method) {
             case METHOD_INCLUDES :
-                if (argCount == SINGLE_ARG) {
-                    return new PolyfillMethod(method, CharSequence.class, context);
-                }
-                return null;
+                return argCount == SINGLE_ARG;
             case METHOD_SLICE :
             case METHOD_PAD_START :
             case METHOD_PAD_END :
-                if (argCount == SINGLE_ARG || argCount == TWO_ARGS) {
-                    return new PolyfillMethod(method, CharSequence.class, context);
-                }
-                return null;
+                return argCount == SINGLE_ARG || argCount == TWO_ARGS;
             case METHOD_TRIM_START :
             case METHOD_TRIM_END :
-                if (argCount == NO_ARGS) {
-                    return new PolyfillMethod(method, CharSequence.class, context);
-                }
-                return null;
+                return argCount == NO_ARGS;
             default :
-                return null;
+                return false;
         }
     }
 
-    private JexlMethod resolveMapMethod(String method, int argCount) {
-        if (argCount != SINGLE_ARG) {
-            return null;
-        }
-        if (METHOD_HAS.equals(method) || METHOD_DELETE.equals(method)) {
-            return new PolyfillMethod(method, Map.class, context);
-        }
-        return null;
+    private static boolean isSupportedMapMethod(String method, int argCount) {
+        return argCount == SINGLE_ARG && (METHOD_HAS.equals(method) || METHOD_DELETE.equals(method));
     }
 
-    private JexlMethod resolveSequenceMethod(Object obj, String method, int argCount, Object... args) {
+    private static boolean isSupportedSequenceMethod(Object obj, String method, int argCount, Object... args) {
         switch (method) {
             case METHOD_INCLUDES :
             case METHOD_INDEX_OF :
-                if (argCount == SINGLE_ARG) {
-                    return new PolyfillMethod(method, Object.class, context);
-                }
-                return null;
+                return argCount == SINGLE_ARG;
             case METHOD_PUSH :
-                if (obj instanceof Collection<?>) {
-                    return new PolyfillMethod(method, Collection.class, context);
-                }
-                return null;
+                return obj instanceof Collection<?>;
             case METHOD_JOIN :
-                if (argCount == NO_ARGS || argCount == SINGLE_ARG) {
-                    return new PolyfillMethod(method, Object.class, context);
-                }
-                return null;
+                return argCount == NO_ARGS || argCount == SINGLE_ARG;
             case METHOD_SLICE :
-                if (argCount == SINGLE_ARG || argCount == TWO_ARGS) {
-                    return new PolyfillMethod(method, Object.class, context);
-                }
-                return null;
+                return argCount == SINGLE_ARG || argCount == TWO_ARGS;
             case METHOD_MAP :
             case METHOD_FILTER :
             case METHOD_FIND :
             case METHOD_SOME :
             case METHOD_EVERY :
             case METHOD_FOR_EACH :
-                if (argCount == SINGLE_ARG && args[0] instanceof JexlScript) {
-                    return new PolyfillMethod(method, Object.class, context);
-                }
-                return null;
+                return argCount == SINGLE_ARG && args[0] instanceof JexlScript;
             default :
-                return null;
+                return false;
         }
     }
 
@@ -559,12 +536,10 @@ public final class JsPolyfillUberspect implements JexlUberspect {
     private static final class PolyfillMethod implements JexlMethod {
 
         private final String method;
-        private final Class<?> receiverType;
         private final JexlContext context;
 
-        PolyfillMethod(String method, Class<?> receiverType, JexlContext context) {
+        PolyfillMethod(String method, JexlContext context) {
             this.method = method;
-            this.receiverType = receiverType;
             this.context = context;
         }
 
@@ -588,22 +563,10 @@ public final class JsPolyfillUberspect implements JexlUberspect {
 
         @Override
         public Object tryInvoke(String name, Object obj, Object... params) {
-            if (!method.equals(name) || obj == null) {
+            if (!method.equals(name) || !isSupportedPolyfill(obj, name, params)) {
                 return JexlEngine.TRY_FAILED;
             }
-            if (receiverType == CharSequence.class && obj instanceof CharSequence) {
-                return invoke(obj, params);
-            }
-            if (receiverType == Map.class && obj instanceof Map<?, ?>) {
-                return invoke(obj, params);
-            }
-            if (receiverType == Collection.class && obj instanceof Collection<?>) {
-                return invoke(obj, params);
-            }
-            if (receiverType == Object.class && (obj instanceof Collection<?> || obj.getClass().isArray())) {
-                return invoke(obj, params);
-            }
-            return JexlEngine.TRY_FAILED;
+            return invoke(obj, params);
         }
 
         @Override

@@ -270,40 +270,57 @@ public class SymbolService {
         }
 
         String referencePrefix = ProjectService.extractReferenceAliasPrefix(normalizedPath);
+        Set<String> orderedResults = new LinkedHashSet<>();
+        collectConventionMatchedTests(normalizedPath, stem, referencePrefix, orderedResults);
+        if (orderedResults.size() < MAX_RELATED_TESTS) {
+            collectSymbolReferencedTests(normalizedPath, stem, referencePrefix, orderedResults);
+        }
+
+        List<String> finalResults = new ArrayList<>(orderedResults);
+        if (finalResults.size() > MAX_RELATED_TESTS) {
+            return new ArrayList<>(finalResults.subList(0, MAX_RELATED_TESTS));
+        }
+        return finalResults;
+    }
+
+    private void collectConventionMatchedTests(String normalizedPath, String stem, String referencePrefix,
+            Set<String> orderedResults) {
         String sourceSubpath = ProjectAnalysisService.extractNormalizedSubpath(
                 ProjectService.stripReferenceAliasPrefix(normalizedPath), ProjectAnalysisService.SOURCE_DIR_MARKERS);
         List<String> allFiles = listFilesForScope(referencePrefix);
+        if (allFiles == null) {
+            return;
+        }
         List<String> mirroredTier1 = new ArrayList<>();
         List<String> otherTier1 = new ArrayList<>();
-        if (allFiles != null) {
-            for (String candidate : allFiles) {
-                if (candidate == null || candidate.isBlank()) {
-                    continue;
-                }
-                String normCandidate = PathUtils.normalizeRelativePath(candidate.trim());
-                if (normCandidate.equals(normalizedPath) || !ProjectAnalysisService.isTestFile(normCandidate)) {
-                    continue;
-                }
-                String candidateFileName = PathUtils.getFileName(normCandidate);
-                if (ProjectAnalysisService.matchesTestNamingConvention(candidateFileName, stem)) {
-                    String testSubpath = ProjectAnalysisService.extractNormalizedSubpath(
-                            ProjectService.stripReferenceAliasPrefix(normCandidate),
-                            ProjectAnalysisService.TEST_DIR_MARKERS);
-                    if (!sourceSubpath.isEmpty() && sourceSubpath.equals(testSubpath)) {
-                        mirroredTier1.add(normCandidate);
-                    } else {
-                        otherTier1.add(normCandidate);
-                    }
+        for (String candidate : allFiles) {
+            if (candidate == null || candidate.isBlank()) {
+                continue;
+            }
+            String normCandidate = PathUtils.normalizeRelativePath(candidate.trim());
+            if (normCandidate.equals(normalizedPath) || !ProjectAnalysisService.isTestFile(normCandidate)) {
+                continue;
+            }
+            String candidateFileName = PathUtils.getFileName(normCandidate);
+            if (ProjectAnalysisService.matchesTestNamingConvention(candidateFileName, stem)) {
+                String testSubpath = ProjectAnalysisService.extractNormalizedSubpath(
+                        ProjectService.stripReferenceAliasPrefix(normCandidate),
+                        ProjectAnalysisService.TEST_DIR_MARKERS);
+                if (!sourceSubpath.isEmpty() && sourceSubpath.equals(testSubpath)) {
+                    mirroredTier1.add(normCandidate);
+                } else {
+                    otherTier1.add(normCandidate);
                 }
             }
         }
         mirroredTier1.sort(Comparator.naturalOrder());
         otherTier1.sort(Comparator.naturalOrder());
-
-        Set<String> orderedResults = new LinkedHashSet<>();
         orderedResults.addAll(mirroredTier1);
         orderedResults.addAll(otherTier1);
+    }
 
+    private void collectSymbolReferencedTests(String normalizedPath, String stem, String referencePrefix,
+            Set<String> orderedResults) {
         String referencePattern = Pattern.quote(stem);
         if (SIMPLE_IDENTIFIER_PATTERN.matcher(stem).matches()) {
             referencePattern = WORD_BOUNDARY + stem + WORD_BOUNDARY;
@@ -314,32 +331,27 @@ public class SymbolService {
         } else {
             referencingFiles = grepService.findMatchingFiles(referencePattern, referencePrefix, null);
         }
-        if (referencingFiles != null) {
-            List<String> tier2 = new ArrayList<>();
-            for (String refFile : referencingFiles) {
-                if (refFile == null || refFile.isBlank()) {
-                    continue;
-                }
-                String normRef = PathUtils.normalizeRelativePath(refFile.trim());
-                if (!normRef.equals(normalizedPath) && ProjectAnalysisService.isTestFile(normRef)
-                        && !orderedResults.contains(normRef)) {
-                    tier2.add(normRef);
-                }
+        if (referencingFiles == null) {
+            return;
+        }
+        List<String> tier2 = new ArrayList<>();
+        for (String refFile : referencingFiles) {
+            if (refFile == null || refFile.isBlank()) {
+                continue;
             }
-            tier2.sort(Comparator.naturalOrder());
-            for (String item : tier2) {
-                if (orderedResults.size() >= MAX_RELATED_TESTS) {
-                    break;
-                }
-                orderedResults.add(item);
+            String normRef = PathUtils.normalizeRelativePath(refFile.trim());
+            if (!normRef.equals(normalizedPath) && ProjectAnalysisService.isTestFile(normRef)
+                    && !orderedResults.contains(normRef)) {
+                tier2.add(normRef);
             }
         }
-
-        List<String> finalResults = new ArrayList<>(orderedResults);
-        if (finalResults.size() > MAX_RELATED_TESTS) {
-            return new ArrayList<>(finalResults.subList(0, MAX_RELATED_TESTS));
+        tier2.sort(Comparator.naturalOrder());
+        for (String item : tier2) {
+            if (orderedResults.size() >= MAX_RELATED_TESTS) {
+                break;
+            }
+            orderedResults.add(item);
         }
-        return finalResults;
     }
 
     private List<RawUsageHit> parseAndFilterUsageHits(List<String> rawMatches) {

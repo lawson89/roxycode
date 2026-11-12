@@ -172,25 +172,31 @@ final class UiComponents {
         }
         try {
             byte[] pngBytes = Base64.getDecoder().decode(base64Png.trim());
-            if (pngBytes.length == 0) {
-                return null;
-            }
-            BufferedImage image = ImageIO.read(new ByteArrayInputStream(pngBytes));
-            if (image == null || image.getWidth() <= 0 || image.getHeight() <= 0) {
-                return null;
-            }
             Path outputDir = getOrCreateTempThumbnailDir();
             String fileName = "thumb-" + PathUtils.computeSha256Hex(base64Png, 16) + ".png";
-            Path pngFile = outputDir.resolve(fileName);
-            if (!Files.exists(pngFile)) {
-                Files.write(pngFile, pngBytes);
-                pngFile.toFile().deleteOnExit();
-            }
-            return new HtmlImagePreview(pngFile.toUri().toURL().toExternalForm(), image.getWidth(), image.getHeight());
+            return writePngBytesToTempPreview(pngBytes, outputDir, fileName);
         } catch (Exception e) {
             log.debug("Failed to decode thumbnail image for HTML preview: {}", e.getMessage());
             return null;
         }
+    }
+
+    @Nullable
+    static HtmlImagePreview writePngBytesToTempPreview(byte[] pngBytes, Path outputDir, String fileName)
+            throws IOException {
+        if (pngBytes == null || pngBytes.length == 0) {
+            return null;
+        }
+        BufferedImage image = ImageIO.read(new ByteArrayInputStream(pngBytes));
+        if (image == null || image.getWidth() <= 0 || image.getHeight() <= 0) {
+            return null;
+        }
+        Path pngFile = outputDir.resolve(fileName);
+        if (!Files.exists(pngFile)) {
+            Files.write(pngFile, pngBytes);
+            pngFile.toFile().deleteOnExit();
+        }
+        return new HtmlImagePreview(pngFile.toUri().toURL().toExternalForm(), image.getWidth(), image.getHeight());
     }
 
     private static synchronized Path getOrCreateTempThumbnailDir() throws IOException {

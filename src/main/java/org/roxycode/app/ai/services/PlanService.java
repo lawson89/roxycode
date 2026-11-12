@@ -488,21 +488,7 @@ public class PlanService {
         }
 
         if (rule.autonomous()) {
-            WorkflowPhase oldPhase = currentPhase;
-            addHandoffLogEntry(OffsetDateTime.now().toString(), "System",
-                    String.format("%s -> %s: %s", oldPhase, nextPhase, reason));
-            this.currentPhase = nextPhase;
-            this.visitedPhases.add(nextPhase);
-            this.pendingPhase = null;
-            this.pendingReason = null;
-            persistActiveWorkflowState();
-            publishPhaseChanged();
-            if (eventPublisher != null) {
-                eventPublisher.publishEvent(new WorkflowTransitionEvent(oldPhase, nextPhase, reason, true));
-            }
-            return String.format(
-                    "Autonomous transition from %s to %s registered. Reason: %s. Provide a brief concluding summary to the user without calling any additional tools.",
-                    oldPhase, nextPhase, reason);
+            return executeAutonomousTransition(nextPhase, reason);
         }
 
         this.pendingPhase = nextPhase;
@@ -609,20 +595,7 @@ public class PlanService {
                 clearPlan();
             }
 
-            this.currentPhase = pendingPhase;
-            if (planToArchive != null) {
-                this.visitedPhases.clear();
-                this.visitedPhases.add(WorkflowPhase.PLAN);
-            } else {
-                this.visitedPhases.add(pendingPhase);
-            }
-            this.pendingPhase = null;
-            this.pendingReason = null;
-            if (planToArchive != null) {
-                PathUtils.deleteIfExistsQuietly(resolveActiveWorkflowPath());
-            } else {
-                persistActiveWorkflowState();
-            }
+            applyPhaseStateTransition(pendingPhase, planToArchive != null);
         }
         if (planToArchive != null) {
             ImplementationPlan capturedPlan = planToArchive;
@@ -655,11 +628,40 @@ public class PlanService {
         String user = EnvironmentService.resolveCurrentUser(environmentService);
         addHandoffLogEntry(timestamp, user,
                 String.format("REVIEW -> CODE (Completion Rejected): %s", effectiveReason.trim()));
-        this.currentPhase = WorkflowPhase.CODE;
-        this.visitedPhases.add(WorkflowPhase.CODE);
-        persistActiveWorkflowState();
+        applyPhaseStateTransition(WorkflowPhase.CODE, false);
         publishPhaseChanged();
         publishTransitionRequested();
+    }
+
+    private String executeAutonomousTransition(WorkflowPhase nextPhase, String reason) {
+        WorkflowPhase oldPhase = currentPhase;
+        addHandoffLogEntry(OffsetDateTime.now().toString(), "System",
+                String.format("%s -> %s: %s", oldPhase, nextPhase, reason));
+        applyPhaseStateTransition(nextPhase, false);
+        publishPhaseChanged();
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new WorkflowTransitionEvent(oldPhase, nextPhase, reason, true));
+        }
+        return String.format(
+                "Autonomous transition from %s to %s registered. Reason: %s. Provide a brief concluding summary to the user without calling any additional tools.",
+                oldPhase, nextPhase, reason);
+    }
+
+    private void applyPhaseStateTransition(WorkflowPhase targetPhase, boolean resetToPlan) {
+        this.currentPhase = targetPhase;
+        if (resetToPlan) {
+            this.visitedPhases.clear();
+            this.visitedPhases.add(WorkflowPhase.PLAN);
+        } else {
+            this.visitedPhases.add(targetPhase);
+        }
+        this.pendingPhase = null;
+        this.pendingReason = null;
+        if (resetToPlan) {
+            PathUtils.deleteIfExistsQuietly(resolveActiveWorkflowPath());
+        } else {
+            persistActiveWorkflowState();
+        }
     }
 
     public synchronized Set<WorkflowPhase> getVisitedPhases() {

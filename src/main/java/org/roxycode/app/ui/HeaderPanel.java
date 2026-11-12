@@ -180,27 +180,25 @@ final class HeaderPanel extends JPanel {
 
         Color warnColor = SwingHtmlUtils.getWarningColor();
         String warnBgHex = SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(warnColor, 0.14));
-        noProjectNoticeLabel.setForeground(warnColor);
-        noProjectNoticeLabel.setIcon(FontIcon.of(Codicons.WARNING, 14, warnColor));
-        noProjectNoticeLabel.putClientProperty(FlatClientProperties.STYLE,
-                PILL_STYLE_PREFIX + warnBgHex + PILL_STYLE_SUFFIX);
+        styleHeaderPill(noProjectNoticeLabel, warnColor, warnBgHex, Codicons.WARNING);
 
-        branchLabel.setForeground(branchAccent);
-        branchLabel.putClientProperty(FlatClientProperties.STYLE, PILL_STYLE_PREFIX + branchBgHex + PILL_STYLE_SUFFIX);
+        Codicons branchIcon = null;
         if (branchLabel.getText() != null && !branchLabel.getText().isEmpty()) {
-            branchLabel.setIcon(FontIcon.of(Codicons.SOURCE_CONTROL, 14, branchAccent));
+            branchIcon = Codicons.SOURCE_CONTROL;
         }
-
-        modelLabel.setForeground(modelAccent);
-        modelLabel.putClientProperty(FlatClientProperties.STYLE, PILL_STYLE_PREFIX + modelBgHex + PILL_STYLE_SUFFIX);
-        modelLabel.setIcon(FontIcon.of(Codicons.HUBOT, 14, modelAccent));
-
-        groundingLabel.setForeground(modelAccent);
-        groundingLabel.putClientProperty(FlatClientProperties.STYLE,
-                PILL_STYLE_PREFIX + modelBgHex + PILL_STYLE_SUFFIX);
-        groundingLabel.setIcon(FontIcon.of(Codicons.GLOBE, 14, modelAccent));
+        styleHeaderPill(branchLabel, branchAccent, branchBgHex, branchIcon);
+        styleHeaderPill(modelLabel, modelAccent, modelBgHex, Codicons.HUBOT);
+        styleHeaderPill(groundingLabel, modelAccent, modelBgHex, Codicons.GLOBE);
 
         themeToggleButton.setIcon(FontIcon.of(Codicons.COLOR_MODE, 16, UiComponents.resolveForegroundColor()));
+    }
+
+    private static void styleHeaderPill(JLabel label, Color fgColor, String bgHex, Codicons icon) {
+        label.setForeground(fgColor);
+        label.putClientProperty(FlatClientProperties.STYLE, PILL_STYLE_PREFIX + bgHex + PILL_STYLE_SUFFIX);
+        if (icon != null) {
+            label.setIcon(FontIcon.of(icon, 14, fgColor));
+        }
     }
 
     @EventListener

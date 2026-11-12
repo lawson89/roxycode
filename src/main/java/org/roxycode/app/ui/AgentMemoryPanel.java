@@ -393,7 +393,7 @@ final class AgentMemoryPanel extends JPanel {
             int chars = text.length();
             int lines = 0;
             if (!text.isEmpty()) {
-                lines = text.lines().mapToInt(line -> 1).sum();
+                lines = memoryEditor.getLineCount();
             }
             long tokens = TokenUtils.estimateTokens(text);
             memoryCounterLabel.setText(String.format("%,d / %,d chars  •  %,d / %,d lines  •  ~%s tokens", chars,
@@ -465,12 +465,8 @@ final class AgentMemoryPanel extends JPanel {
             }
             updateMemoryStatsAndButtons();
 
-            String previousSlug = null;
-            if (selectedNote != null) {
-                previousSlug = selectedNote.slug();
-            }
             allNotes = List.copyOf(Objects.requireNonNullElse(data.notes(), List.of()));
-            applyNoteFilterPreservingSlug(previousSlug);
+            applyNoteFilter();
         }
 
         private void resetMemoryEditorToLoadedContent() {
@@ -484,10 +480,6 @@ final class AgentMemoryPanel extends JPanel {
             if (selectedNote != null) {
                 previousSlug = selectedNote.slug();
             }
-            applyNoteFilterPreservingSlug(previousSlug);
-        }
-
-        private void applyNoteFilterPreservingSlug(@Nullable String slugToSelect) {
             String query = StringUtils.trimToEmpty(searchField.getText());
             List<NoteDetail> filtered = new ArrayList<>();
             for (NoteDetail note : allNotes) {
@@ -496,7 +488,7 @@ final class AgentMemoryPanel extends JPanel {
                 }
             }
             UiComponents.replaceListItemsPreservingSelection(noteListModel, noteList, filtered, NoteDetail::slug,
-                    slugToSelect, !creatingNewNote);
+                    previousSlug, !creatingNewNote);
         }
 
         private boolean matchesFilter(NoteDetail note, String query) {
@@ -560,15 +552,12 @@ final class AgentMemoryPanel extends JPanel {
             saveMemoryButton.setEnabled(false);
             revertMemoryButton.setEnabled(false);
 
-            CompletableFuture<EditorResult> future = Edt.supplyAsync(() -> executeSavePinnedMemory(contentToSave),
+            CompletableFuture<EditorResult> future = Edt.supplyAsync(
+                    () -> supplyInMemoryScope(() -> memoryService.updateGlobalMemory(contentToSave),
+                            () -> memoryService.updateProjectMemory(contentToSave)),
                     result -> handlePinnedMemorySaved(result, contentToSave), this::handlePinnedMemorySaveError);
             lastAsyncFuture = future;
             return future;
-        }
-
-        private EditorResult executeSavePinnedMemory(String contentToSave) {
-            return supplyInMemoryScope(() -> memoryService.updateGlobalMemory(contentToSave),
-                    () -> memoryService.updateProjectMemory(contentToSave));
         }
 
         private EditorResult supplyInMemoryScope(Supplier<EditorResult> globalAction,
@@ -628,17 +617,15 @@ final class AgentMemoryPanel extends JPanel {
             String body = StringUtils.defaultString(noteBodyEditor.getText());
 
             CompletableFuture<EditorResult> future = Edt
-                    .supplyAsync(() -> executeSaveNote(sanitizedSlug, resolvedTitle, tags, body),
+                    .supplyAsync(
+                            () -> supplyInMemoryScope(
+                                    () -> memoryService.saveGlobalNote(sanitizedSlug, resolvedTitle, tags, body),
+                                    () -> memoryService.saveProjectNote(sanitizedSlug, resolvedTitle, tags, body)),
                             result -> handleNoteSaved(result, sanitizedSlug, resolvedTitle, tags, body),
                             ex -> showStatus("Failed to save note: " + ExceptionUtils.getRootCauseMessage(ex), false))
                     .thenCompose(result -> refresh().thenApply(v -> result));
             lastAsyncFuture = future;
             return future;
-        }
-
-        private EditorResult executeSaveNote(String sanitizedSlug, String resolvedTitle, String tags, String body) {
-            return supplyInMemoryScope(() -> memoryService.saveGlobalNote(sanitizedSlug, resolvedTitle, tags, body),
-                    () -> memoryService.saveProjectNote(sanitizedSlug, resolvedTitle, tags, body));
         }
 
         private void handleNoteSaved(@Nullable EditorResult result, String sanitizedSlug, String resolvedTitle,
@@ -663,16 +650,14 @@ final class AgentMemoryPanel extends JPanel {
 
         CompletableFuture<EditorResult> performDeleteCurrentNote(String slug) {
             CompletableFuture<EditorResult> future = Edt
-                    .supplyAsync(() -> executeDeleteNote(slug), result -> handleNoteDeleted(result, slug),
+                    .supplyAsync(
+                            () -> supplyInMemoryScope(() -> memoryService.deleteGlobalNote(slug),
+                                    () -> memoryService.deleteProjectNote(slug)),
+                            result -> handleNoteDeleted(result, slug),
                             ex -> showStatus("Failed to delete note: " + ExceptionUtils.getRootCauseMessage(ex), false))
                     .thenCompose(result -> refresh().thenApply(v -> result));
             lastAsyncFuture = future;
             return future;
-        }
-
-        private EditorResult executeDeleteNote(String slug) {
-            return supplyInMemoryScope(() -> memoryService.deleteGlobalNote(slug),
-                    () -> memoryService.deleteProjectNote(slug));
         }
 
         private void handleNoteDeleted(@Nullable EditorResult result, String slug) {

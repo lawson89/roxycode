@@ -54,7 +54,7 @@ public class GitService {
             return NO_ACTIVE_PROJECT;
         }
         String originHead = executeGitCommand("symbolic-ref", ORIGIN_HEAD_REF);
-        if (NOT_A_GIT_REPOSITORY.equals(originHead) || originHead.startsWith("Error executing git command:")) {
+        if (isFatalGitCommandError(originHead)) {
             return originHead;
         }
         if (isValidOutput(originHead)) {
@@ -72,7 +72,7 @@ public class GitService {
                 DEFAULT_MASTER_BRANCH};
         for (int i = 0; i < candidateRefs.length; i++) {
             String check = executeGitCommand("show-ref", "--verify", candidateRefs[i]);
-            if (NOT_A_GIT_REPOSITORY.equals(check) || check.startsWith("Error executing git command:")) {
+            if (isFatalGitCommandError(check)) {
                 return check;
             }
             if (isValidOutput(check)) {
@@ -196,10 +196,7 @@ public class GitService {
         if (!projectService.hasActiveProject()) {
             return NO_ACTIVE_PROJECT;
         }
-        String normalizedPath = null;
-        if (relativePath != null) {
-            normalizedPath = projectService.resolveRelativePath(relativePath);
-        }
+        String normalizedPath = resolveOptionalRelativePath(relativePath);
         String headDiff = computeTrackedDiffAgainstHead(normalizedPath);
         if (isGitError(headDiff)) {
             return headDiff;
@@ -221,7 +218,14 @@ public class GitService {
         if (!projectService.hasActiveProject()) {
             return NO_ACTIVE_PROJECT;
         }
-        return computeTrackedDiffAgainstHead(projectService.resolveRelativePath(relativePath));
+        return computeTrackedDiffAgainstHead(resolveOptionalRelativePath(relativePath));
+    }
+
+    private String resolveOptionalRelativePath(String relativePath) {
+        if (relativePath == null || relativePath.isBlank()) {
+            return null;
+        }
+        return projectService.resolveRelativePath(relativePath);
     }
 
     @AgentDoc(value = "Returns a list of all modified, staged, deleted, and untracked file paths relative to the project root.", examples = "gitService.getChangedFiles()")
@@ -356,6 +360,11 @@ public class GitService {
 
     public static boolean isValidOutput(String output) {
         return StringUtils.isNotBlank(output) && !isGitError(output);
+    }
+
+    private static boolean isFatalGitCommandError(String output) {
+        return NOT_A_GIT_REPOSITORY.equals(output)
+                || (output != null && output.startsWith("Error executing git command:"));
     }
 
     private static boolean isGitError(String output) {

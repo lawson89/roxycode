@@ -237,36 +237,38 @@ final class ToolHistoryCompactionAdvisor implements CallAdvisor {
             Iterator<Map.Entry<String, JsonNode>> fields = objectNode.fields();
             while (fields.hasNext()) {
                 Map.Entry<String, JsonNode> entry = fields.next();
-                JsonNode child = entry.getValue();
-                if (child != null && child.isTextual()) {
-                    String text = child.asText();
-                    if (text.length() > MIN_PAYLOAD_CHARS_TO_COMPACT) {
-                        entry.setValue(TextNode.valueOf(compactPlainText(text)));
-                        modified = true;
-                    }
-                } else if (child != null && (child.isObject() || child.isArray())) {
-                    if (compactNodeStrings(child)) {
-                        modified = true;
-                    }
+                if (compactChildNode(entry.getValue(), entry::setValue)) {
+                    modified = true;
                 }
             }
         } else if (node instanceof ArrayNode arrayNode) {
             for (int i = 0; i < arrayNode.size(); i++) {
-                JsonNode child = arrayNode.get(i);
-                if (child != null && child.isTextual()) {
-                    String text = child.asText();
-                    if (text.length() > MIN_PAYLOAD_CHARS_TO_COMPACT) {
-                        arrayNode.set(i, TextNode.valueOf(compactPlainText(text)));
-                        modified = true;
-                    }
-                } else if (child != null && (child.isObject() || child.isArray())) {
-                    if (compactNodeStrings(child)) {
-                        modified = true;
-                    }
+                int index = i;
+                if (compactChildNode(arrayNode.get(i), replacement -> arrayNode.set(index, replacement))) {
+                    modified = true;
                 }
             }
         }
         return modified;
+    }
+
+    private static boolean compactChildNode(@Nullable JsonNode child,
+            java.util.function.Consumer<JsonNode> onReplaced) {
+        if (child == null) {
+            return false;
+        }
+        if (child.isTextual()) {
+            String text = child.asText();
+            if (text.length() > MIN_PAYLOAD_CHARS_TO_COMPACT) {
+                onReplaced.accept(TextNode.valueOf(compactPlainText(text)));
+                return true;
+            }
+            return false;
+        }
+        if (child.isObject() || child.isArray()) {
+            return compactNodeStrings(child);
+        }
+        return false;
     }
 
     static String compactPlainText(String data) {

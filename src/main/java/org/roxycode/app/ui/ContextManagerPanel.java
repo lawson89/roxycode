@@ -411,42 +411,37 @@ final class ContextManagerPanel extends JPanel {
         }
 
         CompletableFuture<FolderAndFilesData> addFolderAsync(String folderPath) {
-            return addFolderToListAsync(this::loadConfiguredFolders, this::saveConfiguredFolders, "context folder",
-                    "Folder path must not be blank", folderPath);
+            return mutateFolderListAsync(this::loadConfiguredFolders, this::saveConfiguredFolders, "context folder",
+                    updated -> appendTrimmedFolder(updated, folderPath, "Folder path must not be blank"), null, "add",
+                    "adding", folderPath);
         }
 
         CompletableFuture<FolderAndFilesData> removeFolderAsync(String folderPath) {
-            return removeFolderFromListAsync(this::loadConfiguredFolders, this::saveConfiguredFolders, "context folder",
-                    folderPath);
+            return mutateFolderListAsync(this::loadConfiguredFolders, this::saveConfiguredFolders, "context folder",
+                    updated -> updated.remove(folderPath), this::clearSelection, "remove", "removing", folderPath);
         }
 
         CompletableFuture<FolderAndFilesData> addReferenceFolderAsync(String folderPath) {
-            return addFolderToListAsync(this::loadConfiguredReferenceFolders, this::saveConfiguredReferenceFolders,
-                    "reference folder", "Reference folder path must not be blank", folderPath);
+            return mutateFolderListAsync(this::loadConfiguredReferenceFolders, this::saveConfiguredReferenceFolders,
+                    "reference folder",
+                    updated -> appendTrimmedFolder(updated, folderPath, "Reference folder path must not be blank"),
+                    null, "add", "adding", folderPath);
         }
 
         CompletableFuture<FolderAndFilesData> removeReferenceFolderAsync(String folderPath) {
-            return removeFolderFromListAsync(this::loadConfiguredReferenceFolders, this::saveConfiguredReferenceFolders,
-                    "reference folder", folderPath);
+            return mutateFolderListAsync(this::loadConfiguredReferenceFolders, this::saveConfiguredReferenceFolders,
+                    "reference folder", updated -> updated.remove(folderPath), this::clearSelection, "remove",
+                    "removing", folderPath);
         }
 
-        private CompletableFuture<FolderAndFilesData> addFolderToListAsync(Supplier<List<String>> loader,
-                Consumer<List<String>> saver, String folderTypeLabel, String blankErrorMessage, String folderPath) {
-            return mutateFolderListAsync(loader, saver, folderTypeLabel, updated -> {
-                if (folderPath == null || folderPath.isBlank()) {
-                    throw new IllegalArgumentException(blankErrorMessage);
-                }
-                String trimmed = folderPath.trim();
-                if (!updated.contains(trimmed)) {
-                    updated.add(trimmed);
-                }
-            }, null, "add", "adding", folderPath);
-        }
-
-        private CompletableFuture<FolderAndFilesData> removeFolderFromListAsync(Supplier<List<String>> loader,
-                Consumer<List<String>> saver, String folderTypeLabel, String folderPath) {
-            return mutateFolderListAsync(loader, saver, folderTypeLabel, updated -> updated.remove(folderPath),
-                    this::clearSelection, "remove", "removing", folderPath);
+        private static void appendTrimmedFolder(List<String> updated, String folderPath, String blankErrorMessage) {
+            if (folderPath == null || folderPath.isBlank()) {
+                throw new IllegalArgumentException(blankErrorMessage);
+            }
+            String trimmed = folderPath.trim();
+            if (!updated.contains(trimmed)) {
+                updated.add(trimmed);
+            }
         }
 
         private CompletableFuture<FolderAndFilesData> mutateFolderListAsync(Supplier<List<String>> loader,

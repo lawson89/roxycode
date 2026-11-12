@@ -8,7 +8,6 @@ import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -382,13 +381,6 @@ final class PlantUmlRenderer {
         RENDER_COUNT.incrementAndGet();
         try {
             byte[] pngBytes = renderDiagramPngBytes(key);
-            if (pngBytes.length == 0) {
-                return Optional.empty();
-            }
-            BufferedImage image = ImageIO.read(new ByteArrayInputStream(pngBytes));
-            if (image == null || image.getWidth() <= 0 || image.getHeight() <= 0) {
-                return Optional.empty();
-            }
             Path outputDir = getOrCreateTempDir();
             String themeSuffix;
             if (key.dark()) {
@@ -397,16 +389,14 @@ final class PlantUmlRenderer {
                 themeSuffix = "light";
             }
             String fileName = PathUtils.computeSha256Hex(key.normalizedCode(), 16) + "-" + themeSuffix + ".png";
-            Path pngFile = outputDir.resolve(fileName);
-            if (!Files.exists(pngFile)) {
-                Files.write(pngFile, pngBytes);
-                pngFile.toFile().deleteOnExit();
+            UiComponents.HtmlImagePreview preview = UiComponents.writePngBytesToTempPreview(pngBytes, outputDir,
+                    fileName);
+            if (preview == null) {
+                return Optional.empty();
             }
-
-            String fileUrl = pngFile.toUri().toURL().toExternalForm();
-            String html = ("<table class='diagram-container' width='100%' border='0' cellpadding='8' cellspacing='0'>"
-                    + "<tr><td align='center'><img src='" + SwingHtmlUtils.escapeHtml(fileUrl) + "' width='"
-                    + image.getWidth() + "' height='" + image.getHeight() + "'></td></tr></table>").replace('\'', '"');
+            String html = "<table class=\"diagram-container\" width=\"100%\" border=\"0\" cellpadding=\"8\" cellspacing=\"0\"><tr><td align=\"center\"><img src=\""
+                    + SwingHtmlUtils.escapeHtml(preview.url()) + "\" width=\"" + preview.width() + "\" height=\""
+                    + preview.height() + "\"></td></tr></table>";
             return Optional.of(html);
         } catch (Exception e) {
             log.debug("Failed to render PlantUML diagram ({}): {}", key.language(), e.getMessage());
