@@ -672,13 +672,6 @@ public class MemoryService {
     }
 
     private Path resolveProjectSubdir(String subdir) {
-        if (projectService == null || !projectService.hasActiveProject()) {
-            return null;
-        }
-        Path dir = projectService.resolveProjectDataPath(subdir);
-        if (dir == null) {
-            return null;
-        }
-        return dir.toAbsolutePath().normalize();
+        return ProjectService.resolveProjectDataPathSafely(projectService, subdir);
     }
 }

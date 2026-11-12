@@ -260,5 +260,10 @@ class ProjectServiceTest {
         assertThrows(SecurityException.class, () -> projectService.resolveSearchTarget("@billing-service/.."));
         assertThrows(SecurityException.class,
                 () -> projectService.resolveSearchTarget("@billing-service/../../outside"));
+
+        assertNull(ProjectService.resolveProjectDataPathSafely(null, "active-workflow.json"));
+        assertNull(ProjectService.resolveProjectDataPathSafely(projectService, "../outside.json"));
+        assertEquals(projectService.resolveProjectDataPath("active-workflow.json"),
+                ProjectService.resolveProjectDataPathSafely(projectService, "active-workflow.json"));
     }
 }

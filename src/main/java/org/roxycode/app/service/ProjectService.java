@@ -903,7 +903,8 @@ public class ProjectService {
             throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
         Path normalizedRoot = projectRoot.toAbsolutePath().normalize();
-        String dirName = sanitizeProjectName(normalizedRoot) + "-" + computeProjectHash(normalizedRoot);
+        String dirName = sanitizeProjectName(normalizedRoot) + "-"
+                + PathUtils.computeSha256Hex(normalizedRoot.toString(), 4);
         Path roxyHome = Objects.requireNonNullElseGet(settingsService.getRoxyHomeDir(),
                 SettingsService::getDefaultRoxyHomeDir);
         return roxyHome.toAbsolutePath().normalize().resolve(PROJECTS_SUBDIR).resolve(dirName);
@@ -918,6 +919,31 @@ public class ProjectService {
      */
     public Path resolveProjectDataPath(String relativePath) {
         return resolveWithinSandbox(getProjectDataDir(), relativePath);
+    }
+
+    /**
+     * Resolves a path relative to the active project's data directory, returning {@code null} if {@code projectService}
+     * is null, has no active project, or resolution fails.
+     *
+     * @param projectService
+     *            the project service instance (may be null)
+     * @param relativePath
+     *            the relative path within the project data directory
+     * @return the resolved normalized path, or {@code null}
+     */
+    public static Path resolveProjectDataPathSafely(ProjectService projectService, String relativePath) {
+        if (projectService == null || !projectService.hasActiveProject()) {
+            return null;
+        }
+        try {
+            Path resolved = projectService.resolveProjectDataPath(relativePath);
+            if (resolved == null) {
+                return null;
+            }
+            return resolved.toAbsolutePath().normalize();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static Path resolveWithinSandbox(Path sandboxRoot, String relativePath) {
@@ -942,9 +968,5 @@ public class ProjectService {
             rawName = projectRoot.getFileName().toString();
         }
         return PathUtils.sanitizeSlug(rawName, MAX_PROJECT_NAME_LENGTH, "project");
-    }
-
-    static String computeProjectHash(Path normalizedRoot) {
-        return PathUtils.computeSha256Hex(normalizedRoot.toString(), 4);
     }
 }

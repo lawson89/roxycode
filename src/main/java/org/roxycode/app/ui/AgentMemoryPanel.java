@@ -274,7 +274,7 @@ final class AgentMemoryPanel extends JPanel {
             memoryWarningLabel.setVisible(false);
             card.add(memoryWarningLabel, "growx, wrap, hidemode 3");
 
-            configureMarkdownEditor(memoryEditor);
+            UiComponents.configureSyntaxTextArea(memoryEditor, SyntaxConstants.SYNTAX_STYLE_MARKDOWN, true, true);
             card.add(new RTextScrollPane(memoryEditor), "grow, push");
             return card;
         }
@@ -324,7 +324,7 @@ final class AgentMemoryPanel extends JPanel {
             rightPane.add(new JLabel("Tags:"));
             rightPane.add(noteTagsField, "span 3, growx, wrap");
 
-            configureMarkdownEditor(noteBodyEditor);
+            UiComponents.configureSyntaxTextArea(noteBodyEditor, SyntaxConstants.SYNTAX_STYLE_MARKDOWN, true, true);
             rightPane.add(new RTextScrollPane(noteBodyEditor), "span 4, grow, push, wrap");
 
             JPanel noteButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
@@ -349,10 +349,6 @@ final class AgentMemoryPanel extends JPanel {
             splitPane.setOpaque(false);
             card.add(splitPane, "grow, push");
             return card;
-        }
-
-        private void configureMarkdownEditor(RSyntaxTextArea editor) {
-            UiComponents.configureSyntaxTextArea(editor, SyntaxConstants.SYNTAX_STYLE_MARKDOWN, true, true);
         }
 
         private void setupListeners() {

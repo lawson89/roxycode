@@ -780,14 +780,8 @@ final class ChatController implements AutoCloseable {
     }
 
     private Path resolveActiveChatSessionPath() {
-        if (projectService == null || !projectService.hasActiveProject()) {
-            return null;
-        }
-        try {
-            return projectService.resolveProjectDataPath(resolveActiveChatFilename(model.getConversationId()));
-        } catch (Exception e) {
-            return null;
-        }
+        return ProjectService.resolveProjectDataPathSafely(projectService,
+                resolveActiveChatFilename(model.getConversationId()));
     }
 
     void persistActiveChatSession() {

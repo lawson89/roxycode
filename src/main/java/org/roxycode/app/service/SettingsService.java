@@ -165,14 +165,7 @@ public class SettingsService {
      * @return true if valid credentials are configured for the active authentication mode
      */
     public static boolean hasConfiguredCredentials(AppSettings settings) {
-        if (settings == null) {
-            return false;
-        }
-        if (settings.isVertexAiEnabled()) {
-            return StringUtils.isNotBlank(settings.getVertexProjectId())
-                    && StringUtils.isNotBlank(settings.getVertexLocation());
-        }
-        return StringUtils.isNotBlank(settings.getGeminiApiKey());
+        return AiConfig.GenAiConnectionConfig.fromSettings(settings).isConfigured();
     }
 
     /**

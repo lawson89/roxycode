@@ -40,7 +40,7 @@ import org.springframework.core.retry.RetryListener;
 import org.springframework.core.retry.RetryPolicy;
 import org.springframework.core.retry.RetryTemplate;
 import org.springframework.core.retry.Retryable;
-import org.springframework.util.StringUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.web.client.ResourceAccessException;
 
 /** Configuration for AI-related beans. */
@@ -112,17 +112,10 @@ public class AiConfig {
             String credentialsPath) {
 
         public GenAiConnectionConfig {
-            apiKey = trimToEmpty(apiKey);
-            projectId = trimToEmpty(projectId);
-            location = trimToEmpty(location);
-            credentialsPath = trimToEmpty(credentialsPath);
-        }
-
-        private static String trimToEmpty(String value) {
-            if (value == null) {
-                return "";
-            }
-            return value.trim();
+            apiKey = StringUtils.trimToEmpty(apiKey);
+            projectId = StringUtils.trimToEmpty(projectId);
+            location = StringUtils.trimToEmpty(location);
+            credentialsPath = StringUtils.trimToEmpty(credentialsPath);
         }
 
         /**
@@ -162,12 +155,8 @@ public class AiConfig {
             if (settings == null) {
                 return forApiKey("");
             }
-            if (settings.isVertexAiEnabled()) {
-                return new GenAiConnectionConfig(true, settings.getGeminiApiKey(), settings.getVertexProjectId(),
-                        settings.getVertexLocation(), settings.getVertexCredentialsPath());
-            }
-            return new GenAiConnectionConfig(false, settings.getGeminiApiKey(), settings.getVertexProjectId(),
-                    settings.getVertexLocation(), settings.getVertexCredentialsPath());
+            return new GenAiConnectionConfig(settings.isVertexAiEnabled(), settings.getGeminiApiKey(),
+                    settings.getVertexProjectId(), settings.getVertexLocation(), settings.getVertexCredentialsPath());
         }
 
         /**
@@ -177,23 +166,19 @@ public class AiConfig {
          */
         public boolean isConfigured() {
             if (vertexAi) {
-                return StringUtils.hasText(projectId) && StringUtils.hasText(location);
+                return StringUtils.isNotBlank(projectId) && StringUtils.isNotBlank(location);
             }
-            return StringUtils.hasText(apiKey);
+            return StringUtils.isNotBlank(apiKey);
         }
     }
 
     @Bean(destroyMethod = "close")
     public Client googleGenAiClient(GoogleGenAiConnectionProperties properties,
             @Value("${roxycode.ai.http-timeout-ms:120000}") int httpTimeoutMs) throws IOException {
-        Client.Builder builder = Client.builder();
-        if (httpTimeoutMs > 0) {
-            builder.httpOptions(HttpOptions.builder().timeout(httpTimeoutMs).build());
-        }
-
-        boolean hasApiKey = StringUtils.hasText(properties.getApiKey());
-        boolean hasVertexConfig = StringUtils.hasText(properties.getProjectId())
-                && StringUtils.hasText(properties.getLocation());
+        Client.Builder builder = createClientBuilder(httpTimeoutMs);
+        boolean hasApiKey = StringUtils.isNotBlank(properties.getApiKey());
+        boolean hasVertexConfig = StringUtils.isNotBlank(properties.getProjectId())
+                && StringUtils.isNotBlank(properties.getLocation());
 
         if (properties.isVertexAi()) {
             if (!hasVertexConfig) {
@@ -214,19 +199,6 @@ public class AiConfig {
     }
 
     /**
-     * Creates a Google GenAI {@link Client} for the given API key and HTTP timeout.
-     *
-     * @param apiKey
-     *            the Gemini API key
-     * @param httpTimeoutMs
-     *            the HTTP timeout in milliseconds
-     * @return the configured {@link Client}
-     */
-    public static Client createGenAiClient(String apiKey, int httpTimeoutMs) {
-        return createGenAiClient(GenAiConnectionConfig.forApiKey(apiKey), httpTimeoutMs);
-    }
-
-    /**
      * Creates a Google GenAI {@link Client} for the given {@link GenAiConnectionConfig} and HTTP timeout.
      *
      * @param config
@@ -239,29 +211,39 @@ public class AiConfig {
         if (config == null) {
             throw new IllegalArgumentException("Connection configuration must not be null.");
         }
+        Client.Builder builder = createClientBuilder(httpTimeoutMs);
+        if (config.vertexAi()) {
+            if (StringUtils.isBlank(config.projectId())) {
+                throw new IllegalArgumentException("Please enter a GCP Project ID for Vertex AI.");
+            }
+            if (StringUtils.isBlank(config.location())) {
+                throw new IllegalArgumentException("Please enter a Vertex Location (e.g. global or us-central1).");
+            }
+            GoogleCredentials credentials = null;
+            if (StringUtils.isNotBlank(config.credentialsPath())) {
+                credentials = loadCredentialsFromFile(Path.of(config.credentialsPath()));
+            }
+            applyVertexAiBuilder(builder, config.projectId(), config.location(), credentials);
+        } else {
+            builder.apiKey(StringUtils.defaultIfBlank(config.apiKey(), UNCONFIGURED_API_KEY_PLACEHOLDER));
+        }
+        return builder.build();
+    }
+
+    private static Client.Builder createClientBuilder(int httpTimeoutMs) {
         Client.Builder builder = Client.builder();
         if (httpTimeoutMs > 0) {
             builder.httpOptions(HttpOptions.builder().timeout(httpTimeoutMs).build());
         }
-        if (config.vertexAi()) {
-            if (!StringUtils.hasText(config.projectId())) {
-                throw new IllegalArgumentException("Please enter a GCP Project ID for Vertex AI.");
-            }
-            if (!StringUtils.hasText(config.location())) {
-                throw new IllegalArgumentException("Please enter a Vertex Location (e.g. global or us-central1).");
-            }
-            builder.project(config.projectId()).location(config.location()).vertexAI(true);
-            if (StringUtils.hasText(config.credentialsPath())) {
-                builder.credentials(loadCredentialsFromFile(Path.of(config.credentialsPath())));
-            }
-        } else {
-            String effectiveApiKey = config.apiKey();
-            if (!StringUtils.hasText(effectiveApiKey)) {
-                effectiveApiKey = UNCONFIGURED_API_KEY_PLACEHOLDER;
-            }
-            builder.apiKey(effectiveApiKey);
+        return builder;
+    }
+
+    private static void applyVertexAiBuilder(Client.Builder builder, String projectId, String location,
+            GoogleCredentials credentials) {
+        builder.project(projectId.trim()).location(location.trim()).vertexAI(true);
+        if (credentials != null) {
+            builder.credentials(credentials);
         }
-        return builder.build();
     }
 
     static GoogleCredentials loadCredentialsFromFile(Path credentialsFile) {
@@ -278,10 +260,7 @@ public class AiConfig {
 
     public static GoogleGenAiChatModel createChatModel(Client client, String defaultModel,
             ToolCallingManager toolCallingManager) {
-        String modelName = AppSettings.DEFAULT_GEMINI_MODEL;
-        if (StringUtils.hasText(defaultModel)) {
-            modelName = defaultModel.trim();
-        }
+        String modelName = StringUtils.defaultIfBlank(defaultModel, AppSettings.DEFAULT_GEMINI_MODEL).trim();
         GoogleGenAiChatOptions options = GoogleGenAiChatOptions.builder().model(modelName).build();
         GoogleGenAiChatModel.Builder builder = GoogleGenAiChatModel.builder().genAiClient(client).options(options)
                 .retryTemplate(createNoOpRetryTemplate());
@@ -293,12 +272,13 @@ public class AiConfig {
 
     private static void configureVertexAi(Client.Builder builder, GoogleGenAiConnectionProperties props)
             throws IOException {
-        builder.project(props.getProjectId().trim()).location(props.getLocation().trim()).vertexAI(true);
+        GoogleCredentials credentials = null;
         if (props.getCredentialsUri() != null) {
             try (InputStream is = props.getCredentialsUri().getInputStream()) {
-                builder.credentials(GoogleCredentials.fromStream(is));
+                credentials = GoogleCredentials.fromStream(is);
             }
         }
+        applyVertexAiBuilder(builder, props.getProjectId(), props.getLocation(), credentials);
     }
 
     @Bean
@@ -459,8 +439,8 @@ public class AiConfig {
         return exception -> {
             ExceptionUtils.rethrowIfCancelled(exception, "Tool execution cancelled");
             String message;
-            if (exception != null && (StringUtils.hasText(exception.getMessage())
-                    || StringUtils.hasText(ExceptionUtils.getRootCause(exception).getMessage()))) {
+            if (exception != null && (StringUtils.isNotBlank(exception.getMessage())
+                    || StringUtils.isNotBlank(ExceptionUtils.getRootCause(exception).getMessage()))) {
                 message = ExceptionUtils.getRootCauseMessage(exception);
             } else {
                 message = "Tool execution failed";

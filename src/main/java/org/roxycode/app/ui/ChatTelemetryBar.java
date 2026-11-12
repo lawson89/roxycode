@@ -56,10 +56,6 @@ final class ChatTelemetryBar {
         telemetryPanel.add(turnLabel, HIDEMODE_3);
     }
 
-    void addToToolbar(JPanel toolbar) {
-        toolbar.add(telemetryPanel, "wmin 0");
-    }
-
     void update(ChatModel model, String turnStatusText) {
         turnLabel.setText(turnStatusText);
 

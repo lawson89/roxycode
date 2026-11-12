@@ -28,6 +28,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
 import javax.swing.SwingUtilities;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.SystemUtils;
 import org.apache.commons.lang3.exception.ExceptionUtils;
@@ -228,14 +229,10 @@ public class GenericBuildToolService {
     }
 
     private void performProjectChanged() {
-        stopActiveContainer();
+        buildContainerService.stopActiveContainer();
         if (this.projectService.hasActiveProject()) {
             ensureConfig();
         }
-    }
-
-    private void stopActiveContainer() {
-        buildContainerService.stopActiveContainer();
     }
 
     static String formatNoOpOutput(String commandLabel) {
@@ -300,10 +297,7 @@ public class GenericBuildToolService {
 
     @AgentDoc(value = "Discovers and runs unit tests related to the specified file paths using test_single for fast intermediate verification.", examples = "buildToolService.runRelatedTests(['src/main/java/App.java'])")
     public BuildResult runRelatedTests(@AgentDoc("File paths relative to the project root") String... relativePaths) {
-        if (relativePaths == null || relativePaths.length == 0) {
-            return runRelatedTests(List.of());
-        }
-        return runRelatedTests(Arrays.asList(relativePaths));
+        return runRelatedTests(Arrays.asList(ArrayUtils.nullToEmpty(relativePaths)));
     }
 
     @AgentDoc(value = "Discovers and runs unit tests related to the specified list of file paths using test_single for fast intermediate verification.", examples = "buildToolService.runRelatedTests(gitService.getChangedFiles())")
@@ -402,7 +396,7 @@ public class GenericBuildToolService {
         return runTestsAndLint(compileResult.output());
     }
 
-    private BuildResult runTestsAndLint(String compileOutput) {
+    private BuildResult runTestsAndLint(@Nullable String compileOutput) {
         BuildResult testResult = runCommand("commands.test_all", config -> config.commands().testAll());
         if (!testResult.success()) {
             if (planService != null) {
@@ -411,13 +405,9 @@ public class GenericBuildToolService {
             if (compileOutput == null) {
                 return testResult;
             }
-            return new BuildResult(false, testResult.exitCode(), """
-                    COMPILE OUTPUT:
-                    %s
-
-                    TEST OUTPUT:
-                    %s""".formatted(compileOutput, testResult.output()), testResult.errors(), testResult.failedTests(),
-                    testResult.timedOut());
+            return new BuildResult(false, testResult.exitCode(),
+                    formatLabeledOutputs(compileOutput, testResult.output(), null), testResult.errors(),
+                    testResult.failedTests(), testResult.timedOut());
         }
         if (compileOutput == null && planService != null) {
             planService.updateVerificationStep(ImplementationPlan.STEP_COMPILE, true);
@@ -426,28 +416,27 @@ public class GenericBuildToolService {
         if (planService != null) {
             planService.updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, lintResult.success());
         }
+        if (compileOutput == null && lintResult.success()) {
+            return testResult;
+        }
+        return new BuildResult(lintResult.success(), lintResult.exitCode(),
+                formatLabeledOutputs(compileOutput, testResult.output(), lintResult.output()), lintResult.errors(),
+                lintResult.failedTests(), testResult.timedOut() || lintResult.timedOut());
+    }
+
+    private static String formatLabeledOutputs(@Nullable String compileOutput, String testOutput,
+            @Nullable String lintOutput) {
+        StringBuilder sb = new StringBuilder();
         if (compileOutput != null) {
-            return new BuildResult(lintResult.success(), lintResult.exitCode(), """
-                    COMPILE OUTPUT:
-                    %s
-
-                    TEST OUTPUT:
-                    %s
-
-                    LINT OUTPUT:
-                    %s""".formatted(compileOutput, testResult.output(), lintResult.output()), lintResult.errors(),
-                    lintResult.failedTests(), testResult.timedOut() || lintResult.timedOut());
+            sb.append("COMPILE OUTPUT:").append(StringUtils.LF).append(compileOutput).append(StringUtils.LF)
+                    .append(StringUtils.LF);
         }
-        if (!lintResult.success()) {
-            return new BuildResult(false, lintResult.exitCode(), """
-                    TEST OUTPUT:
-                    %s
-
-                    LINT OUTPUT:
-                    %s""".formatted(testResult.output(), lintResult.output()), lintResult.errors(),
-                    lintResult.failedTests(), testResult.timedOut() || lintResult.timedOut());
+        sb.append("TEST OUTPUT:").append(StringUtils.LF).append(testOutput);
+        if (lintOutput != null) {
+            sb.append(StringUtils.LF).append(StringUtils.LF).append("LINT OUTPUT:").append(StringUtils.LF)
+                    .append(lintOutput);
         }
-        return testResult;
+        return sb.toString();
     }
 
     private void requireCodePhase(String methodName) {
@@ -489,7 +478,7 @@ public class GenericBuildToolService {
             Duration timeout = Duration.ofSeconds(config.timeoutSeconds());
             if (mode == SandboxMode.DOCKER) {
                 if (!buildContainerService.isDockerAvailable()) {
-                    stopActiveContainer();
+                    buildContainerService.stopActiveContainer();
                     String msg = "Error executing " + commandLabel
                             + ": Docker is not available, but [sandbox] mode = \"docker\" is configured in build.toml.";
                     return new BuildResult(false, -1, msg, List.of(msg), List.of());
@@ -497,7 +486,7 @@ public class GenericBuildToolService {
                 return executeInContainer(command, sandboxConfig, env, logFile, parseSection, timeout);
             }
             if (mode == SandboxMode.NATIVE) {
-                stopActiveContainer();
+                buildContainerService.stopActiveContainer();
                 if (!buildContainerService.isNativeSandboxAvailable()) {
                     String msg = "Error executing " + commandLabel
                             + ": Native OS sandbox is not available on this system, but [sandbox] mode = \"native\" is configured in build.toml.";
@@ -507,7 +496,7 @@ public class GenericBuildToolService {
                         .buildNativeSandboxCommand(projectService.getCurrentProjectRoot(), sandboxConfig, command);
                 return executeCommandList(sandboxCmd, env, logFile, parseSection, timeout);
             }
-            stopActiveContainer();
+            buildContainerService.stopActiveContainer();
             return execute(command, env, logFile, parseSection, timeout);
         } catch (CancellationException e) {
             throw e;
@@ -541,10 +530,6 @@ public class GenericBuildToolService {
             log.warn("Failed to read build template: {}", id, e);
             return DEFAULT_FALLBACK_TOML;
         }
-    }
-
-    private String loadDefaultTemplateContent() {
-        return loadTemplateContent(detectTemplate());
     }
 
     private void ensureConfig() {
@@ -685,15 +670,15 @@ public class GenericBuildToolService {
             return buildResultFromExecution(exitCode, fullOutput, logFile, errors, parseSection, startTimeMillis,
                     result.timedOut());
         } catch (CancellationException e) {
-            stopActiveContainer();
+            buildContainerService.stopActiveContainer();
             throw e;
         } catch (InterruptedException e) {
-            stopActiveContainer();
+            buildContainerService.stopActiveContainer();
             Thread.currentThread().interrupt();
             throw new CancellationException("Container build command interrupted");
         } catch (Exception e) {
             log.error("Container execution failed", e);
-            stopActiveContainer();
+            buildContainerService.stopActiveContainer();
             String errorMsg = BuildOutputParser
                     .stripAnsiCodes(org.roxycode.app.util.ExceptionUtils.getMessageOrSimpleName(e));
             errors.add("Container execution failed: " + errorMsg);
@@ -759,8 +744,9 @@ public class GenericBuildToolService {
         }
         List<String> failedTests = new ArrayList<>(
                 BuildOutputParser.extractWithRipGrep(effectiveParse.testFailureRegex(), logFile, contextLines));
-        if (exitCode != 0) {
-            List<String> xmlFailures = extractJunitXmlFailures(effectiveParse.resolvedJunitXmlPaths(), startTimeMillis);
+        if (exitCode != 0 && projectService.hasActiveProject()) {
+            List<String> xmlFailures = BuildOutputParser.extractJunitXmlFailures(projectService.getCurrentProjectRoot(),
+                    effectiveParse.resolvedJunitXmlPaths(), startTimeMillis);
             for (String xmlFailure : xmlFailures) {
                 if (failedTests.size() >= MAX_EXTRACTED_BLOCKS) {
                     break;
@@ -773,14 +759,6 @@ public class GenericBuildToolService {
         boolean success = exitCode == 0 && errors.isEmpty() && failedTests.isEmpty();
         String tailOutput = BuildOutputParser.getLogTail(fullOutput);
         return new BuildResult(success, exitCode, tailOutput, errors, failedTests, timedOut);
-    }
-
-    List<String> extractJunitXmlFailures(List<String> configuredPaths, long commandStartTimeMillis) {
-        if (!projectService.hasActiveProject()) {
-            return List.of();
-        }
-        return BuildOutputParser.extractJunitXmlFailures(projectService.getCurrentProjectRoot(), configuredPaths,
-                commandStartTimeMillis);
     }
 
     public String getConfigContent() throws IOException {
@@ -796,7 +774,7 @@ public class GenericBuildToolService {
                 log.warn("Build config file not found at {}, falling back to template", configPath);
             }
         }
-        return loadDefaultTemplateContent();
+        return loadTemplateContent(detectTemplate());
     }
 
     private static final int MAX_BUILD_CONTEXT_FILE_CHARS = 8_000;
@@ -1085,7 +1063,7 @@ public class GenericBuildToolService {
         }
         String normalizedContent = StringUtils.defaultString(content);
         validateConfig(normalizedContent);
-        stopActiveContainer();
+        buildContainerService.stopActiveContainer();
         Path configPath = getConfigPath();
         PathUtils.createParentDirectories(configPath);
         Files.writeString(configPath, normalizedContent, StandardCharsets.UTF_8);

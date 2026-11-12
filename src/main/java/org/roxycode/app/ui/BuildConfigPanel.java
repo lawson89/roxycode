@@ -109,8 +109,6 @@ final class BuildConfigPanel extends JPanel {
 
     private final transient UiComponents.UiGuard textUpdateGuard = new UiComponents.UiGuard();
     private boolean textEditedByUser = false;
-    private boolean saveFeedbackActive = false;
-    private boolean modelSaveFeedbackActive = false;
     private boolean lastStatusSuccess = true;
     private String savedTomlContent = "";
     private String savedModelApiName = "";
@@ -144,11 +142,7 @@ final class BuildConfigPanel extends JPanel {
         saveButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         saveButton.setIconTextGap(6);
 
-        saveFeedbackTimer = new Timer(2500, e -> {
-            saveFeedbackActive = false;
-            updateSaveButtonState();
-        });
-        saveFeedbackTimer.setRepeats(false);
+        saveFeedbackTimer = createFeedbackTimer(this::updateSaveButtonState);
 
         buildTabPanel.add(UiComponents.createPageHeader(titleLabel, subtitleLabel, saveButton), "growx, wmin 0, wrap");
 
@@ -185,7 +179,7 @@ final class BuildConfigPanel extends JPanel {
         textArea = new RSyntaxTextArea();
         UiComponents.configureSyntaxTextArea(textArea, SyntaxConstants.SYNTAX_STYLE_INI, true, false);
         SwingHtmlUtils.addChangeListener(textArea, this::onTomlTextEdited);
-        updateTextAreaTheme();
+        SwingHtmlUtils.applyRSyntaxTheme(textArea, settingsService);
 
         buildCardPanel.add(new RTextScrollPane(textArea), "grow, push");
         buildTabPanel.add(buildCardPanel, "grow, push, wmin 0");
@@ -205,11 +199,7 @@ final class BuildConfigPanel extends JPanel {
         modelSaveButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         modelSaveButton.setIconTextGap(6);
 
-        modelSaveFeedbackTimer = new Timer(2500, e -> {
-            modelSaveFeedbackActive = false;
-            updateModelSaveButtonState();
-        });
-        modelSaveFeedbackTimer.setRepeats(false);
+        modelSaveFeedbackTimer = createFeedbackTimer(this::updateModelSaveButtonState);
 
         JPanel modelHeaderActions = new JPanel(new MigLayout("insets 0, gapx 12", "[][]", "[center]"));
         modelHeaderActions.setOpaque(false);
@@ -283,15 +273,11 @@ final class BuildConfigPanel extends JPanel {
     }
 
     void selectBuildConfigTab() {
-        if (settingsTabs != null && settingsTabs.getTabCount() > TAB_INDEX_BUILD_CONFIG) {
-            settingsTabs.setSelectedIndex(TAB_INDEX_BUILD_CONFIG);
-        }
+        UiComponents.selectTabSafely(settingsTabs, TAB_INDEX_BUILD_CONFIG);
     }
 
     void selectAiModelTab() {
-        if (settingsTabs != null && settingsTabs.getTabCount() > TAB_INDEX_AI_MODEL) {
-            settingsTabs.setSelectedIndex(TAB_INDEX_AI_MODEL);
-        }
+        UiComponents.selectTabSafely(settingsTabs, TAB_INDEX_AI_MODEL);
     }
 
     void updateTabIcons() {
@@ -458,33 +444,29 @@ final class BuildConfigPanel extends JPanel {
         return !Objects.equals(resolveSelectedThinkingLevelId(), savedThinkingLevelId);
     }
 
+    private static Timer createFeedbackTimer(Runnable onExpire) {
+        Timer timer = new Timer(2500, null);
+        timer.setRepeats(false);
+        timer.addActionListener(e -> {
+            timer.stop();
+            onExpire.run();
+        });
+        return timer;
+    }
+
     private void onComboSelectionChanged() {
         if (!textUpdateGuard.isActive()) {
-            cancelModelSaveFeedback();
+            UiComponents.stopTimer(modelSaveFeedbackTimer);
             clearModelStatus();
             updateModelSaveButtonState();
         }
-    }
-
-    private void cancelSaveFeedback() {
-        if (saveFeedbackTimer != null && saveFeedbackTimer.isRunning()) {
-            saveFeedbackTimer.stop();
-        }
-        saveFeedbackActive = false;
-    }
-
-    private void cancelModelSaveFeedback() {
-        if (modelSaveFeedbackTimer != null && modelSaveFeedbackTimer.isRunning()) {
-            modelSaveFeedbackTimer.stop();
-        }
-        modelSaveFeedbackActive = false;
     }
 
     void updateSaveButtonState() {
         if (saveButton == null) {
             return;
         }
-        if (saveFeedbackActive) {
+        if (saveFeedbackTimer != null && saveFeedbackTimer.isRunning()) {
             applyButtonPresentation(saveButton, SAVED_FEEDBACK_BUTTON_TEXT, Codicons.CHECK,
                     SAVE_BUTTON_BASE_STYLE + UiComponents.GREEN_BUTTON_STYLE);
             return;
@@ -504,7 +486,7 @@ final class BuildConfigPanel extends JPanel {
         if (modelSaveButton == null) {
             return;
         }
-        if (modelSaveFeedbackActive) {
+        if (modelSaveFeedbackTimer != null && modelSaveFeedbackTimer.isRunning()) {
             applyButtonPresentation(modelSaveButton, MODEL_SAVED_FEEDBACK_BUTTON_TEXT, Codicons.CHECK,
                     SAVE_BUTTON_BASE_STYLE + UiComponents.GREEN_BUTTON_STYLE);
         } else {
@@ -544,7 +526,7 @@ final class BuildConfigPanel extends JPanel {
     @EventListener
     public void onSettingsChanged(SettingsChangedEvent event) {
         Edt.run(() -> {
-            updateTextAreaTheme();
+            SwingHtmlUtils.applyRSyntaxTheme(textArea, settingsService);
             applySectionStyling();
             loadModelOptions();
             loadThinkingLevelOptions();
@@ -556,8 +538,8 @@ final class BuildConfigPanel extends JPanel {
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
         Edt.run(() -> {
-            cancelSaveFeedback();
-            cancelModelSaveFeedback();
+            UiComponents.stopTimer(saveFeedbackTimer);
+            UiComponents.stopTimer(modelSaveFeedbackTimer);
             clearBuildStatus();
             clearModelStatus();
             loadModelOptions();
@@ -573,7 +555,7 @@ final class BuildConfigPanel extends JPanel {
         if (!textUpdateGuard.isActive()) {
             String currentText = StringUtils.defaultString(textArea.getText());
             textEditedByUser = !Objects.equals(currentText, savedTomlContent);
-            cancelSaveFeedback();
+            UiComponents.stopTimer(saveFeedbackTimer);
             clearBuildStatus();
             updateBannerState();
         }
@@ -616,7 +598,7 @@ final class BuildConfigPanel extends JPanel {
     }
 
     CompletableFuture<Void> saveConfig() {
-        cancelSaveFeedback();
+        UiComponents.stopTimer(saveFeedbackTimer);
         if (buildToolService == null && projectService == null) {
             CompletableFuture<Void> done = CompletableFuture.completedFuture(null);
             lastAsyncFuture = done;
@@ -640,7 +622,6 @@ final class BuildConfigPanel extends JPanel {
             saveButton.setEnabled(true);
             savedTomlContent = contentToSave;
             textEditedByUser = false;
-            saveFeedbackActive = true;
             saveFeedbackTimer.restart();
             updateBannerState();
             showBuildStatus("Configuration saved successfully!", true);
@@ -659,7 +640,7 @@ final class BuildConfigPanel extends JPanel {
     }
 
     CompletableFuture<Void> saveModelConfig() {
-        cancelModelSaveFeedback();
+        UiComponents.stopTimer(modelSaveFeedbackTimer);
         if (projectService == null) {
             CompletableFuture<Void> done = CompletableFuture.completedFuture(null);
             lastAsyncFuture = done;
@@ -677,7 +658,6 @@ final class BuildConfigPanel extends JPanel {
             modelSaveButton.setEnabled(true);
             savedModelApiName = modelOverrideToSave;
             savedThinkingLevelId = thinkingOverrideToSave;
-            modelSaveFeedbackActive = true;
             modelSaveFeedbackTimer.restart();
             updateModelSaveButtonState();
             showModelStatus(MODEL_SAVED_STATUS_TEXT, true);
@@ -704,9 +684,5 @@ final class BuildConfigPanel extends JPanel {
         selectBuildConfigTab();
         setEditorContentProgrammatically(toml, false);
         showBuildStatus(APPLIED_FROM_ASK_ROXY_STATUS, true);
-    }
-
-    private void updateTextAreaTheme() {
-        SwingHtmlUtils.applyRSyntaxTheme(textArea, settingsService);
     }
 }

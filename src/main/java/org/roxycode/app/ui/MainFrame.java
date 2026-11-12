@@ -12,7 +12,6 @@ import java.awt.Image;
 import java.awt.KeyboardFocusManager;
 import java.awt.Rectangle;
 import java.awt.Taskbar;
-import java.awt.Toolkit;
 import java.awt.desktop.QuitResponse;
 import java.awt.event.ActionEvent;
 import java.awt.event.ComponentAdapter;
@@ -25,7 +24,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.Action;
@@ -40,6 +38,7 @@ import javax.swing.KeyStroke;
 import javax.swing.Timer;
 import javax.swing.text.JTextComponent;
 import net.miginfocom.swing.MigLayout;
+import org.apache.commons.lang3.SystemUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.PlanService;
@@ -675,7 +674,7 @@ public final class MainFrame extends JPanel {
     }
 
     private void setupMenuBar() {
-        int shortcutMask = resolveMenuShortcutMask();
+        int shortcutMask = UiComponents.resolveMenuShortcutMask();
         menuBar = new JMenuBar();
         menuBar.putClientProperty(FlatClientProperties.MENU_BAR_EMBEDDED, Boolean.TRUE);
         applyMenuBarStyling();
@@ -700,7 +699,7 @@ public final class MainFrame extends JPanel {
         registerCardMenuItem(SidebarPanel.CARD_SETTINGS, settingsItem);
         fileMenu.add(settingsItem);
 
-        if (!isMacOs()) {
+        if (!SystemUtils.IS_OS_MAC) {
             fileMenu.addSeparator();
             JMenuItem exitItem = new JMenuItem("Exit");
             exitItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_Q, shortcutMask));
@@ -913,18 +912,6 @@ public final class MainFrame extends JPanel {
         }
     }
 
-    private static int resolveMenuShortcutMask() {
-        if (GraphicsEnvironment.isHeadless()) {
-            return InputEvent.CTRL_DOWN_MASK;
-        }
-        return Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
-    }
-
-    static boolean isMacOs() {
-        String osName = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
-        return osName.contains("mac") || osName.contains("darwin");
-    }
-
     void exitApplication() {
         saveWindowStateOnClose();
         dispose();
@@ -1084,41 +1071,39 @@ public final class MainFrame extends JPanel {
     }
 
     private static String resolveHubLayoutCard(String cardName) {
-        if (CACHE_VIEW.equals(cardName) || API_VIEW.equals(cardName) || CONTEXT_MGR_VIEW.equals(cardName)) {
-            return CONTEXT_MGR_VIEW;
+        if (cardName == null) {
+            return null;
         }
-        if (TOOLS_VIEW.equals(cardName) || SETTINGS_VIEW.equals(cardName)) {
-            return SETTINGS_VIEW;
-        }
-        if (PROJECT_MODEL_VIEW.equals(cardName) || BUILD_CONFIG_VIEW.equals(cardName)) {
-            return BUILD_CONFIG_VIEW;
-        }
-        return cardName;
+        return switch (cardName) {
+            case CONTEXT_MGR_VIEW, CACHE_VIEW, API_VIEW -> CONTEXT_MGR_VIEW;
+            case SETTINGS_VIEW, TOOLS_VIEW -> SETTINGS_VIEW;
+            case BUILD_CONFIG_VIEW, PROJECT_MODEL_VIEW -> BUILD_CONFIG_VIEW;
+            default -> cardName;
+        };
     }
 
     private void selectHubSubTab(String cardName) {
+        if (cardName == null) {
+            return;
+        }
         hubTabGuard.run(() -> {
-            if (contextHubTabs != null) {
-                if (CONTEXT_MGR_VIEW.equals(cardName) && contextHubTabs.getTabCount() > TAB_INDEX_FIRST) {
-                    contextHubTabs.setSelectedIndex(TAB_INDEX_FIRST);
-                } else if (CACHE_VIEW.equals(cardName) && contextHubTabs.getTabCount() > TAB_INDEX_SECOND) {
-                    contextHubTabs.setSelectedIndex(TAB_INDEX_SECOND);
-                } else if (API_VIEW.equals(cardName) && contextHubTabs.getTabCount() > TAB_INDEX_THIRD) {
-                    contextHubTabs.setSelectedIndex(TAB_INDEX_THIRD);
+            switch (cardName) {
+                case CONTEXT_MGR_VIEW -> UiComponents.selectTabSafely(contextHubTabs, TAB_INDEX_FIRST);
+                case CACHE_VIEW -> UiComponents.selectTabSafely(contextHubTabs, TAB_INDEX_SECOND);
+                case API_VIEW -> UiComponents.selectTabSafely(contextHubTabs, TAB_INDEX_THIRD);
+                case SETTINGS_VIEW -> UiComponents.selectTabSafely(settingsHubTabs, TAB_INDEX_FIRST);
+                case TOOLS_VIEW -> UiComponents.selectTabSafely(settingsHubTabs, TAB_INDEX_SECOND);
+                case BUILD_CONFIG_VIEW -> {
+                    if (buildConfigPanel != null) {
+                        buildConfigPanel.selectBuildConfigTab();
+                    }
                 }
-            }
-            if (settingsHubTabs != null) {
-                if (SETTINGS_VIEW.equals(cardName) && settingsHubTabs.getTabCount() > TAB_INDEX_FIRST) {
-                    settingsHubTabs.setSelectedIndex(TAB_INDEX_FIRST);
-                } else if (TOOLS_VIEW.equals(cardName) && settingsHubTabs.getTabCount() > TAB_INDEX_SECOND) {
-                    settingsHubTabs.setSelectedIndex(TAB_INDEX_SECOND);
+                case PROJECT_MODEL_VIEW -> {
+                    if (buildConfigPanel != null) {
+                        buildConfigPanel.selectAiModelTab();
+                    }
                 }
-            }
-            if (buildConfigPanel != null) {
-                if (BUILD_CONFIG_VIEW.equals(cardName)) {
-                    buildConfigPanel.selectBuildConfigTab();
-                } else if (PROJECT_MODEL_VIEW.equals(cardName)) {
-                    buildConfigPanel.selectAiModelTab();
+                default -> {
                 }
             }
         });

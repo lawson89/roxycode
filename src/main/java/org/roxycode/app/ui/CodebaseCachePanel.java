@@ -195,9 +195,9 @@ final class CodebaseCachePanel extends JPanel {
         summaryCardPanel.add(progressBar, "growx, hidemode 3");
         add(summaryCardPanel, "growx, wrap");
 
-        configureViewer(repoMapArea, SyntaxConstants.SYNTAX_STYLE_NONE);
-        configureViewer(stableContextArea, SyntaxConstants.SYNTAX_STYLE_MARKDOWN);
-        configureViewer(sessionContextArea, SyntaxConstants.SYNTAX_STYLE_MARKDOWN);
+        UiComponents.configureSyntaxTextArea(repoMapArea, SyntaxConstants.SYNTAX_STYLE_NONE, false, true);
+        UiComponents.configureSyntaxTextArea(stableContextArea, SyntaxConstants.SYNTAX_STYLE_MARKDOWN, false, true);
+        UiComponents.configureSyntaxTextArea(sessionContextArea, SyntaxConstants.SYNTAX_STYLE_MARKDOWN, false, true);
 
         tabbedPane.addTab(TAB_REPO_MAP, FontIcon.of(Codicons.LIST_TREE, 14), new RTextScrollPane(repoMapArea));
         tabbedPane.addTab(TAB_STABLE_PROMPT, FontIcon.of(Codicons.BOOK, 14), new RTextScrollPane(stableContextArea));
@@ -207,10 +207,6 @@ final class CodebaseCachePanel extends JPanel {
 
         packButton.addActionListener(e -> runPack());
         updateTheme();
-    }
-
-    private void configureViewer(RSyntaxTextArea area, String syntaxStyle) {
-        UiComponents.configureSyntaxTextArea(area, syntaxStyle, false, true);
     }
 
     void updateTheme() {

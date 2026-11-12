@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.util.PathUtils;
@@ -86,12 +87,11 @@ public class ProjectAnalysisService {
         }
         String dirPath = normalizedPath.substring(0, lastSlash);
         for (String prefix : prefixes) {
-            String prefixWithoutTrailing = prefix.substring(0, prefix.length() - 1);
-            if (dirPath.equals(prefixWithoutTrailing)) {
+            if (dirPath.equals(StringUtils.removeEnd(prefix, "/"))) {
                 return "";
             }
             if (dirPath.startsWith(prefix)) {
-                return dirPath.substring(prefix.length());
+                return StringUtils.removeStart(dirPath, prefix);
             }
         }
         return dirPath;

@@ -165,7 +165,7 @@ final class SystemToolsPanel extends JPanel {
             }
             sortedTools.sort((a, b) -> Boolean.compare(b.required(), a.required()));
             for (SystemTool tool : sortedTools) {
-                ToolCard card = new ToolCard(tool, this::openWebsite);
+                ToolCard card = new ToolCard(tool, UiComponents::openUrlOrCopyToClipboard);
                 toolCards.add(card);
                 cardsContainer.add(card, GROWX_WMIN_0);
             }
@@ -175,10 +175,6 @@ final class SystemToolsPanel extends JPanel {
         updateWarningBannerState();
         cardsContainer.revalidate();
         cardsContainer.repaint();
-    }
-
-    void openWebsite(String websiteUrl) {
-        UiComponents.openUrlOrCopyToClipboard(websiteUrl);
     }
 
     static Codicons resolveToolIcon(String toolName) {

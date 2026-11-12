@@ -24,6 +24,8 @@ import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Desktop;
 import java.awt.Shape;
+import java.awt.Toolkit;
+import java.awt.event.InputEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.RoundRectangle2D;
@@ -683,10 +685,27 @@ final class UiComponents {
         }
     }
 
-    static void clearStatusMessage(@Nullable JLabel statusLabel, @Nullable Timer statusTimer, boolean hideLabel) {
-        if (statusTimer != null && statusTimer.isRunning()) {
-            statusTimer.stop();
+    static void stopTimer(@Nullable Timer timer) {
+        if (timer != null && timer.isRunning()) {
+            timer.stop();
         }
+    }
+
+    static int resolveMenuShortcutMask() {
+        if (GraphicsEnvironment.isHeadless()) {
+            return InputEvent.CTRL_DOWN_MASK;
+        }
+        return Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+    }
+
+    static void selectTabSafely(@Nullable JTabbedPane tabbedPane, int tabIndex) {
+        if (tabbedPane != null && tabIndex >= 0 && tabbedPane.getTabCount() > tabIndex) {
+            tabbedPane.setSelectedIndex(tabIndex);
+        }
+    }
+
+    static void clearStatusMessage(@Nullable JLabel statusLabel, @Nullable Timer statusTimer, boolean hideLabel) {
+        stopTimer(statusTimer);
         if (statusLabel == null) {
             return;
         }
@@ -760,16 +779,6 @@ final class UiComponents {
         }
     }
 
-    static void updateTabIcons(JTabbedPane tabbedPane, List<Codicons> icons, List<Color> colors) {
-        if (tabbedPane == null || icons == null || colors == null) {
-            return;
-        }
-        int count = Math.min(tabbedPane.getTabCount(), Math.min(icons.size(), colors.size()));
-        for (int i = 0; i < count; i++) {
-            tabbedPane.setIconAt(i, FontIcon.of(icons.get(i), 15, colors.get(i)));
-        }
-    }
-
     static void updateSelectedTabIcons(JTabbedPane tabbedPane, List<Codicons> icons) {
         if (tabbedPane == null || icons == null || tabbedPane.getTabCount() != icons.size()) {
             return;
@@ -777,15 +786,15 @@ final class UiComponents {
         Color accent = SwingHtmlUtils.getAccentColor();
         Color muted = SwingHtmlUtils.getMutedForegroundColor();
         int selectedIndex = tabbedPane.getSelectedIndex();
-        List<Color> colors = new ArrayList<>(icons.size());
         for (int i = 0; i < icons.size(); i++) {
+            Color color;
             if (i == selectedIndex) {
-                colors.add(accent);
+                color = accent;
             } else {
-                colors.add(muted);
+                color = muted;
             }
+            tabbedPane.setIconAt(i, FontIcon.of(icons.get(i), 15, color));
         }
-        updateTabIcons(tabbedPane, icons, colors);
     }
 
     @SuppressWarnings("PMD.UnusedAssignment")

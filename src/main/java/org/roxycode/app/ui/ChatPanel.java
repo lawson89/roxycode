@@ -353,7 +353,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
             autoApprovePlanCheckBox.putClientProperty(FlatClientProperties.STYLE, "font: -1");
             actionToolbar.add(autoApprovePlanCheckBox);
         }
-        telemetryBar.addToToolbar(actionToolbar);
+        actionToolbar.add(telemetryBar.telemetryPanel, "wmin 0");
         actionToolbar.add(sendButton, "split 2, alignx right, " + HIDEMODE_3);
         actionToolbar.add(stopButton, "alignx right, " + HIDEMODE_3);
 
@@ -1003,12 +1003,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
 
         InputMap inputMap = inputArea.getInputMap();
         ActionMap actionMap = inputArea.getActionMap();
-        int menuShortcutMask;
-        if (GraphicsEnvironment.isHeadless()) {
-            menuShortcutMask = java.awt.event.InputEvent.CTRL_DOWN_MASK;
-        } else {
-            menuShortcutMask = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
-        }
+        int menuShortcutMask = UiComponents.resolveMenuShortcutMask();
 
         inputMap.put(KeyStroke.getKeyStroke(KeyEvent.VK_Z, menuShortcutMask), "Undo");
         actionMap.put("Undo", createAction(() -> {

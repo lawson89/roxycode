@@ -8,6 +8,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
@@ -105,11 +106,7 @@ public class UserInputService {
 
     @AgentDoc(value = "Prompts the user to choose a single option from an array of options and returns the selected option.", examples = "userInputService.selectOption('Which build tool?', ['Maven', 'Gradle'])")
     public String selectOption(@AgentDoc(DOC_QUESTION) String question, @AgentDoc(DOC_OPTIONS) String... options) {
-        List<String> list = List.of();
-        if (options != null) {
-            list = Arrays.asList(options);
-        }
-        return selectOption(question, list);
+        return selectOption(question, Arrays.asList(ArrayUtils.nullToEmpty(options)));
     }
 
     @AgentDoc(value = "Prompts the user to select zero or more options from a list and returns the selected options.", examples = "userInputService.selectMultiple('Select modules to update:', ['core', 'ui', 'api'])")
@@ -133,11 +130,7 @@ public class UserInputService {
     @AgentDoc(value = "Prompts the user to select zero or more options from an array of options and returns the selected options.", examples = "userInputService.selectMultiple('Select modules to update:', ['core', 'ui', 'api'])")
     public List<String> selectMultiple(@AgentDoc(DOC_QUESTION) String question,
             @AgentDoc(DOC_OPTIONS) String... options) {
-        List<String> list = List.of();
-        if (options != null) {
-            list = Arrays.asList(options);
-        }
-        return selectMultiple(question, list);
+        return selectMultiple(question, Arrays.asList(ArrayUtils.nullToEmpty(options)));
     }
 
     public boolean cancelPendingRequest(String targetConversationId) {

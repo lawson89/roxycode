@@ -728,14 +728,7 @@ public class PlanService {
     }
 
     private Path resolveActiveWorkflowPath() {
-        if (projectService == null || !projectService.hasActiveProject()) {
-            return null;
-        }
-        try {
-            return projectService.resolveProjectDataPath(ACTIVE_WORKFLOW_FILENAME);
-        } catch (Exception e) {
-            return null;
-        }
+        return ProjectService.resolveProjectDataPathSafely(projectService, ACTIVE_WORKFLOW_FILENAME);
     }
 
     private boolean hasActiveWorkflowStateToPersist() {

@@ -41,12 +41,8 @@ public final class ChatHtmlTemplates {
     }
 
     static String linkifyMoveToFeatureMentions(String renderedHtml, int messageIndex) {
-        if (StringUtils.isBlank(renderedHtml) || messageIndex < 0
-                || !renderedHtml.contains("[Move to Feature Request]")) {
-            return StringUtils.defaultString(renderedHtml);
-        }
-        String linkHtml = renderMoveToActionHtml(messageIndex, false);
-        return MOVE_TO_FEATURE_MENTION_PATTERN.matcher(renderedHtml).replaceAll(Matcher.quoteReplacement(linkHtml));
+        return linkifyActionMentions(renderedHtml, messageIndex, "[Move to Feature Request]",
+                MOVE_TO_FEATURE_MENTION_PATTERN, renderMoveToActionHtml(messageIndex, false));
     }
 
     public static String renderApplyBuildTomlActionHtml(int messageIndex, boolean applied) {
@@ -57,11 +53,16 @@ public final class ChatHtmlTemplates {
     }
 
     static String linkifyApplyBuildTomlMentions(String renderedHtml, int messageIndex) {
-        if (StringUtils.isBlank(renderedHtml) || messageIndex < 0 || !renderedHtml.contains("[Apply to build.toml]")) {
+        return linkifyActionMentions(renderedHtml, messageIndex, "[Apply to build.toml]",
+                APPLY_BUILD_TOML_MENTION_PATTERN, renderApplyBuildTomlActionHtml(messageIndex, false));
+    }
+
+    private static String linkifyActionMentions(String renderedHtml, int messageIndex, String literalMarker,
+            Pattern pattern, String linkHtml) {
+        if (StringUtils.isBlank(renderedHtml) || messageIndex < 0 || !renderedHtml.contains(literalMarker)) {
             return StringUtils.defaultString(renderedHtml);
         }
-        String linkHtml = renderApplyBuildTomlActionHtml(messageIndex, false);
-        return APPLY_BUILD_TOML_MENTION_PATTERN.matcher(renderedHtml).replaceAll(Matcher.quoteReplacement(linkHtml));
+        return pattern.matcher(renderedHtml).replaceAll(Matcher.quoteReplacement(linkHtml));
     }
 
     public static String renderCopyActionHtml(int messageIndex, boolean copied) {

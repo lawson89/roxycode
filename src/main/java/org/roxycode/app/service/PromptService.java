@@ -93,9 +93,9 @@ public class PromptService {
      * @return the stable context string
      */
     public String getStableContext() {
-        return readClasspathResource(CLASSPATH_PROMPT) + HEADER_JEXL_CONTEXT + loadJexlContext()
-                + HEADER_USER_GUIDE_CONTEXT + loadUserGuideContext() + NEWLINE_DOUBLE + loadGlobalContext()
-                + loadProjectContext() + loadReferenceFoldersContext() + loadAgentMemoryContext();
+        return readClasspathResource(CLASSPATH_PROMPT) + HEADER_JEXL_CONTEXT + readClasspathResource(JEXL_DOC_PATH)
+                + HEADER_USER_GUIDE_CONTEXT + readClasspathResource(USER_GUIDE_DOC_PATH) + NEWLINE_DOUBLE
+                + loadGlobalContext() + loadProjectContext() + loadReferenceFoldersContext() + loadAgentMemoryContext();
     }
 
     String loadReferenceFoldersContext() {
@@ -268,20 +268,12 @@ public class PromptService {
         return StringSubstitutor.replace(raw, Map.of("maxTurns", maxTurns));
     }
 
-    private String loadJexlContext() {
-        return readClasspathResource(JEXL_DOC_PATH);
-    }
-
-    private String loadUserGuideContext() {
-        return readClasspathResource(USER_GUIDE_DOC_PATH);
-    }
-
     public List<ContextFileItem> listGlobalContextFiles() {
         return listContextFilesInFolders(projectService.getGlobalContextFolders(), false);
     }
 
     public List<ContextFileItem> listProjectContextFiles() {
-        if (!hasActiveProject()) {
+        if (projectService == null || !projectService.hasActiveProject()) {
             return List.of();
         }
         return listContextFilesInFolders(projectService.getProjectContextFolders(), true);
@@ -298,7 +290,7 @@ public class PromptService {
             }
             String folderStr = rawFolder.trim();
             Path dir = ProjectService.resolveMountFolderPath(folderStr, resolveRelativeToProject,
-                    resolveActiveProjectRoot());
+                    projectService.getCurrentProjectRoot());
             if (dir == null || !Files.isDirectory(dir)) {
                 continue;
             }
@@ -368,17 +360,6 @@ public class PromptService {
             }
         }
         return sb.toString();
-    }
-
-    private Path resolveActiveProjectRoot() {
-        if (hasActiveProject()) {
-            return projectService.getCurrentProjectRoot();
-        }
-        return null;
-    }
-
-    private boolean hasActiveProject() {
-        return projectService != null && projectService.hasActiveProject();
     }
 
     private static boolean isNonBinaryFile(Path path) {

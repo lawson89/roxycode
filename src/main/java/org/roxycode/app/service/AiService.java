@@ -309,10 +309,6 @@ public class AiService implements AutoCloseable {
         return ProjectService.resolveEffectiveThinkingLevel(projectService, settingsService);
     }
 
-    void setRetryTemplate(RetryTemplate retryTemplate) {
-        setRetryTemplate(retryTemplate, AiConfig.DEFAULT_MAX_RETRY_ATTEMPTS);
-    }
-
     void setRetryTemplate(RetryTemplate retryTemplate, int maxRetryAttempts) {
         this.retryTemplate = Objects.requireNonNull(retryTemplate, "retryTemplate must not be null");
         this.maxRetryAttempts = Math.max(1, maxRetryAttempts);

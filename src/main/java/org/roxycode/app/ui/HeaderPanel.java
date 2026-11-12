@@ -111,7 +111,7 @@ final class HeaderPanel extends JPanel {
 
         applyHeaderStyling();
         updateProjectStateDisplay();
-        updateBranchLabel();
+        refreshGitBranch();
         updateProjectTooltip(projectService.getCurrentProjectRoot());
     }
 
@@ -207,7 +207,7 @@ final class HeaderPanel extends JPanel {
             updateProjectStateDisplay();
             updateProjectTooltip(event.projectRoot());
             updateModelDisplay();
-            updateBranchLabel();
+            refreshGitBranch();
         });
     }
 
@@ -237,10 +237,6 @@ final class HeaderPanel extends JPanel {
     }
 
     public CompletableFuture<String> refreshGitBranch() {
-        return updateBranchLabel();
-    }
-
-    CompletableFuture<String> updateBranchLabel() {
         return Edt.supplyAsync(gitService::getCurrentBranch, branch -> {
             boolean valid = GitService.isValidOutput(branch);
             if (valid) {
