@@ -490,6 +490,27 @@ class MainFrameTest {
             assertEquals("View", frame.menuBar.getMenu(2).getText());
             assertEquals("Help", frame.menuBar.getMenu(3).getText());
 
+            // Verify Recent Projects submenu under File menu (empty placeholder -> populated MRU list -> click
+            // switches)
+            assertNotNull(frame.recentProjectsMenu);
+            assertEquals("Recent Projects", frame.recentProjectsMenu.getText());
+            assertEquals(1, frame.recentProjectsMenu.getItemCount());
+            assertEquals("No Recent Projects", frame.recentProjectsMenu.getItem(0).getText());
+            assertFalse(frame.recentProjectsMenu.getItem(0).isEnabled());
+
+            Path activeProj = tempDir.resolve("active-proj").toAbsolutePath().normalize();
+            Path recentProj = tempDir.resolve("other-proj").toAbsolutePath().normalize();
+            when(projectService.getCurrentProjectRoot()).thenReturn(activeProj);
+            when(projectService.getRecentProjects()).thenReturn(List.of(activeProj, recentProj));
+            SwingTestUtils.runOnEdt(frame::refreshRecentProjectsMenu);
+            assertEquals(2, frame.recentProjectsMenu.getItemCount());
+            assertEquals("active-proj — " + activeProj, frame.recentProjectsMenu.getItem(0).getText());
+            assertFalse(frame.recentProjectsMenu.getItem(0).isEnabled());
+            assertEquals("other-proj — " + recentProj, frame.recentProjectsMenu.getItem(1).getText());
+            assertTrue(frame.recentProjectsMenu.getItem(1).isEnabled());
+            SwingTestUtils.runOnEdt(() -> frame.recentProjectsMenu.getItem(1).doClick());
+            verify(projectService, timeout(2000)).setCurrentProjectRoot(recentProj);
+
             javax.swing.JMenu viewMenu = frame.menuBar.getMenu(2);
             javax.swing.JMenuItem askRoxyItem = viewMenu.getItem(0);
             javax.swing.JMenuItem buildFeatureItem = viewMenu.getItem(1);

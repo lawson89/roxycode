@@ -30,6 +30,7 @@ import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.TokenUsageEvent;
+import org.roxycode.app.events.ToolCompactionEvent;
 import org.roxycode.app.events.ToolExecutionEvent;
 import org.roxycode.app.events.UserInputRequestEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
@@ -932,6 +933,19 @@ final class ChatController implements AutoCloseable {
         Edt.run(() -> {
             if (!model.isTurnCancelled()) {
                 view.appendToolLog(JexlToHtmlConverter.convert(event.script()), event.success(), event.error());
+                persistActiveChatSession();
+            }
+        });
+    }
+
+    @EventListener
+    public void onToolCompaction(ToolCompactionEvent event) {
+        if (event == null || !isMatchingActiveTurnEvent(event.conversationId())) {
+            return;
+        }
+        Edt.run(() -> {
+            if (!model.isTurnCancelled()) {
+                view.appendMessage(ROLE_SYSTEM, event.formatDiagnosticMessage());
                 persistActiveChatSession();
             }
         });

@@ -19,6 +19,7 @@ public class AppSettings {
     public static final String DEFAULT_THINKING_LEVEL = ThinkingLevel.DEFAULT.getId();
     public static final String DEFAULT_VERTEX_LOCATION = "global";
     public static final int DEFAULT_MAX_AGENT_TOOL_TURNS = 50;
+    public static final int MAX_RECENT_PROJECTS = 5;
     public static final int DEFAULT_WINDOW_WIDTH = 1200;
     public static final int DEFAULT_WINDOW_HEIGHT = 900;
 
@@ -29,6 +30,7 @@ public class AppSettings {
     private String vertexLocation = DEFAULT_VERTEX_LOCATION;
     private String vertexCredentialsPath = "";
     private String currentProjectPath = "";
+    private List<String> recentProjectPaths = new ArrayList<>();
     private String geminiModel = DEFAULT_GEMINI_MODEL;
     private String thinkingLevel = DEFAULT_THINKING_LEVEL;
     private int maxAgentToolTurns = DEFAULT_MAX_AGENT_TOOL_TURNS;
@@ -55,6 +57,7 @@ public class AppSettings {
             this.vertexLocation = other.vertexLocation;
             this.vertexCredentialsPath = other.vertexCredentialsPath;
             this.currentProjectPath = other.currentProjectPath;
+            this.recentProjectPaths = new ArrayList<>(Objects.requireNonNullElse(other.recentProjectPaths, List.of()));
             this.geminiModel = other.geminiModel;
             this.thinkingLevel = other.thinkingLevel;
             this.maxAgentToolTurns = other.maxAgentToolTurns;
@@ -208,6 +211,25 @@ public class AppSettings {
      */
     public void setCurrentProjectPath(String currentProjectPath) {
         this.currentProjectPath = currentProjectPath;
+    }
+
+    /**
+     * Gets the list of recent project paths in most-recently-used order.
+     *
+     * @return the list of recent project paths
+     */
+    public List<String> getRecentProjectPaths() {
+        return recentProjectPaths;
+    }
+
+    /**
+     * Sets the list of recent project paths.
+     *
+     * @param recentProjectPaths
+     *            the list of recent project paths to set
+     */
+    public void setRecentProjectPaths(List<String> recentProjectPaths) {
+        this.recentProjectPaths = new ArrayList<>(Objects.requireNonNullElse(recentProjectPaths, List.of()));
     }
 
     /**

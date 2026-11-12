@@ -39,6 +39,30 @@ class ProjectServiceTest {
         assertEquals(projectPath.toAbsolutePath().toString(),
                 projectService2.getCurrentProjectRoot().toAbsolutePath().toString());
         assertEquals("my-project", projectService2.getProjectName());
+        assertEquals(List.of(projectPath.toAbsolutePath().normalize()), projectService2.getRecentProjects());
+
+        // Switching across 6 projects maintains MRU order, deduplicates, and caps at 5
+        Path p1 = tempDir.resolve("proj-1");
+        Path p2 = tempDir.resolve("proj-2");
+        Path p3 = tempDir.resolve("proj-3");
+        Path p4 = tempDir.resolve("proj-4");
+        Path p5 = tempDir.resolve("proj-5");
+        Path p6 = tempDir.resolve("proj-6");
+        projectService2.setCurrentProjectRoot(p1);
+        projectService2.setCurrentProjectRoot(p2);
+        projectService2.setCurrentProjectRoot(p3);
+        projectService2.setCurrentProjectRoot(p4);
+        projectService2.setCurrentProjectRoot(p5);
+        projectService2.setCurrentProjectRoot(p6);
+        assertEquals(List.of(p6.toAbsolutePath().normalize(), p5.toAbsolutePath().normalize(),
+                p4.toAbsolutePath().normalize(), p3.toAbsolutePath().normalize(), p2.toAbsolutePath().normalize()),
+                projectService2.getRecentProjects());
+
+        // Re-selecting an earlier project moves it to index 0 without duplicating
+        projectService2.setCurrentProjectRoot(p4.resolve("./"));
+        assertEquals(List.of(p4.toAbsolutePath().normalize(), p6.toAbsolutePath().normalize(),
+                p5.toAbsolutePath().normalize(), p3.toAbsolutePath().normalize(), p2.toAbsolutePath().normalize()),
+                projectService2.getRecentProjects());
     }
 
     @Test

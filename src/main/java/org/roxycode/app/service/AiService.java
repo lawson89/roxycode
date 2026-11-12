@@ -88,6 +88,7 @@ public class AiService implements AutoCloseable {
     private final ApplicationEventPublisher eventPublisher;
     private final ChatMemory chatMemory;
     private final ToolCallingManager toolCallingManager;
+    private final ToolHistoryCompactionAdvisor toolHistoryCompactionAdvisor;
     private volatile GenAiConnectionConfig activeConnectionConfig;
     private volatile Client managedClient;
     private volatile ChatModel activeChatModel;
@@ -133,12 +134,13 @@ public class AiService implements AutoCloseable {
         this.eventPublisher = eventPublisher;
         this.chatMemory = chatMemory;
         this.toolCallingManager = toolCallingManager;
+        this.toolHistoryCompactionAdvisor = new ToolHistoryCompactionAdvisor(eventPublisher);
         this.activeConnectionConfig = resolveConfiguredConnection();
         this.chatClient = buildChatClient(chatClientBuilder);
     }
 
     private ChatClient buildChatClient(ChatClient.Builder builder) {
-        return builder.defaultAdvisors(new ToolHistoryCompactionAdvisor(), new ModelCallRetryAdvisor()).build();
+        return builder.defaultAdvisors(toolHistoryCompactionAdvisor, new ModelCallRetryAdvisor()).build();
     }
 
     private GenAiConnectionConfig resolveConfiguredConnection() {
@@ -678,7 +680,7 @@ public class AiService implements AutoCloseable {
         }
     }
 
-    private static String resolveConversationId(ChatClientRequest request) {
+    static String resolveConversationId(ChatClientRequest request) {
         if (request != null && request.context() != null) {
             Object convId = request.context().get(ChatMemory.CONVERSATION_ID);
             if (convId != null) {

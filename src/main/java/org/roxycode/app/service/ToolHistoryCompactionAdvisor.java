@@ -9,7 +9,10 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AiConfig;
+import org.roxycode.app.events.ToolCompactionEvent;
 import org.roxycode.app.util.TokenUtils;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
@@ -19,6 +22,7 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.Ordered;
 import org.springframework.lang.Nullable;
 
@@ -36,6 +40,22 @@ final class ToolHistoryCompactionAdvisor implements CallAdvisor {
     static final int COMPACT_HEAD_CHARS = 300;
     static final int COMPACT_TAIL_CHARS = 200;
 
+    record CompactionResult(List<Message> messages, int compactedTurns, int lockedEpochBoundary, long savedTokens,
+            int savedChars) {
+    }
+
+    @Nullable
+    private final ApplicationEventPublisher eventPublisher;
+    private final Map<String, Integer> lastReportedBoundaryByConversation = new ConcurrentHashMap<>();
+
+    ToolHistoryCompactionAdvisor() {
+        this(null);
+    }
+
+    ToolHistoryCompactionAdvisor(@Nullable ApplicationEventPublisher eventPublisher) {
+        this.eventPublisher = eventPublisher;
+    }
+
     @Override
     public String getName() {
         return "ToolHistoryCompactionAdvisor";
@@ -48,8 +68,49 @@ final class ToolHistoryCompactionAdvisor implements CallAdvisor {
 
     @Override
     public ChatClientResponse adviseCall(ChatClientRequest chatClientRequest, CallAdvisorChain callAdvisorChain) {
-        ChatClientRequest effectiveRequest = compactRequestIfNeeded(chatClientRequest);
+        if (chatClientRequest == null || chatClientRequest.prompt() == null) {
+            return callAdvisorChain.nextCall(chatClientRequest);
+        }
+        Prompt originalPrompt = chatClientRequest.prompt();
+        List<Message> originalMessages = originalPrompt.getInstructions();
+        CompactionResult result = compactMessagesWithStats(originalMessages);
+        recordAndPublishCompactionIfNeeded(chatClientRequest, result);
+        if (result.messages() == null || result.messages().equals(originalMessages)) {
+            return callAdvisorChain.nextCall(chatClientRequest);
+        }
+        Prompt compactedPrompt;
+        if (originalPrompt.getOptions() != null) {
+            compactedPrompt = new Prompt(result.messages(), originalPrompt.getOptions());
+        } else {
+            compactedPrompt = new Prompt(result.messages());
+        }
+        ChatClientRequest effectiveRequest = chatClientRequest.mutate().prompt(compactedPrompt).build();
         return callAdvisorChain.nextCall(effectiveRequest);
+    }
+
+    private void recordAndPublishCompactionIfNeeded(ChatClientRequest request, CompactionResult result) {
+        String conversationId = AiService.resolveConversationId(request);
+        if (StringUtils.isBlank(conversationId)) {
+            return;
+        }
+        int lockedBoundary = result.lockedEpochBoundary();
+        if (lockedBoundary <= 0) {
+            lastReportedBoundaryByConversation.remove(conversationId);
+            return;
+        }
+        Integer previousBoundary = lastReportedBoundaryByConversation.get(conversationId);
+        int prev = 0;
+        if (previousBoundary != null) {
+            prev = previousBoundary;
+        }
+        if (lockedBoundary <= prev) {
+            return;
+        }
+        lastReportedBoundaryByConversation.put(conversationId, lockedBoundary);
+        if (eventPublisher != null && result.compactedTurns() > 0 && result.savedChars() > 0) {
+            eventPublisher.publishEvent(new ToolCompactionEvent(conversationId, result.compactedTurns(), lockedBoundary,
+                    result.savedTokens(), result.savedChars()));
+        }
     }
 
     static ChatClientRequest compactRequestIfNeeded(@Nullable ChatClientRequest request) {
@@ -80,8 +141,12 @@ final class ToolHistoryCompactionAdvisor implements CallAdvisor {
     }
 
     static List<Message> compactMessages(@Nullable List<Message> messages) {
+        return compactMessagesWithStats(messages).messages();
+    }
+
+    static CompactionResult compactMessagesWithStats(@Nullable List<Message> messages) {
         if (messages == null || messages.isEmpty()) {
-            return messages;
+            return new CompactionResult(messages, 0, 0, 0L, 0);
         }
         List<ToolResponseMessage> toolMessages = new ArrayList<>();
         for (Message msg : messages) {
@@ -91,11 +156,14 @@ final class ToolHistoryCompactionAdvisor implements CallAdvisor {
         }
         int lockedEpochBoundary = resolveLockedEpochBoundary(toolMessages);
         if (lockedEpochBoundary <= 0) {
-            return messages;
+            return new CompactionResult(messages, 0, 0, 0L, 0);
         }
 
         List<Message> result = new ArrayList<>(messages.size());
         int currentToolIndex = 0;
+        int compactedTurns = 0;
+        long savedTokens = 0L;
+        int savedChars = 0;
         boolean anyModified = false;
         for (Message msg : messages) {
             if (msg instanceof ToolResponseMessage toolMsg) {
@@ -103,6 +171,11 @@ final class ToolHistoryCompactionAdvisor implements CallAdvisor {
                     ToolResponseMessage compactedToolMsg = compactToolResponseMessage(toolMsg);
                     if (!compactedToolMsg.equals(toolMsg)) {
                         anyModified = true;
+                        compactedTurns++;
+                        savedChars += Math.max(0,
+                                countToolMessageChars(toolMsg) - countToolMessageChars(compactedToolMsg));
+                        savedTokens += Math.max(0L,
+                                estimateToolMessageTokens(toolMsg) - estimateToolMessageTokens(compactedToolMsg));
                     }
                     result.add(compactedToolMsg);
                 } else {
@@ -114,9 +187,9 @@ final class ToolHistoryCompactionAdvisor implements CallAdvisor {
             }
         }
         if (!anyModified) {
-            return messages;
+            return new CompactionResult(messages, 0, lockedEpochBoundary, 0L, 0);
         }
-        return result;
+        return new CompactionResult(result, compactedTurns, lockedEpochBoundary, savedTokens, savedChars);
     }
 
     static int resolveLockedEpochBoundary(@Nullable List<ToolResponseMessage> toolMessages) {
@@ -138,6 +211,19 @@ final class ToolHistoryCompactionAdvisor implements CallAdvisor {
             }
         }
         return lockedBoundary;
+    }
+
+    static int countToolMessageChars(@Nullable ToolResponseMessage toolMsg) {
+        if (toolMsg == null || toolMsg.getResponses() == null) {
+            return 0;
+        }
+        int chars = 0;
+        for (ToolResponse response : toolMsg.getResponses()) {
+            if (response != null && response.responseData() != null) {
+                chars += response.responseData().length();
+            }
+        }
+        return chars;
     }
 
     static long estimateToolMessageTokens(@Nullable ToolResponseMessage toolMsg) {

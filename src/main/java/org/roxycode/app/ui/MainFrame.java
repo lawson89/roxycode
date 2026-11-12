@@ -21,6 +21,7 @@ import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowEvent;
 import java.awt.event.WindowFocusListener;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -101,6 +102,7 @@ public final class MainFrame extends JPanel {
     private final transient UiComponents.UiGuard hubTabGuard = new UiComponents.UiGuard();
     private final Map<String, List<JMenuItem>> cardMenuItems = new LinkedHashMap<>();
     JMenuBar menuBar;
+    JMenu recentProjectsMenu;
     JTabbedPane contextHubTabs;
     JTabbedPane settingsHubTabs;
     SidebarPanel sidebar;
@@ -238,6 +240,7 @@ public final class MainFrame extends JPanel {
         if (sidebar != null) {
             sidebar.updateNavigationAccess(hasCredentials, hasProject, buildConfirmed);
         }
+        refreshRecentProjectsMenu();
         syncMenuAccessWithSidebar();
         if (!hasCredentials) {
             showCard(SETTINGS_VIEW);
@@ -687,6 +690,10 @@ public final class MainFrame extends JPanel {
         });
         fileMenu.add(openProjectItem);
 
+        recentProjectsMenu = new JMenu("Recent Projects");
+        refreshRecentProjectsMenu();
+        fileMenu.add(recentProjectsMenu);
+
         JMenuItem settingsItem = new JMenuItem("Settings...");
         settingsItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_COMMA, shortcutMask));
         settingsItem.addActionListener(e -> navigateIfAccessible(SidebarPanel.CARD_SETTINGS));
@@ -775,6 +782,60 @@ public final class MainFrame extends JPanel {
         item.addActionListener(e -> navigateIfAccessible(cardName));
         registerCardMenuItem(cardName, item);
         viewMenu.add(item);
+    }
+
+    void refreshRecentProjectsMenu() {
+        if (recentProjectsMenu == null) {
+            return;
+        }
+        recentProjectsMenu.removeAll();
+        List<Path> recentProjects = List.of();
+        if (projectService != null) {
+            recentProjects = projectService.getRecentProjects();
+        }
+        if (recentProjects.isEmpty()) {
+            JMenuItem emptyItem = new JMenuItem("No Recent Projects");
+            emptyItem.setEnabled(false);
+            recentProjectsMenu.add(emptyItem);
+            return;
+        }
+        Path activeNormalized = null;
+        if (projectService != null && projectService.getCurrentProjectRoot() != null) {
+            activeNormalized = projectService.getCurrentProjectRoot().toAbsolutePath().normalize();
+        }
+        for (Path projectPath : recentProjects) {
+            Path normalizedPath = projectPath.toAbsolutePath().normalize();
+            JMenuItem item = new JMenuItem(formatRecentProjectLabel(normalizedPath));
+            item.setToolTipText(normalizedPath.toString());
+            if (activeNormalized != null && activeNormalized.equals(normalizedPath)) {
+                item.setEnabled(false);
+            } else {
+                item.addActionListener(e -> openRecentProject(normalizedPath));
+            }
+            recentProjectsMenu.add(item);
+        }
+    }
+
+    static String formatRecentProjectLabel(Path projectPath) {
+        if (projectPath == null) {
+            return "";
+        }
+        Path fileName = projectPath.getFileName();
+        if (fileName == null) {
+            return projectPath.toString();
+        }
+        return fileName + " — " + projectPath;
+    }
+
+    void openRecentProject(Path projectPath) {
+        if (projectPath == null) {
+            return;
+        }
+        if (header != null) {
+            header.switchProjectAsync(projectPath);
+        } else if (projectService != null) {
+            Edt.runAsync(() -> projectService.setCurrentProjectRoot(projectPath), null);
+        }
     }
 
     private void registerCardMenuItem(String cardName, JMenuItem item) {

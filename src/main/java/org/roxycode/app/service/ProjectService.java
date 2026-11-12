@@ -149,6 +149,7 @@ public class ProjectService {
         String savedPath = settingsService.getSettings().getCurrentProjectPath();
         if (StringUtils.isNotEmpty(savedPath)) {
             this.currentProjectRoot = Paths.get(savedPath);
+            recordRecentProjectInSettings(this.currentProjectRoot, false);
         }
     }
 
@@ -180,8 +181,68 @@ public class ProjectService {
         if (newRoot != null) {
             this.currentProjectRoot = newRoot;
             settingsService.getSettings().setCurrentProjectPath(newRoot.toAbsolutePath().toString());
+            recordRecentProjectInSettings(newRoot, false);
             settingsService.saveSettings();
             eventPublisher.publishEvent(new ProjectChangedEvent(newRoot));
+        }
+    }
+
+    /**
+     * Returns up to {@link AppSettings#MAX_RECENT_PROJECTS} recent project paths in most-recently-used order.
+     *
+     * @return the list of recent project paths
+     */
+    public List<Path> getRecentProjects() {
+        if (settingsService == null || settingsService.getSettings() == null) {
+            return List.of();
+        }
+        List<String> rawPaths = settingsService.getSettings().getRecentProjectPaths();
+        List<Path> result = new ArrayList<>();
+        Set<String> seenNormalized = new HashSet<>();
+        if (rawPaths != null) {
+            for (String raw : rawPaths) {
+                if (StringUtils.isNotBlank(raw)) {
+                    Path normalized = Paths.get(raw.trim()).toAbsolutePath().normalize();
+                    if (seenNormalized.add(normalized.toString())) {
+                        result.add(normalized);
+                        if (result.size() >= AppSettings.MAX_RECENT_PROJECTS) {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        if (result.isEmpty() && currentProjectRoot != null) {
+            result.add(currentProjectRoot.toAbsolutePath().normalize());
+        }
+        return List.copyOf(result);
+    }
+
+    private void recordRecentProjectInSettings(Path projectRoot, boolean saveImmediately) {
+        if (projectRoot == null || settingsService == null || settingsService.getSettings() == null) {
+            return;
+        }
+        AppSettings settings = settingsService.getSettings();
+        String targetNormalized = projectRoot.toAbsolutePath().normalize().toString();
+        List<String> updated = new ArrayList<>();
+        updated.add(targetNormalized);
+        List<String> existing = settings.getRecentProjectPaths();
+        if (existing != null) {
+            for (String raw : existing) {
+                if (StringUtils.isNotBlank(raw)) {
+                    String candidate = Paths.get(raw.trim()).toAbsolutePath().normalize().toString();
+                    if (!updated.contains(candidate)) {
+                        updated.add(candidate);
+                        if (updated.size() >= AppSettings.MAX_RECENT_PROJECTS) {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        settings.setRecentProjectPaths(updated);
+        if (saveImmediately) {
+            settingsService.saveSettings();
         }
     }
 

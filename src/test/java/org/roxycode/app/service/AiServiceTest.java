@@ -39,6 +39,7 @@ import org.roxycode.app.events.AgentActivityEvent;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.TokenUsageEvent;
+import org.roxycode.app.events.ToolCompactionEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.model.ImplementationPlan;
@@ -46,6 +47,8 @@ import org.roxycode.app.model.ThinkingLevel;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.google.genai.common.GoogleGenAiThinkingLevel;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ChatClientRequest;
+import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
@@ -1016,6 +1019,43 @@ class AiServiceTest {
         for (int i = 1; i <= 6; i++) {
             assertEquals(recentToolOutput, secondCallTools.get(i).getResponses().get(0).responseData());
         }
+
+        ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
+        verify(eventPublisher, atLeastOnce()).publishEvent(eventCaptor.capture());
+        List<ToolCompactionEvent> compactionEvents = eventCaptor.getAllValues().stream()
+                .filter(ToolCompactionEvent.class::isInstance).map(ToolCompactionEvent.class::cast).toList();
+        assertEquals(1, compactionEvents.size());
+        ToolCompactionEvent compactionEvent = compactionEvents.get(0);
+        assertEquals("task:compact-chain", compactionEvent.conversationId());
+        assertEquals(1, compactionEvent.compactedTurns());
+        assertEquals(1, compactionEvent.lockedEpochBoundary());
+        assertTrue(compactionEvent.savedTokens() >= 19_000L);
+        assertTrue(compactionEvent.savedChars() >= 79_000);
+        assertTrue(compactionEvent.formatDiagnosticMessage()
+                .contains("🗜️ Compacted 1 earlier tool response (locked epoch 1..1, saved ~"));
+
+        // Subsequent sub-turn in the same conversation and locked epoch (boundary = 1) must NOT emit a duplicate event
+        ToolHistoryCompactionAdvisor statefulAdvisor = new ToolHistoryCompactionAdvisor(eventPublisher);
+        ChatClientRequest subTurnReq = ChatClientRequest.builder().prompt(new Prompt(historyAfterTools))
+                .context(Map.of(ChatMemory.CONVERSATION_ID, "task:compact-chain")).build();
+        CallAdvisorChain noopChain = mock(CallAdvisorChain.class);
+
+        clearInvocations(eventPublisher);
+        statefulAdvisor.adviseCall(subTurnReq, noopChain);
+        verify(eventPublisher, times(1)).publishEvent(any(ToolCompactionEvent.class));
+
+        clearInvocations(eventPublisher);
+        statefulAdvisor.adviseCall(subTurnReq, noopChain);
+        verify(eventPublisher, never()).publishEvent(any(ToolCompactionEvent.class));
+
+        // Resetting conversation history (lockedEpochBoundary <= 0) clears tracking so a new epoch later emits again
+        ChatClientRequest resetReq = ChatClientRequest.builder().prompt(new Prompt(List.of(new UserMessage("Reset"))))
+                .context(Map.of(ChatMemory.CONVERSATION_ID, "task:compact-chain")).build();
+        statefulAdvisor.adviseCall(resetReq, noopChain);
+        verify(eventPublisher, never()).publishEvent(any(ToolCompactionEvent.class));
+
+        statefulAdvisor.adviseCall(subTurnReq, noopChain);
+        verify(eventPublisher, times(1)).publishEvent(any(ToolCompactionEvent.class));
     }
 
     @Test
