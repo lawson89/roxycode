@@ -682,8 +682,6 @@ class ChatControllerTest extends ChatTestFixture {
                     List.of(new UserMessage("Create plan"), new AssistantMessage("Plan submitted.")));
             taskPanel.controller.onToolExecution(new ToolExecutionEvent("task:default",
                     "planService.submitPlan('Title', 'Goal', [], ['Step 1'])", "ok", true, null));
-            taskPanel.controller.onToolCompaction(new ToolCompactionEvent("task:default", 4, 5, 18_400L, 73_600));
-            taskPanel.controller.onToolCompaction(new ToolCompactionEvent("qa:default", 2, 3, 9_000L, 36_000));
             taskPanel.controller.onTokenUsage(new TokenUsageEvent("task:default", "gemini-1.5-pro", 1_000_000, 25_000,
                     20_000, 5_000, 600, 100, 25_700, null, 0.0, 0.0, 0.0, 0.0, 0.008));
             return "Plan submitted.";
@@ -696,12 +694,7 @@ class ChatControllerTest extends ChatTestFixture {
                 .resolve(ChatController.resolveActiveChatFilename(ChatModel.TASK_CONVERSATION_ID));
         assertTrue(Files.exists(projectASessionFile));
         assertEquals(2, realMemory.get("task:default").size());
-        assertEquals(4, taskPanel.exportMessages().size());
-        assertEquals(ChatHtmlTemplates.ROLE_SYSTEM, taskPanel.exportMessages().get(2).role());
-        assertTrue(taskPanel.exportMessages().get(2).content().contains(
-                "Compacted 4 earlier tool responses (locked epoch 1..5, saved ~18.4k tokens / 73,600 chars)"));
-        assertContainsAll(taskPanel.outputArea.getText(), "Compacted 4 earlier tool responses", "18.4k", "73,600");
-        assertFalse(taskPanel.outputArea.getText().contains("Compacted 2 earlier tool responses"));
+        assertEquals(3, taskPanel.exportMessages().size());
         assertEquals("Ctx: 25.0k / 1.0M (3%)", taskPanel.telemetryBar.ctxLabel.getText());
 
         // Switch to Project B: clears transcript, ChatMemory, and telemetry without deleting Project A's session file
@@ -727,10 +720,9 @@ class ChatControllerTest extends ChatTestFixture {
         assertEquals(2, realMemory.get("task:default").size());
         assertEquals("Create plan", realMemory.get("task:default").get(0).getText());
         assertEquals("Plan submitted.", realMemory.get("task:default").get(1).getText());
-        assertEquals(4, taskPanel.exportMessages().size());
+        assertEquals(3, taskPanel.exportMessages().size());
         assertTrue(taskPanel.exportMessages().get(1).isTool());
-        assertContainsAll(taskPanel.outputArea.getText(), "Create plan", "Plan submitted.", "submitPlan",
-                "Compacted 4 earlier tool responses");
+        assertContainsAll(taskPanel.outputArea.getText(), "Create plan", "Plan submitted.", "submitPlan");
         assertEquals("Ctx: 25.0k / 1.0M (3%)", taskPanel.telemetryBar.ctxLabel.getText());
         assertEquals("Cache: 80%", taskPanel.telemetryBar.cacheLabel.getText());
         assertTrue(taskPanel.inlineActionPanel.isVisible());
@@ -765,7 +757,7 @@ class ChatControllerTest extends ChatTestFixture {
         restartedPanel.setProjectService(projectService);
         verify(projectService, times(1)).resolveProjectDataPath(anyString());
         assertEquals(2, realMemory.get("task:default").size());
-        assertEquals(4, restartedPanel.exportMessages().size());
+        assertEquals(3, restartedPanel.exportMessages().size());
         assertTrue(restartedPanel.inlineActionPanel.isVisible());
 
         // Reset session deletes the persisted session file
