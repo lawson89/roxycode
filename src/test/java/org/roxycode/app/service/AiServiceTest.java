@@ -1009,32 +1009,17 @@ class AiServiceTest {
         assertEquals("Done with compacted history", response);
         assertEquals(2, capturedModelPrompts.size());
 
+        // ToolHistoryCompactionAdvisor is disabled in AiService, so tool history is passed unmodified
         List<ToolResponseMessage> secondCallTools = capturedModelPrompts.get(1).getInstructions().stream()
                 .filter(ToolResponseMessage.class::isInstance).map(ToolResponseMessage.class::cast).toList();
         assertEquals(7, secondCallTools.size());
-        String firstToolData = secondCallTools.get(0).getResponses().get(0).responseData();
-        assertTrue(firstToolData.startsWith("BEGIN_"));
-        assertTrue(firstToolData.endsWith("_END"));
-        assertTrue(firstToolData.contains("...[compacted "));
+        assertEquals(hugeToolOutput, secondCallTools.get(0).getResponses().get(0).responseData());
         for (int i = 1; i <= 6; i++) {
             assertEquals(recentToolOutput, secondCallTools.get(i).getResponses().get(0).responseData());
         }
+        verify(eventPublisher, never()).publishEvent(any(ToolCompactionEvent.class));
 
-        ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
-        verify(eventPublisher, atLeastOnce()).publishEvent(eventCaptor.capture());
-        List<ToolCompactionEvent> compactionEvents = eventCaptor.getAllValues().stream()
-                .filter(ToolCompactionEvent.class::isInstance).map(ToolCompactionEvent.class::cast).toList();
-        assertEquals(1, compactionEvents.size());
-        ToolCompactionEvent compactionEvent = compactionEvents.get(0);
-        assertEquals("task:compact-chain", compactionEvent.conversationId());
-        assertEquals(1, compactionEvent.compactedTurns());
-        assertEquals(1, compactionEvent.lockedEpochBoundary());
-        assertTrue(compactionEvent.savedTokens() >= 19_000L);
-        assertTrue(compactionEvent.savedChars() >= 79_000);
-        assertTrue(compactionEvent.formatDiagnosticMessage()
-                .contains("🗜️ Compacted 1 earlier tool response (locked epoch 1..1, saved ~"));
-
-        // Subsequent sub-turn in the same conversation and locked epoch (boundary = 1) must NOT emit a duplicate event
+        // Direct advisor invocation still compacts older epoch and emits ToolCompactionEvent once per locked epoch
         ToolHistoryCompactionAdvisor statefulAdvisor = new ToolHistoryCompactionAdvisor(eventPublisher);
         ChatClientRequest subTurnReq = ChatClientRequest.builder().prompt(new Prompt(historyAfterTools))
                 .context(Map.of(ChatMemory.CONVERSATION_ID, "task:compact-chain")).build();
@@ -1042,7 +1027,26 @@ class AiServiceTest {
 
         clearInvocations(eventPublisher);
         statefulAdvisor.adviseCall(subTurnReq, noopChain);
-        verify(eventPublisher, times(1)).publishEvent(any(ToolCompactionEvent.class));
+
+        ArgumentCaptor<ChatClientRequest> reqCaptor = ArgumentCaptor.forClass(ChatClientRequest.class);
+        verify(noopChain).nextCall(reqCaptor.capture());
+        List<ToolResponseMessage> advisedTools = reqCaptor.getValue().prompt().getInstructions().stream()
+                .filter(ToolResponseMessage.class::isInstance).map(ToolResponseMessage.class::cast).toList();
+        String firstToolData = advisedTools.get(0).getResponses().get(0).responseData();
+        assertTrue(firstToolData.startsWith("BEGIN_"));
+        assertTrue(firstToolData.endsWith("_END"));
+        assertTrue(firstToolData.contains("...[compacted "));
+
+        ArgumentCaptor<ToolCompactionEvent> eventCaptor = ArgumentCaptor.forClass(ToolCompactionEvent.class);
+        verify(eventPublisher, times(1)).publishEvent(eventCaptor.capture());
+        ToolCompactionEvent compactionEvent = eventCaptor.getValue();
+        assertEquals("task:compact-chain", compactionEvent.conversationId());
+        assertEquals(1, compactionEvent.compactedTurns());
+        assertEquals(1, compactionEvent.lockedEpochBoundary());
+        assertTrue(compactionEvent.savedTokens() >= 19_000L);
+        assertTrue(compactionEvent.savedChars() >= 79_000);
+        assertTrue(compactionEvent.formatDiagnosticMessage()
+                .contains("🗜️ Compacted 1 earlier tool response (locked epoch 1..1, saved ~"));
 
         clearInvocations(eventPublisher);
         statefulAdvisor.adviseCall(subTurnReq, noopChain);
