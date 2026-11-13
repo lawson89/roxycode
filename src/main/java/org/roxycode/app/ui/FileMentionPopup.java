@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
@@ -30,6 +31,8 @@ import javax.swing.ListSelectionModel;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.text.BadLocationException;
+import javax.swing.text.Document;
+import javax.swing.text.Segment;
 import net.miginfocom.swing.MigLayout;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -141,6 +144,9 @@ public final class FileMentionPopup {
     private volatile List<FileCandidate> cachedCandidates = List.of();
 
     private boolean popupActive = false;
+    private boolean evaluationScheduled = false;
+    private String lastEvaluatedText;
+    private int lastEvaluatedCaret = -1;
     private final UiComponents.UiGuard inputTextUpdateGuard = new UiComponents.UiGuard();
     private MentionToken activeToken;
 
@@ -191,9 +197,50 @@ public final class FileMentionPopup {
     }
 
     private void onInputChanged() {
-        if (!inputTextUpdateGuard.isActive()) {
-            Edt.run(this::evaluateCurrentInput);
+        if (!inputTextUpdateGuard.isActive() && !evaluationScheduled) {
+            evaluationScheduled = true;
+            SwingUtilities.invokeLater(() -> {
+                evaluationScheduled = false;
+                evaluateCurrentInput();
+            });
         }
+    }
+
+    static MentionToken extractMentionTokenFromDocument(Document doc, int caretOffset) {
+        if (doc == null || caretOffset < 1 || caretOffset > doc.getLength()) {
+            return null;
+        }
+        int windowStart = Math.max(0, caretOffset - 256);
+        Segment segment = new Segment();
+        try {
+            doc.getText(windowStart, caretOffset - windowStart, segment);
+        } catch (BadLocationException ex) {
+            return null;
+        }
+        for (int i = segment.count - 1; i >= 0; i--) {
+            char c = segment.array[segment.offset + i];
+            if (Character.isWhitespace(c)) {
+                return null;
+            }
+            if (c == MENTION_TRIGGER_CHAR || c == COMMAND_TRIGGER_CHAR) {
+                int docIndex = windowStart + i;
+                if (docIndex == 0 || (i > 0 && Character.isWhitespace(segment.array[segment.offset + i - 1]))) {
+                    String query = new String(segment.array, segment.offset + i + 1, segment.count - i - 1);
+                    return new MentionToken(docIndex, caretOffset, query, c);
+                }
+                if (c == MENTION_TRIGGER_CHAR) {
+                    return null;
+                }
+            }
+        }
+        if (windowStart > 0) {
+            try {
+                return extractMentionToken(doc.getText(0, doc.getLength()), caretOffset);
+            } catch (BadLocationException ex) {
+                return null;
+            }
+        }
+        return null;
     }
 
     public static MentionToken extractMentionToken(String text, int caretOffset) {
@@ -290,6 +337,13 @@ public final class FileMentionPopup {
 
     public void invalidateCache() {
         cachedCandidates = List.of();
+        clearEvaluationCache();
+    }
+
+    @SuppressWarnings("PMD.NullAssignment")
+    private void clearEvaluationCache() {
+        lastEvaluatedText = null;
+        lastEvaluatedCaret = -1;
     }
 
     private List<FileCandidate> performFileIndexing() {
@@ -323,15 +377,23 @@ public final class FileMentionPopup {
     }
 
     void evaluateCurrentInput() {
+        evaluationScheduled = false;
         if (inputTextUpdateGuard.isActive() || !inputArea.isEnabled() || !inputArea.isEditable()) {
             hidePopup();
             return;
         }
-        MentionToken token = extractMentionToken(inputArea.getText(), inputArea.getCaretPosition());
+        int caretOffset = inputArea.getCaretPosition();
+        MentionToken token = extractMentionTokenFromDocument(inputArea.getDocument(), caretOffset);
         if (token == null) {
             hidePopup();
             return;
         }
+        String currentText = inputArea.getText();
+        if (popupActive && caretOffset == lastEvaluatedCaret && Objects.equals(currentText, lastEvaluatedText)) {
+            return;
+        }
+        lastEvaluatedText = currentText;
+        lastEvaluatedCaret = caretOffset;
         this.activeToken = token;
 
         if (token.trigger() == MENTION_TRIGGER_CHAR && cachedCandidates.isEmpty() && grepService != null) {
@@ -339,6 +401,7 @@ public final class FileMentionPopup {
             if (!future.isDone()) {
                 future.thenRunAsync(() -> {
                     if (!cachedCandidates.isEmpty()) {
+                        clearEvaluationCache();
                         evaluateCurrentInput();
                     }
                 }, Edt.EXECUTOR);
@@ -354,15 +417,18 @@ public final class FileMentionPopup {
             return;
         }
 
+        boolean wasVisible = popupActive && popupMenu.isVisible();
         updateCandidateListModel(matches);
         popupActive = true;
 
         updatePopupPosition(token.startOffset());
-        SwingUtilities.invokeLater(() -> {
-            if (popupActive && activeToken != null) {
-                updatePopupPosition(activeToken.startOffset());
-            }
-        });
+        if (!wasVisible) {
+            SwingUtilities.invokeLater(() -> {
+                if (popupActive && activeToken != null) {
+                    updatePopupPosition(activeToken.startOffset());
+                }
+            });
+        }
     }
 
     private void updateCandidateListModel(List<MentionItem> matches) {
@@ -447,6 +513,7 @@ public final class FileMentionPopup {
     public void hidePopup() {
         popupActive = false;
         activeToken = null;
+        clearEvaluationCache();
         if (popupMenu.isVisible()) {
             popupMenu.setVisible(false);
         }

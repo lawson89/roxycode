@@ -845,6 +845,10 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         outputArea.appendMessage(role, content, thumbnailBase64List);
     }
 
+    void appendPreRenderedMessage(String role, String content, String renderedHtml, String extractedToml) {
+        outputArea.appendPreRenderedMessage(role, content, renderedHtml, extractedToml, List.of());
+    }
+
     void appendToolLog(String output, boolean success, String error) {
         outputArea.appendToolLog(output, success, error);
     }

@@ -82,5 +82,11 @@ class AppIconRendererTest {
 
         BufferedImage noProjImg = AppIconRenderer.renderAppIcon(32, null, AppIconRenderer.AgentStatus.IDLE, false);
         assertNotNull(noProjImg);
+
+        List<Image> cachedFirst = AppIconRenderer.renderAppIconImages("roxy-code", AppIconRenderer.AgentStatus.IDLE,
+                false);
+        List<Image> cachedSecond = AppIconRenderer.renderAppIconImages("roxy-code", AppIconRenderer.AgentStatus.IDLE,
+                false);
+        assertSame(cachedFirst, cachedSecond);
     }
 }

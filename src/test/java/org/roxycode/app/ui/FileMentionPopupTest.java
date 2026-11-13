@@ -43,6 +43,12 @@ class FileMentionPopupTest {
         assertNull(FileMentionPopup.extractMentionToken("no mention here", 15));
         assertNull(FileMentionPopup.extractMentionToken("@Chat", 0));
         assertNull(FileMentionPopup.extractMentionToken(null, 1));
+
+        JTextArea docArea = new JTextArea("Please inspect @src/main/ChatPanel.java");
+        assertEquals(new MentionToken(15, docArea.getText().length(), "src/main/ChatPanel.java", '@'),
+                FileMentionPopup.extractMentionTokenFromDocument(docArea.getDocument(), docArea.getText().length()));
+        docArea.setText("plain typing without any trigger");
+        assertNull(FileMentionPopup.extractMentionTokenFromDocument(docArea.getDocument(), docArea.getText().length()));
     }
 
     @Test

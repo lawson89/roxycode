@@ -26,6 +26,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.Action;
 import javax.swing.JFrame;
@@ -114,6 +115,10 @@ public final class MainFrame extends JPanel {
     private Timer blinkTimer;
     private boolean blinkHighlight;
     AppIconRenderer.AgentStatus currentStatus = AppIconRenderer.AgentStatus.IDLE;
+    private String lastAppliedIconProjectName;
+    private AppIconRenderer.AgentStatus lastAppliedIconStatus;
+    private boolean lastAppliedIconHighlight;
+    private boolean iconImagesApplied;
     Rectangle lastNormalBounds;
     int simulatedExtendedState = Frame.NORMAL;
 
@@ -1297,8 +1302,16 @@ public final class MainFrame extends JPanel {
             return;
         }
         String projName = getActiveProjectName();
+        if (iconImagesApplied && Objects.equals(projName, lastAppliedIconProjectName) && status == lastAppliedIconStatus
+                && highlight == lastAppliedIconHighlight) {
+            return;
+        }
         List<Image> icons = AppIconRenderer.renderAppIconImages(projName, status, highlight);
         hostFrame.setIconImages(icons);
+        lastAppliedIconProjectName = projName;
+        lastAppliedIconStatus = status;
+        lastAppliedIconHighlight = highlight;
+        iconImagesApplied = true;
     }
 
     String getActiveProjectName() {

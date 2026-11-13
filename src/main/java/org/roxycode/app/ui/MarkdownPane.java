@@ -155,7 +155,7 @@ final class MarkdownPane extends JTextPane {
         return true;
     }
 
-    private String resolveExtractedBuildToml(String role, String content) {
+    String resolveExtractedBuildToml(String role, String content) {
         if (!taskMode && ChatHtmlTemplates.ROLE_AI.equalsIgnoreCase(role)) {
             return GenericBuildToolService.extractValidBuildTomlBlock(content);
         }
@@ -168,6 +168,14 @@ final class MarkdownPane extends JTextPane {
 
     public void appendMessage(String role, String content, List<String> thumbnailBase64List) {
         String safeContent = StringUtils.defaultString(content);
+        String extractedToml = resolveExtractedBuildToml(role, safeContent);
+        appendPreRenderedMessage(role, safeContent, renderMarkdownBodySafely(safeContent), extractedToml,
+                thumbnailBase64List);
+    }
+
+    public void appendPreRenderedMessage(String role, String content, String renderedHtml, String extractedToml,
+            List<String> thumbnailBase64List) {
+        String safeContent = StringUtils.defaultString(content);
         String timestamp = LocalDateTime.now().format(TIME_FORMATTER);
         List<String> safeThumbs;
         if (thumbnailBase64List == null || thumbnailBase64List.isEmpty()) {
@@ -175,9 +183,12 @@ final class MarkdownPane extends JTextPane {
         } else {
             safeThumbs = List.copyOf(thumbnailBase64List);
         }
-        String extractedToml = resolveExtractedBuildToml(role, safeContent);
-        addAndRenderMessage(new Message(role, safeContent, timestamp, false, true, null,
-                renderMarkdownBodySafely(safeContent), true, false, extractedToml, false, safeThumbs));
+        String safeHtml = renderedHtml;
+        if (safeHtml == null) {
+            safeHtml = renderMarkdownBodySafely(safeContent);
+        }
+        addAndRenderMessage(new Message(role, safeContent, timestamp, false, true, null, safeHtml, true, false,
+                extractedToml, false, safeThumbs));
     }
 
     public void appendToolLog(String output, boolean success, String error) {
@@ -394,7 +405,7 @@ final class MarkdownPane extends JTextPane {
         return null;
     }
 
-    private static String renderMarkdownBodySafely(String content) {
+    static String renderMarkdownBodySafely(String content) {
         try {
             return SwingHtmlUtils.renderMarkdownToHtml(content);
         } catch (Exception e) {

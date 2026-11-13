@@ -2,9 +2,11 @@ package org.roxycode.app.service;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -158,9 +160,17 @@ public class ProjectService {
         return ThinkingLevel.fromString(rawThinkingLevel).getId();
     }
 
+    private record FileStamp(Instant lastModified, long size) {
+    }
+
+    private record CachedConfig<T>(Path filePath, FileStamp stamp, T config) {
+    }
+
     private final SettingsService settingsService;
     private final ApplicationEventPublisher eventPublisher;
     private volatile Path currentProjectRoot;
+    private volatile CachedConfig<ProjectConfig> cachedProjectConfig;
+    private volatile CachedConfig<ProjectContextConfig> cachedProjectContextConfig;
 
     public ProjectService(SettingsService settingsService, ApplicationEventPublisher eventPublisher) {
         this.settingsService = settingsService;
@@ -280,12 +290,31 @@ public class ProjectService {
         return Objects.requireNonNullElse(fileName, projectRoot).toString();
     }
 
+    private static FileStamp readFileStamp(Path path) {
+        try {
+            if (Files.exists(path)) {
+                return new FileStamp(Files.getLastModifiedTime(path).toInstant(), Files.size(path));
+            }
+        } catch (IOException e) {
+            log.debug("Failed to read file stamp for {}: {}", path, e.getMessage());
+        }
+        return new FileStamp(Instant.EPOCH, -1L);
+    }
+
     private ProjectConfig readProjectConfig() {
         if (!hasActiveProject()) {
             return ProjectConfig.DEFAULT;
         }
-        return PathUtils.readTomlOrDefault(resolveProjectDataPath(PROJECT_CONFIG_FILE), ProjectConfig.class,
-                ProjectConfig.DEFAULT, AiConfig.SHARED_TOML_MAPPER);
+        Path configFile = resolveProjectDataPath(PROJECT_CONFIG_FILE);
+        FileStamp stamp = readFileStamp(configFile);
+        CachedConfig<ProjectConfig> cached = this.cachedProjectConfig;
+        if (cached != null && cached.filePath().equals(configFile) && cached.stamp().equals(stamp)) {
+            return cached.config();
+        }
+        ProjectConfig loaded = PathUtils.readTomlOrDefault(configFile, ProjectConfig.class, ProjectConfig.DEFAULT,
+                AiConfig.SHARED_TOML_MAPPER);
+        this.cachedProjectConfig = new CachedConfig<>(configFile, stamp, loaded);
+        return loaded;
     }
 
     private void writeProjectConfig(ProjectConfig config) {
@@ -295,6 +324,7 @@ public class ProjectService {
         Path configFile = resolveProjectDataPath(PROJECT_CONFIG_FILE);
         try {
             PathUtils.writeToml(configFile, config, AiConfig.SHARED_TOML_MAPPER);
+            this.cachedProjectConfig = new CachedConfig<>(configFile, readFileStamp(configFile), config);
         } catch (IOException e) {
             log.error("Failed to save project config {}: {}", configFile, e.getMessage());
             throw new UncheckedIOException("Failed to save project config", e);
@@ -536,8 +566,16 @@ public class ProjectService {
         if (!hasActiveProject()) {
             return ProjectContextConfig.EMPTY;
         }
-        return PathUtils.readTomlOrDefault(resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE),
-                ProjectContextConfig.class, ProjectContextConfig.EMPTY, AiConfig.SHARED_TOML_MAPPER);
+        Path configFile = resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE);
+        FileStamp stamp = readFileStamp(configFile);
+        CachedConfig<ProjectContextConfig> cached = this.cachedProjectContextConfig;
+        if (cached != null && cached.filePath().equals(configFile) && cached.stamp().equals(stamp)) {
+            return cached.config();
+        }
+        ProjectContextConfig loaded = PathUtils.readTomlOrDefault(configFile, ProjectContextConfig.class,
+                ProjectContextConfig.EMPTY, AiConfig.SHARED_TOML_MAPPER);
+        this.cachedProjectContextConfig = new CachedConfig<>(configFile, stamp, loaded);
+        return loaded;
     }
 
     private void writeProjectContextConfig(ProjectContextConfig config) {
@@ -547,6 +585,7 @@ public class ProjectService {
         Path configFile = resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE);
         try {
             PathUtils.writeToml(configFile, config, AiConfig.SHARED_TOML_MAPPER);
+            this.cachedProjectContextConfig = new CachedConfig<>(configFile, readFileStamp(configFile), config);
             if (eventPublisher != null) {
                 eventPublisher.publishEvent(new ContextChangedEvent(false));
             }

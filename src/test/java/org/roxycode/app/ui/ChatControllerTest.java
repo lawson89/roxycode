@@ -620,6 +620,7 @@ class ChatControllerTest extends ChatTestFixture {
 
         sendOnEdt(taskPanel, "Create plan");
         flushEdt();
+        taskPanel.controller.awaitPendingPersistence();
 
         Path projectASessionFile = projectAData
                 .resolve(ChatController.resolveActiveChatFilename(ChatModel.TASK_CONVERSATION_ID));
@@ -694,6 +695,7 @@ class ChatControllerTest extends ChatTestFixture {
         // Reset session deletes the persisted session file
         restartedPanel.controller.performResetSession();
         flushEdt();
+        restartedPanel.controller.awaitPendingPersistence();
         assertFalse(Files.exists(projectASessionFile));
         assertTrue(realMemory.get("task:default").isEmpty());
     }

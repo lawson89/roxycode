@@ -177,6 +177,19 @@ class ProjectServiceTest {
         assertEquals("MAX", projectService.getProjectAgentProfile());
         assertEquals(AgentProfile.MAX, projectService.getEffectiveAgentProfile());
         assertTrue(projectService.isBuildConfirmed());
+
+        // External modification with a newer mtime invalidates the cached ProjectConfig
+        assertDoesNotThrow(() -> {
+            Files.writeString(legacyProjectConfig, """
+                    agentProfile = "SPEED"
+                    buildConfirmed = false
+                    """);
+            java.nio.file.attribute.FileTime newer = java.nio.file.attribute.FileTime
+                    .fromMillis(System.currentTimeMillis() + 2000L);
+            Files.setLastModifiedTime(legacyProjectConfig, newer);
+        });
+        assertEquals("SPEED", projectService.getProjectAgentProfile());
+        assertFalse(projectService.isBuildConfirmed());
     }
 
     @Test

@@ -12,6 +12,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import org.apache.commons.lang3.StringUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
@@ -41,6 +43,11 @@ final class AppIconRenderer {
     public static final int[] STANDARD_ICON_SIZES = new int[]{16, 32, 64, 128};
     private static final int MIN_PARTS_FOR_MONOGRAM = 2;
     private static final int MIN_CHARS_FOR_MONOGRAM = 2;
+
+    private record IconCacheKey(String monogram, Color projectColor, AgentStatus status, boolean blinkHighlight) {
+    }
+
+    private static final Map<IconCacheKey, List<Image>> ICON_CACHE = new ConcurrentHashMap<>();
 
     @Nullable
     private static final BufferedImage BASE_ROXY_IMAGE = UiComponents
@@ -106,6 +113,14 @@ final class AppIconRenderer {
     }
 
     public static List<Image> renderAppIconImages(@Nullable String projectName, AgentStatus status,
+            boolean blinkHighlight) {
+        String monogram = extractMonogram(projectName);
+        Color projectColor = resolveProjectColor(projectName);
+        IconCacheKey key = new IconCacheKey(monogram, projectColor, status, blinkHighlight);
+        return ICON_CACHE.computeIfAbsent(key, k -> buildAppIconImages(projectName, status, blinkHighlight));
+    }
+
+    private static List<Image> buildAppIconImages(@Nullable String projectName, AgentStatus status,
             boolean blinkHighlight) {
         List<Image> images = new ArrayList<>(STANDARD_ICON_SIZES.length);
         for (int size : STANDARD_ICON_SIZES) {

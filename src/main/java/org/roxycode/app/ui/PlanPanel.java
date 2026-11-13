@@ -2,7 +2,9 @@ package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.BorderLayout;
+import java.awt.event.HierarchyEvent;
 import java.util.List;
+import java.util.Objects;
 import javax.swing.JButton;
 import javax.swing.JEditorPane;
 import javax.swing.JLabel;
@@ -39,6 +41,9 @@ final class PlanPanel extends JPanel {
     private Timer copyFeedbackTimer;
     String lastCopiedCommitMessage;
     String lastCopiedMarkdown;
+    private transient ImplementationPlan lastRenderedPlan;
+    private boolean displayInitialized;
+    private boolean htmlDirty = true;
 
     public PlanPanel(PlanService planManagerService) {
         this.planManagerService = planManagerService;
@@ -68,6 +73,12 @@ final class PlanPanel extends JPanel {
 
         displayArea = SwingHtmlUtils.createHtmlEditorPane();
         add(UiComponents.createHtmlScrollPane(displayArea), BorderLayout.CENTER);
+
+        addHierarchyListener(e -> {
+            if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0 && isShowing() && htmlDirty) {
+                applyDisplayOnEdt(planManagerService.getCurrentPlan());
+            }
+        });
 
         updateTheme();
         refresh();
@@ -119,6 +130,7 @@ final class PlanPanel extends JPanel {
         super.updateUI();
         if (displayArea != null) {
             updateTheme();
+            htmlDirty = true;
             if (planManagerService != null) {
                 applyDisplayOnEdt(planManagerService.getCurrentPlan());
             }
@@ -158,8 +170,18 @@ final class PlanPanel extends JPanel {
             }
             planStepsLabel.setText(plan.completedStepCount() + " / " + total + " steps completed");
         }
+        if (displayInitialized && Objects.equals(plan, lastRenderedPlan) && !htmlDirty) {
+            return;
+        }
+        lastRenderedPlan = plan;
+        if (displayInitialized && getParent() != null && !isShowing()) {
+            htmlDirty = true;
+            return;
+        }
         displayArea.setText(buildPlanHtml(plan));
         displayArea.setCaretPosition(0);
+        displayInitialized = true;
+        htmlDirty = false;
     }
 
     static String buildPlanHtml(ImplementationPlan plan) {

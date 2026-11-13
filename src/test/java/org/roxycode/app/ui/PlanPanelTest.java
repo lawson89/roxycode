@@ -70,5 +70,17 @@ class PlanPanelTest {
 
         panel.onProjectChanged(new ProjectChangedEvent(Path.of("/tmp/other")));
         SwingTestUtils.flushEdt();
+
+        // Hidden mounted PlanPanel updates toolbar labels immediately and defers HTML until refresh()
+        javax.swing.JPanel hiddenParent = new javax.swing.JPanel();
+        hiddenParent.add(panel);
+        ImplementationPlan updatedPlan = new ImplementationPlan("Deferred Plan", "Goal", List.of(),
+                List.of(new ImplementationPlan.TechStep("Deferred step", true)), true, "2026-04-06T12:00:00", "user",
+                null, null, List.of());
+        when(planService.getCurrentPlan()).thenReturn(updatedPlan);
+        panel.onPlanUpdated(new PlanUpdatedEvent(updatedPlan));
+        SwingTestUtils.flushEdt();
+        assertEquals("Deferred Plan", panel.planTitleLabel.getText());
+        assertEquals("1 / 1 steps completed", panel.planStepsLabel.getText());
     }
 }

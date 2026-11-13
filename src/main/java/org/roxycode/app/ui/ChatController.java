@@ -13,6 +13,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
+import javax.swing.SwingUtilities;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GitService;
@@ -104,6 +106,8 @@ final class ChatController implements AutoCloseable {
     private volatile Future<?> activeTurnFuture;
     private volatile CompletableFuture<Object> pendingUserInputFuture;
     private volatile WorkflowTransitionEvent deferredTransitionEvent;
+    private final Object persistLock = new Object();
+    private CompletableFuture<Void> lastPersistFuture = CompletableFuture.completedFuture(null);
 
     public ChatController(ChatModel model, ChatPanel view, AiService aiService, PlanService planService,
             ApplicationEventPublisher eventPublisher, ChatMemory chatMemory, SettingsService settingsService,
@@ -475,7 +479,13 @@ final class ChatController implements AutoCloseable {
             if (chatMemory != null) {
                 chatMemory.clear(model.getConversationId());
             }
-            PathUtils.deleteIfExistsQuietly(resolveActiveChatSessionPath());
+            Path sessionPath = resolveActiveChatSessionPath();
+            if (sessionPath != null) {
+                CompletableFuture<Void> deleteFuture = enqueueSessionDiskOperation(sessionPath, null, true);
+                if (!SwingUtilities.isEventDispatchThread()) {
+                    deleteFuture.join();
+                }
+            }
         }
         Edt.run(() -> {
             view.clearAttachments();
@@ -500,6 +510,13 @@ final class ChatController implements AutoCloseable {
         if (text == null || text.trim().isEmpty()) {
             return;
         }
+        triggerTurn(() -> text, pendingImages);
+    }
+
+    private void triggerTurn(Supplier<String> promptSupplier, List<java.awt.image.BufferedImage> pendingImages) {
+        if (promptSupplier == null) {
+            return;
+        }
 
         cancelActiveTurnState(false);
         long turnId = turnSequence.incrementAndGet();
@@ -512,14 +529,21 @@ final class ChatController implements AutoCloseable {
 
         FutureTask<Void> task = new FutureTask<>(() -> {
             try {
+                String promptText = promptSupplier.get();
+                if (promptText == null || promptText.trim().isEmpty()) {
+                    Edt.run(() -> finishTurnCancelled(turnId));
+                    return;
+                }
                 List<byte[]> imageBytes = ChatModel.encodeImagesToPngBytes(pendingImages);
                 WorkflowPhase activePhase = model.resolveActivePhase(planService.getCurrentPhase());
-                String response = aiService.chat(model.getConversationId(), activePhase, text, imageBytes);
+                String response = aiService.chat(model.getConversationId(), activePhase, promptText, imageBytes);
                 if (Thread.currentThread().isInterrupted() || model.isTurnCancelled()) {
                     Edt.run(() -> finishTurnCancelled(turnId));
                     return;
                 }
-                Edt.run(() -> finishTurn(turnId, ROLE_AI, response));
+                String renderedHtml = MarkdownPane.renderMarkdownBodySafely(response);
+                String extractedToml = view.outputArea.resolveExtractedBuildToml(ROLE_AI, response);
+                Edt.run(() -> finishTurn(turnId, ROLE_AI, response, renderedHtml, extractedToml));
             } catch (Exception ex) {
                 if (ExceptionUtils.isCancellation(ex) || model.isTurnCancelled()) {
                     Edt.run(() -> finishTurnCancelled(turnId));
@@ -527,14 +551,15 @@ final class ChatController implements AutoCloseable {
                 }
                 log.error("AI chat interaction failed: {}", ex.getMessage(), ex);
                 String errorMsg = "Error: " + ExceptionUtils.getRootCauseMessage(ex);
-                Edt.run(() -> finishTurn(turnId, ROLE_AI, errorMsg));
+                String renderedHtml = MarkdownPane.renderMarkdownBodySafely(errorMsg);
+                Edt.run(() -> finishTurn(turnId, ROLE_AI, errorMsg, renderedHtml, null));
             }
         }, null);
         activeTurnFuture = task;
         turnExecutor.execute(task);
     }
 
-    private void finishTurn(long turnId, String role, String message) {
+    private void finishTurn(long turnId, String role, String message, String renderedHtml, String extractedToml) {
         if (activeTurnId != turnId || model.isTurnCancelled()) {
             return;
         }
@@ -544,7 +569,7 @@ final class ChatController implements AutoCloseable {
         WorkflowTransitionEvent transition = deferredTransitionEvent;
         deferredTransitionEvent = null;
 
-        view.appendMessage(role, message);
+        view.appendPreRenderedMessage(role, message, renderedHtml, extractedToml);
         persistActiveChatSession();
         view.setLoading(false);
         if (transition != null && !model.isTurnCancelled()) {
@@ -632,7 +657,7 @@ final class ChatController implements AutoCloseable {
                 view.appendMessage(ROLE_SYSTEM, "Task complete. What is the next feature you would like to work on?");
                 persistActiveChatSession();
             } else {
-                triggerTurn(buildAutonomousTransitionPrompt(event, gitService));
+                triggerTurn(() -> buildAutonomousTransitionPrompt(event, gitService), List.of());
             }
         } else if (event.from() == WorkflowPhase.PLAN && event.to() == WorkflowPhase.CODE
                 && view.isAutoApprovePlanEnabled()) {
@@ -789,13 +814,46 @@ final class ChatController implements AutoCloseable {
         }
         List<PersistedChatEntry> uiEntries = view.exportMessages();
         List<PersistedMemoryMessage> memoryMessages = exportChatMemoryMessages();
-        if (uiEntries.isEmpty() && memoryMessages.isEmpty() && model.getLastPromptTokens() <= 0) {
+        long promptTokens = model.getLastPromptTokens();
+        long cachedTokens = model.getLastCachedInputTokens();
+        int contextWindowTokens = model.getLastContextWindowTokens();
+        boolean deleteOnly = uiEntries.isEmpty() && memoryMessages.isEmpty() && promptTokens <= 0;
+        ActiveChatSessionState state;
+        if (deleteOnly) {
+            state = null;
+        } else {
+            state = new ActiveChatSessionState(uiEntries, memoryMessages, promptTokens, cachedTokens,
+                    contextWindowTokens);
+        }
+        CompletableFuture<Void> saveFuture = enqueueSessionDiskOperation(path, state, deleteOnly);
+        if (!SwingUtilities.isEventDispatchThread()) {
+            saveFuture.join();
+        }
+    }
+
+    private CompletableFuture<Void> enqueueSessionDiskOperation(Path path, ActiveChatSessionState state,
+            boolean deleteOnly) {
+        synchronized (persistLock) {
+            lastPersistFuture = lastPersistFuture.thenRunAsync(() -> writeSessionStateToDisk(path, state, deleteOnly),
+                    Edt.VIRTUAL_EXECUTOR);
+            return lastPersistFuture;
+        }
+    }
+
+    void awaitPendingPersistence() {
+        CompletableFuture<Void> future;
+        synchronized (persistLock) {
+            future = lastPersistFuture;
+        }
+        future.join();
+    }
+
+    private static void writeSessionStateToDisk(Path path, ActiveChatSessionState state, boolean deleteOnly) {
+        if (deleteOnly) {
             PathUtils.deleteIfExistsQuietly(path);
             return;
         }
         try {
-            ActiveChatSessionState state = new ActiveChatSessionState(uiEntries, memoryMessages,
-                    model.getLastPromptTokens(), model.getLastCachedInputTokens(), model.getLastContextWindowTokens());
             PathUtils.writeJson(path, state);
         } catch (Exception e) {
             log.warn("Failed to persist active chat session state", e);
@@ -921,9 +979,10 @@ final class ChatController implements AutoCloseable {
         if (event == null || !isMatchingActiveTurnEvent(event.conversationId())) {
             return;
         }
+        String highlightedHtml = JexlToHtmlConverter.convert(event.script());
         Edt.run(() -> {
             if (!model.isTurnCancelled()) {
-                view.appendToolLog(JexlToHtmlConverter.convert(event.script()), event.success(), event.error());
+                view.appendToolLog(highlightedHtml, event.success(), event.error());
                 persistActiveChatSession();
             }
         });
