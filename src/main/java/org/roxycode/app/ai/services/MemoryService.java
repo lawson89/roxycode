@@ -51,6 +51,7 @@ public class MemoryService {
     private static final String SCOPE_GLOBAL = "global";
     private static final String SCOPE_PROJECT = "project";
     private static final String TYPE_TOPIC = "topic";
+    private static final String TYPE_PLAN = "plan";
     private static final String KEY_TITLE = "title";
     private static final String KEY_TAGS = "tags";
     private static final String KEY_UPDATED_AT = "updatedAt";
@@ -59,6 +60,7 @@ public class MemoryService {
     private static final String GLOBAL_DIR_UNAVAILABLE = "Global memory directory is unavailable";
     private static final String MD_EXTENSION = ".md";
     private static final String TOPIC_HEADING_PREFIX = "# Topic: ";
+    private static final String PLAN_HEADING_PREFIX = "# Implementation Plan: ";
 
     public record NoteDetail(String slug, String title, String tags, String updated, String body, String rawMarkdown) {
     }
@@ -269,18 +271,18 @@ public class MemoryService {
         return readFileIfExists(target);
     }
 
-    private Path resolveArchivedTopicPath(String filename) {
+    private Path resolveArchivedFilePath(String subdir, String filename, String label) {
         if (projectService == null || !projectService.hasActiveProject()) {
             return null;
         }
-        Path archiveDir = resolveProjectSubdir(ARCHIVE_TOPICS_SUBDIR);
+        Path archiveDir = resolveProjectSubdir(subdir);
         if (archiveDir == null) {
             return null;
         }
         String cleanName = sanitizeArchiveFilename(filename);
         Path target = archiveDir.resolve(cleanName).toAbsolutePath().normalize();
         if (!target.startsWith(archiveDir)) {
-            throw new IllegalArgumentException("Invalid archived topic filename: " + filename);
+            throw new IllegalArgumentException("Invalid archived " + label + " filename: " + filename);
         }
         return target;
     }
@@ -296,45 +298,23 @@ public class MemoryService {
      * @return the {@link EditorResult} containing the cleaned title on success or an error hint on failure
      */
     public EditorResult renameArchivedTopic(String filename, String newTitle) {
-        if (projectService == null || !projectService.hasActiveProject()) {
-            return new EditorResult(false, "", NO_ACTIVE_PROJECT);
-        }
-        String cleanedTitle = cleanTopicTitle(newTitle);
-        if (cleanedTitle.isEmpty()) {
-            return new EditorResult(false, "", "Topic title must not be blank.");
-        }
-        try {
-            Path target = resolveArchivedTopicPath(filename);
-            if (target == null || !Files.isRegularFile(target)) {
-                return new EditorResult(false, "", "Archived topic not found: " + filename);
-            }
-            String rawMarkdown = Files.readString(target, StandardCharsets.UTF_8);
-            Map<String, String> existingFm = FrontmatterUtils.parseFrontmatter(rawMarkdown);
-            Map<String, Object> updatedFm = new LinkedHashMap<>(existingFm);
-            updatedFm.put(KEY_TITLE, cleanedTitle);
+        return renameArchivedEntry(ARCHIVE_TOPICS_SUBDIR, filename, newTitle, TOPIC_HEADING_PREFIX, "Topic", TYPE_TOPIC,
+                ArchiveUpdatedEvent.TYPE_TOPIC);
+    }
 
-            String body = FrontmatterUtils.stripFrontmatter(rawMarkdown).stripLeading();
-            String updatedBody;
-            if (body.startsWith(TOPIC_HEADING_PREFIX.trim())) {
-                int newlineIdx = body.indexOf(LF);
-                if (newlineIdx >= 0) {
-                    updatedBody = TOPIC_HEADING_PREFIX + cleanedTitle + body.substring(newlineIdx);
-                } else {
-                    updatedBody = TOPIC_HEADING_PREFIX + cleanedTitle + NL;
-                }
-            } else {
-                updatedBody = TOPIC_HEADING_PREFIX + cleanedTitle + NL + NL + body;
-            }
-            String updatedMarkdown = FrontmatterUtils.formatFrontmatter(updatedFm) + updatedBody;
-            Files.writeString(target, updatedMarkdown, StandardCharsets.UTF_8);
-            if (eventPublisher != null) {
-                eventPublisher.publishEvent(
-                        new ArchiveUpdatedEvent(ArchiveUpdatedEvent.TYPE_TOPIC, target.getFileName().toString()));
-            }
-            return new EditorResult(true, cleanedTitle, "");
-        } catch (IllegalArgumentException | IOException e) {
-            return new EditorResult(false, "", "Failed to rename topic: " + e.getMessage());
-        }
+    /**
+     * Renames an archived implementation plan by updating its frontmatter {@code title} and leading
+     * {@code # Implementation Plan:} heading on disk, then publishes an {@link ArchiveUpdatedEvent}.
+     *
+     * @param filename
+     *            the archived plan filename
+     * @param newTitle
+     *            the new plan title
+     * @return the {@link EditorResult} containing the cleaned title on success or an error hint on failure
+     */
+    public EditorResult renameArchivedPlan(String filename, String newTitle) {
+        return renameArchivedEntry(ARCHIVE_PLANS_SUBDIR, filename, newTitle, PLAN_HEADING_PREFIX, "Plan", TYPE_PLAN,
+                ArchiveUpdatedEvent.TYPE_PLAN);
     }
 
     /**
@@ -345,22 +325,79 @@ public class MemoryService {
      * @return the {@link EditorResult} containing the deleted filename on success or an error hint on failure
      */
     public EditorResult deleteArchivedTopic(String filename) {
+        return deleteArchivedEntry(ARCHIVE_TOPICS_SUBDIR, filename, TYPE_TOPIC, ArchiveUpdatedEvent.TYPE_TOPIC);
+    }
+
+    /**
+     * Deletes an archived implementation plan Markdown file from disk and publishes an {@link ArchiveUpdatedEvent}.
+     *
+     * @param filename
+     *            the archived plan filename
+     * @return the {@link EditorResult} containing the deleted filename on success or an error hint on failure
+     */
+    public EditorResult deleteArchivedPlan(String filename) {
+        return deleteArchivedEntry(ARCHIVE_PLANS_SUBDIR, filename, TYPE_PLAN, ArchiveUpdatedEvent.TYPE_PLAN);
+    }
+
+    private EditorResult renameArchivedEntry(String subdir, String filename, String newTitle, String headingPrefix,
+            String capitalizedLabel, String label, String eventType) {
+        if (projectService == null || !projectService.hasActiveProject()) {
+            return new EditorResult(false, "", NO_ACTIVE_PROJECT);
+        }
+        String cleanedTitle = cleanTopicTitle(newTitle);
+        if (cleanedTitle.isEmpty()) {
+            return new EditorResult(false, "", capitalizedLabel + " title must not be blank.");
+        }
+        try {
+            Path target = resolveArchivedFilePath(subdir, filename, label);
+            if (target == null || !Files.isRegularFile(target)) {
+                return new EditorResult(false, "", "Archived " + label + " not found: " + filename);
+            }
+            String rawMarkdown = Files.readString(target, StandardCharsets.UTF_8);
+            Map<String, String> existingFm = FrontmatterUtils.parseFrontmatter(rawMarkdown);
+            Map<String, Object> updatedFm = new LinkedHashMap<>(existingFm);
+            updatedFm.put(KEY_TITLE, cleanedTitle);
+
+            String body = FrontmatterUtils.stripFrontmatter(rawMarkdown).stripLeading();
+            String updatedBody;
+            if (body.startsWith(headingPrefix.trim())) {
+                int newlineIdx = body.indexOf(LF);
+                if (newlineIdx >= 0) {
+                    updatedBody = headingPrefix + cleanedTitle + body.substring(newlineIdx);
+                } else {
+                    updatedBody = headingPrefix + cleanedTitle + NL;
+                }
+            } else {
+                updatedBody = headingPrefix + cleanedTitle + NL + NL + body;
+            }
+            String updatedMarkdown = FrontmatterUtils.formatFrontmatter(updatedFm) + updatedBody;
+            Files.writeString(target, updatedMarkdown, StandardCharsets.UTF_8);
+            if (eventPublisher != null) {
+                eventPublisher.publishEvent(new ArchiveUpdatedEvent(eventType, target.getFileName().toString()));
+            }
+            return new EditorResult(true, cleanedTitle, "");
+        } catch (IllegalArgumentException | IOException e) {
+            return new EditorResult(false, "", "Failed to rename " + label + ": " + e.getMessage());
+        }
+    }
+
+    private EditorResult deleteArchivedEntry(String subdir, String filename, String label, String eventType) {
         if (projectService == null || !projectService.hasActiveProject()) {
             return new EditorResult(false, "", NO_ACTIVE_PROJECT);
         }
         try {
-            Path target = resolveArchivedTopicPath(filename);
+            Path target = resolveArchivedFilePath(subdir, filename, label);
             if (target == null || !Files.isRegularFile(target)) {
-                return new EditorResult(false, "", "Archived topic not found: " + filename);
+                return new EditorResult(false, "", "Archived " + label + " not found: " + filename);
             }
             String deletedName = target.getFileName().toString();
             Files.deleteIfExists(target);
             if (eventPublisher != null) {
-                eventPublisher.publishEvent(new ArchiveUpdatedEvent(ArchiveUpdatedEvent.TYPE_TOPIC, deletedName));
+                eventPublisher.publishEvent(new ArchiveUpdatedEvent(eventType, deletedName));
             }
             return new EditorResult(true, deletedName, "");
         } catch (IllegalArgumentException | IOException e) {
-            return new EditorResult(false, "", "Failed to delete topic: " + e.getMessage());
+            return new EditorResult(false, "", "Failed to delete " + label + ": " + e.getMessage());
         }
     }
 

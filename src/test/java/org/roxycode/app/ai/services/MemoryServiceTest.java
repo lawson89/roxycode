@@ -211,4 +211,42 @@ class MemoryServiceTest {
         EditorResult missingErr = topicMemoryService.deleteArchivedTopic(filename);
         assertFalse(missingErr.success());
     }
+
+    @Test
+    void testRenameAndDeleteArchivedPlan() throws Exception {
+        List<org.roxycode.app.events.ArchiveUpdatedEvent> archiveEvents = new ArrayList<>();
+        MemoryService planMemoryService = new MemoryService(settingsService, projectService, event -> {
+            if (event instanceof org.roxycode.app.events.ArchiveUpdatedEvent archiveEvent) {
+                archiveEvents.add(archiveEvent);
+            }
+        });
+        Path plansDir = Files.createDirectories(projectDataDir.resolve("archive/plans"));
+        String filename = "20261113-120000-sample-plan.md";
+        String initialMd = "---\nid: '20261113-120000-sample-plan'\ntype: plan\ntitle: 'Original Plan'\n---\n\n"
+                + "# Implementation Plan: Original Plan\n\n## Goal\nShip it.\n";
+        Files.writeString(plansDir.resolve(filename), initialMd, StandardCharsets.UTF_8);
+
+        EditorResult blankErr = planMemoryService.renameArchivedPlan(filename, "   ");
+        assertFalse(blankErr.success());
+
+        EditorResult renameRes = planMemoryService.renameArchivedPlan(filename, "  **Updated Plan Name**  ");
+        assertTrue(renameRes.success());
+        assertEquals("Updated Plan Name", renameRes.content());
+        assertEquals(1, archiveEvents.size());
+        assertEquals(new org.roxycode.app.events.ArchiveUpdatedEvent(
+                org.roxycode.app.events.ArchiveUpdatedEvent.TYPE_PLAN, filename), archiveEvents.get(0));
+        String updatedMd = planMemoryService.readArchivedPlan(filename);
+        assertContainsAll(updatedMd, "title: \"Updated Plan Name\"", "# Implementation Plan: Updated Plan Name",
+                "Ship it.");
+        EditorResult deleteRes = planMemoryService.deleteArchivedPlan(filename);
+        assertTrue(deleteRes.success());
+        assertEquals(filename, deleteRes.content());
+        assertEquals("", planMemoryService.readArchivedPlan(filename));
+        assertEquals(2, archiveEvents.size());
+        assertEquals(new org.roxycode.app.events.ArchiveUpdatedEvent(
+                org.roxycode.app.events.ArchiveUpdatedEvent.TYPE_PLAN, filename), archiveEvents.get(1));
+
+        EditorResult missingErr = planMemoryService.deleteArchivedPlan(filename);
+        assertFalse(missingErr.success());
+    }
 }

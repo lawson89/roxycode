@@ -161,13 +161,11 @@ final class ArchiveBrowserPanel extends JPanel {
         actionRight.setOpaque(false);
         renameButton = UiComponents.createActionButton("Rename", Codicons.EDIT, null, false, null, e -> startRename());
         deleteButton = UiComponents.createActionButton("Delete", Codicons.TRASH, null, false,
-                UiComponents.SUBTLE_RED_BUTTON_STYLE, e -> promptDeleteTopic());
+                UiComponents.SUBTLE_RED_BUTTON_STYLE, e -> promptDeleteEntry());
         renameButton.setEnabled(false);
         deleteButton.setEnabled(false);
-        if (mode == ArchiveMode.TOPICS) {
-            actionRight.add(renameButton);
-            actionRight.add(deleteButton);
-        }
+        actionRight.add(renameButton);
+        actionRight.add(deleteButton);
         copyMarkdownButton = UiComponents.createCopyButton(COPY_BUTTON_TEXT, false, this::copyCurrentMarkdown);
         actionRight.add(copyMarkdownButton);
         detailToolbar.add(actionRight, BorderLayout.EAST);
@@ -305,9 +303,8 @@ final class ArchiveBrowserPanel extends JPanel {
             return done;
         }
 
-        boolean isTopicsMode = mode == ArchiveMode.TOPICS;
-        renameButton.setEnabled(isTopicsMode);
-        deleteButton.setEnabled(isTopicsMode);
+        renameButton.setEnabled(true);
+        deleteButton.setEnabled(true);
         detailSummaryLabel.setText(entry.title());
         CompletableFuture<String> future = Edt.supplyAsync(() -> readEntryMarkdown(entry.filename()),
                 normalized -> applyDetailContent(entry, normalized), e -> {
@@ -418,7 +415,7 @@ final class ArchiveBrowserPanel extends JPanel {
     }
 
     void startRename() {
-        if (mode != ArchiveMode.TOPICS || currentSelectedEntry == null) {
+        if (currentSelectedEntry == null) {
             return;
         }
         deleteConfirmBar.cancel();
@@ -439,13 +436,19 @@ final class ArchiveBrowserPanel extends JPanel {
     }
 
     CompletableFuture<EditorResult> saveRename() {
-        if (mode != ArchiveMode.TOPICS || currentSelectedEntry == null || memoryService == null) {
-            return CompletableFuture.completedFuture(new EditorResult(false, "", "No topic selected"));
+        if (currentSelectedEntry == null || memoryService == null) {
+            return CompletableFuture
+                    .completedFuture(new EditorResult(false, "", "No " + mode.singularNoun + " selected"));
         }
         String filename = currentSelectedEntry.filename();
         String newTitle = renameField.getText();
         saveRenameButton.setEnabled(false);
-        return Edt.supplyAsync(() -> memoryService.renameArchivedTopic(filename, newTitle), result -> {
+        return Edt.supplyAsync(() -> {
+            if (mode == ArchiveMode.PLANS) {
+                return memoryService.renameArchivedPlan(filename, newTitle);
+            }
+            return memoryService.renameArchivedTopic(filename, newTitle);
+        }, result -> {
             saveRenameButton.setEnabled(true);
             if (result != null && result.success()) {
                 cancelRename();
@@ -453,30 +456,35 @@ final class ArchiveBrowserPanel extends JPanel {
             }
         }, ex -> {
             saveRenameButton.setEnabled(true);
-            log.warn("Failed to rename archived topic {}: {}", filename, ex.getMessage());
+            log.warn("Failed to rename archived {} {}: {}", mode.singularNoun, filename, ex.getMessage());
         });
     }
 
-    void promptDeleteTopic() {
-        if (mode != ArchiveMode.TOPICS || currentSelectedEntry == null) {
+    void promptDeleteEntry() {
+        if (currentSelectedEntry == null) {
             return;
         }
         cancelRename();
         String filename = currentSelectedEntry.filename();
         String title = StringUtils.defaultIfBlank(currentSelectedEntry.title(), filename);
-        deleteConfirmBar.prompt("Delete topic '" + title + "'?", "Confirm Delete", true,
-                () -> performDeleteTopic(filename));
+        deleteConfirmBar.prompt("Delete " + mode.singularNoun + " '" + title + "'?", "Confirm Delete", true,
+                () -> performDeleteEntry(filename));
     }
 
-    CompletableFuture<EditorResult> performDeleteTopic(String filename) {
+    CompletableFuture<EditorResult> performDeleteEntry(String filename) {
         if (memoryService == null || StringUtils.isBlank(filename)) {
-            return CompletableFuture.completedFuture(new EditorResult(false, "", "Invalid topic"));
+            return CompletableFuture.completedFuture(new EditorResult(false, "", "Invalid " + mode.singularNoun));
         }
-        return Edt.supplyAsync(() -> memoryService.deleteArchivedTopic(filename), result -> {
+        return Edt.supplyAsync(() -> {
+            if (mode == ArchiveMode.PLANS) {
+                return memoryService.deleteArchivedPlan(filename);
+            }
+            return memoryService.deleteArchivedTopic(filename);
+        }, result -> {
             if (result != null && result.success()) {
                 refresh();
             }
-        }, ex -> log.warn("Failed to delete archived topic {}: {}", filename, ex.getMessage()));
+        }, ex -> log.warn("Failed to delete archived {} {}: {}", mode.singularNoun, filename, ex.getMessage()));
     }
 
     private String formatCountText(int count) {

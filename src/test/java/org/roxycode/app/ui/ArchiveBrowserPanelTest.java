@@ -69,11 +69,13 @@ class ArchiveBrowserPanelTest {
         assertContainsAll(detailHtml, "<span class='mtk-keyword'>public</span>", "<span class='mtk-number'>1</span>");
         assertFalse(detailHtml.contains("<span class=<span"));
 
-        // Verify Rename and Delete controls in TOPICS mode
+        // Verify Rename and Delete controls in both TOPICS and PLANS modes
         assertTrue(panel.renameButton.isVisible());
         assertTrue(panel.deleteButton.isVisible());
-        assertNull(plansPanel.renameButton.getParent());
-        assertNull(plansPanel.deleteButton.getParent());
+        assertNotNull(plansPanel.renameButton.getParent());
+        assertNotNull(plansPanel.deleteButton.getParent());
+        assertTrue(plansPanel.renameButton.isEnabled());
+        assertTrue(plansPanel.deleteButton.isEnabled());
 
         // Select topic1 in unfiltered list
         panel.searchField.setText("");
@@ -95,9 +97,31 @@ class ArchiveBrowserPanelTest {
 
         when(memoryService.deleteArchivedTopic("20250514-153000-first.md"))
                 .thenReturn(new EditorResult(true, "20250514-153000-first.md", ""));
-        SwingTestUtils.runOnEdt(panel::promptDeleteTopic);
+        SwingTestUtils.runOnEdt(panel::promptDeleteEntry);
         assertTrue(panel.deleteConfirmBar.isPromptVisible());
-        SwingTestUtils.awaitFuture(panel.performDeleteTopic("20250514-153000-first.md"));
+        assertTrue(panel.deleteConfirmBar.getMessage().contains("Delete topic"));
+        SwingTestUtils.awaitFuture(panel.performDeleteEntry("20250514-153000-first.md"));
         verify(memoryService).deleteArchivedTopic("20250514-153000-first.md");
+
+        // Verify Rename and Delete in PLANS mode
+        when(memoryService.renameArchivedPlan("20250514-120000-plan.md", "Renamed Plan"))
+                .thenReturn(new EditorResult(true, "Renamed Plan", ""));
+        SwingTestUtils.runOnEdt(() -> {
+            plansPanel.startRename();
+            assertTrue(plansPanel.renamePanel.isVisible());
+            assertEquals("Feature Plan Alpha", plansPanel.renameField.getText());
+            plansPanel.renameField.setText("Renamed Plan");
+        });
+        SwingTestUtils.awaitFuture(plansPanel.saveRename());
+        verify(memoryService).renameArchivedPlan("20250514-120000-plan.md", "Renamed Plan");
+        assertFalse(plansPanel.renamePanel.isVisible());
+
+        when(memoryService.deleteArchivedPlan("20250514-120000-plan.md"))
+                .thenReturn(new EditorResult(true, "20250514-120000-plan.md", ""));
+        SwingTestUtils.runOnEdt(plansPanel::promptDeleteEntry);
+        assertTrue(plansPanel.deleteConfirmBar.isPromptVisible());
+        assertTrue(plansPanel.deleteConfirmBar.getMessage().contains("Delete plan"));
+        SwingTestUtils.awaitFuture(plansPanel.performDeleteEntry("20250514-120000-plan.md"));
+        verify(memoryService).deleteArchivedPlan("20250514-120000-plan.md");
     }
 }
