@@ -452,11 +452,15 @@ final class ArchiveBrowserPanel extends JPanel {
             saveRenameButton.setEnabled(true);
             if (result != null && result.success()) {
                 cancelRename();
-                refresh();
             }
         }, ex -> {
             saveRenameButton.setEnabled(true);
             log.warn("Failed to rename archived {} {}: {}", mode.singularNoun, filename, ex.getMessage());
+        }).thenCompose(result -> {
+            if (result != null && result.success()) {
+                return refresh().thenApply(v -> result);
+            }
+            return CompletableFuture.completedFuture(result);
         });
     }
 
@@ -481,10 +485,14 @@ final class ArchiveBrowserPanel extends JPanel {
             }
             return memoryService.deleteArchivedTopic(filename);
         }, result -> {
-            if (result != null && result.success()) {
-                refresh();
-            }
-        }, ex -> log.warn("Failed to delete archived {} {}: {}", mode.singularNoun, filename, ex.getMessage()));
+            // Post-delete refresh is chained via thenCompose below.
+        }, ex -> log.warn("Failed to delete archived {} {}: {}", mode.singularNoun, filename, ex.getMessage()))
+                .thenCompose(result -> {
+                    if (result != null && result.success()) {
+                        return refresh().thenApply(v -> result);
+                    }
+                    return CompletableFuture.completedFuture(result);
+                });
     }
 
     private String formatCountText(int count) {
