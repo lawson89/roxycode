@@ -72,7 +72,6 @@ final class TaskWorkspacePanel extends JPanel {
         topBar = new JPanel(new MigLayout("insets 0 16 0 16, gapx 0, fillx", "[left]12:push[][]", LAYOUT_CENTER));
         topBar.setOpaque(false);
 
-        planLabel.setIconTextGap(6);
         planLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         planLabel.addMouseListener(new MouseAdapter() {
             @Override
@@ -167,12 +166,9 @@ final class TaskWorkspacePanel extends JPanel {
     }
 
     void applyPlanBadgeStyling() {
-        Color accent = SwingHtmlUtils.getAccentColor();
-        Color tintedBg = SwingHtmlUtils.getTintedBackground(accent, 0.10);
-        planLabel.setIcon(FontIcon.of(Codicons.PROJECT, 14, accent));
-        planLabel.setForeground(accent);
-        planLabel.putClientProperty(FlatClientProperties.STYLE,
-                "font: bold -2; background: " + SwingHtmlUtils.toHex(tintedBg) + "; arc: 10; border: 3,8,3,8");
+        planLabel.setIcon(null);
+        planLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
+        planLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
         UiComponents.updateSelectedTabIcons(taskTabs,
                 List.of(Codicons.COMMENT_DISCUSSION, Codicons.LIST_ORDERED, Codicons.HISTORY));
     }
