@@ -15,7 +15,8 @@ class PlanPanelTest {
 
     @Test
     void testBuildPlanHtmlCopyMarkdownAndRefreshOnEvents() {
-        assertTrue(PlanPanel.buildPlanHtml(null).contains("No implementation plan submitted yet."));
+        assertContainsAll(PlanPanel.buildPlanHtml(null), "No implementation plan submitted yet.", "welcome-card",
+                "1. Plan", "2. Code", "3. Review");
 
         ImplementationPlan plan = new ImplementationPlan("Test Plan", "Test Goal", List.of("Requirement 1"),
                 List.of(new ImplementationPlan.TechStep("Step 0 with wrapping HTML (<html>...</html>)", false),
@@ -33,12 +34,16 @@ class PlanPanelTest {
         PlanPanel panel = new PlanPanel(planService);
         SwingTestUtils.flushEdt();
         assertNotNull(panel.toolbar.getBorder());
+        assertEquals("Implementation Plan", panel.planTitleLabel.getText());
+        assertEquals("No plan submitted yet", panel.planStepsLabel.getText());
         assertFalse(panel.copyMarkdownButton.isEnabled());
 
         when(planService.getCurrentPlan()).thenReturn(plan);
         panel.onPlanUpdated(new PlanUpdatedEvent(plan));
         SwingTestUtils.flushEdt();
 
+        assertEquals("Test Plan", panel.planTitleLabel.getText());
+        assertEquals("1 / 2 steps completed", panel.planStepsLabel.getText());
         assertTrue(panel.copyMarkdownButton.isEnabled());
         assertContainsAll(panel.displayArea.getText(), "MODIFIED src/Main.java");
         String renderedDocText = assertDoesNotThrow(

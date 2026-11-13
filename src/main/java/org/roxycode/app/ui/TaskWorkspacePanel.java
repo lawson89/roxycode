@@ -102,6 +102,10 @@ final class TaskWorkspacePanel extends JPanel {
         taskTabs.addTab("Chat", FontIcon.of(Codicons.COMMENT_DISCUSSION, 15, accent), taskChatPanel);
         taskTabs.addTab(PLAN_TAB_BASE_TITLE, FontIcon.of(Codicons.LIST_ORDERED, 15, muted), planPanel);
         taskTabs.addTab(PAST_PLANS_TAB_TITLE, FontIcon.of(Codicons.HISTORY, 15, muted), pastPlansPanel);
+        this.pastPlansPanel.setOnTotalCountChanged(this::updatePastPlansTabTitle);
+        if (memoryService != null) {
+            this.pastPlansPanel.refresh();
+        }
 
         updateActivePhase(planService.getCurrentPhase());
         taskTabs.addChangeListener(e -> {
@@ -195,6 +199,17 @@ final class TaskWorkspacePanel extends JPanel {
         if (taskChatPanel != null) {
             taskTabs.setSelectedComponent(taskChatPanel);
             SwingUtilities.invokeLater(taskChatPanel::focusInput);
+        }
+    }
+
+    void updatePastPlansTabTitle(int count) {
+        if (taskTabs == null || taskTabs.getTabCount() <= 2) {
+            return;
+        }
+        if (count > 0) {
+            taskTabs.setTitleAt(2, PAST_PLANS_TAB_TITLE + " (" + count + ")");
+        } else {
+            taskTabs.setTitleAt(2, PAST_PLANS_TAB_TITLE);
         }
     }
 

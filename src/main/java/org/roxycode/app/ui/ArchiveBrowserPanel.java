@@ -8,6 +8,7 @@ import java.awt.FlowLayout;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.IntConsumer;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
@@ -98,6 +99,7 @@ final class ArchiveBrowserPanel extends JPanel {
     private String currentRawMarkdown = "";
     String lastCopiedMarkdown;
     private transient ArchiveEntrySummary currentSelectedEntry;
+    private transient IntConsumer onTotalCountChanged;
     transient CompletableFuture<String> lastSelectionFuture = CompletableFuture.completedFuture("");
 
     public ArchiveBrowserPanel(MemoryService memoryService, ArchiveMode mode) {
@@ -174,6 +176,10 @@ final class ArchiveBrowserPanel extends JPanel {
         searchDebounceTimer.restart();
     }
 
+    void setOnTotalCountChanged(IntConsumer listener) {
+        this.onTotalCountChanged = listener;
+    }
+
     public CompletableFuture<?> refresh() {
         if (searchDebounceTimer != null && searchDebounceTimer.isRunning()) {
             searchDebounceTimer.stop();
@@ -219,6 +225,9 @@ final class ArchiveBrowserPanel extends JPanel {
         }
 
         countLabel.setText(formatCountText(safeResults.size()));
+        if ((query == null || query.isBlank()) && onTotalCountChanged != null) {
+            onTotalCountChanged.accept(safeResults.size());
+        }
         lastSelectionFuture = CompletableFuture.completedFuture("");
         int selectedIndex = UiComponents.replaceListItemsPreservingSelection(listModel, entryList, safeResults,
                 ArchiveEntrySummary::filename, previousFilename, true);

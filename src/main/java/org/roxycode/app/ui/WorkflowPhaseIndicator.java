@@ -20,13 +20,31 @@ final class WorkflowPhaseIndicator extends JPanel {
     public WorkflowPhaseIndicator(WorkflowPhase phase) {
         this.phase = phase;
         setLayout(new MigLayout("insets 0", "[center]", "center"));
-        textLabel = new JLabel(phase.getDisplayName());
+        textLabel = new JLabel(formatPhaseLabel(phase));
         textLabel.setIconTextGap(4);
         String tooltip = phase.getTooltipHtml();
         setToolTipText(tooltip);
         textLabel.setToolTipText(tooltip);
         add(textLabel);
         updateStyle();
+    }
+
+    static String formatPhaseLabel(WorkflowPhase phase) {
+        return switch (phase) {
+            case PLAN -> "1. Plan";
+            case CODE -> "2. Code";
+            case REVIEW -> "3. Review";
+            default -> phase.getDisplayName();
+        };
+    }
+
+    static Codicons resolvePhaseIcon(WorkflowPhase phase) {
+        return switch (phase) {
+            case PLAN -> Codicons.LIST_ORDERED;
+            case CODE -> Codicons.CODE;
+            case REVIEW -> Codicons.CHECK_ALL;
+            default -> Codicons.CIRCLE_OUTLINE;
+        };
     }
 
     public WorkflowPhase getPhase() {
@@ -49,11 +67,11 @@ final class WorkflowPhaseIndicator extends JPanel {
         Color disabledFg = SwingHtmlUtils.getMutedForegroundColor();
 
         setBorder(BorderFactory.createEmptyBorder(2, 10, 2, 10));
-        textLabel.setIcon(null);
         setOpaque(false);
         if (active) {
             setBackground(accentColor);
             putClientProperty(FlatClientProperties.STYLE, "arc: 8; background: " + SwingHtmlUtils.toHex(accentColor));
+            textLabel.setIcon(FontIcon.of(resolvePhaseIcon(phase), 12, Color.WHITE));
             textLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
             textLabel.setForeground(Color.WHITE);
         } else {
@@ -63,6 +81,7 @@ final class WorkflowPhaseIndicator extends JPanel {
                 textLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
                 textLabel.setForeground(greenColor);
             } else {
+                textLabel.setIcon(FontIcon.of(resolvePhaseIcon(phase), 12, disabledFg));
                 textLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
                 textLabel.setForeground(disabledFg);
             }

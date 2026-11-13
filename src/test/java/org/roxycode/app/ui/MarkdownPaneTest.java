@@ -24,7 +24,8 @@ class MarkdownPaneTest {
         pane.appendMessage("ai", aiContent);
         String text = pane.getText();
         assertTrue(text.contains("feature:0"));
-        assertTrue(text.contains("[Move to Feature") && text.contains("Request]"));
+        assertTrue(text.contains("Move to Feature") && text.contains("Request"));
+        assertFalse(text.contains("[Move to Feature Request]"));
         assertEquals(2, org.apache.commons.lang3.StringUtils.countMatches(text, "feature:0"));
 
         pane.fireHyperlinkUpdate(new HyperlinkEvent(pane, HyperlinkEvent.EventType.ACTIVATED, null, "feature:0"));
@@ -43,7 +44,8 @@ class MarkdownPaneTest {
                 "Click **[Apply to build.toml]** to apply.");
         pane.appendMessage("ai", buildTomlResponse);
         String htmlWithBuildToml = pane.getText();
-        assertContainsAll(htmlWithBuildToml, "buildtoml:1", "[Apply to", "build.toml]", "feature:1");
+        assertContainsAll(htmlWithBuildToml, "buildtoml:1", "Apply to", "build.toml", "feature:1");
+        assertFalse(htmlWithBuildToml.contains("[Apply to build.toml]"));
         assertEquals(2, org.apache.commons.lang3.StringUtils.countMatches(htmlWithBuildToml, "buildtoml:1"));
 
         pane.fireHyperlinkUpdate(new HyperlinkEvent(pane, HyperlinkEvent.EventType.ACTIVATED, null, "buildtoml:1"));
@@ -58,8 +60,15 @@ class MarkdownPaneTest {
     @Test
     void testIncrementalAppendInPlaceCopyFeedbackToolLogsAndTranscript() {
         MarkdownPane pane = new MarkdownPane(false);
-        assertContainsAll(pane.getText(), "welcome-card", "Technical Mentor (Read-Only Explore Mode)", "@ Mention");
+        assertContainsAll(pane.getText(), "welcome-card", "Technical Mentor (Read-Only Explore Mode)", "@ Mention",
+                "prompt:");
         assertTrue(new MarkdownPane(true).getText().contains("Autonomous Feature Development"));
+
+        String[] clickedStarter = new String[1];
+        pane.setOnStarterPromptListener(prompt -> clickedStarter[0] = prompt);
+        pane.fireHyperlinkUpdate(
+                new HyperlinkEvent(pane, HyperlinkEvent.EventType.ACTIVATED, null, "prompt:Explain+the+architecture"));
+        assertEquals("Explain the architecture", clickedStarter[0]);
 
         pane.appendMessage("user", "Prompt 1");
         Document doc = pane.getDocument();
@@ -114,6 +123,8 @@ class MarkdownPaneTest {
 
         pane.clear();
         assertTrue(pane.getConversationMessages().isEmpty());
+        pane.appendMessage(ChatHtmlTemplates.ROLE_SYSTEM, "Started a new topic.");
+        assertContainsAll(pane.getText(), "system-notice", "Started a new topic.", "welcome-card");
     }
 
     @Test
@@ -133,24 +144,25 @@ class MarkdownPaneTest {
         MarkdownPane pane = new MarkdownPane(true);
         pane.appendToolLog(multiLineScript, true, null);
         String collapsedHtml = pane.getText();
-        assertContainsAll(collapsedHtml, "toggle-tool:0", "[Show 5 lines]", "fileReadService.readLines",
+        assertContainsAll(collapsedHtml, "toggle-tool:0", "Show 5 lines", "fileReadService.readLines",
                 "fileEditorService.replaceBlock", "(5 lines)");
+        assertFalse(collapsedHtml.contains("[Show 5 lines]"));
         assertFalse(collapsedHtml.contains("build.success;"));
 
         HTMLDocument htmlDoc = (HTMLDocument) pane.getDocument();
         pane.fireHyperlinkUpdate(new HyperlinkEvent(pane, HyperlinkEvent.EventType.ACTIVATED, null, "toggle-tool:0"));
         assertSame(htmlDoc, pane.getDocument());
         String expandedHtml = pane.getText();
-        assertContainsAll(expandedHtml, "toggle-tool:0", "[Hide code]", "build.success;");
+        assertContainsAll(expandedHtml, "toggle-tool:0", "Hide", "build.success;");
 
         pane.fireHyperlinkUpdate(new HyperlinkEvent(pane, HyperlinkEvent.EventType.ACTIVATED, null, "toggle-tool:0"));
-        assertContainsAll(pane.getText(), "[Show 5 lines]", "fileReadService.readLines");
+        assertContainsAll(pane.getText(), "Show 5 lines", "fileReadService.readLines");
         assertFalse(pane.getText().contains("build.success;"));
 
         String failedMultiLine = String.join(System.lineSeparator(), "line1", "line2", "line3", "line4",
                 "line5_failed");
         pane.appendToolLog(failedMultiLine, false, "Compilation failed");
-        assertContainsAll(pane.getText(), "tool-call-error", "tool-accent-error", "[Hide code]", "line5_failed",
+        assertContainsAll(pane.getText(), "tool-call-error", "tool-accent-error", "Hide", "line5_failed",
                 "Compilation failed");
 
         java.awt.image.BufferedImage wideImg = new java.awt.image.BufferedImage(360, 180,
@@ -177,7 +189,7 @@ class MarkdownPaneTest {
         MarkdownPane restoredPane = new MarkdownPane(true);
         restoredPane.restoreMessages(exported);
         assertEquals(exported, restoredPane.exportMessages());
-        assertContainsAll(restoredPane.getText(), "[Show 5 lines]", "line5_failed", "Compilation failed",
+        assertContainsAll(restoredPane.getText(), "Show 5 lines", "line5_failed", "Compilation failed",
                 "Verify persistence", "Persistence verified.", "<img src=", "180", "90");
     }
 

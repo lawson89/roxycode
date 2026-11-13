@@ -1,12 +1,14 @@
 package org.roxycode.app.ui;
 
+import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.BorderLayout;
-import java.awt.FlowLayout;
-import javax.swing.BorderFactory;
+import java.util.List;
 import javax.swing.JButton;
 import javax.swing.JEditorPane;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.Timer;
+import net.miginfocom.swing.MigLayout;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.PhaseChangedEvent;
@@ -28,6 +30,8 @@ final class PlanPanel extends JPanel {
 
     private final transient PlanService planManagerService;
     final JPanel toolbar;
+    final JLabel planTitleLabel = new JLabel("Implementation Plan");
+    final JLabel planStepsLabel = new JLabel("No plan submitted yet");
     final JEditorPane displayArea;
     final JButton copyCommitMessageButton;
     final JButton copyMarkdownButton;
@@ -40,14 +44,26 @@ final class PlanPanel extends JPanel {
         this.planManagerService = planManagerService;
         setLayout(new BorderLayout());
 
-        toolbar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
-        toolbar.setBorder(BorderFactory.createCompoundBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0),
-                BorderFactory.createEmptyBorder(8, 12, 8, 12)));
+        toolbar = new JPanel(new MigLayout("insets 8 12 8 12, fillx, hidemode 3", "[grow, fill][]", "center"));
+        toolbar.setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));
+
+        JPanel headerInfo = new JPanel(new MigLayout("insets 0, gapy 2", "[grow, fill]", "[]"));
+        headerInfo.setOpaque(false);
+        planTitleLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +1");
+        planStepsLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
+        headerInfo.add(planTitleLabel, "wrap");
+        headerInfo.add(planStepsLabel);
+
+        JPanel actionButtons = new JPanel(new MigLayout("insets 0, gapx 8, hidemode 3", "", "center"));
+        actionButtons.setOpaque(false);
         copyCommitMessageButton = UiComponents.createCopyButton(COPY_COMMIT_MSG_TEXT, false, this::copyCommitMessage);
         copyCommitMessageButton.setVisible(false);
-        toolbar.add(copyCommitMessageButton);
+        actionButtons.add(copyCommitMessageButton);
         copyMarkdownButton = UiComponents.createCopyButton(COPY_BUTTON_TEXT, false, this::copyPlanAsMarkdown);
-        toolbar.add(copyMarkdownButton);
+        actionButtons.add(copyMarkdownButton);
+
+        toolbar.add(headerInfo, "growx, wmin 0");
+        toolbar.add(actionButtons, "alignx right");
         add(toolbar, BorderLayout.NORTH);
 
         displayArea = SwingHtmlUtils.createHtmlEditorPane();
@@ -111,8 +127,7 @@ final class PlanPanel extends JPanel {
 
     private void updateTheme() {
         if (toolbar != null) {
-            toolbar.setBorder(BorderFactory.createCompoundBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0),
-                    BorderFactory.createEmptyBorder(8, 12, 8, 12)));
+            toolbar.setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));
         }
         UiComponents.refreshActionButtonIcons(this);
         SwingHtmlUtils.applyTheme(displayArea, 15);
@@ -131,6 +146,18 @@ final class PlanPanel extends JPanel {
             copyCommitMessageButton.setEnabled(hasCommitMsg);
             copyCommitMessageButton.setVisible(hasCommitMsg);
         }
+        if (plan == null) {
+            planTitleLabel.setText("Implementation Plan");
+            planStepsLabel.setText("No plan submitted yet");
+        } else {
+            planTitleLabel.setText(StringUtils.defaultIfBlank(plan.title(), "Implementation Plan"));
+            List<ImplementationPlan.TechStep> steps = plan.technicalSteps();
+            int total = 0;
+            if (steps != null) {
+                total = steps.size();
+            }
+            planStepsLabel.setText(plan.completedStepCount() + " / " + total + " steps completed");
+        }
         displayArea.setText(buildPlanHtml(plan));
         displayArea.setCaretPosition(0);
     }
@@ -139,8 +166,22 @@ final class PlanPanel extends JPanel {
         if (plan == null) {
             return """
                     <html><body>
-                    <h3>No implementation plan submitted yet.</h3>
-                    <p>The AI will submit a plan as it progresses through the project.</p>
+                    <table class="welcome-card" width="100%" cellpadding="0" cellspacing="0" border="0">
+                        <tr>
+                            <td class="ai-accent" width="4" nowrap="nowrap">&nbsp;</td>
+                            <td width="100%" style="padding: 14px 16px;">
+                                <div class="welcome-title">No implementation plan submitted yet.</div>
+                                <div class="welcome-hint" style="margin-top: 6px;">
+                                    Describe a feature, refactoring, or bug fix in the <b>Chat</b> tab. Roxy will inspect the codebase and draft a structured blueprint here for your approval.
+                                </div>
+                                <table width="100%" cellpadding="3" cellspacing="0" border="0" style="margin-top: 8px;">
+                                    <tr><td class="welcome-hint"><b>1. Plan</b> &mdash; Review requirements, target files, line ranges, and technical steps.</td></tr>
+                                    <tr><td class="welcome-hint"><b>2. Code</b> &mdash; Track live step-by-step completion, compilation, and unit test verification.</td></tr>
+                                    <tr><td class="welcome-hint"><b>3. Review</b> &mdash; Inspect final audit status and copy the generated commit message.</td></tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
                     </body></html>
                     """;
         }

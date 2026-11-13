@@ -1,6 +1,8 @@
 package org.roxycode.app.ui;
 
 import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -27,8 +29,8 @@ final class MarkdownPane extends JTextPane {
     private static final String FEATURE_PREFIX = "feature:";
     private static final String BUILD_TOML_PREFIX = "buildtoml:";
     private static final String TOGGLE_TOOL_PREFIX = "toggle-tool:";
+    private static final String PROMPT_PREFIX = "prompt:";
     private static final int COPY_FEEDBACK_DELAY_MS = 1500;
-    private static final int INITIAL_MESSAGE_COUNT = 1;
     private static final String ERROR_RENDERING_HTML = "<div>Error rendering message</div>";
     private static final int MAX_UI_MESSAGES = 200;
     private boolean pruned = false;
@@ -37,6 +39,7 @@ final class MarkdownPane extends JTextPane {
     private final boolean taskMode;
     private java.util.function.Consumer<String> onMoveToFeatureListener;
     private java.util.function.Consumer<String> onApplyBuildTomlListener;
+    private java.util.function.Consumer<String> onStarterPromptListener;
     int copiedMessageIndex = -1;
     Timer copyFeedbackTimer;
     String lastCopiedMarkdown;
@@ -101,6 +104,12 @@ final class MarkdownPane extends JTextPane {
                 toggleToolLog(Integer.parseInt(desc.substring(TOGGLE_TOOL_PREFIX.length())));
             } catch (NumberFormatException ignored) {
             }
+        } else if (desc.startsWith(PROMPT_PREFIX)) {
+            if (onStarterPromptListener != null) {
+                String encoded = desc.substring(PROMPT_PREFIX.length());
+                String prompt = URLDecoder.decode(encoded, StandardCharsets.UTF_8);
+                onStarterPromptListener.accept(prompt);
+            }
         }
     }
 
@@ -128,6 +137,22 @@ final class MarkdownPane extends JTextPane {
 
     public void setOnApplyBuildTomlListener(java.util.function.Consumer<String> listener) {
         this.onApplyBuildTomlListener = listener;
+    }
+
+    public void setOnStarterPromptListener(java.util.function.Consumer<String> listener) {
+        this.onStarterPromptListener = listener;
+    }
+
+    boolean shouldShowWelcomeCard() {
+        for (Message msg : messages) {
+            if (msg.isTool()) {
+                return false;
+            }
+            if (msg.role() != null && !ChatHtmlTemplates.ROLE_SYSTEM.equalsIgnoreCase(msg.role())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private String resolveExtractedBuildToml(String role, String content) {
@@ -164,8 +189,9 @@ final class MarkdownPane extends JTextPane {
     }
 
     private void addAndRenderMessage(Message msg) {
+        boolean wasShowingWelcome = shouldShowWelcomeCard();
         messages.add(msg);
-        if (pruneMessagesIfNeeded()) {
+        if (pruneMessagesIfNeeded() || wasShowingWelcome) {
             renderAll(true);
         } else {
             appendRenderedEntry(formatMessageEntryHtml(msg, messages.size() - 1));
@@ -333,11 +359,6 @@ final class MarkdownPane extends JTextPane {
     }
 
     private void appendRenderedEntry(String entryHtml) {
-        if (messages.size() == INITIAL_MESSAGE_COUNT) {
-            setText("<html><body>" + entryHtml + "</body></html>");
-            scrollToBottomLater();
-            return;
-        }
         if (getDocument() instanceof HTMLDocument doc) {
             Element bodyElement = findBodyElement(doc.getDefaultRootElement());
             if (bodyElement != null) {
@@ -412,16 +433,15 @@ final class MarkdownPane extends JTextPane {
     private void renderAll(boolean scrollToBottom) {
         int savedCaret = getCaretPosition();
         StringBuilder fullHtml = new StringBuilder("<html><body>");
-        if (messages.isEmpty()) {
+        if (pruned) {
+            fullHtml.append(ChatHtmlTemplates.renderSystemNotice(
+                    "Older messages pruned from UI to save memory. Full history is available in archived plans."));
+        }
+        for (int i = 0; i < messages.size(); i++) {
+            fullHtml.append(formatMessageEntryHtml(messages.get(i), i));
+        }
+        if (shouldShowWelcomeCard()) {
             fullHtml.append(ChatHtmlTemplates.renderWelcomeCard(taskMode));
-        } else {
-            if (pruned) {
-                fullHtml.append(ChatHtmlTemplates.renderSystemNotice(
-                        "Older messages pruned from UI to save memory. Full history is available in archived plans."));
-            }
-            for (int i = 0; i < messages.size(); i++) {
-                fullHtml.append(formatMessageEntryHtml(messages.get(i), i));
-            }
         }
         fullHtml.append("</body></html>");
         setText(fullHtml.toString());

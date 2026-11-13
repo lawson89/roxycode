@@ -369,6 +369,7 @@ class ChatControllerTest extends ChatTestFixture {
         assertTrue(chatPanel.outputArea.getText().contains("FINAL_PLAN_SUMMARY"));
         assertTrue(chatPanel.inlineActionPanel.isVisible());
         assertEquals("Approve Plan and proceed to Code", chatPanel.transitionLabel.getText());
+        assertTrue(chatPanel.transitionSubtitleLabel.getText().contains("unlocking file editing"));
 
         // Rejecting PLAN -> CODE does NOT fire an extra AI call; updates placeholder and focuses composer
         clearInvocations(aiService);
@@ -504,7 +505,17 @@ class ChatControllerTest extends ChatTestFixture {
         assertFalse(chatPanel.approveButton.isEnabled());
         assertEquals("Image", chatPanel.attachImageButton.getText());
         assertEquals("Send message (Enter)", chatPanel.sendButton.getToolTipText());
+        assertEquals("Stop (Esc)", chatPanel.stopButton.getText());
         assertEquals("Stop active turn (Esc)", chatPanel.stopButton.getToolTipText());
+        assertTrue(ChatPanel.isRateLimitOrRetryStatus("Rate limit reached, retrying in 5s..."));
+        assertFalse(ChatPanel.isRateLimitOrRetryStatus("Thinking with gemini-4-argon..."));
+        ImplementationPlan stepPlan = new ImplementationPlan("Step Plan", "Goal", List.of(), List
+                .of(new ImplementationPlan.TechStep("Step 0", true), new ImplementationPlan.TechStep("Step 1", false)),
+                false, null, null, null, null, List.of());
+        when(planService.getCurrentPlan()).thenReturn(stepPlan);
+        chatPanel.updateActivityStatus("Running tool...");
+        assertTrue(chatPanel.activityStepLabel.isVisible());
+        assertTrue(chatPanel.activityStepLabel.getText().startsWith("Step 1/2"));
         String workingPlaceholder = String
                 .valueOf(chatPanel.inputArea.getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT));
         assertEquals(ChatPanel.BUSY_PLACEHOLDER_TEXT, workingPlaceholder);

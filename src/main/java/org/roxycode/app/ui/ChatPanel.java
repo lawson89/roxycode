@@ -34,6 +34,7 @@ import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.UserInputService;
 import org.roxycode.app.events.UserInputRequestEvent;
 import org.roxycode.app.model.ChatTranscriptEntry;
+import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.ProjectService;
@@ -63,6 +64,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     private static final String TOOLBAR_BUTTON_STYLE = "font: -1; foreground: $Label.disabledForeground; focusWidth: 0; innerFocusWidth: 0";
     private static final String GROW_FILL_COL = "[grow, fill]";
     private static final String HIDEMODE_3 = "hidemode 3";
+    private static final String LAYOUT_CENTER = "center";
     static final int THUMBNAIL_SIZE = 64;
     static final int COMPOSER_MIN_HEIGHT = 120;
     static final int COMPOSER_PREFERRED_HEIGHT = 140;
@@ -97,6 +99,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     final ChatPromptBanner userInputPromptPanel;
     final JPanel activityStripPanel;
     JLabel activityStatusLabel;
+    JLabel activityStepLabel;
     JLabel activityElapsedLabel;
     transient FontIcon activityIcon;
     Timer activityAnimationTimer;
@@ -104,6 +107,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     private int activityIconFrameIndex;
     private long turnStartMillis;
     JLabel transitionLabel;
+    JLabel transitionSubtitleLabel;
     final transient ChatTelemetryBar telemetryBar;
     private JScrollPane outputScrollPane;
     private JPanel attachmentPanel;
@@ -191,12 +195,19 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     private JPanel createInlineActionPanel() {
-        JPanel panel = new JPanel(new MigLayout("insets 0, gap 15", "", "center"));
+        JPanel panel = new JPanel(new MigLayout("insets 0, fillx, hidemode 3", "[grow, fill][]", LAYOUT_CENTER));
         SwingHtmlUtils.applyTintedBannerStyle(panel, SwingHtmlUtils.getAccentColor(), 10, 16, 20);
         panel.setVisible(false);
 
+        JPanel textCol = new JPanel(new MigLayout("insets 0, gapy 2", "[grow, fill]", "[]"));
+        textCol.setOpaque(false);
         transitionLabel = ChatPromptBanner.createPromptHeaderLabel("Workflow Transition", Codicons.ROCKET);
         transitionLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Component.accentColor");
+        transitionSubtitleLabel = new JLabel("");
+        transitionSubtitleLabel.putClientProperty(FlatClientProperties.STYLE,
+                "font: -1; foreground: $Label.disabledForeground");
+        textCol.add(transitionLabel, "wrap");
+        textCol.add(transitionSubtitleLabel);
 
         approveButton = UiComponents.createActionButton("Approve", Codicons.CHECK, null, false,
                 UiComponents.ACCENT_BUTTON_STYLE, e -> controller.approvePhase());
@@ -216,17 +227,24 @@ final class ChatPanel extends JPanel implements AutoCloseable {
                 UiComponents.SUBTLE_RED_BUTTON_STYLE, e -> controller.rejectPhase());
         rejectButton.setEnabled(false);
 
-        panel.add(transitionLabel);
-        panel.add(Box.createHorizontalStrut(10));
-        panel.add(viewPlanButton, HIDEMODE_3);
-        panel.add(copyCommitMsgButton, HIDEMODE_3);
-        panel.add(approveButton);
-        panel.add(rejectButton);
+        JPanel btnCol = new JPanel(new MigLayout("insets 0, gapx 6, hidemode 3", "", LAYOUT_CENTER));
+        btnCol.setOpaque(false);
+        btnCol.add(viewPlanButton);
+        btnCol.add(copyCommitMsgButton);
+        btnCol.add(approveButton);
+        btnCol.add(rejectButton);
+
+        panel.add(textCol, "growx, wmin 0");
+        panel.add(btnCol, "alignx right");
         return panel;
     }
 
     private Component createOutputSection(boolean isTaskMode) {
         outputArea = new MarkdownPane(isTaskMode);
+        outputArea.setOnStarterPromptListener(prompt -> {
+            setInputText(prompt);
+            focusInput();
+        });
         outputScrollPane = new JScrollPane(outputArea);
         outputScrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         updateOutputScrollPaneBorder();
@@ -298,7 +316,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
                 "arc: 8; font: bold; " + UiComponents.ACCENT_BUTTON_STYLE, this::sendMessage);
         sendButton.setToolTipText("Send message (Enter)");
 
-        stopButton = UiComponents.createActionButton("Stop", Codicons.DEBUG_STOP, new Insets(5, 14, 5, 14), false,
+        stopButton = UiComponents.createActionButton("Stop (Esc)", Codicons.DEBUG_STOP, new Insets(5, 14, 5, 14), false,
                 "arc: 8; font: bold; " + UiComponents.RED_BUTTON_STYLE, e -> controller.stopTurn());
         stopButton.setToolTipText("Stop active turn (Esc)");
         stopButton.setEnabled(false);
@@ -333,18 +351,20 @@ final class ChatPanel extends JPanel implements AutoCloseable {
 
         updateTurnLabel();
 
+        JSeparator toolbarSep = new JSeparator(SwingConstants.VERTICAL);
         String toolbarCols;
         if (isTaskMode) {
-            toolbarCols = "[]4[]4[]4[]8[]push[]push[right]";
+            toolbarCols = "[]4[]4[]6[]6[]8[]push[]push[right]";
         } else {
-            toolbarCols = "[]4[]4[]4[]push[]push[right]";
+            toolbarCols = "[]4[]4[]6[]6[]push[]push[right]";
         }
-        JPanel actionToolbar = new JPanel(new MigLayout("insets 4 8 6 8, fillx", toolbarCols, "center"));
+        JPanel actionToolbar = new JPanel(new MigLayout("insets 4 8 6 8, fillx", toolbarCols, LAYOUT_CENTER));
         actionToolbar.setOpaque(false);
         actionToolbar.add(attachImageButton);
-        actionToolbar.add(resetSessionButton);
         actionToolbar.add(mentionButton);
         actionToolbar.add(commandsButton);
+        actionToolbar.add(toolbarSep, "h 16!");
+        actionToolbar.add(resetSessionButton);
         if (isTaskMode) {
             autoApprovePlanCheckBox = new JCheckBox("Auto-approve Plan");
             autoApprovePlanCheckBox.setOpaque(false);
@@ -396,7 +416,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     private JPanel createActivityStripPanel() {
-        JPanel panel = new JPanel(new MigLayout("insets 6 14 6 14, fillx", "[]8[grow, fill]12[]", "center"));
+        JPanel panel = new JPanel(new MigLayout("insets 0, fillx, hidemode 3", "[grow, fill]12[]6[]", LAYOUT_CENTER));
         panel.setVisible(false);
 
         activityIcon = FontIcon.of(HOURGLASS_FRAMES[0], 13, SwingHtmlUtils.getAccentColor());
@@ -405,12 +425,20 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         activityStatusLabel.setIconTextGap(8);
         activityStatusLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
 
+        activityStepLabel = new JLabel("");
+        activityStepLabel.putClientProperty(FlatClientProperties.STYLE,
+                "font: -1 bold; foreground: $Component.accentColor");
+        activityStepLabel.setVisible(false);
+
         activityElapsedLabel = new JLabel("0:00");
-        activityElapsedLabel.putClientProperty(FlatClientProperties.STYLE,
-                "font: -1; foreground: $Label.disabledForeground");
+        Font baseElapsedFont = activityElapsedLabel.getFont();
+        activityElapsedLabel
+                .setFont(new Font(Font.MONOSPACED, Font.PLAIN, Math.max(11, baseElapsedFont.getSize() - 1)));
+        activityElapsedLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Label.disabledForeground");
 
         panel.add(activityStatusLabel, "growx, wmin 0");
-        panel.add(activityElapsedLabel, " right");
+        panel.add(activityStepLabel, HIDEMODE_3);
+        panel.add(activityElapsedLabel, "alignx right");
 
         activityAnimationTimer = new Timer(ACTIVITY_ANIMATION_DELAY_MS, e -> advanceActivityIconFrame());
         activityElapsedTimer = new Timer(ACTIVITY_ELAPSED_DELAY_MS, e -> updateElapsedTimeLabel());
@@ -418,12 +446,26 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         return panel;
     }
 
+    static boolean isRateLimitOrRetryStatus(String statusText) {
+        if (statusText == null || statusText.isEmpty()) {
+            return false;
+        }
+        String lower = statusText.toLowerCase(java.util.Locale.ROOT);
+        return lower.contains("rate limit") || lower.contains("retrying");
+    }
+
     private void applyActivityStripStyling(JPanel panel) {
-        Color accent = SwingHtmlUtils.getAccentColor();
-        panel.setOpaque(true);
-        panel.setBackground(SwingHtmlUtils.getTintedBackground(accent, 0.08));
-        panel.setBorder(BorderFactory.createCompoundBorder(SwingHtmlUtils.createThemeMatteBorder(1, 0, 0, 0),
-                BorderFactory.createEmptyBorder(0, 0, 0, 0)));
+        String currentText = "";
+        if (activityStatusLabel != null) {
+            currentText = activityStatusLabel.getText();
+        }
+        Color accent;
+        if (isRateLimitOrRetryStatus(currentText)) {
+            accent = SwingHtmlUtils.getWarningColor();
+        } else {
+            accent = SwingHtmlUtils.getAccentColor();
+        }
+        SwingHtmlUtils.applyTintedBannerStyle(panel, accent, 5, 12, 12);
         if (activityIcon != null) {
             activityIcon.setIconColor(accent);
         }
@@ -461,6 +503,8 @@ final class ChatPanel extends JPanel implements AutoCloseable {
             activityIcon.setIkon(HOURGLASS_FRAMES[0]);
         }
         activityElapsedLabel.setText("0:00");
+        updateActivityStepLabel();
+        applyActivityStripStyling(activityStripPanel);
         activityStripPanel.setVisible(true);
         if (activityAnimationTimer != null && !activityAnimationTimer.isRunning()) {
             activityAnimationTimer.start();
@@ -479,6 +523,32 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         }
     }
 
+    void updateActivityStepLabel() {
+        if (activityStepLabel == null) {
+            return;
+        }
+        if (!model.isTaskMode() || planService == null || planService.getCurrentPlan() == null) {
+            activityStepLabel.setText("");
+            activityStepLabel.setVisible(false);
+            return;
+        }
+        ImplementationPlan plan = planService.getCurrentPlan();
+        List<ImplementationPlan.TechStep> steps = plan.technicalSteps();
+        if (steps == null || steps.isEmpty()) {
+            activityStepLabel.setText("");
+            activityStepLabel.setVisible(false);
+            return;
+        }
+        int completed = 0;
+        for (ImplementationPlan.TechStep step : steps) {
+            if (step.completed()) {
+                completed++;
+            }
+        }
+        activityStepLabel.setText("Step " + completed + "/" + steps.size() + " ·");
+        activityStepLabel.setVisible(true);
+    }
+
     void updateActivityStatus(String statusText) {
         String text = Objects.requireNonNullElse(statusText, "").trim();
         activityStatusLabel.setText(text);
@@ -487,6 +557,8 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         } else {
             activityStatusLabel.setToolTipText(text);
         }
+        updateActivityStepLabel();
+        applyActivityStripStyling(activityStripPanel);
         if (loading && !text.isEmpty() && !activityStripPanel.isVisible()) {
             activityStripPanel.setVisible(true);
         }
@@ -824,8 +896,27 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         copyCommitMsgButton.setVisible(showCopyCommit);
     }
 
+    static String resolveTransitionSubtitle(String bannerText, WorkflowPhase currentPhase, WorkflowPhase pendingPhase) {
+        if ((currentPhase == WorkflowPhase.REVIEW && pendingPhase == WorkflowPhase.PLAN)
+                || PlanService.formatApprovalLabel(WorkflowPhase.REVIEW, WorkflowPhase.PLAN).equals(bannerText)) {
+            return "Approving archives this completed plan to Past Plans and resets the workspace for your next feature.";
+        }
+        if ((currentPhase == WorkflowPhase.PLAN && pendingPhase == WorkflowPhase.CODE)
+                || PlanService.formatApprovalLabel(WorkflowPhase.PLAN, WorkflowPhase.CODE).equals(bannerText)) {
+            return "Review the implementation blueprint before unlocking file editing in the Code phase.";
+        }
+        return "Review the proposed workflow transition and approve or reject to continue.";
+    }
+
     void showTransitionBanner(String path) {
         transitionLabel.setText(path);
+        WorkflowPhase currentPhase = null;
+        WorkflowPhase pendingPhase = null;
+        if (planService != null) {
+            currentPhase = planService.getCurrentPhase();
+            pendingPhase = planService.getPendingPhase();
+        }
+        transitionSubtitleLabel.setText(resolveTransitionSubtitle(path, currentPhase, pendingPhase));
         approveButton.setText("Approve");
         approveButton.setEnabled(true);
         rejectButton.setEnabled(true);
@@ -950,6 +1041,8 @@ final class ChatPanel extends JPanel implements AutoCloseable {
             activityStripPanel.setVisible(false);
             activityStatusLabel.setText("");
             activityStatusLabel.setToolTipText(null);
+            activityStepLabel.setText("");
+            activityStepLabel.setVisible(false);
             activityElapsedLabel.setText("0:00");
             SwingUtilities.invokeLater(inputArea::requestFocusInWindow);
             sendButton.setText("Send");

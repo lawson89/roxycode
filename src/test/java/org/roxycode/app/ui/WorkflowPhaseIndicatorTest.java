@@ -17,6 +17,9 @@ class WorkflowPhaseIndicatorTest {
 
     @Test
     void testPhaseIndicatorsAndImmediateTooltipBehavior() {
+        assertEquals("1. Plan", WorkflowPhaseIndicator.formatPhaseLabel(WorkflowPhase.PLAN));
+        assertEquals("2. Code", WorkflowPhaseIndicator.formatPhaseLabel(WorkflowPhase.CODE));
+        assertEquals("3. Review", WorkflowPhaseIndicator.formatPhaseLabel(WorkflowPhase.REVIEW));
         for (WorkflowPhase phase : WorkflowPhase.values()) {
             WorkflowPhaseIndicator indicator = new WorkflowPhaseIndicator(phase);
             assertEquals(phase, indicator.getPhase());
@@ -54,6 +57,10 @@ class WorkflowPhaseIndicatorTest {
         assertEquals(fiftyCharTitle + " (Click to view Plan)", taskWorkspace.planLabel.getToolTipText());
 
         assertEquals("Plan", taskWorkspace.taskTabs.getTitleAt(1));
+        SwingTestUtils.runOnEdt(() -> taskWorkspace.updatePastPlansTabTitle(5));
+        assertEquals("Past Plans (5)", taskWorkspace.taskTabs.getTitleAt(2));
+        SwingTestUtils.runOnEdt(() -> taskWorkspace.updatePastPlansTabTitle(0));
+        assertEquals("Past Plans", taskWorkspace.taskTabs.getTitleAt(2));
         assertEquals(0, taskWorkspace.taskTabs.getSelectedIndex());
         SwingTestUtils.runOnEdt(() -> {
             MouseEvent clickEvent = new MouseEvent(taskWorkspace.planLabel, MouseEvent.MOUSE_CLICKED,
@@ -65,6 +72,10 @@ class WorkflowPhaseIndicatorTest {
         assertEquals(1, taskWorkspace.taskTabs.getSelectedIndex());
 
         QaWorkspacePanel qaWorkspace = SwingTestUtils.callOnEdt(() -> new QaWorkspacePanel(null, null));
+        SwingTestUtils.runOnEdt(() -> qaWorkspace.updatePastTopicsTabTitle(3));
+        assertEquals("Past Topics (3)", qaWorkspace.qaTabs.getTitleAt(1));
+        SwingTestUtils.runOnEdt(() -> qaWorkspace.updatePastTopicsTabTitle(0));
+        assertEquals("Past Topics", qaWorkspace.qaTabs.getTitleAt(1));
         assertNotNull(qaWorkspace.mentorModeLabel);
         assertEquals(QaWorkspacePanel.MENTOR_MODE_BADGE_TEXT, qaWorkspace.mentorModeLabel.getText());
 

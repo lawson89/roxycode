@@ -70,6 +70,10 @@ final class QaWorkspacePanel extends JPanel {
                 qaChatPanel);
         qaTabs.addTab(PAST_TOPICS_TAB_TITLE,
                 FontIcon.of(Codicons.HISTORY, 15, SwingHtmlUtils.getMutedForegroundColor()), pastTopicsPanel);
+        this.pastTopicsPanel.setOnTotalCountChanged(this::updatePastTopicsTabTitle);
+        if (memoryService != null) {
+            this.pastTopicsPanel.refresh();
+        }
         qaTabs.addChangeListener(e -> {
             UiComponents.updateSelectedTabIcons(qaTabs, List.of(Codicons.COMMENT_DISCUSSION, Codicons.HISTORY));
             if (qaChatPanel != null && qaChatPanel.equals(qaTabs.getSelectedComponent())) {
@@ -79,6 +83,17 @@ final class QaWorkspacePanel extends JPanel {
             }
         });
         add(qaTabs, BorderLayout.CENTER);
+    }
+
+    void updatePastTopicsTabTitle(int count) {
+        if (qaTabs == null || qaTabs.getTabCount() <= 1) {
+            return;
+        }
+        if (count > 0) {
+            qaTabs.setTitleAt(1, PAST_TOPICS_TAB_TITLE + " (" + count + ")");
+        } else {
+            qaTabs.setTitleAt(1, PAST_TOPICS_TAB_TITLE);
+        }
     }
 
     @EventListener

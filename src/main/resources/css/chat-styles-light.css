@@ -64,3 +64,9 @@ code { font-family: monospace; font-size: 11px; background-color: #e2e8f0; color
 .diagram-container { background-color: #ffffff; border-color: #cbd5e1; border-style: solid; border-width: 1px; margin-top: 6px; margin-bottom: 6px; padding: 8px; }
 .pruning-notice { background-color: #f5f5f5; border-color: #e2e8f0; border-style: solid; border-width: 1px; color: #666666; font-style: italic; padding: 8px; margin-bottom: 10px; }
 .system-notice { font-size: 11px; color: #64748b; font-style: italic; padding: 4px 2px; margin-bottom: 8px; }
+.action-cta-link { font-family: sans-serif; font-size: 10px; font-weight: bold; color: #0066cc; text-decoration: none; }
+.tool-toggle { font-family: sans-serif; font-size: 10px; color: #0066cc; text-decoration: none; }
+.starter-card { background-color: #ffffff; border-color: #cbd5e1; border-style: solid; border-width: 1px; padding: 8px 10px; }
+.starter-title { font-family: sans-serif; font-size: 12px; font-weight: bold; color: #0f172a; }
+.starter-desc { font-family: sans-serif; font-size: 11px; color: #475569; margin-top: 2px; }
+.starter-link { font-family: monospace; font-size: 11px; color: #0066cc; text-decoration: none; }

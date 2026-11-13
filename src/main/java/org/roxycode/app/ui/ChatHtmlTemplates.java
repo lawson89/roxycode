@@ -1,5 +1,7 @@
 package org.roxycode.app.ui;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -37,7 +39,7 @@ public final class ChatHtmlTemplates {
         if (moved) {
             return "<span class='copy-feedback'>&#10003; Sent to Feature Development</span>";
         }
-        return "<a class='feature-action' href='feature:" + messageIndex + "'>[Move to Feature Request]</a>";
+        return "<a class='action-cta-link' href='feature:" + messageIndex + "'>&#8599; Move to Feature Request</a>";
     }
 
     static String linkifyMoveToFeatureMentions(String renderedHtml, int messageIndex) {
@@ -49,7 +51,7 @@ public final class ChatHtmlTemplates {
         if (applied) {
             return "<span class='copy-feedback'>&#10003; Applied to build.toml</span>";
         }
-        return "<a class='feature-action' href='buildtoml:" + messageIndex + "'>[Apply to build.toml]</a>";
+        return "<a class='action-cta-link' href='buildtoml:" + messageIndex + "'>&#9881; Apply to build.toml</a>";
     }
 
     static String linkifyApplyBuildTomlMentions(String renderedHtml, int messageIndex) {
@@ -69,7 +71,7 @@ public final class ChatHtmlTemplates {
         if (copied) {
             return "<span class='copy-feedback'>&#10003; Copied!</span>";
         }
-        return "<a class='copy-action' href='copy:" + messageIndex + "'>[Copy]</a>";
+        return "<a class='copy-action' href='copy:" + messageIndex + "'>Copy</a>";
     }
 
     public static String renderMessageActionCellContent(String role, int messageIndex, boolean copied,
@@ -289,11 +291,11 @@ public final class ChatHtmlTemplates {
         if (messageIndex >= 0) {
             String toggleLabel;
             if (expanded) {
-                toggleLabel = "[Hide code]";
+                toggleLabel = "&#9662; Hide";
             } else {
-                toggleLabel = "[Show " + lineCount + " lines]";
+                toggleLabel = "&#9656; Show " + lineCount + " lines";
             }
-            toggleLinkHtml = "<a class='copy-link' href='toggle-tool:" + messageIndex + "'>" + toggleLabel
+            toggleLinkHtml = "<a class='tool-toggle' href='toggle-tool:" + messageIndex + "'>" + toggleLabel
                     + "</a>&nbsp;&nbsp;";
         }
         String bodyHtml;
@@ -316,62 +318,92 @@ public final class ChatHtmlTemplates {
                         bodyHtml);
     }
 
+    private static String renderStarterRow(String leftCard, String rightCard) {
+        return "<tr>" + leftCard + rightCard + "</tr>";
+    }
+
+    private static String renderStarterCard(String title, String description, String promptText, String linkLabel) {
+        String encodedPrompt = URLEncoder.encode(promptText, StandardCharsets.UTF_8);
+        return """
+                <td class="starter-card" width="50%%" valign="top">
+                    <div class="starter-title">%s</div>
+                    <div class="starter-desc">%s</div>
+                    <div style="margin-top: 6px;"><a class="starter-link" href="prompt:%s">&rarr; %s</a></div>
+                </td>
+                """.formatted(title, description, encodedPrompt, linkLabel);
+    }
+
     public static String renderWelcomeCard(boolean isTaskMode) {
         if (isTaskMode) {
+            String row1 = renderStarterRow(
+                    renderStarterCard("Build a New Feature", "Plan, implement, and verify new functionality",
+                            "I want to implement a new feature: ", "Draft a feature implementation plan"),
+                    renderStarterCard("Fix a Bug or Regression", "Diagnose root cause and add regression tests",
+                            "Help me diagnose and fix a bug in: ", "Diagnose and fix a bug"));
+            String row2 = renderStarterRow(
+                    renderStarterCard("Refactor &amp; Clean Up Code", "Remove dead, duplicated, or complex code",
+                            "Identify and clean up dead, duplicated, or overly complex code in: ",
+                            "Identify cleanup opportunities"),
+                    renderStarterCard("Add Unit Test Coverage", "Cover business logic and edge cases",
+                            "Add pragmatic unit tests for the business logic and edge cases in: ",
+                            "Add pragmatic unit tests"));
             return """
                     <table class="welcome-card" width="100%%" cellpadding="0" cellspacing="0" border="0">
                         <tr>
                             <td class="ai-accent" width="4" nowrap="nowrap">&nbsp;</td>
                             <td width="100%%" style="padding: 10px 14px;">
-                                <div class="welcome-title">ROXY %s &mdash; Autonomous Feature Development (Plan &rarr; Code &rarr; Review)</div>
-                                <div class="welcome-hint" style="margin-top: 6px;">
-                                    Build features, refactor modules, and fix bugs through a structured 3-phase lifecycle with human-in-the-loop approval and automated verification:
+                                <div class="welcome-title">ROXY %s &mdash; Autonomous Feature Development (1. Plan &rarr; 2. Code &rarr; 3. Review)</div>
+                                <div class="welcome-hint" style="margin-top: 4px;">
+                                    Describe a task or click a starter prompt below to populate the composer:
                                 </div>
-                                <table width="100%%" cellpadding="2" cellspacing="0" border="0" style="margin-top: 8px;">
-                                    <tr>
-                                        <td class="welcome-hint">1. <b>Plan</b>: Describe the feature or bugfix; Roxy drafts a step-by-step implementation plan for your approval.</td>
-                                    </tr>
-                                    <tr>
-                                        <td class="welcome-hint">2. <b>Code</b>: Once you click <b>Approve</b>, Roxy edits files, compiles, and runs unit tests autonomously.</td>
-                                    </tr>
-                                    <tr>
-                                        <td class="welcome-hint">3. <b>Review</b>: Roxy audits the git diff and test results before requesting final sign-off.</td>
-                                    </tr>
-                                    <tr>
-                                        <td class="welcome-hint">&bull; <b>Tip</b>: Hover over the <b>Plan &rarr; Code &rarr; Review</b> phase pills above for lifecycle details, or ask Roxy in <b>Codebase Q&amp;A</b> whenever you need help using RoxyCode!</td>
-                                    </tr>
+                                <table width="100%%" cellpadding="0" cellspacing="6" border="0" style="margin-top: 6px;">
+                                    %s
+                                    %s
                                 </table>
+                                <div class="welcome-hint" style="margin-top: 4px;">
+                                    1. <b>Plan</b> (draft &amp; approve) &bull; 2. <b>Code</b> (edit, compile &amp; test) &bull; 3. <b>Review</b> (audit diff &amp; sign-off)
+                                </div>
                             </td>
                         </tr>
                     </table>
                     """
-                    .formatted(CAT_EARS);
+                    .formatted(CAT_EARS, row1, row2);
         }
+        String row1 = renderStarterRow(
+                renderStarterCard("Architecture &amp; Data Flow", "Understand key services and request flows",
+                        "Explain the high-level architecture and key services in this repository.",
+                        "Explain the high-level architecture and key services"),
+                renderStarterCard("Recent Git Activity &amp; Diffs", "Review recent commits and working-tree changes",
+                        "Summarize the recent commits and any uncommitted working-tree changes.",
+                        "Summarize recent commits and working-tree changes"));
+        String row2 = renderStarterRow(
+                renderStarterCard("Configure build.toml &amp; Sandbox", "Detect project toolchains and build commands",
+                        "Inspect my project files and toolchain and recommend a build.toml configuration.",
+                        "Inspect my project toolchain and suggest a build.toml"),
+                renderStarterCard("Scope a Feature Blueprint", "Explore and design before building",
+                        "Help me explore and design a new feature so I can move it to Build Feature.",
+                        "Help me design a feature to Move to Feature Request"));
         return """
                 <table class="welcome-card" width="100%%" cellpadding="0" cellspacing="0" border="0">
                     <tr>
                         <td class="ai-accent" width="4" nowrap="nowrap">&nbsp;</td>
                         <td width="100%%" style="padding: 10px 14px;">
                             <div class="welcome-title">ROXY %s &mdash; Technical Mentor (Read-Only Explore Mode)</div>
-                            <div class="welcome-hint" style="margin-top: 6px;">
-                                Explore your codebase, ask architecture questions, and debug issues safely without modifying any files &mdash; or ask Roxy how to use and configure <b>RoxyCode</b> itself:
+                            <div class="welcome-hint" style="margin-top: 4px;">
+                                Explore your codebase in read-only mode, or click a starter prompt below to populate the composer:
                             </div>
-                            <table width="100%%" cellpadding="2" cellspacing="0" border="0" style="margin-top: 8px;">
-                                <tr>
-                                    <td class="welcome-hint">&bull; <b>Ask about your codebase</b>: <i>"Explain how @PromptService.java assembles the system prompt."</i></td>
-                                </tr>
-                                <tr>
-                                    <td class="welcome-hint">&bull; <b>Ask about RoxyCode</b>: <i>"How do I configure build.toml for Gradle or Docker sandboxing?"</i> &bull; <i>"How do Context folders and Agent Memory work?"</i></td>
-                                </tr>
-                                <tr>
-                                    <td class="welcome-hint">&bull; Type <b>@</b> or click <b>@ Mention</b> to reference files &bull; <b>Enter</b> to send, <b>Shift+Enter</b> for newline &bull; <b>Ctrl+V</b> to paste images</td>
-                                </tr>
+                            <table width="100%%" cellpadding="0" cellspacing="6" border="0" style="margin-top: 6px;">
+                                %s
+                                %s
                             </table>
+                            <div class="welcome-hint" style="margin-top: 4px;">
+                                Type <b>@</b> or click <b>@ Mention</b> to reference files &bull; <b>Enter</b> to send, <b>Shift+Enter</b> for newline &bull; <b>Ctrl+V</b> to paste images
+                            </div>
                         </td>
                     </tr>
                 </table>
                 """
-                .formatted(CAT_EARS);
+                .formatted(CAT_EARS, row1, row2);
     }
 
     public static String renderSystemNotice(String message) {
