@@ -66,7 +66,22 @@ code { font-family: monospace; font-size: 11px; background-color: #2c313a; color
 .system-notice { font-size: 11px; color: #94a3b8; font-style: italic; padding: 4px 2px; margin-bottom: 8px; }
 .action-cta-link { font-family: sans-serif; font-size: 10px; font-weight: bold; color: #3794ff; text-decoration: none; }
 .tool-toggle { font-family: sans-serif; font-size: 10px; color: #3794ff; text-decoration: none; }
-.starter-card { background-color: #1e2228; border-color: #3c3c3c; border-style: solid; border-width: 1px; padding: 8px 10px; }
-.starter-title { font-family: sans-serif; font-size: 12px; font-weight: bold; color: #e2e8f0; }
-.starter-desc { font-family: sans-serif; font-size: 11px; color: #94a3b8; margin-top: 2px; }
-.starter-link { font-family: monospace; font-size: 11px; color: #3794ff; text-decoration: none; }
+.starter-card { background-color: #1e2228; border-color: #363c46; border-style: solid; border-width: 1px; }
+.starter-title-link { font-family: sans-serif; font-size: 12px; font-weight: bold; color: #f1f5f9; text-decoration: none; }
+.starter-desc { font-family: sans-serif; font-size: 11px; color: #94a3b8; margin-top: 4px; }
+.starter-accent-blue { background-color: #38bdf8; }
+.starter-badge-blue { background-color: #172a3a; color: #7dd3fc; font-family: sans-serif; font-size: 9px; font-weight: bold; }
+.starter-cta-pill-blue { background-color: #172534; }
+.starter-link-blue { font-family: sans-serif; font-size: 11px; font-weight: bold; color: #38bdf8; text-decoration: none; }
+.starter-accent-purple { background-color: #a78bfa; }
+.starter-badge-purple { background-color: #261f3d; color: #c4b5fd; font-family: sans-serif; font-size: 9px; font-weight: bold; }
+.starter-cta-pill-purple { background-color: #211c33; }
+.starter-link-purple { font-family: sans-serif; font-size: 11px; font-weight: bold; color: #a78bfa; text-decoration: none; }
+.starter-accent-amber { background-color: #fbbf24; }
+.starter-badge-amber { background-color: #332714; color: #fcd34d; font-family: sans-serif; font-size: 9px; font-weight: bold; }
+.starter-cta-pill-amber { background-color: #2b2112; }
+.starter-link-amber { font-family: sans-serif; font-size: 11px; font-weight: bold; color: #fbbf24; text-decoration: none; }
+.starter-accent-emerald { background-color: #34d399; }
+.starter-badge-emerald { background-color: #132f28; color: #6ee7b7; font-family: sans-serif; font-size: 9px; font-weight: bold; }
+.starter-cta-pill-emerald { background-color: #122822; }
+.starter-link-emerald { font-family: sans-serif; font-size: 11px; font-weight: bold; color: #34d399; text-decoration: none; }

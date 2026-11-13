@@ -322,29 +322,49 @@ public final class ChatHtmlTemplates {
         return "<tr>" + leftCard + rightCard + "</tr>";
     }
 
-    private static String renderStarterCard(String title, String description, String promptText, String linkLabel) {
+    private static String renderStarterCard(String accentVariant, String badgeText, String title, String description,
+            String promptText, String linkLabel) {
         String encodedPrompt = URLEncoder.encode(promptText, StandardCharsets.UTF_8);
         return """
-                <td class="starter-card" width="50%%" valign="top">
-                    <div class="starter-title">%s</div>
-                    <div class="starter-desc">%s</div>
-                    <div style="margin-top: 6px;"><a class="starter-link" href="prompt:%s">&rarr; %s</a></div>
+                <td width="50%%" valign="top">
+                    <table class="starter-card" width="100%%" cellpadding="0" cellspacing="0" border="0">
+                        <tr>
+                            <td class="starter-accent-%s" width="4" nowrap="nowrap">&nbsp;</td>
+                            <td width="100%%" style="padding: 10px 12px;" valign="top">
+                                <div><span class="starter-badge-%s">&nbsp;%s&nbsp;</span>&nbsp;&nbsp;<a class="starter-title-link" href="prompt:%s">%s</a></div>
+                                <div class="starter-desc">%s</div>
+                                <table cellpadding="0" cellspacing="0" border="0" style="margin-top: 6px;">
+                                    <tr>
+                                        <td class="starter-cta-pill-%s" style="padding: 3px 8px;">
+                                            <a class="starter-link-%s" href="prompt:%s">&#9656; %s</a>
+                                        </td>
+                                    </tr>
+                                </table>
+                            </td>
+                        </tr>
+                    </table>
                 </td>
-                """.formatted(title, description, encodedPrompt, linkLabel);
+                """
+                .formatted(accentVariant, accentVariant, badgeText, encodedPrompt, title, description, accentVariant,
+                        accentVariant, encodedPrompt, linkLabel);
     }
 
     public static String renderWelcomeCard(boolean isTaskMode) {
         if (isTaskMode) {
             String row1 = renderStarterRow(
-                    renderStarterCard("Build a New Feature", "Plan, implement, and verify new functionality",
+                    renderStarterCard("blue", "FEATURE", "Build a New Feature",
+                            "Plan, implement, and verify new end-to-end functionality",
                             "I want to implement a new feature: ", "Draft a feature implementation plan"),
-                    renderStarterCard("Fix a Bug or Regression", "Diagnose root cause and add regression tests",
+                    renderStarterCard("purple", "BUGFIX", "Fix a Bug or Regression",
+                            "Diagnose root cause, fix the defect, and add regression tests",
                             "Help me diagnose and fix a bug in: ", "Diagnose and fix a bug"));
             String row2 = renderStarterRow(
-                    renderStarterCard("Refactor &amp; Clean Up Code", "Remove dead, duplicated, or complex code",
+                    renderStarterCard("amber", "REFACTOR", "Refactor &amp; Clean Up Code",
+                            "Eliminate dead, duplicated, or overly complex code",
                             "Identify and clean up dead, duplicated, or overly complex code in: ",
                             "Identify cleanup opportunities"),
-                    renderStarterCard("Add Unit Test Coverage", "Cover business logic and edge cases",
+                    renderStarterCard("emerald", "TESTING", "Add Unit Test Coverage",
+                            "Add pragmatic unit tests for business logic and edge cases",
                             "Add pragmatic unit tests for the business logic and edge cases in: ",
                             "Add pragmatic unit tests"));
             return """
@@ -356,9 +376,12 @@ public final class ChatHtmlTemplates {
                                 <div class="welcome-hint" style="margin-top: 4px;">
                                     Describe a task or click a starter prompt below to populate the composer:
                                 </div>
-                                <table width="100%%" cellpadding="0" cellspacing="6" border="0" style="margin-top: 6px;">
+                                <table width="100%%" cellpadding="0" cellspacing="8" border="0" style="margin-top: 6px;">
                                     %s
                                     %s
+                                </table>
+                                <table width="100%%" cellpadding="0" cellspacing="0" border="0" style="margin-top: 6px; margin-bottom: 6px;">
+                                    <tr><td class="hr-line" height="1"></td></tr>
                                 </table>
                                 <div class="welcome-hint" style="margin-top: 4px;">
                                     1. <b>Plan</b> (draft &amp; approve) &bull; 2. <b>Code</b> (edit, compile &amp; test) &bull; 3. <b>Review</b> (audit diff &amp; sign-off)
@@ -370,19 +393,23 @@ public final class ChatHtmlTemplates {
                     .formatted(CAT_EARS, row1, row2);
         }
         String row1 = renderStarterRow(
-                renderStarterCard("Architecture &amp; Data Flow", "Understand key services and request flows",
+                renderStarterCard("blue", "ARCHITECTURE", "Architecture &amp; Data Flow",
+                        "Map out core services, entry points, and request lifecycles",
                         "Explain the high-level architecture and key services in this repository.",
-                        "Explain the high-level architecture and key services"),
-                renderStarterCard("Recent Git Activity &amp; Diffs", "Review recent commits and working-tree changes",
+                        "Explain architecture &amp; key services"),
+                renderStarterCard("purple", "GIT HISTORY", "Recent Git Activity &amp; Diffs",
+                        "Inspect recent commits and uncommitted working-tree changes",
                         "Summarize the recent commits and any uncommitted working-tree changes.",
-                        "Summarize recent commits and working-tree changes"));
+                        "Summarize recent commits &amp; diffs"));
         String row2 = renderStarterRow(
-                renderStarterCard("Configure build.toml &amp; Sandbox", "Detect project toolchains and build commands",
+                renderStarterCard("amber", "BUILD &amp; TOOLS", "Configure build.toml &amp; Sandbox",
+                        "Auto-detect project toolchains, test runners, and sandbox paths",
                         "Inspect my project files and toolchain and recommend a build.toml configuration.",
-                        "Inspect my project toolchain and suggest a build.toml"),
-                renderStarterCard("Scope a Feature Blueprint", "Explore and design before building",
+                        "Recommend a build.toml config"),
+                renderStarterCard("emerald", "BLUEPRINT", "Scope a Feature Blueprint",
+                        "Explore requirements and design before sending to Build Feature",
                         "Help me explore and design a new feature so I can move it to Build Feature.",
-                        "Help me design a feature to Move to Feature Request"));
+                        "Design a feature blueprint"));
         return """
                 <table class="welcome-card" width="100%%" cellpadding="0" cellspacing="0" border="0">
                     <tr>
@@ -392,9 +419,12 @@ public final class ChatHtmlTemplates {
                             <div class="welcome-hint" style="margin-top: 4px;">
                                 Explore your codebase in read-only mode, or click a starter prompt below to populate the composer:
                             </div>
-                            <table width="100%%" cellpadding="0" cellspacing="6" border="0" style="margin-top: 6px;">
+                            <table width="100%%" cellpadding="0" cellspacing="8" border="0" style="margin-top: 6px;">
                                 %s
                                 %s
+                            </table>
+                            <table width="100%%" cellpadding="0" cellspacing="0" border="0" style="margin-top: 6px; margin-bottom: 6px;">
+                                <tr><td class="hr-line" height="1"></td></tr>
                             </table>
                             <div class="welcome-hint" style="margin-top: 4px;">
                                 Type <b>@</b> or click <b>@ Mention</b> to reference files &bull; <b>Enter</b> to send, <b>Shift+Enter</b> for newline &bull; <b>Ctrl+V</b> to paste images
