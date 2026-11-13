@@ -6,6 +6,7 @@ import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.MemoryService.ArchiveEntrySummary;
 import org.roxycode.app.ui.ArchiveBrowserPanel.ArchiveMode;
@@ -67,5 +68,36 @@ class ArchiveBrowserPanelTest {
                 ArchiveMode.TOPICS);
         assertContainsAll(detailHtml, "<span class='mtk-keyword'>public</span>", "<span class='mtk-number'>1</span>");
         assertFalse(detailHtml.contains("<span class=<span"));
+
+        // Verify Rename and Delete controls in TOPICS mode
+        assertTrue(panel.renameButton.isVisible());
+        assertTrue(panel.deleteButton.isVisible());
+        assertNull(plansPanel.renameButton.getParent());
+        assertNull(plansPanel.deleteButton.getParent());
+
+        // Select topic1 in unfiltered list
+        panel.searchField.setText("");
+        SwingTestUtils.awaitFuture(panel.refresh());
+        assertTrue(panel.renameButton.isEnabled());
+        assertTrue(panel.deleteButton.isEnabled());
+
+        when(memoryService.renameArchivedTopic("20250514-153000-first.md", "Renamed Topic"))
+                .thenReturn(new EditorResult(true, "Renamed Topic", ""));
+        SwingTestUtils.runOnEdt(() -> {
+            panel.startRename();
+            assertTrue(panel.renamePanel.isVisible());
+            assertEquals("First Topic Title", panel.renameField.getText());
+            panel.renameField.setText("Renamed Topic");
+        });
+        SwingTestUtils.awaitFuture(panel.saveRename());
+        verify(memoryService).renameArchivedTopic("20250514-153000-first.md", "Renamed Topic");
+        assertFalse(panel.renamePanel.isVisible());
+
+        when(memoryService.deleteArchivedTopic("20250514-153000-first.md"))
+                .thenReturn(new EditorResult(true, "20250514-153000-first.md", ""));
+        SwingTestUtils.runOnEdt(panel::promptDeleteTopic);
+        assertTrue(panel.deleteConfirmBar.isPromptVisible());
+        SwingTestUtils.awaitFuture(panel.performDeleteTopic("20250514-153000-first.md"));
+        verify(memoryService).deleteArchivedTopic("20250514-153000-first.md");
     }
 }

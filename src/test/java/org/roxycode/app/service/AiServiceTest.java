@@ -39,7 +39,9 @@ import org.roxycode.app.events.AgentActivityEvent;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.TokenUsageEvent;
+import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.model.AppSettings;
+import org.roxycode.app.model.ChatTranscriptEntry;
 import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.model.AgentProfile;
@@ -855,5 +857,34 @@ class AiServiceTest {
         assertThrows(ServerException.class,
                 () -> service.chat("task:no-progress", WorkflowPhase.CODE, "Fails immediately", null));
         verify(alwaysFailingModel, times(3)).call(any(Prompt.class));
+    }
+
+    @Test
+    void testGenerateTopicTitleWithGemini38FlashLowAndFallback() {
+        ChatModel titleModel = mock(ChatModel.class);
+        lenient().when(titleModel.getOptions())
+                .thenReturn(GoogleGenAiChatOptions.builder().model("gemini-2.5-flash").build());
+        AiService service = createRealClientService(titleModel, null);
+
+        assertEquals(MemoryService.DEFAULT_TOPIC_TITLE, service.generateTopicTitle(List.of()));
+
+        List<ChatTranscriptEntry> transcript = List.of(
+                new ChatTranscriptEntry(ChatTranscriptEntry.ROLE_USER, "How does Spring AI retry work?", "10:00:00"),
+                new ChatTranscriptEntry(ChatTranscriptEntry.ROLE_AI, "It uses ModelCallRetryAdvisor.", "10:00:05"));
+
+        ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
+        when(titleModel.call(promptCaptor.capture()))
+                .thenReturn(buildChatResponse("  **\"Spring AI Retry Architecture!\"**  ", "STOP", null));
+
+        String generated = service.generateTopicTitle(transcript);
+        assertEquals("Spring AI Retry Architecture", generated);
+
+        GoogleGenAiChatOptions capturedOptions = assertInstanceOf(GoogleGenAiChatOptions.class,
+                promptCaptor.getValue().getOptions());
+        assertEquals("gemini-3.8-flash", capturedOptions.getModel());
+        assertEquals(GoogleGenAiThinkingLevel.LOW, capturedOptions.getThinkingLevel());
+
+        when(titleModel.call(any(Prompt.class))).thenThrow(new RuntimeException("transient failure"));
+        assertEquals("How does Spring AI retry work", service.generateTopicTitle(transcript));
     }
 }

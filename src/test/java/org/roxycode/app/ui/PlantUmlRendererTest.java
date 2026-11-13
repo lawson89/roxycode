@@ -282,6 +282,29 @@ class PlantUmlRendererTest {
         assertEquals(690.0f, hyphenatedSize.height, 0.01f);
     }
 
+    @Test
+    void testSvgStyleInliningAndXmlTextEscaping() {
+        String styledAndUnescapedSvg = """
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 300" width="600" height="300">
+                  <style>
+                    .card { fill: #1E293B; stroke: #38BDF8; stroke-width: 2; rx: 8; }
+                    .label { fill: #F8FAFC; font-family: 'Segoe UI', sans-serif; font-size: 14px; }
+                  </style>
+                  <rect class="card" x="10" y="10" width="580" height="280" fill="#0F172A"/>
+                  <text class="label" x="30" y="50">Plan &amp; Code: x < 10 & y > 2 <tspan class="label" x="30" y="80">A & B</tspan></text>
+                </svg>
+                """;
+        String sanitized = PlantUmlRenderer.sanitizeSvgForRendering(styledAndUnescapedSvg);
+        assertFalse(sanitized.contains("<style>"));
+        assertContainsAll(sanitized, "fill=" + '"' + "#0F172A" + '"', "stroke=" + '"' + "#38BDF8" + '"',
+                "stroke-width=" + '"' + "2" + '"', "font-family=" + '"' + "Segoe UI, sans-serif" + '"',
+                "Plan &amp; Code: x &lt; 10 &amp; y > 2", "<tspan class=" + '"' + "label" + '"', "A &amp; B</tspan>");
+
+        Optional<String> renderedHtml = PlantUmlRenderer.renderDiagramHtml(styledAndUnescapedSvg, "svg", true);
+        assertTrue(renderedHtml.isPresent());
+        assertContainsAll(renderedHtml.get(), "width=" + '"' + "600" + '"', "height=" + '"' + "300" + '"');
+    }
+
     private static Path extractImagePath(String html) throws Exception {
         Matcher matcher = IMG_SRC_PATTERN.matcher(html);
         assertTrue(matcher.find(), "Expected <img src='file:...'> in HTML: " + html);

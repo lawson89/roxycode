@@ -32,10 +32,6 @@ import org.roxycode.app.events.UserInputRequestEvent.PromptType;
 final class ChatPromptBanner extends JPanel {
     private static final long serialVersionUID = 1L;
 
-    static final String NEW_TOPIC_PROMPT_MESSAGE = "Save the current topic to Past Topics before starting a new one?";
-    static final String TOPIC_NAME_LABEL_TEXT = "Topic Name:";
-    static final String SAVE_TOPIC_BUTTON_TEXT = "Yes, Save Topic";
-    static final String DISCARD_TOPIC_BUTTON_TEXT = "No, Discard";
     static final String RESET_SESSION_PROMPT_MESSAGE = "Reset session? This cancels active tasks and clears chat history.";
     static final String CONFIRM_RESET_BUTTON_TEXT = "Yes, Reset";
     static final String CANCEL_BUTTON_TEXT = "Cancel";
@@ -199,53 +195,6 @@ final class ChatPromptBanner extends JPanel {
         add(createPromptActionsRow(confirmButton, cancelButton));
 
         showPrompt();
-    }
-
-    void showNewTopicPrompt(String defaultTopicName, Consumer<ChatPanel.NewTopicChoice> onChoice) {
-        resetWithHeader(NEW_TOPIC_PROMPT_MESSAGE, Codicons.COMMENT_DISCUSSION);
-        Runnable cancelTopicAction = () -> {
-            hidePrompt();
-            if (onChoice != null) {
-                onChoice.accept(new ChatPanel.NewTopicChoice(false, false, ""));
-            }
-        };
-        activePromptCancelAction = cancelTopicAction;
-
-        JPanel fieldPanel = new JPanel(new MigLayout("insets 0, fillx, gap 8", "[][grow, fill]"));
-        fieldPanel.setOpaque(false);
-        JLabel nameLabel = new JLabel(TOPIC_NAME_LABEL_TEXT);
-        JTextField topicNameField = new JTextField(StringUtils.defaultString(defaultTopicName), 30);
-        topicNameField.selectAll();
-        ActionListener saveAction = e -> {
-            String enteredName = topicNameField.getText();
-            hidePrompt();
-            if (onChoice != null) {
-                onChoice.accept(new ChatPanel.NewTopicChoice(true, true, enteredName));
-            }
-        };
-        topicNameField.addActionListener(saveAction);
-        fieldPanel.add(nameLabel);
-        fieldPanel.add(topicNameField, "growx");
-        add(fieldPanel);
-
-        JButton saveButton = UiComponents.createActionButton(SAVE_TOPIC_BUTTON_TEXT, Codicons.CHECK, null, false,
-                UiComponents.ACCENT_BUTTON_STYLE, saveAction);
-        JButton discardButton = UiComponents.createActionButton(DISCARD_TOPIC_BUTTON_TEXT, Codicons.TRASH, null, false,
-                UiComponents.SUBTLE_RED_BUTTON_STYLE, e -> {
-                    hidePrompt();
-                    if (onChoice != null) {
-                        onChoice.accept(new ChatPanel.NewTopicChoice(true, false, ""));
-                    }
-                });
-        JButton cancelButton = UiComponents.createActionButton(CANCEL_BUTTON_TEXT, Codicons.CLOSE, null, false, null,
-                e -> cancelTopicAction.run());
-        add(createPromptActionsRow(saveButton, discardButton, cancelButton));
-
-        showPrompt();
-        SwingUtilities.invokeLater(() -> {
-            topicNameField.selectAll();
-            topicNameField.requestFocusInWindow();
-        });
     }
 
     void addVisibilityListener(Consumer<Boolean> listener) {

@@ -74,9 +74,6 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     private static final int ACTIVITY_ELAPSED_DELAY_MS = 1000;
     private static final Codicons[] HOURGLASS_FRAMES = {Codicons.CIRCLE_FILLED, Codicons.CIRCLE_OUTLINE};
 
-    public record NewTopicChoice(boolean proceed, boolean saveTopic, String topicName) {
-    }
-
     final transient ChatModel model;
     final transient ChatController controller;
     MarkdownPane outputArea;
@@ -947,10 +944,6 @@ final class ChatPanel extends JPanel implements AutoCloseable {
 
     void showResetSessionPrompt(Runnable onConfirm) {
         userInputPromptPanel.showResetSessionPrompt(onConfirm);
-    }
-
-    void showNewTopicPrompt(String defaultTopicName, Consumer<NewTopicChoice> onChoice) {
-        userInputPromptPanel.showNewTopicPrompt(defaultTopicName, onChoice);
     }
 
     private void sendMessage(ActionEvent e) {

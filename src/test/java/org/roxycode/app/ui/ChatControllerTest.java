@@ -6,7 +6,6 @@ import static org.mockito.Mockito.*;
 import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
 import com.formdev.flatlaf.FlatClientProperties;
-import java.awt.Color;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
@@ -33,7 +32,6 @@ import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.border.CompoundBorder;
-import javax.swing.border.MatteBorder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.kordamp.ikonli.Ikon;
@@ -135,80 +133,10 @@ class ChatControllerTest extends ChatTestFixture {
         verify(chatMemory).clear("qa:default");
         verifyNoInteractions(memoryService, aiService);
 
-        // 2. Non-empty Q&A conversation renders inline New Topic prompt; Cancel hides prompt and keeps messages
-        clearInvocations(chatMemory, memoryService, publisher);
-        SwingTestUtils.runOnEdt(() -> {
-            panel.appendMessage("user", "How does RipGrep search work in MemoryService?");
-            panel.appendMessage("ai", "It searches global, project, and archive dirs.");
-        });
-        SwingTestUtils.clickOnEdt(panel.resetSessionButton);
-        flushEdt();
-        assertTrue(panel.userInputPromptPanel.isVisible());
-
-        JTextField topicField = SwingTestUtils.findComponent(panel.userInputPromptPanel, JTextField.class);
-        assertNotNull(topicField);
-        assertEquals("How does RipGrep search work in MemoryService", topicField.getText());
-
-        SettingsPanel.applyTheme("Light");
-        SwingTestUtils.runOnEdt(() -> SwingUtilities.updateComponentTreeUI(panel));
-        assertInstanceOf(CompoundBorder.class, panel.userInputPromptPanel.getBorder());
-        MatteBorder promptAccentStripe = assertInstanceOf(MatteBorder.class,
-                ((CompoundBorder) panel.userInputPromptPanel.getBorder()).getOutsideBorder());
-        assertEquals(4, promptAccentStripe.getBorderInsets(panel.userInputPromptPanel).left);
-
-        JButton saveBtn = SwingTestUtils.findButton(panel.userInputPromptPanel,
-                ChatPromptBanner.SAVE_TOPIC_BUTTON_TEXT);
-        JButton discardBtnInitial = SwingTestUtils.findButton(panel.userInputPromptPanel,
-                ChatPromptBanner.DISCARD_TOPIC_BUTTON_TEXT);
-        JButton cancelBtn = SwingTestUtils.findButton(panel.userInputPromptPanel, ChatPromptBanner.CANCEL_BUTTON_TEXT);
-        assertNotNull(saveBtn);
-        assertNotNull(discardBtnInitial);
-        assertNotNull(cancelBtn);
-        assertEquals(UiComponents.ACCENT_BUTTON_STYLE, saveBtn.getClientProperty(FlatClientProperties.STYLE));
-        assertEquals(UiComponents.SUBTLE_RED_BUTTON_STYLE,
-                discardBtnInitial.getClientProperty(FlatClientProperties.STYLE));
-        assertNull(cancelBtn.getClientProperty(FlatClientProperties.STYLE));
-        assertEquals(Color.WHITE, assertInstanceOf(FontIcon.class, saveBtn.getIcon()).getIconColor());
-        assertNotEquals(Color.WHITE, assertInstanceOf(FontIcon.class, cancelBtn.getIcon()).getIconColor());
-
-        SettingsPanel.applyTheme("Dark");
-        SwingTestUtils.runOnEdt(() -> SwingUtilities.updateComponentTreeUI(panel));
-        SwingTestUtils.clickOnEdt(cancelBtn);
-        flushEdt();
-        assertFalse(panel.userInputPromptPanel.isVisible());
-        assertEquals(2, panel.getConversationMessages().size());
-        verifyNoInteractions(chatMemory, memoryService, aiService);
-
-        // Escape key on New Topic prompt cancels without clearing messages
-        SwingTestUtils.clickOnEdt(panel.resetSessionButton);
-        flushEdt();
-        assertTrue(panel.userInputPromptPanel.isVisible());
-        ActionListener escapeAction = panel.userInputPromptPanel
-                .getActionForKeyStroke(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0));
-        assertNotNull(escapeAction);
-        SwingTestUtils
-                .runOnEdt(() -> escapeAction.actionPerformed(new ActionEvent(panel.userInputPromptPanel, 0, "esc")));
-        flushEdt();
-        assertFalse(panel.userInputPromptPanel.isVisible());
-        assertEquals(2, panel.getConversationMessages().size());
-
-        // 3. Inline New Topic prompt -> No, Discard clears chat without archiving
-        SwingTestUtils.clickOnEdt(panel.resetSessionButton);
-        flushEdt();
-        assertTrue(panel.userInputPromptPanel.isVisible());
-        JButton discardBtn = SwingTestUtils.findButton(panel.userInputPromptPanel,
-                ChatPromptBanner.DISCARD_TOPIC_BUTTON_TEXT);
-        assertNotNull(discardBtn);
-        SwingTestUtils.clickOnEdt(discardBtn);
-        flushEdt();
-        assertFalse(panel.userInputPromptPanel.isVisible());
-        verify(chatMemory).clear("qa:default");
-        verifyNoInteractions(memoryService, aiService);
-        assertTrue(panel.getConversationMessages().isEmpty());
-
-        // 4. Inline New Topic prompt -> Yes, Save Topic (and Enter key action) archives with edited title
-        clearInvocations(chatMemory, memoryService, publisher);
+        // 2. Non-empty Q&A conversation auto-archives in background with generated title and no prompt
+        clearInvocations(chatMemory, memoryService, publisher, aiService);
         when(environmentService.getCurrentUser()).thenReturn("DevUser");
+        when(aiService.generateTopicTitle(argThat(list -> list.size() == 2))).thenReturn("RipGrep Search Architecture");
         when(memoryService.archiveTopicConversation(eq("RipGrep Search Architecture"), eq("DevUser"), anyString(),
                 anyList())).thenReturn("20250514-153000-ripgrep-search-architecture.md");
 
@@ -218,18 +146,10 @@ class ChatControllerTest extends ChatTestFixture {
         });
         SwingTestUtils.clickOnEdt(panel.resetSessionButton);
         flushEdt();
-        assertTrue(panel.userInputPromptPanel.isVisible());
-
-        JTextField saveTopicField = SwingTestUtils.findComponent(panel.userInputPromptPanel, JTextField.class);
-        assertNotNull(saveTopicField);
-        SwingTestUtils.runOnEdt(() -> {
-            saveTopicField.setText("  # **RipGrep Search Architecture!**  ");
-            saveTopicField.postActionEvent();
-        });
-        flushEdt();
 
         assertFalse(panel.userInputPromptPanel.isVisible());
         verify(chatMemory).clear("qa:default");
+        verify(aiService).generateTopicTitle(argThat(list -> list.size() == 2));
         verify(memoryService).archiveTopicConversation(eq("RipGrep Search Architecture"), eq("DevUser"), anyString(),
                 argThat(list -> list.size() == 2));
         assertContainsAll(panel.outputArea.getText(), "Archived previous topic as", "RipGrep Search Architecture",
@@ -237,7 +157,7 @@ class ChatControllerTest extends ChatTestFixture {
         verify(publisher).publishEvent(new ArchiveUpdatedEvent(ArchiveUpdatedEvent.TYPE_TOPIC,
                 "20250514-153000-ripgrep-search-architecture.md"));
 
-        // 5. Task Mode inline Reset Session prompt: Cancel vs Yes, Reset
+        // 3. Task Mode inline Reset Session prompt: Cancel vs Yes, Reset
         ChatPanel taskPanel = createFeatureChatPanel(directExecutor);
         clearInvocations(planService, chatMemory);
         SwingTestUtils.clickOnEdt(taskPanel.resetSessionButton);
@@ -1046,8 +966,9 @@ class ChatControllerTest extends ChatTestFixture {
         panel.appendMessage("user", "Reset me");
         sendOnEdt(panel, "/reset");
         flushEdt();
-        // Reset shows prompt for non-empty conversation in Q&A
-        assertTrue(panel.userInputPromptPanel.isVisible());
+        // Reset immediately resets and archives in background without showing a prompt in Q&A
+        assertFalse(panel.userInputPromptPanel.isVisible());
+        verify(chatMemory).clear("qa:default");
 
         // 6. Bare /rem-p and /rem-g usage hints
         sendOnEdt(panel, "/rem-p");

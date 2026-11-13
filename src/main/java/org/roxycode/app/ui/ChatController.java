@@ -404,17 +404,7 @@ final class ChatController implements AutoCloseable {
 
     public void resetSession() {
         if (!model.isTaskMode()) {
-            List<ChatTranscriptEntry> currentTranscript = view.getConversationMessages();
-            if (currentTranscript.isEmpty()) {
-                performNewTopicReset(false, "");
-                return;
-            }
-            String defaultTitle = MemoryService.deriveDefaultTopicTitle(currentTranscript);
-            view.showNewTopicPrompt(defaultTitle, choice -> {
-                if (choice != null && choice.proceed()) {
-                    performNewTopicReset(choice.saveTopic(), choice.topicName());
-                }
-            });
+            performNewTopicReset(true, null);
             return;
         }
         view.showResetSessionPrompt(this::performResetSession);
@@ -446,7 +436,14 @@ final class ChatController implements AutoCloseable {
     }
 
     private void archiveCapturedTopic(List<ChatTranscriptEntry> capturedTranscript, String customTopicTitle) {
-        String title = MemoryService.resolveTopicTitle(customTopicTitle, capturedTranscript);
+        String title = MemoryService.cleanTopicTitle(customTopicTitle);
+        if (title.isEmpty()) {
+            if (aiService != null) {
+                title = aiService.generateTopicTitle(capturedTranscript);
+            } else {
+                title = MemoryService.deriveDefaultTopicTitle(capturedTranscript);
+            }
+        }
         String user = EnvironmentService.resolveCurrentUser(environmentService);
         String filename = memoryService.archiveTopicConversation(title, user, Instant.now().toString(),
                 capturedTranscript);

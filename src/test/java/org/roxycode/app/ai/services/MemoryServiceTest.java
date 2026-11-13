@@ -176,4 +176,39 @@ class MemoryServiceTest {
         assertEquals("Custom User Title", MemoryService.resolveTopicTitle("  **Custom User Title**  ", entries));
         assertEquals("How does repo map packing work", MemoryService.resolveTopicTitle("   ", entries));
     }
+
+    @Test
+    void testRenameAndDeleteArchivedTopic() throws Exception {
+        List<org.roxycode.app.events.ArchiveUpdatedEvent> archiveEvents = new ArrayList<>();
+        MemoryService topicMemoryService = new MemoryService(settingsService, projectService, event -> {
+            if (event instanceof org.roxycode.app.events.ArchiveUpdatedEvent archiveEvent) {
+                archiveEvents.add(archiveEvent);
+            }
+        });
+        List<ChatTranscriptEntry> entries = List.of(new ChatTranscriptEntry("user", "Initial question", "10:00:00"),
+                new ChatTranscriptEntry("ai", "Initial answer", "10:00:05"));
+        String filename = topicMemoryService.archiveTopicConversation("Original Topic", "Alice", "2025-05-14T15:30:00Z",
+                entries);
+        assertNotNull(filename);
+
+        EditorResult blankErr = topicMemoryService.renameArchivedTopic(filename, "   ");
+        assertFalse(blankErr.success());
+
+        EditorResult renameRes = topicMemoryService.renameArchivedTopic(filename, "  **Updated Topic Name**  ");
+        assertTrue(renameRes.success());
+        assertEquals("Updated Topic Name", renameRes.content());
+        assertEquals(1, archiveEvents.size());
+        assertEquals(new org.roxycode.app.events.ArchiveUpdatedEvent("topic", filename), archiveEvents.get(0));
+        String updatedMd = topicMemoryService.readArchivedTopic(filename);
+        assertContainsAll(updatedMd, "title: \"Updated Topic Name\"", "# Topic: Updated Topic Name", "Initial answer");
+
+        EditorResult deleteRes = topicMemoryService.deleteArchivedTopic(filename);
+        assertTrue(deleteRes.success());
+        assertEquals(filename, deleteRes.content());
+        assertEquals("", topicMemoryService.readArchivedTopic(filename));
+        assertEquals(2, archiveEvents.size());
+
+        EditorResult missingErr = topicMemoryService.deleteArchivedTopic(filename);
+        assertFalse(missingErr.success());
+    }
 }

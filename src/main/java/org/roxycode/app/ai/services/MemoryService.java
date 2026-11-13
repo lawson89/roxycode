@@ -15,6 +15,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
+import org.roxycode.app.events.ArchiveUpdatedEvent;
 import org.roxycode.app.events.MemoryChangedEvent;
 import org.roxycode.app.model.ChatTranscriptEntry;
 import org.roxycode.app.service.ProjectService;
@@ -57,6 +58,7 @@ public class MemoryService {
     private static final String NO_ACTIVE_PROJECT = "No active project";
     private static final String GLOBAL_DIR_UNAVAILABLE = "Global memory directory is unavailable";
     private static final String MD_EXTENSION = ".md";
+    private static final String TOPIC_HEADING_PREFIX = "# Topic: ";
 
     public record NoteDetail(String slug, String title, String tags, String updated, String body, String rawMarkdown) {
     }
@@ -267,6 +269,101 @@ public class MemoryService {
         return readFileIfExists(target);
     }
 
+    private Path resolveArchivedTopicPath(String filename) {
+        if (projectService == null || !projectService.hasActiveProject()) {
+            return null;
+        }
+        Path archiveDir = resolveProjectSubdir(ARCHIVE_TOPICS_SUBDIR);
+        if (archiveDir == null) {
+            return null;
+        }
+        String cleanName = sanitizeArchiveFilename(filename);
+        Path target = archiveDir.resolve(cleanName).toAbsolutePath().normalize();
+        if (!target.startsWith(archiveDir)) {
+            throw new IllegalArgumentException("Invalid archived topic filename: " + filename);
+        }
+        return target;
+    }
+
+    /**
+     * Renames an archived Q&amp;A topic by updating its frontmatter {@code title} and leading {@code # Topic:} heading
+     * on disk, then publishes an {@link ArchiveUpdatedEvent}.
+     *
+     * @param filename
+     *            the archived topic filename
+     * @param newTitle
+     *            the new topic title
+     * @return the {@link EditorResult} containing the cleaned title on success or an error hint on failure
+     */
+    public EditorResult renameArchivedTopic(String filename, String newTitle) {
+        if (projectService == null || !projectService.hasActiveProject()) {
+            return new EditorResult(false, "", NO_ACTIVE_PROJECT);
+        }
+        String cleanedTitle = cleanTopicTitle(newTitle);
+        if (cleanedTitle.isEmpty()) {
+            return new EditorResult(false, "", "Topic title must not be blank.");
+        }
+        try {
+            Path target = resolveArchivedTopicPath(filename);
+            if (target == null || !Files.isRegularFile(target)) {
+                return new EditorResult(false, "", "Archived topic not found: " + filename);
+            }
+            String rawMarkdown = Files.readString(target, StandardCharsets.UTF_8);
+            Map<String, String> existingFm = FrontmatterUtils.parseFrontmatter(rawMarkdown);
+            Map<String, Object> updatedFm = new LinkedHashMap<>(existingFm);
+            updatedFm.put(KEY_TITLE, cleanedTitle);
+
+            String body = FrontmatterUtils.stripFrontmatter(rawMarkdown).stripLeading();
+            String updatedBody;
+            if (body.startsWith(TOPIC_HEADING_PREFIX.trim())) {
+                int newlineIdx = body.indexOf(LF);
+                if (newlineIdx >= 0) {
+                    updatedBody = TOPIC_HEADING_PREFIX + cleanedTitle + body.substring(newlineIdx);
+                } else {
+                    updatedBody = TOPIC_HEADING_PREFIX + cleanedTitle + NL;
+                }
+            } else {
+                updatedBody = TOPIC_HEADING_PREFIX + cleanedTitle + NL + NL + body;
+            }
+            String updatedMarkdown = FrontmatterUtils.formatFrontmatter(updatedFm) + updatedBody;
+            Files.writeString(target, updatedMarkdown, StandardCharsets.UTF_8);
+            if (eventPublisher != null) {
+                eventPublisher.publishEvent(
+                        new ArchiveUpdatedEvent(ArchiveUpdatedEvent.TYPE_TOPIC, target.getFileName().toString()));
+            }
+            return new EditorResult(true, cleanedTitle, "");
+        } catch (IllegalArgumentException | IOException e) {
+            return new EditorResult(false, "", "Failed to rename topic: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Deletes an archived Q&amp;A topic Markdown file from disk and publishes an {@link ArchiveUpdatedEvent}.
+     *
+     * @param filename
+     *            the archived topic filename
+     * @return the {@link EditorResult} containing the deleted filename on success or an error hint on failure
+     */
+    public EditorResult deleteArchivedTopic(String filename) {
+        if (projectService == null || !projectService.hasActiveProject()) {
+            return new EditorResult(false, "", NO_ACTIVE_PROJECT);
+        }
+        try {
+            Path target = resolveArchivedTopicPath(filename);
+            if (target == null || !Files.isRegularFile(target)) {
+                return new EditorResult(false, "", "Archived topic not found: " + filename);
+            }
+            String deletedName = target.getFileName().toString();
+            Files.deleteIfExists(target);
+            if (eventPublisher != null) {
+                eventPublisher.publishEvent(new ArchiveUpdatedEvent(ArchiveUpdatedEvent.TYPE_TOPIC, deletedName));
+            }
+            return new EditorResult(true, deletedName, "");
+        } catch (IllegalArgumentException | IOException e) {
+            return new EditorResult(false, "", "Failed to delete topic: " + e.getMessage());
+        }
+    }
+
     public String archiveTopicConversation(String title, String user, String isoTimestamp,
             List<ChatTranscriptEntry> entries) {
         if (entries == null || entries.isEmpty() || projectService == null || !projectService.hasActiveProject()) {
@@ -295,8 +392,8 @@ public class MemoryService {
             frontmatter.put("messageCount", entries.size());
 
             StringBuilder md = new StringBuilder(FrontmatterUtils.formatFrontmatter(frontmatter));
-            md.append("# Topic: ").append(resolvedTitle).append(NL).append(NL).append("## Conversation Transcript")
-                    .append(NL);
+            md.append(TOPIC_HEADING_PREFIX).append(resolvedTitle).append(NL).append(NL)
+                    .append("## Conversation Transcript").append(NL);
 
             for (ChatTranscriptEntry entry : entries) {
                 String speaker;
@@ -350,7 +447,15 @@ public class MemoryService {
         return StringUtils.defaultIfEmpty(fallback, DEFAULT_TOPIC_TITLE);
     }
 
-    static String cleanTopicTitle(String rawTitle) {
+    /**
+     * Cleans a raw topic title by taking the first non-blank line, stripping Markdown/quote characters, collapsing
+     * whitespace, and truncating to {@link #MAX_TOPIC_TITLE_LENGTH}.
+     *
+     * @param rawTitle
+     *            the raw title text
+     * @return the cleaned topic title, or an empty string if blank
+     */
+    public static String cleanTopicTitle(String rawTitle) {
         if (StringUtils.isBlank(rawTitle)) {
             return "";
         }

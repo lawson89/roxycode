@@ -5,6 +5,7 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.FlowLayout;
+import java.awt.event.KeyEvent;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -19,6 +20,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTextField;
+import javax.swing.KeyStroke;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
 import javax.swing.Timer;
@@ -26,6 +28,7 @@ import net.miginfocom.swing.MigLayout;
 import org.apache.commons.lang3.StringUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
+import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.MemoryService.ArchiveEntrySummary;
 import org.roxycode.app.util.Edt;
@@ -45,6 +48,7 @@ final class ArchiveBrowserPanel extends JPanel {
     static final int TIMESTAMP_PREFIX_LEN = 16;
     private static final int SINGLE_ITEM_COUNT = 1;
     static final String COPY_BUTTON_TEXT = "Copy as Markdown";
+    private static final String MIG_GROW_X = "growx";
 
     public enum ArchiveMode {
         TOPICS("Search past topics...", "topic", "topics", Codicons.COMMENT_DISCUSSION, "Archived On",
@@ -91,7 +95,14 @@ final class ArchiveBrowserPanel extends JPanel {
     final DefaultListModel<ArchiveEntrySummary> listModel = new DefaultListModel<>();
     final JList<ArchiveEntrySummary> entryList = new JList<>(listModel);
     final JLabel detailSummaryLabel = new JLabel("");
+    final JButton renameButton;
+    final JButton deleteButton;
     final JButton copyMarkdownButton;
+    final JPanel renamePanel;
+    final JTextField renameField;
+    final JButton saveRenameButton;
+    final JButton cancelRenameButton;
+    final UiComponents.InlineConfirmBar deleteConfirmBar;
     final JEditorPane displayArea;
     private final Timer searchDebounceTimer;
 
@@ -122,7 +133,7 @@ final class ArchiveBrowserPanel extends JPanel {
         refreshButton.setToolTipText("Refresh archive list");
         refreshButton.addActionListener(e -> refresh());
 
-        topBar.add(searchField, "growx");
+        topBar.add(searchField, MIG_GROW_X);
         topBar.add(countLabel);
         topBar.add(refreshButton);
         add(topBar, BorderLayout.NORTH);
@@ -146,16 +157,49 @@ final class ArchiveBrowserPanel extends JPanel {
         detailSummaryLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
         detailToolbar.add(detailSummaryLabel, BorderLayout.WEST);
 
-        JPanel actionRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        JPanel actionRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
         actionRight.setOpaque(false);
+        renameButton = UiComponents.createActionButton("Rename", Codicons.EDIT, null, false, null, e -> startRename());
+        deleteButton = UiComponents.createActionButton("Delete", Codicons.TRASH, null, false,
+                UiComponents.SUBTLE_RED_BUTTON_STYLE, e -> promptDeleteTopic());
+        renameButton.setEnabled(false);
+        deleteButton.setEnabled(false);
+        if (mode == ArchiveMode.TOPICS) {
+            actionRight.add(renameButton);
+            actionRight.add(deleteButton);
+        }
         copyMarkdownButton = UiComponents.createCopyButton(COPY_BUTTON_TEXT, false, this::copyCurrentMarkdown);
         actionRight.add(copyMarkdownButton);
         detailToolbar.add(actionRight, BorderLayout.EAST);
 
+        renamePanel = new JPanel(new MigLayout("insets 6 12 6 12, fillx, gap 8", "[][grow, fill][][]", "center"));
+        renamePanel.setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));
+        renamePanel.setVisible(false);
+        renameField = new JTextField(24);
+        renameField.addActionListener(e -> saveRename());
+        renameField.registerKeyboardAction(e -> cancelRename(), KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
+                WHEN_FOCUSED);
+        saveRenameButton = UiComponents.createActionButton("Save", Codicons.CHECK, null, false,
+                UiComponents.ACCENT_BUTTON_STYLE, e -> saveRename());
+        cancelRenameButton = UiComponents.createActionButton("Cancel", Codicons.CLOSE, null, false, null,
+                e -> cancelRename());
+        renamePanel.add(new JLabel("Title:"));
+        renamePanel.add(renameField, MIG_GROW_X);
+        renamePanel.add(saveRenameButton);
+        renamePanel.add(cancelRenameButton);
+
+        deleteConfirmBar = new UiComponents.InlineConfirmBar();
+
+        JPanel detailHeaderPanel = new JPanel(new MigLayout("insets 0, fillx, wrap 1, gapy 0", "[grow, fill]"));
+        detailHeaderPanel.setOpaque(false);
+        detailHeaderPanel.add(detailToolbar);
+        detailHeaderPanel.add(renamePanel);
+        detailHeaderPanel.add(deleteConfirmBar);
+
         displayArea = SwingHtmlUtils.createHtmlEditorPane();
         JScrollPane detailScrollPane = UiComponents.createHtmlScrollPane(displayArea);
 
-        detailPanel.add(detailToolbar, BorderLayout.NORTH);
+        detailPanel.add(detailHeaderPanel, BorderLayout.NORTH);
         detailPanel.add(detailScrollPane, BorderLayout.CENTER);
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, listScrollPane, detailPanel);
@@ -235,7 +279,11 @@ final class ArchiveBrowserPanel extends JPanel {
             currentSelectedEntry = null;
             currentRawMarkdown = "";
             detailSummaryLabel.setText("");
+            renameButton.setEnabled(false);
+            deleteButton.setEnabled(false);
             copyMarkdownButton.setEnabled(false);
+            cancelRename();
+            deleteConfirmBar.cancel();
             renderEmptyState(query != null && !query.isBlank());
             lastSelectionFuture = CompletableFuture.completedFuture("");
         }
@@ -243,9 +291,13 @@ final class ArchiveBrowserPanel extends JPanel {
 
     CompletableFuture<String> onEntrySelected(ArchiveEntrySummary entry) {
         currentSelectedEntry = entry;
+        cancelRename();
+        deleteConfirmBar.cancel();
         if (entry == null) {
             currentRawMarkdown = "";
             detailSummaryLabel.setText("");
+            renameButton.setEnabled(false);
+            deleteButton.setEnabled(false);
             copyMarkdownButton.setEnabled(false);
             renderEmptyState(searchField != null && !searchField.getText().isBlank());
             CompletableFuture<String> done = CompletableFuture.completedFuture("");
@@ -253,6 +305,9 @@ final class ArchiveBrowserPanel extends JPanel {
             return done;
         }
 
+        boolean isTopicsMode = mode == ArchiveMode.TOPICS;
+        renameButton.setEnabled(isTopicsMode);
+        deleteButton.setEnabled(isTopicsMode);
         detailSummaryLabel.setText(entry.title());
         CompletableFuture<String> future = Edt.supplyAsync(() -> readEntryMarkdown(entry.filename()),
                 normalized -> applyDetailContent(entry, normalized), e -> {
@@ -360,6 +415,68 @@ final class ArchiveBrowserPanel extends JPanel {
         this.lastCopiedMarkdown = currentRawMarkdown;
         copyFeedbackTimer = UiComponents.copyWithFeedback(copyMarkdownButton, copyFeedbackTimer, currentRawMarkdown,
                 COPY_BUTTON_TEXT, COPY_FEEDBACK_DELAY_MS);
+    }
+
+    void startRename() {
+        if (mode != ArchiveMode.TOPICS || currentSelectedEntry == null) {
+            return;
+        }
+        deleteConfirmBar.cancel();
+        renameField.setText(StringUtils.defaultString(currentSelectedEntry.title()));
+        renamePanel.setVisible(true);
+        renameField.selectAll();
+        renameField.requestFocusInWindow();
+        revalidate();
+        repaint();
+    }
+
+    void cancelRename() {
+        if (renamePanel != null && renamePanel.isVisible()) {
+            renamePanel.setVisible(false);
+            revalidate();
+            repaint();
+        }
+    }
+
+    CompletableFuture<EditorResult> saveRename() {
+        if (mode != ArchiveMode.TOPICS || currentSelectedEntry == null || memoryService == null) {
+            return CompletableFuture.completedFuture(new EditorResult(false, "", "No topic selected"));
+        }
+        String filename = currentSelectedEntry.filename();
+        String newTitle = renameField.getText();
+        saveRenameButton.setEnabled(false);
+        return Edt.supplyAsync(() -> memoryService.renameArchivedTopic(filename, newTitle), result -> {
+            saveRenameButton.setEnabled(true);
+            if (result != null && result.success()) {
+                cancelRename();
+                refresh();
+            }
+        }, ex -> {
+            saveRenameButton.setEnabled(true);
+            log.warn("Failed to rename archived topic {}: {}", filename, ex.getMessage());
+        });
+    }
+
+    void promptDeleteTopic() {
+        if (mode != ArchiveMode.TOPICS || currentSelectedEntry == null) {
+            return;
+        }
+        cancelRename();
+        String filename = currentSelectedEntry.filename();
+        String title = StringUtils.defaultIfBlank(currentSelectedEntry.title(), filename);
+        deleteConfirmBar.prompt("Delete topic '" + title + "'?", "Confirm Delete", true,
+                () -> performDeleteTopic(filename));
+    }
+
+    CompletableFuture<EditorResult> performDeleteTopic(String filename) {
+        if (memoryService == null || StringUtils.isBlank(filename)) {
+            return CompletableFuture.completedFuture(new EditorResult(false, "", "Invalid topic"));
+        }
+        return Edt.supplyAsync(() -> memoryService.deleteArchivedTopic(filename), result -> {
+            if (result != null && result.success()) {
+                refresh();
+            }
+        }, ex -> log.warn("Failed to delete archived topic {}: {}", filename, ex.getMessage()));
     }
 
     private String formatCountText(int count) {

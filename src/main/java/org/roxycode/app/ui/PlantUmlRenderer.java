@@ -18,7 +18,9 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -44,6 +46,7 @@ final class PlantUmlRenderer {
     private static final String LANG_UML = "uml";
     private static final String LANG_DITAA = "ditaa";
     private static final String LANG_SVG = "svg";
+    private static final String CSS_PROP_FONT_FAMILY = "font-family";
     private static final Set<String> DIAGRAM_LANGUAGES = Set.of(LANG_PLANTUML, LANG_PUML, LANG_UML, LANG_DITAA,
             LANG_SVG);
 
@@ -68,6 +71,19 @@ final class PlantUmlRenderer {
     private static final Pattern SVG_ATTR_PATTERN = Pattern
             .compile("(?is)(?<![\\w-])(width|height|viewBox)\\s*=\\s*(?:\\x22([^\\x22]*)\\x22|'([^']*)')");
     private static final Pattern WHITESPACE_OR_COMMA_PATTERN = Pattern.compile("[\\s,]+");
+    private static final Pattern SVG_STYLE_BLOCK_PATTERN = Pattern.compile("(?is)<style\\b[^>]*>(.*?)</style>");
+    private static final Pattern CSS_RULE_PATTERN = Pattern.compile("(?s)([^{}]+)\\{([^{}]*)\\}");
+    private static final Pattern SVG_ELEMENT_OPEN_PATTERN = Pattern.compile("(?s)<([a-zA-Z][\\w:-]*)(\\s+[^>]*?)(/?)>");
+    private static final Pattern SVG_CLASS_ATTR_PATTERN = Pattern
+            .compile("(?is)(?<![\\w-])class\\s*=\\s*(?:\\x22([^\\x22]*)\\x22|'([^']*)')");
+    private static final Pattern SVG_TEXT_BLOCK_PATTERN = Pattern.compile("(?is)<text\\b[^>]*>.*?</text>");
+    private static final Pattern XML_TAG_OR_TEXT_PATTERN = Pattern
+            .compile("(?s)(</?[a-zA-Z!?][^>]*>)|((?:[^<]|<(?![/?!a-zA-Z]))+)");
+    private static final Pattern BARE_AMPERSAND_PATTERN = Pattern
+            .compile("&(?!(?:#[0-9]+|#x[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9._-]*);)");
+    private static final Set<String> SUPPORTED_SVG_PRESENTATION_ATTRS = Set.of("fill", "stroke", "stroke-width",
+            "font-family", "font-size", "font-weight", "rx", "ry", "opacity", "stroke-dasharray", "text-anchor",
+            "dominant-baseline", "fill-opacity", "stroke-opacity");
     private static final String SMETANA_PRAGMA = "!pragma layout smetana";
     private static final String ERROR_DESCRIPTION_MARKER = "(Error)";
     private static final char DOUBLE_QUOTE_CHAR = '"';
@@ -523,20 +539,172 @@ final class PlantUmlRenderer {
         return new int[]{resolvedWidth, resolvedHeight};
     }
 
+    static String sanitizeSvgForRendering(String svgCode) {
+        if (svgCode == null || svgCode.isBlank()) {
+            return svgCode;
+        }
+        String inlined = inlineSvgStyleClasses(svgCode);
+        return escapeSvgTextContent(inlined);
+    }
+
+    private static String inlineSvgStyleClasses(String svgCode) {
+        Map<String, Map<String, String>> classRules = new LinkedHashMap<>();
+        Matcher styleMatcher = SVG_STYLE_BLOCK_PATTERN.matcher(svgCode);
+        StringBuilder stripped = new StringBuilder(svgCode.length());
+        while (styleMatcher.find()) {
+            parseCssClassRules(styleMatcher.group(1), classRules);
+            styleMatcher.appendReplacement(stripped, "");
+        }
+        styleMatcher.appendTail(stripped);
+        String withoutStyles = stripped.toString();
+        if (classRules.isEmpty()) {
+            return withoutStyles;
+        }
+        Matcher elemMatcher = SVG_ELEMENT_OPEN_PATTERN.matcher(withoutStyles);
+        StringBuilder result = new StringBuilder(withoutStyles.length() + 128);
+        while (elemMatcher.find()) {
+            String tagName = elemMatcher.group(1);
+            String attrs = elemMatcher.group(2);
+            String selfClose = elemMatcher.group(3);
+            Matcher classMatcher = SVG_CLASS_ATTR_PATTERN.matcher(attrs);
+            if (!classMatcher.find()) {
+                elemMatcher.appendReplacement(result, Matcher.quoteReplacement(elemMatcher.group(0)));
+                continue;
+            }
+            String classListRaw = classMatcher.group(1);
+            if (classListRaw == null) {
+                classListRaw = classMatcher.group(2);
+            }
+            if (classListRaw == null || classListRaw.isBlank()) {
+                elemMatcher.appendReplacement(result, Matcher.quoteReplacement(elemMatcher.group(0)));
+                continue;
+            }
+            Map<String, String> mergedProps = new LinkedHashMap<>();
+            for (String token : classListRaw.trim().split("\\s+")) {
+                Map<String, String> ruleProps = classRules.get(token);
+                if (ruleProps != null) {
+                    mergedProps.putAll(ruleProps);
+                }
+            }
+            if (mergedProps.isEmpty()) {
+                elemMatcher.appendReplacement(result, Matcher.quoteReplacement(elemMatcher.group(0)));
+                continue;
+            }
+            StringBuilder appendedAttrs = new StringBuilder(attrs);
+            for (Map.Entry<String, String> prop : mergedProps.entrySet()) {
+                String attrName = prop.getKey();
+                if (!hasInlineSvgAttribute(attrs, attrName)) {
+                    String safeValue = prop.getValue().replace("\"", "&quot;");
+                    appendedAttrs.append(' ').append(attrName).append("=\"").append(safeValue).append('"');
+                }
+            }
+
+            String replacement = "<" + tagName + appendedAttrs + selfClose + ">";
+            elemMatcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
+        }
+        elemMatcher.appendTail(result);
+        return result.toString();
+    }
+
+    private static void parseCssClassRules(String cssBody, Map<String, Map<String, String>> classRules) {
+        if (cssBody == null || cssBody.isBlank()) {
+            return;
+        }
+        Matcher ruleMatcher = CSS_RULE_PATTERN.matcher(cssBody);
+        while (ruleMatcher.find()) {
+            String selectorGroup = ruleMatcher.group(1).trim();
+            String declarations = ruleMatcher.group(2).trim();
+            Map<String, String> parsedProps = parseCssDeclarations(declarations);
+            if (parsedProps.isEmpty()) {
+                continue;
+            }
+            for (String selector : selectorGroup.split(",")) {
+                String trimmedSelector = selector.trim();
+                if (trimmedSelector.startsWith(".") && trimmedSelector.length() > 1) {
+                    String className = trimmedSelector.substring(1).trim();
+                    if (!className.isEmpty() && className.indexOf(' ') < 0 && className.indexOf(':') < 0) {
+                        classRules.computeIfAbsent(className, k -> new LinkedHashMap<>()).putAll(parsedProps);
+                    }
+                }
+            }
+        }
+    }
+
+    private static Map<String, String> parseCssDeclarations(String declarations) {
+        Map<String, String> props = new LinkedHashMap<>();
+        if (declarations == null || declarations.isBlank()) {
+            return props;
+        }
+        for (String decl : declarations.split(";")) {
+            int colonIdx = decl.indexOf(':');
+            if (colonIdx <= 0) {
+                continue;
+            }
+            String propName = decl.substring(0, colonIdx).trim().toLowerCase(Locale.ROOT);
+            if (!SUPPORTED_SVG_PRESENTATION_ATTRS.contains(propName)) {
+                continue;
+            }
+            String propVal = decl.substring(colonIdx + 1).trim();
+            if (CSS_PROP_FONT_FAMILY.equals(propName)) {
+                propVal = propVal.replace("'", "").replace("\"", "");
+            }
+            props.put(propName, propVal);
+        }
+        return props;
+    }
+
+    private static boolean hasInlineSvgAttribute(String attrs, String attrName) {
+        Pattern p = Pattern.compile("(?is)(?<![\\w-])" + Pattern.quote(attrName) + "\\s*=");
+        return p.matcher(attrs).find();
+
+    }
+
+    private static String escapeSvgTextContent(String svgCode) {
+        Matcher textMatcher = SVG_TEXT_BLOCK_PATTERN.matcher(svgCode);
+        StringBuilder result = new StringBuilder(svgCode.length());
+        while (textMatcher.find()) {
+            String textBlock = textMatcher.group(0);
+            String escapedBlock = escapeXmlTextSegments(textBlock);
+            textMatcher.appendReplacement(result, Matcher.quoteReplacement(escapedBlock));
+        }
+        textMatcher.appendTail(result);
+        return result.toString();
+    }
+
+    private static String escapeXmlTextSegments(String textBlock) {
+        Matcher segmentMatcher = XML_TAG_OR_TEXT_PATTERN.matcher(textBlock);
+        StringBuilder out = new StringBuilder(textBlock.length());
+        while (segmentMatcher.find()) {
+            String tag = segmentMatcher.group(1);
+            if (tag != null) {
+                out.append(tag);
+            } else {
+                String text = segmentMatcher.group(2);
+                if (text != null) {
+                    String escapedAmp = BARE_AMPERSAND_PATTERN.matcher(text).replaceAll("&amp;");
+                    String escapedLt = escapedAmp.replace("<", "&lt;");
+                    out.append(escapedLt);
+                }
+            }
+        }
+        return out.toString();
+    }
+
     static String normalizeRootSvgAttributes(String svgCode) {
         if (svgCode == null || svgCode.isBlank()) {
             return svgCode;
         }
-        Matcher openTagMatcher = SVG_OPEN_TAG_PATTERN.matcher(svgCode);
+        String sanitized = sanitizeSvgForRendering(svgCode);
+        Matcher openTagMatcher = SVG_OPEN_TAG_PATTERN.matcher(sanitized);
         if (!openTagMatcher.find()) {
-            return svgCode;
+            return sanitized;
         }
         String attrs = openTagMatcher.group(1);
         SvgRootAttributes parsed = parseSvgRootAttributes(attrs);
         boolean widthIsPercent = isPercentageValue(parsed.width());
         boolean heightIsPercent = isPercentageValue(parsed.height());
         if (!widthIsPercent && !heightIsPercent) {
-            return svgCode;
+            return sanitized;
         }
         FloatSize viewBoxSize = parseViewBoxDimensions(parsed.viewBox());
         String updatedAttrs = attrs;
@@ -560,10 +728,10 @@ final class PlantUmlRenderer {
             float resolvedHeight = scaleByPercentage(fallbackHeight, parsed.height());
             updatedAttrs = replaceSvgAttributeValue(updatedAttrs, SVG_ATTR_HEIGHT, formatSvgDimension(resolvedHeight));
         }
-        StringBuilder sb = new StringBuilder(svgCode.length() + 16);
-        sb.append(svgCode, 0, openTagMatcher.start(1));
+        StringBuilder sb = new StringBuilder(sanitized.length() + 16);
+        sb.append(sanitized, 0, openTagMatcher.start(1));
         sb.append(updatedAttrs);
-        sb.append(svgCode, openTagMatcher.end(1), svgCode.length());
+        sb.append(sanitized, openTagMatcher.end(1), sanitized.length());
         return sb.toString();
     }
 

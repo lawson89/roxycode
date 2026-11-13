@@ -13,7 +13,7 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
   - Press **Enter** to send, **Shift+Enter** for a newline, and **Ctrl+V** (or the image button) to attach screenshots/images.
   - Click **[Move to Feature Request]** on any Roxy response to copy that architectural finding or prompt directly into the **Build Feature** workspace.
   - Click **[Apply to build.toml]** on any Roxy response containing a valid `build.toml` code block to populate the **Project Settings** editor and switch to it for confirmation.
-- **Past Topics Tab**: Browse, search, and copy archived Q&A conversations (<projectDataDir>/archive/topics/*.md). Starting a **New Topic** prompts whether to archive the current conversation.
+- **Past Topics Tab**: Browse, search, copy, rename, and delete archived Q&A conversations (<projectDataDir>/archive/topics/*.md). Starting a **New Topic** automatically archives non-empty conversations in the background with a generated title.
 
 ### Build Feature (PLAN -> CODE -> REVIEW Lifecycle)
 - **1. Plan (PLAN — Lead Architect)**:

@@ -14,12 +14,14 @@ import org.roxycode.app.ai.AiConfig.GenAiConnectionConfig;
 import org.roxycode.app.ai.JexlTool;
 import org.roxycode.app.ai.TurnToolContext;
 import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.AgentActivityEvent;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.model.AgentProfile;
+import org.roxycode.app.model.ChatTranscriptEntry;
 import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.model.ThinkingLevel;
 import org.roxycode.app.util.ExceptionUtils;
@@ -70,6 +72,9 @@ public class AiService implements AutoCloseable {
     public static final String AUTO_NUDGE_PROMPT = "You completed the turn without returning any text response. Please summarize what you just did or provide your final response to the user.";
     public static final String AUTO_CONTINUE_ACTIVITY_MESSAGE = "API connection reset — resuming turn automatically";
     static final String GROUNDED_SEARCH_SYSTEM_PROMPT = "You are a technical research assistant. Use Google Search to provide accurate, up-to-date facts, synthesis, and source URLs or citations when available.";
+    static final String TOPIC_TITLE_MODEL = "gemini-3.8-flash";
+    static final int MAX_TOPIC_EXCERPT_CHARS = 2000;
+    static final String TOPIC_TITLE_SYSTEM_PROMPT = "Generate a concise, descriptive 3 to 7 word title summarizing the following technical Q&A conversation. Return plain text only with no quotes, markdown formatting, or trailing punctuation.";
     private static final List<String> TOOL_FAILURE_MARKERS = List.of("""
             "success":false""", """
             "success": false""", """
@@ -423,6 +428,65 @@ public class AiService implements AutoCloseable {
         }
     }
 
+    /**
+     * Generates a concise 3 to 7 word topic title for an archived Q&A conversation using {@code gemini-3.8-flash} with
+     * {@link ThinkingLevel#LOW}, falling back to {@link MemoryService#deriveDefaultTopicTitle(List)} if the model call
+     * fails or returns an empty title.
+     *
+     * @param transcript
+     *            the captured Q&A transcript entries
+     * @return a cleaned topic title
+     */
+    public String generateTopicTitle(List<ChatTranscriptEntry> transcript) {
+        if (transcript == null || transcript.isEmpty()) {
+            return MemoryService.DEFAULT_TOPIC_TITLE;
+        }
+        String excerpt = buildTopicTranscriptExcerpt(transcript);
+        if (excerpt.isEmpty()) {
+            return MemoryService.deriveDefaultTopicTitle(transcript);
+        }
+        GoogleGenAiChatOptions.Builder optionsBuilder = GoogleGenAiChatOptions.builder().model(TOPIC_TITLE_MODEL);
+        ThinkingLevel.LOW.applyTo(optionsBuilder);
+        try {
+            ChatResponse chatResponse = chatClient.prompt().system(TOPIC_TITLE_SYSTEM_PROMPT).user(excerpt)
+                    .options(optionsBuilder).call().chatResponse();
+            String rawTitle = ChatResponseFormatter.extractResponseText(chatResponse);
+            String cleaned = MemoryService.cleanTopicTitle(rawTitle);
+            if (!cleaned.isEmpty()) {
+                return cleaned;
+            }
+        } catch (Exception e) {
+            log.warn("Failed to generate topic title with {}: {}", TOPIC_TITLE_MODEL, e.getMessage());
+        }
+        return MemoryService.deriveDefaultTopicTitle(transcript);
+    }
+
+    static String buildTopicTranscriptExcerpt(List<ChatTranscriptEntry> transcript) {
+        if (transcript == null || transcript.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (ChatTranscriptEntry entry : transcript) {
+            if (entry == null || StringUtils.isBlank(entry.content())) {
+                continue;
+            }
+            String speaker = "Roxy";
+            if (ChatTranscriptEntry.ROLE_USER.equalsIgnoreCase(entry.role())) {
+                speaker = "User";
+            }
+            String line = speaker + ": " + entry.content().trim() + "\n\n";
+            if (sb.length() + line.length() > MAX_TOPIC_EXCERPT_CHARS) {
+                int remaining = MAX_TOPIC_EXCERPT_CHARS - sb.length();
+                if (remaining > 0) {
+                    sb.append(line, 0, remaining);
+                }
+                break;
+            }
+            sb.append(line);
+        }
+        return sb.toString().trim();
+    }
+
     private void recordAutoContinueInterruption(String conversationId, int completedToolTurns) {
         if (chatMemory != null && StringUtils.isNotBlank(conversationId)) {
             chatMemory.add(conversationId,
@@ -468,8 +532,11 @@ public class AiService implements AutoCloseable {
             ThinkingLevel configuredLevel = resolveEffectiveThinkingLevel();
             ThinkingLevel activeSubTurnLevel = resolveActiveSubTurnThinkingLevel(configuredLevel, currentPhase,
                     chatClientRequest);
-            ChatClientRequest effectiveRequest = applySubTurnThinkingLevel(chatClientRequest, configuredLevel,
-                    activeSubTurnLevel);
+            ChatClientRequest resolvedRequest = chatClientRequest;
+            if (currentPhase != null || !hasExplicitThinkingLevel(chatClientRequest)) {
+                resolvedRequest = applySubTurnThinkingLevel(chatClientRequest, configuredLevel, activeSubTurnLevel);
+            }
+            ChatClientRequest effectiveRequest = resolvedRequest;
             String thinkingActivityMessage = formatThinkingActivityMessage(modelName, configuredLevel,
                     activeSubTurnLevel);
             int maxAttempts = maxRetryAttempts;
@@ -625,6 +692,17 @@ public class AiService implements AutoCloseable {
             return ThinkingLevel.LOW;
         }
         return current;
+    }
+
+    private static boolean hasExplicitThinkingLevel(@Nullable ChatClientRequest request) {
+        if (request == null || request.prompt() == null) {
+            return false;
+        }
+        ChatOptions options = request.prompt().getOptions();
+        if (options instanceof GoogleGenAiChatOptions genAiOptions) {
+            return genAiOptions.getThinkingLevel() != null;
+        }
+        return false;
     }
 
     private static ChatClientRequest applySubTurnThinkingLevel(ChatClientRequest request, ThinkingLevel configuredLevel,
