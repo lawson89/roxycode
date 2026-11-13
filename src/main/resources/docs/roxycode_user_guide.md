@@ -13,7 +13,8 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
   - Press **Enter** to send, **Shift+Enter** for a newline, and **Ctrl+V** (or the image button) to attach screenshots/images.
   - Click **[Move to Feature Request]** on any Roxy response to copy that architectural finding or prompt directly into the **Build Feature** workspace.
   - Click **[Apply to build.toml]** on any Roxy response containing a valid `build.toml` code block to populate the **Project Settings** editor and switch to it for confirmation.
-- **Past Topics Tab**: Browse, search, copy, rename, and delete archived Q&A conversations (<projectDataDir>/archive/topics/*.md). Starting a **New Topic** automatically archives non-empty conversations in the background with a generated title.
+  - Renders fenced `plantuml`, `ditaa`, and `svg` code blocks as inline theme-aware diagrams and UI wireframes in chat and plans.
+- **Past Topics Tab**: Browse, search, copy, rename, and delete archived Q&A conversations (<projectDataDir>/archive/topics/*.md) with a live **Past Topics (N)** count badge. Starting a **New Topic** automatically archives non-empty conversations in the background with an AI-generated title (`gemini-3.8-flash`).
 
 ### Build Feature (PLAN -> CODE -> REVIEW Lifecycle)
 - **1. Plan (PLAN — Lead Architect)**:
@@ -28,7 +29,7 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
   - Roxy audits gitService.getDiff(), test coverage, and adherence to requirements.
   - If issues are found, Roxy autonomously routes back to CODE via planService.requestFixes(reason).
   - If verification passes, Roxy marks the review gate complete and calls planService.requestCompletion(reason), prompting the user for final **Approve / Reject** sign-off (with a **Copy Commit Msg** button on the completion banner and Plan tab). Approving archives the completed plan and resets for the next feature.
-- **Plan & Past Plans Tabs**: The **Plan** tab renders live checklist progress, the handoff log, and **Copy Commit Msg** / **Copy as Markdown** actions; **Past Plans** searches archived plans (<projectDataDir>/archive/plans/*.md).
+- **Plan & Past Plans Tabs**: The **Plan** tab renders live checklist progress, the handoff log, and **Copy Commit Msg** / **Copy as Markdown** actions; **Past Plans** supports browsing, searching, copying, renaming, and deleting archived plans (<projectDataDir>/archive/plans/*.md) with a live **Past Plans (N)** count badge.
 
 ## 2. Context & Prompts Hub & Agent Memory
 
@@ -57,7 +58,7 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
 ### Project Settings & build.toml (Project Settings Sidebar View)
 - **Two-Tabbed Project Settings Hub**:
   - **Build Configuration (<projectDataDir>/build.toml — Tab 1)**:
-    - Must be reviewed and confirmed (**Confirm & Save Settings**) before Build Feature chat is unlocked for a project. Built-in templates are provided for Maven, Gradle, npm/Node, Python, Rust, Go, CMake, and Default, or click **Configure with Roxy** to open an interactive **Ask Roxy** session where Roxy inspects your project files and installed host toolchains, asks clarifying questions if needed, and generates a tailored `build.toml` with a one-click **[Apply to build.toml]** action.
+    - Must be reviewed and confirmed (**Confirm & Save Settings**) before Build Feature chat is unlocked for a project. Templates are auto-detected on project initialization (Maven, Gradle, npm/Node, Python, Rust, Go, CMake, or Default), and the editor displays a 4-card live summary strip (**Pipeline Commands**, **Sandbox Isolation**, **Log Parser**, **Timeout & Syntax**), section quick-jump buttons (`[commands]`, `[env]`, `[parse]`, `[sandbox]`), and a **Copy** button. Click **Configure with Roxy** to open an interactive **Ask Roxy** session where Roxy inspects your project files and installed host toolchains, asks clarifying questions if needed, and generates a tailored `build.toml` with a one-click **[Apply to build.toml]** action.
   - **AI Model Override (Tab 2 — or click the active profile pill in the top header bar)**:
     - Optionally override the Global Settings **Agent Profile** (Use Global Default, Max, Normal, or Speed) for the active project and save independently via **Save Model Settings**. Every profile uses phase-aware model routing (EXPLORE/PLAN -> gemini-4-carbon, gemini-4-argon, or gemini-4-hydrogen; CODE/REVIEW -> gemini-4-hydrogen) and automatic **Adaptive (Phase-Aware)** sub-turn thinking (PLAN: MEDIUM on initial discovery -> HIGH while designing the blueprint -> LOW after submitPlan; CODE: MEDIUM for fast execution -> HIGH after any tool/build/test failure; REVIEW: HIGH; EXPLORE: LOW on initial discovery -> MEDIUM on synthesis).
     - **[commands]**: Shell commands executed from the project root:
@@ -81,5 +82,5 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
       - image & workdir: Container image (e.g., "eclipse-temurin:25-jdk") and working directory ("/workspace") when mode = "docker".
 
 ### Global Settings & System Tools (Settings & Tools Sidebar Hub)
-- **Global Settings**: Configures Light/Dark theme, Authentication Provider (**Gemini API Key (Google AI Studio)** or **Google Cloud Vertex AI** with GCP Project ID, Vertex Location, and optional Service Account JSON key file or Application Default Credentials / ADC), default **Agent Profile** (**Max**, **Normal**, or **Speed**), max tool turns per request, chat memory window, tool call logging, and Google Search grounding (webSearchService).
+- **Global Settings & Menu Bar**: Configures Light/Dark theme, Authentication Provider (**Gemini API Key (Google AI Studio)** or **Google Cloud Vertex AI** with GCP Project ID, Vertex Location, and optional Service Account JSON key file or Application Default Credentials / ADC), default **Agent Profile** (**Max**, **Normal**, or **Speed**), max tool turns per request, chat memory window, tool call logging, and Google Search grounding (webSearchService). Use **File -> Open Recent** in the menu bar to quickly switch between recently opened projects.
 - **System Tools**: Checks status and install commands for required CLI tools (**Ripgrep**, **Universal Ctags**) and optional tools/sandbox runtimes (**Git**, **Bubblewrap** / **Seatbelt**, **Docker**).

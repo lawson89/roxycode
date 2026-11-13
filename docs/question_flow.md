@@ -16,7 +16,7 @@ The `ChatController` serves as the orchestrator for the conversation, managing t
 
 *   **Class:** `ChatController`
 *   **Method:** `sendMessage(String rawText)`
-    *   Handles slash commands (`/clear`, `/reset`, `/memory`) or drains any attached images (`model.drainPendingImages()`).
+    *   Handles slash commands (`/clear`, `/reset`, `/help`, `/rem-p <text>`, `/rem-g <text>`) or drains any attached images (`model.drainPendingImages()`).
     *   Cancels any currently active turn.
     *   Updates the UI to display the user's message and image thumbnails immediately, and persists the active chat session.
     *   Calls `triggerTurn(text, pendingImages)` to start the AI processing asynchronously.
@@ -33,21 +33,21 @@ Before contacting the LLM, the system builds a prefix-cache-friendly System Prom
 *   **Class:** `PromptService`
 *   **Method:** `buildSystemPrompt(WorkflowPhase phase)`
     *   *Context Gathering steps inside `buildSystemPrompt`:*
-        1.  **Stable Context (`getStableContext()`):** Loads the base workflow protocol (`system-prompt.st`), JEXL documentation (`loadJexlContext()`), built-in user guide (`loadUserGuideContext()`), global and project context folders (`loadGlobalContext()`, `loadProjectContext()`), mounted read-only reference folders (`loadReferenceFoldersContext()`), and global/project agent memory (`loadAgentMemoryContext()`).
+        1.  **Stable Context (`getStableContext()`):** Loads the base workflow protocol (`prompts/core_workflow.md`), JEXL documentation (`docs/jexl.md` via `loadJexlContext()`), built-in user guide (`docs/roxycode_user_guide.md` via `loadUserGuideContext()`), global and project context folders (`loadGlobalContext()`, `loadProjectContext()`), mounted read-only reference folders (`loadReferenceFoldersContext()`), and global/project agent memory (`loadAgentMemoryContext()`).
         2.  **Repository Map:** Appends the Universal Ctags structural repository map (`repoMapPackerService.generateRepoMap()`).
         3.  **Phase Instructions:** Appends the phase-specific prompt (`loadPhasePrompt(currentPhase)`).
         4.  **Static Phase Context (`getStaticPhaseContext(currentPhase)`):** Appends the dominant language, active phase persona, and phase-filtered JEXL API documentation (`jexlServiceRegistry.getDocumentation(currentPhase)`).
         5.  **Volatile Session Context (`getVolatileSessionContext()`):** Appends current Git branch/status (`gitService.getCurrentBranch()`, `gitService.getStatus()`) and active implementation plan checklist progress (`planService.getCurrentPlan()`).
 
 ## 4. LLM Invocation & Spring AI Advisor Chain
-With the prompt constructed, `AiService` executes the call through Spring AI's `ChatClient` advisor pipeline.
+With the prompt constructed, `AiService` resolves the phase-aware model via `AgentProfile.resolveModelForPhase(phase)` and executes the call through Spring AI's `ChatClient` advisor pipeline (with automatic client reset and turn continuation up to `MAX_AUTO_CONTINUES` if a transient network error occurs mid-turn after tool progress).
 
 *   **Class:** `AiService`
 *   **Method:** `executeChatCall(ChatClient.ChatClientRequestSpec promptSpec, String convId, WorkflowPhase phase)`
     *   **Memory Advisor (`MessageChatMemoryAdvisor`):** Loads and persists conversation history from `ChatMemory`.
     *   **Tool Calling Advisor (`ToolCallingAdvisor`):** Manages the autonomous tool-calling loop with `JexlTool` until the model produces a final response or reaches the turn limit.
     *   **Auto-Nudge Advisor (`AutoNudgeAdvisor`):** Ordered before chat memory persistence; if the model executed tools during the turn but returned an empty text response with a recoverable finish reason, it automatically nudges the model (up to `AiService.MAX_AUTO_NUDGES` times) to summarize what it did.
-    *   **Retry & Telemetry Advisor (`ModelCallRetryAdvisor`):** Retries transient API errors (e.g., HTTP 429, 503, network timeouts) via `RetryTemplate` and publishes `TokenUsageEvent` telemetry after each model call.
+    *   **Retry & Telemetry Advisor (`ModelCallRetryAdvisor`):** Dynamically resolves the sub-turn thinking level via `ThinkingLevel.resolveSubTurnLevel(...)`, retries transient API errors (e.g., HTTP 429, 503, network timeouts) via `RetryTemplate`, and publishes `TokenUsageEvent` telemetry after each model call.
 
 ## 5. Tool Execution (JEXL Sandbox)
 When the LLM outputs a tool call, it targets `JexlTool.executeJexl`, passing a JavaScript-like orchestration script.
@@ -74,9 +74,9 @@ Once the advisor chain completes and returns a `ChatResponse`, `ChatResponseForm
 The controller receives the final formatted response on the background turn thread and updates the UI on the Swing EDT.
 
 *   **Class:** `ChatController`
-*   **Method:** `finishTurn(long turnId, String role, String message)`
-    *   Appends the assistant message to `ChatPanel` (`view.appendMessage(role, message)`).
+*   **Method:** `finishTurn(long turnId, String role, String message, String renderedHtml, String extractedToml)`
+    *   Pre-renders the Markdown body off the EDT (`MarkdownPane.renderMarkdownBodySafely`) and extracts any valid `build.toml` block (`GenericBuildToolService.extractValidBuildTomlBlock`), then appends the pre-rendered message on the EDT (`view.appendPreRenderedMessage(role, message, renderedHtml, extractedToml)`).
     *   Clears the loading state, updates the turn status label, persists the active chat session to disk, and applies any deferred autonomous workflow transition (`deferredTransitionEvent`).
 *   **Class:** `MarkdownPane`
-    *   **Method:** `appendMessage(String role, String content)`
-    *   Renders the Markdown response (including syntax-highlighted code blocks and PlantUML/Ditaa diagrams) into HTML 3.2 using `flexmark-java` and displays it in the `JTextPane`, concluding the request lifecycle.
+    *   **Method:** `appendPreRenderedMessage(String role, String content, String renderedHtml, String extractedToml)`
+    *   Displays the pre-rendered HTML 3.2 output (including syntax-highlighted code blocks and `plantuml`, `ditaa`, and `svg` blocks rendered via `PlantUmlRenderer`) in the `JTextPane`, concluding the request lifecycle.

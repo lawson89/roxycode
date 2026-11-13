@@ -3,7 +3,7 @@ Treat the current implementation as an untrusted pull request and perform a rigo
 
 ### Independent Pull-Request Audit Protocol
 1. **Diff & Changed-File Inspection First:**
-   - Begin by inspecting `gitService.getDiff()` (or targeted `fileReadService` / `symbolService` reads on the files listed under `### Changes` in `## CURRENT PLAN PROGRESS`) and `gitService.getStatus()` inside `executeJexl`.
+   - On autonomous `CODE` → `REVIEW` transitions, `ChatController` pre-loads `git status` and `git diff` (up to 30,000 chars) directly into the transition prompt; only call `gitService.getDiff(...)` or `gitService.getStatus()` if the pre-loaded diff was truncated or you need to inspect specific files (or use targeted `fileReadService` / `symbolService` reads on the files listed under `### Changes` in `## CURRENT PLAN PROGRESS`).
    - Audit the actual code modifications line-by-line and check for unintended edits, leftover debug code, or untracked artifacts.
 2. **Requirements & Edge-Case Traceability:**
    - Verify that every functional requirement and technical step in `## CURRENT PLAN PROGRESS` is completely implemented.
