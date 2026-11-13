@@ -40,6 +40,15 @@ class WorkflowPhaseIndicatorTest {
         assertSame(taskWorkspace.planLabel, taskWorkspace.topBar.getComponent(0));
         assertSame(taskWorkspace.progressTracker, taskWorkspace.topBar.getComponent(1));
         assertSame(taskWorkspace.workflowInfoIcon, taskWorkspace.topBar.getComponent(2));
+        assertFalse(taskWorkspace.planLabel.isVisible());
+        SwingTestUtils.runOnEdt(() -> {
+            taskWorkspace.topBar.setSize(800, 40);
+            taskWorkspace.topBar.doLayout();
+        });
+        assertEquals(800 - 16, taskWorkspace.workflowInfoIcon.getX() + taskWorkspace.workflowInfoIcon.getWidth());
+        assertEquals(taskWorkspace.workflowInfoIcon.getX() - 8,
+                taskWorkspace.progressTracker.getX() + taskWorkspace.progressTracker.getWidth());
+        assertTrue(taskWorkspace.progressTracker.getX() > 400);
 
         String fiftyCharTitle = "12345678901234567890123456789012345678901234567890";
         assertEquals(fiftyCharTitle, TaskWorkspacePanel.formatPlanTitleDisplay(fiftyCharTitle));
@@ -55,6 +64,16 @@ class WorkflowPhaseIndicatorTest {
         assertTrue(taskWorkspace.planLabel.isVisible());
         assertEquals(fiftyCharTitle, taskWorkspace.planLabel.getText());
         assertEquals(fiftyCharTitle + " (Click to view Plan)", taskWorkspace.planLabel.getToolTipText());
+        SwingTestUtils.runOnEdt(() -> {
+            taskWorkspace.topBar.setSize(800, 40);
+            taskWorkspace.topBar.doLayout();
+        });
+        assertEquals(16, taskWorkspace.planLabel.getX());
+        assertEquals(800 - 16, taskWorkspace.workflowInfoIcon.getX() + taskWorkspace.workflowInfoIcon.getWidth());
+        assertEquals(taskWorkspace.workflowInfoIcon.getX() - 8,
+                taskWorkspace.progressTracker.getX() + taskWorkspace.progressTracker.getWidth());
+        assertTrue(taskWorkspace.progressTracker.getX() > taskWorkspace.planLabel.getX()
+                + taskWorkspace.planLabel.getWidth());
 
         assertEquals("Plan", taskWorkspace.taskTabs.getTitleAt(1));
         SwingTestUtils.runOnEdt(() -> taskWorkspace.updatePastPlansTabTitle(5));

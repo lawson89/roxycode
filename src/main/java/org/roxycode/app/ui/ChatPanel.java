@@ -313,7 +313,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
                 "arc: 8; font: bold; " + UiComponents.ACCENT_BUTTON_STYLE, this::sendMessage);
         sendButton.setToolTipText("Send message (Enter)");
 
-        stopButton = UiComponents.createActionButton("Stop (Esc)", Codicons.DEBUG_STOP, new Insets(5, 14, 5, 14), false,
+        stopButton = UiComponents.createActionButton("Stop", Codicons.DEBUG_STOP, new Insets(5, 14, 5, 14), false,
                 "arc: 8; font: bold; " + UiComponents.RED_BUTTON_STYLE, e -> controller.stopTurn());
         stopButton.setToolTipText("Stop active turn (Esc)");
         stopButton.setEnabled(false);

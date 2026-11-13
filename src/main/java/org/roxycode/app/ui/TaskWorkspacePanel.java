@@ -69,7 +69,7 @@ final class TaskWorkspacePanel extends JPanel {
         this.taskChatPanel = taskChatPanel;
         this.pastPlansPanel = new ArchiveBrowserPanel(memoryService, ArchiveMode.PLANS);
 
-        topBar = new JPanel(new MigLayout("insets 0 16 0 16, fill", "[left, grow][right]", LAYOUT_CENTER));
+        topBar = new JPanel(new MigLayout("insets 0 16 0 16, gapx 0, fillx", "[left]12:push[][]", LAYOUT_CENTER));
         topBar.setOpaque(false);
 
         planLabel.setIconTextGap(6);
@@ -83,7 +83,7 @@ final class TaskWorkspacePanel extends JPanel {
             }
         });
         applyPlanBadgeStyling();
-        topBar.add(planLabel, "left, center, hidemode 3");
+        topBar.add(planLabel, "cell 0 0, hidemode 3");
 
         progressTracker = new JPanel(new MigLayout("insets 0, gapx 2", "[]", LAYOUT_CENTER));
         applyPhaseTrackerStyling();
@@ -93,8 +93,8 @@ final class TaskWorkspacePanel extends JPanel {
                 indicators.add(new WorkflowPhaseIndicator(phase));
             }
         }
-        topBar.add(progressTracker, "split 2, right, center");
-        topBar.add(workflowInfoIcon, "gapleft 8, center");
+        topBar.add(progressTracker, "cell 1 0");
+        topBar.add(workflowInfoIcon, "cell 2 0, gapleft 8");
 
         this.taskTabs = UiComponents.createUnderlinedTabbedPane(topBar);
         Color accent = SwingHtmlUtils.getAccentColor();

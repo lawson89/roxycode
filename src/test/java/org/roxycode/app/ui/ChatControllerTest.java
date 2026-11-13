@@ -425,7 +425,7 @@ class ChatControllerTest extends ChatTestFixture {
         assertFalse(chatPanel.approveButton.isEnabled());
         assertEquals("Image", chatPanel.attachImageButton.getText());
         assertEquals("Send message (Enter)", chatPanel.sendButton.getToolTipText());
-        assertEquals("Stop (Esc)", chatPanel.stopButton.getText());
+        assertEquals("Stop", chatPanel.stopButton.getText());
         assertEquals("Stop active turn (Esc)", chatPanel.stopButton.getToolTipText());
         assertTrue(ChatPanel.isRateLimitOrRetryStatus("Rate limit reached, retrying in 5s..."));
         assertFalse(ChatPanel.isRateLimitOrRetryStatus("Thinking with gemini-4-argon..."));
