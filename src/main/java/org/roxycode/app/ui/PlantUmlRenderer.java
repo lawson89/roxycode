@@ -8,8 +8,14 @@ import java.awt.FontMetrics;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import com.github.weisj.jsvg.SVGDocument;
+import com.github.weisj.jsvg.geometry.size.FloatSize;
+import com.github.weisj.jsvg.parser.SVGLoader;
+import com.github.weisj.jsvg.attributes.ViewBox;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
@@ -35,15 +41,25 @@ final class PlantUmlRenderer {
     private static final String LANG_PUML = "puml";
     private static final String LANG_UML = "uml";
     private static final String LANG_DITAA = "ditaa";
-    private static final Set<String> DIAGRAM_LANGUAGES = Set.of(LANG_PLANTUML, LANG_PUML, LANG_UML, LANG_DITAA);
+    private static final String LANG_SALT = "salt";
+    private static final String LANG_SVG = "svg";
+    private static final Set<String> DIAGRAM_LANGUAGES = Set.of(LANG_PLANTUML, LANG_PUML, LANG_UML, LANG_DITAA,
+            LANG_SALT, LANG_SVG);
 
     private static final String START_PREFIX = "@start";
     private static final String START_UML = "@startuml";
     private static final String END_UML = "@enduml";
     private static final String START_DITAA = "@startditaa";
     private static final String END_DITAA = "@endditaa";
+    private static final String START_SALT = "@startsalt";
+    private static final String END_SALT = "@endsalt";
     private static final String START_MINDMAP = "@startmindmap";
     private static final String START_WBS = "@startwbs";
+    private static final String START_SVG_TAG = "<svg";
+    private static final String END_SVG_TAG = "</svg>";
+    private static final int SVG_DEFAULT_WIDTH = 600;
+    private static final int SVG_DEFAULT_HEIGHT = 400;
+    private static final int SVG_MAX_DIMENSION = 1600;
     private static final String SMETANA_PRAGMA = "!pragma layout smetana";
     private static final String ERROR_DESCRIPTION_MARKER = "(Error)";
     private static final char DOUBLE_QUOTE_CHAR = '"';
@@ -221,17 +237,39 @@ final class PlantUmlRenderer {
             return false;
         }
         String lower = code.trim().toLowerCase(Locale.ROOT);
-        return lower.startsWith(START_UML) || lower.startsWith(START_DITAA) || lower.startsWith(START_MINDMAP)
-                || lower.startsWith(START_WBS);
+        if (lower.startsWith(START_UML) || lower.startsWith(START_DITAA) || lower.startsWith(START_MINDMAP)
+                || lower.startsWith(START_WBS) || lower.startsWith(START_SALT)) {
+            return true;
+        }
+        return isRawSvgBlock(lower);
+    }
+
+    private static boolean isRawSvgBlock(String lowerTrimmedCode) {
+        return lowerTrimmedCode.startsWith(START_SVG_TAG) && lowerTrimmedCode.endsWith(END_SVG_TAG);
     }
 
     static String resolveEffectiveLanguage(String language, String code) {
         String normalized = normalizeLanguage(language);
+        if (LANG_SVG.equals(normalized)) {
+            return LANG_SVG;
+        }
         if (LANG_DITAA.equals(normalized)) {
             return LANG_DITAA;
         }
-        if (code != null && code.trim().toLowerCase(Locale.ROOT).startsWith(START_DITAA)) {
-            return LANG_DITAA;
+        if (LANG_SALT.equals(normalized)) {
+            return LANG_SALT;
+        }
+        if (code != null) {
+            String lower = code.trim().toLowerCase(Locale.ROOT);
+            if (isRawSvgBlock(lower)) {
+                return LANG_SVG;
+            }
+            if (lower.startsWith(START_DITAA)) {
+                return LANG_DITAA;
+            }
+            if (lower.startsWith(START_SALT)) {
+                return LANG_SALT;
+            }
         }
         return LANG_PLANTUML;
     }
@@ -253,7 +291,12 @@ final class PlantUmlRenderer {
             return Optional.empty();
         }
         String effectiveLanguage = resolveEffectiveLanguage(language, code);
-        String normalizedSource = buildPlantUmlSource(code, effectiveLanguage, darkTheme);
+        String normalizedSource;
+        if (LANG_SVG.equals(effectiveLanguage)) {
+            normalizedSource = code.trim();
+        } else {
+            normalizedSource = buildPlantUmlSource(code, effectiveLanguage, darkTheme);
+        }
         if (normalizedSource.isBlank()) {
             return Optional.empty();
         }
@@ -338,6 +381,12 @@ final class PlantUmlRenderer {
             }
             return START_DITAA + "\n" + normalizedLines + "\n" + END_DITAA;
         }
+        if (LANG_SALT.equals(normalizedLanguage) || lowerCode.startsWith(START_SALT)) {
+            if (lowerCode.startsWith(START_PREFIX)) {
+                return normalizedLines;
+            }
+            return START_SALT + "\n" + normalizedLines + "\n" + END_SALT;
+        }
 
         String sanitizedLines = sanitizeMultilineQuotedStrings(normalizedLines);
         String wrapped;
@@ -357,7 +406,7 @@ final class PlantUmlRenderer {
 
         StringBuilder sb = new StringBuilder(wrapped.length() + 512);
         sb.append(startLine).append('\n');
-        if (lowerStartLine.startsWith(START_UML)) {
+        if (lowerStartLine.startsWith(START_UML) && !startsWithSaltDirective(bodyAndEnd)) {
             if (!bodyAndEnd.toLowerCase(Locale.ROOT).contains("!pragma layout")) {
                 sb.append(SMETANA_PRAGMA).append('\n');
             }
@@ -404,7 +453,16 @@ final class PlantUmlRenderer {
         }
     }
 
+    private static boolean startsWithSaltDirective(String bodyAndEnd) {
+        String trimmedBody = bodyAndEnd.trim().toLowerCase(Locale.ROOT);
+        return LANG_SALT.equals(trimmedBody) || trimmedBody.startsWith(LANG_SALT + "\n")
+                || trimmedBody.startsWith(LANG_SALT + " ") || trimmedBody.startsWith("startsalt");
+    }
+
     private static byte[] renderDiagramPngBytes(DiagramCacheKey key) throws IOException {
+        if (LANG_SVG.equals(key.language())) {
+            return renderSvgPngBytes(key.normalizedCode());
+        }
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         SourceStringReader reader = new SourceStringReader(key.normalizedCode());
         DiagramDescription description = reader.outputImage(baos, new FileFormatOption(FileFormat.PNG));
@@ -430,6 +488,48 @@ final class PlantUmlRenderer {
             return false;
         }
         return !descText.contains(ERROR_DESCRIPTION_MARKER);
+    }
+
+    static byte[] renderSvgPngBytes(String svgCode) throws IOException {
+        SVGLoader loader = new SVGLoader();
+        SVGDocument svgDocument = loader.load(new ByteArrayInputStream(svgCode.getBytes(StandardCharsets.UTF_8)));
+        if (svgDocument == null) {
+            return new byte[0];
+        }
+        FloatSize size = svgDocument.size();
+        int[] dimensions = resolveSvgRenderDimensions(size);
+        int width = dimensions[0];
+        int height = dimensions[1];
+
+        BufferedImage image = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2 = image.createGraphics();
+        g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+        g2.setRenderingHint(RenderingHints.KEY_FRACTIONALMETRICS, RenderingHints.VALUE_FRACTIONALMETRICS_ON);
+        svgDocument.render(null, g2, new ViewBox(0, 0, width, height));
+        g2.dispose();
+
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageIO.write(image, "png", out);
+        return out.toByteArray();
+    }
+
+    static int[] resolveSvgRenderDimensions(FloatSize size) {
+        if (size == null || size.width <= 0.0f || size.height <= 0.0f) {
+            return new int[]{SVG_DEFAULT_WIDTH, SVG_DEFAULT_HEIGHT};
+        }
+        double width = size.width;
+        double height = size.height;
+        double maxSide = Math.max(width, height);
+        if (maxSide > SVG_MAX_DIMENSION) {
+            double scale = SVG_MAX_DIMENSION / maxSide;
+            width = width * scale;
+            height = height * scale;
+        }
+        int resolvedWidth = Math.max(1, (int) Math.round(width));
+        int resolvedHeight = Math.max(1, (int) Math.round(height));
+        return new int[]{resolvedWidth, resolvedHeight};
     }
 
     private static boolean isDitaaSource(DiagramCacheKey key) {

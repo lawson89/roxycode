@@ -42,7 +42,7 @@ public class JexlToHtmlConverterTest {
         assertTrue(proseHtml.contains("<pre class='jexl-highlight'><code>var x = 42;</code></pre>"));
         assertFalse(proseHtml.contains("mtk-"));
 
-        String[] diagramLangs = {"ascii", "diagram", "flowchart", "tree", "plantuml", "puml", "ditaa"};
+        String[] diagramLangs = {"ascii", "diagram", "flowchart", "tree", "plantuml", "puml", "ditaa", "salt"};
         for (String lang : diagramLangs) {
             String diagramFallback = JexlToHtmlConverter.highlight("interface GitService -> record <Node>", lang);
             assertContainsAll(diagramFallback,

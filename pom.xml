@@ -75,6 +75,11 @@
             <version>3.7.2</version>
             <scope>compile</scope>
         </dependency>
+        <dependency>
+            <groupId>com.github.weisj</groupId>
+            <artifactId>jsvg</artifactId>
+            <version>1.7.1</version>
+        </dependency>
         <!-- Core Ikonli Swing Integration -->
         <dependency>
             <groupId>org.kordamp.ikonli</groupId>

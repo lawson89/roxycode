@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 import static org.roxycode.app.ui.SwingTestUtils.assertContainsNone;
 
+import com.github.weisj.jsvg.geometry.size.FloatSize;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -29,6 +30,8 @@ class PlantUmlRendererTest {
         assertTrue(PlantUmlRenderer.isDiagramLanguage("puml"));
         assertTrue(PlantUmlRenderer.isDiagramLanguage("uml"));
         assertTrue(PlantUmlRenderer.isDiagramLanguage("ditaa"));
+        assertTrue(PlantUmlRenderer.isDiagramLanguage("salt"));
+        assertTrue(PlantUmlRenderer.isDiagramLanguage("svg"));
         assertTrue(PlantUmlRenderer.isDiagramLanguage("plantuml title=demo"));
         assertFalse(PlantUmlRenderer.isDiagramLanguage("java"));
         assertFalse(PlantUmlRenderer.isDiagramLanguage(""));
@@ -39,6 +42,11 @@ class PlantUmlRendererTest {
         assertTrue(PlantUmlRenderer.isDiagramBlock(null, "  @STARTDITAA\n+---+\n@endditaa"));
         assertTrue(PlantUmlRenderer.isDiagramBlock("", "@startmindmap\n* Root\n@endmindmap"));
         assertTrue(PlantUmlRenderer.isDiagramBlock("", "@startwbs\n* Root\n@endwbs"));
+        assertTrue(PlantUmlRenderer.isDiagramBlock("", "@startsalt\n{\n  [OK]\n}\n@endsalt"));
+        assertTrue(PlantUmlRenderer.isDiagramBlock("salt", "{\n  [OK]\n}"));
+        assertTrue(PlantUmlRenderer.isDiagramBlock("svg", "<svg width='100' height='40'></svg>"));
+        assertTrue(PlantUmlRenderer.isDiagramBlock("",
+                "<svg width='100' height='40'><rect width='10' height='10'/></svg>"));
         assertFalse(PlantUmlRenderer.isDiagramBlock("", "public class Demo {}"));
         assertFalse(PlantUmlRenderer.isDiagramBlock(null, null));
 
@@ -63,6 +71,15 @@ class PlantUmlRendererTest {
         String ditaa = PlantUmlRenderer.buildPlantUmlSource("+------+\n| Box  |\n+------+", "ditaa", false);
         assertEquals("@startditaa\n+------+\n| Box  |\n+------+\n@endditaa", ditaa);
         assertContainsNone(ditaa, "skinparam");
+
+        String bareSalt = PlantUmlRenderer.buildPlantUmlSource("{\n  [OK] | [Cancel]\n}", "salt", false);
+        assertEquals("@startsalt\n{\n  [OK] | [Cancel]\n}\n@endsalt", bareSalt);
+        assertContainsNone(bareSalt, "skinparam", "!pragma layout smetana");
+
+        String umlWrappedSalt = PlantUmlRenderer.buildPlantUmlSource("@startuml\nsalt\n{\n  [OK]\n}\n@enduml",
+                "plantuml", true);
+        assertContainsAll(umlWrappedSalt, "@startuml", "salt", "[OK]", "@enduml");
+        assertContainsNone(umlWrappedSalt, "!pragma layout smetana", "skinparam");
     }
 
     @Test
@@ -182,6 +199,61 @@ class PlantUmlRendererTest {
 
         Optional<String> renderedUmlTag = PlantUmlRenderer.renderDiagramHtml(raw, "uml", true);
         assertTrue(renderedUmlTag.isPresent());
+    }
+
+    @Test
+    void testRenderSaltWireframeAndInlineSvgWithDimensionClampingAndFallback() throws Exception {
+        String saltWireframe = """
+                {^"Project Settings"
+                  Profile: | ^Normal^
+                  [X] Auto-approve plan
+                  [Save] | [Cancel]
+                }
+                """;
+        Optional<String> saltHtml = PlantUmlRenderer.renderDiagramHtml(saltWireframe, "salt", false);
+        assertTrue(saltHtml.isPresent());
+        Path saltPng = extractImagePath(saltHtml.get());
+        assertTrue(Files.isRegularFile(saltPng));
+        assertTrue(Files.size(saltPng) > 0);
+
+        String umlSalt = """
+                @startuml
+                salt
+                {
+                  [Apply] | [Close]
+                }
+                @enduml
+                """;
+        Optional<String> umlSaltHtml = PlantUmlRenderer.renderDiagramHtml(umlSalt, "plantuml", false);
+        assertTrue(umlSaltHtml.isPresent());
+        Path umlSaltPng = extractImagePath(umlSaltHtml.get());
+        assertTrue(Files.isRegularFile(umlSaltPng));
+        assertTrue(Files.size(umlSaltPng) > 0);
+
+        String svgContent = """
+                <svg xmlns="http://www.w3.org/2000/svg" width="240" height="80" viewBox="0 0 240 80">
+                  <rect x="4" y="4" width="232" height="72" rx="8" fill="#1E293B" stroke="#38BDF8" stroke-width="2"/>
+                  <text x="20" y="46" fill="#F8FAFC" font-size="16">RoxyCode SVG</text>
+                </svg>
+                """;
+        Optional<String> svgHtml = PlantUmlRenderer.renderDiagramHtml(svgContent, "svg", false);
+        assertTrue(svgHtml.isPresent());
+        assertContainsAll(svgHtml.get(), "diagram-container", "<img src=", "width=" + '"' + "240" + '"',
+                "height=" + '"' + "80" + '"');
+        Path svgPng = extractImagePath(svgHtml.get());
+        assertTrue(Files.isRegularFile(svgPng));
+        assertTrue(Files.size(svgPng) > 0);
+
+        Optional<String> unlabeledSvgHtml = PlantUmlRenderer.renderDiagramHtml(svgContent, "", true);
+        assertTrue(unlabeledSvgHtml.isPresent());
+
+        assertArrayEquals(new int[]{600, 400}, PlantUmlRenderer.resolveSvgRenderDimensions(null));
+        assertArrayEquals(new int[]{600, 400}, PlantUmlRenderer.resolveSvgRenderDimensions(new FloatSize(0, 0)));
+        assertArrayEquals(new int[]{320, 180}, PlantUmlRenderer.resolveSvgRenderDimensions(new FloatSize(320, 180)));
+        assertArrayEquals(new int[]{1600, 800}, PlantUmlRenderer.resolveSvgRenderDimensions(new FloatSize(3200, 1600)));
+
+        assertTrue(PlantUmlRenderer.renderDiagramHtml("<svg><unclosed></svg>", "svg", false).isEmpty());
+        assertTrue(PlantUmlRenderer.renderDiagramHtml("not valid svg", "svg", false).isEmpty());
     }
 
     private static Path extractImagePath(String html) throws Exception {
