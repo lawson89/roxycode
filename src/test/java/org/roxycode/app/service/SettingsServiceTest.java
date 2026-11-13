@@ -59,7 +59,6 @@ class SettingsServiceTest {
         settings.setTheme("Darcula");
         settings.setGeminiApiKey("test-api-key");
         settings.setAgentProfile("max");
-        settings.setLogToolCalls(true);
         settings.setGlobalContextFolders(List.of("/tmp/global-a", "/tmp/global-b"));
         service.saveSettings();
 
@@ -78,7 +77,6 @@ class SettingsServiceTest {
         assertEquals("MAX", service2.getSettings().getAgentProfile());
         assertEquals(AgentProfile.MAX, SettingsService.resolveGlobalAgentProfile(service2));
         assertEquals(ThinkingLevel.ADAPTIVE, SettingsService.resolveGlobalThinkingLevel(service2));
-        assertTrue(service2.getSettings().isLogToolCalls());
         assertEquals(List.of("/tmp/global-a", "/tmp/global-b"), service2.getSettings().getGlobalContextFolders());
         assertTrue(Files.exists(settingsFile));
         if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {

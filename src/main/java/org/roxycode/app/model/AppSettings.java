@@ -37,7 +37,6 @@ public class AppSettings {
     private String thinkingLevel = DEFAULT_THINKING_LEVEL;
     private int maxAgentToolTurns = DEFAULT_MAX_AGENT_TOOL_TURNS;
     private int maxChatMemoryMessages = 50;
-    private boolean logToolCalls = false;
     private boolean googleGroundingEnabled = false;
     private List<String> globalContextFolders = new ArrayList<>();
     private List<String> globalReferenceFolders = new ArrayList<>();
@@ -65,7 +64,6 @@ public class AppSettings {
             this.thinkingLevel = other.thinkingLevel;
             this.maxAgentToolTurns = other.maxAgentToolTurns;
             this.maxChatMemoryMessages = other.maxChatMemoryMessages;
-            this.logToolCalls = other.logToolCalls;
             this.googleGroundingEnabled = other.googleGroundingEnabled;
             this.globalContextFolders = new ArrayList<>(
                     Objects.requireNonNullElse(other.globalContextFolders, List.of()));
@@ -337,25 +335,6 @@ public class AppSettings {
      */
     public void setMaxChatMemoryMessages(int maxChatMemoryMessages) {
         this.maxChatMemoryMessages = maxChatMemoryMessages;
-    }
-
-    /**
-     * Checks if tool calls should be logged.
-     *
-     * @return true if tool calls should be logged, false otherwise
-     */
-    public boolean isLogToolCalls() {
-        return logToolCalls;
-    }
-
-    /**
-     * Sets whether tool calls should be logged.
-     *
-     * @param logToolCalls
-     *            true to log tool calls, false otherwise
-     */
-    public void setLogToolCalls(boolean logToolCalls) {
-        this.logToolCalls = logToolCalls;
     }
 
     /**

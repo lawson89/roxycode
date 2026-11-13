@@ -146,6 +146,7 @@ public class JexlToolTest {
                 new TurnToolContext("task:default", WorkflowPhase.CODE, null).toMap());
         assertTrue(tool.executeJexl("codeOnlyService.writeData()", toolContext).contains("written"));
         assertEquals("task:default", capturedEvent.get().conversationId());
+        assertEquals("CODE", capturedEvent.get().phase());
         assertEquals("codeOnlyService.writeData()", capturedEvent.get().script());
         assertEquals("written", capturedEvent.get().result());
         assertTrue(capturedEvent.get().success());
@@ -217,8 +218,15 @@ public class JexlToolTest {
     @Test
     public void testExecuteJexlSyntaxAndSerializationErrorHandling() throws Exception {
         AtomicReference<ToolExecutionEvent> capturedEvent = new AtomicReference<>();
-        assertTrue(createTool(capturedEvent).executeJexl("if (").contains("Syntax Error"));
-        assertEquals("if (", capturedEvent.get().script());
+        JsonNode syntaxErrNode = AiConfig.SHARED_OBJECT_MAPPER
+                .readTree(createTool(capturedEvent).executeJexl("var m = ['key': 1];"));
+        assertTrue(syntaxErrNode.get("error").asText().startsWith("Syntax Error: "));
+        assertTrue(syntaxErrNode.get("hint").asText().contains("curly braces"));
+        assertEquals("var m = ['key': 1];", syntaxErrNode.get("offendingLine").asText());
+        assertEquals("var m = ['key': 1];", capturedEvent.get().script());
+        assertEquals("BRACKET_MAP_LITERAL", capturedEvent.get().errorCategory());
+        assertEquals(1, capturedEvent.get().line());
+        assertNotNull(capturedEvent.get().hint());
         assertNull(capturedEvent.get().result());
         assertFalse(capturedEvent.get().success());
         assertTrue(capturedEvent.get().error().startsWith("Syntax Error: "));

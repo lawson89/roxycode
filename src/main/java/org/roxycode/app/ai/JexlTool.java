@@ -2,6 +2,7 @@ package org.roxycode.app.ai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import org.apache.commons.lang3.StringUtils;
@@ -117,29 +118,31 @@ public class JexlTool {
             try {
                 jexlScript = jexl.createScript(script);
             } catch (Exception e) {
-                log.warn("JEXL Syntax Error intercepted: {}", e.getMessage());
-                publishToolEvent(conversationId, script, null, false, "Syntax Error: " + e.getMessage());
-                return toJsonError("Syntax Error (Script not executed): " + e.getMessage());
+                JexlErrorAnalyzer.ErrorAnalysis analysis = JexlErrorAnalyzer.analyze(e, script, true);
+                log.warn("JEXL Syntax Error [{}] intercepted: {}", analysis.errorCategory(), analysis.error());
+                publishToolEvent(conversationId, phase, script, null, false, analysis);
+                return toJsonError(analysis);
             }
 
             Object result = jexlScript.execute(context);
             ExceptionUtils.checkInterrupted("JEXL execution cancelled");
-            publishToolEvent(conversationId, script, result, true, null);
+            publishToolEvent(conversationId, phase, script, result, true, null);
             return serializeResult(result);
         } catch (Exception e) {
             if (ExceptionUtils.isCancellation(e)) {
                 cancelled = true;
                 try {
-                    publishToolEvent(conversationId, script, null, false, "Execution cancelled");
+                    publishToolEvent(conversationId, phase, script, null, false,
+                            new JexlErrorAnalyzer.ErrorAnalysis(JexlErrorAnalyzer.ErrorCategory.RUNTIME_ERROR.name(),
+                                    null, null, null, "Execution cancelled", null));
                 } catch (Exception ignored) {
                 }
                 throw ExceptionUtils.asCancellationException(e, "JEXL execution cancelled");
             }
-            log.warn("Error executing JEXL script: {}", e.getMessage());
-            Throwable cause = ExceptionUtils.getRootCause(e);
-            String error = ExceptionUtils.getMessageOrSimpleName(cause);
-            publishToolEvent(conversationId, script, null, false, error);
-            return toJsonError(error);
+            JexlErrorAnalyzer.ErrorAnalysis analysis = JexlErrorAnalyzer.analyze(e, script, false);
+            log.warn("Error executing JEXL script [{}]: {}", analysis.errorCategory(), analysis.error());
+            publishToolEvent(conversationId, phase, script, null, false, analysis);
+            return toJsonError(analysis);
         } finally {
             if (!cancelled && !Thread.currentThread().isInterrupted() && eventPublisher != null) {
                 eventPublisher.publishEvent(new AgentActivityEvent(conversationId, "Analyzing tool output..."));
@@ -186,9 +189,36 @@ public class JexlTool {
         return mapper.writeValueAsString(Map.of(RESULT_KEY, StringUtils.defaultIfBlank(rawOutput, "<empty result>")));
     }
 
-    private void publishToolEvent(String conversationId, String script, Object result, boolean success, String error) {
-        if (eventPublisher != null) {
-            eventPublisher.publishEvent(new ToolExecutionEvent(conversationId, script, result, success, error));
+    private void publishToolEvent(String conversationId, WorkflowPhase phase, String script, @Nullable Object result,
+            boolean success, JexlErrorAnalyzer.@Nullable ErrorAnalysis analysis) {
+        if (eventPublisher == null) {
+            return;
+        }
+        String phaseName = phase.name();
+        if (analysis == null) {
+            eventPublisher.publishEvent(new ToolExecutionEvent(conversationId, phaseName, script, result, success, null,
+                    null, null, null, null, null));
+            return;
+        }
+        eventPublisher.publishEvent(new ToolExecutionEvent(conversationId, phaseName, script, result, success,
+                analysis.errorCategory(), analysis.line(), analysis.column(), analysis.offendingLine(),
+                analysis.error(), analysis.hint()));
+    }
+
+    private String toJsonError(JexlErrorAnalyzer.ErrorAnalysis analysis) {
+        try {
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("error", Objects.requireNonNullElse(analysis.error(), "Unknown error"));
+            if (StringUtils.isNotBlank(analysis.hint())) {
+                payload.put("hint", analysis.hint());
+            }
+            if (StringUtils.isNotBlank(analysis.offendingLine())) {
+                payload.put("offendingLine", analysis.offendingLine());
+            }
+            return mapper.writeValueAsString(payload);
+        } catch (Exception e) {
+            return """
+                    {"error":"Internal Error during error serialization"}""";
         }
     }
 

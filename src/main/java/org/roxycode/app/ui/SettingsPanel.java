@@ -67,7 +67,7 @@ public final class SettingsPanel extends JPanel {
     static final String CONNECTION_SUCCESS_TEXT = "Connection verified!";
     static final String CONNECTION_FAILED_PREFIX = "Connection failed: ";
     static final String OPEN_LOG_BUTTON_TEXT = "Open Log";
-    static final String TOOL_LOG_DISPLAY_PATH = "~/.roxycode/logs/toolcalls.log";
+    static final String TOOL_LOG_DISPLAY_PATH = "~/.roxycode/logs/toolcalls.jsonl";
     static final String SECTION_AUTH_TITLE = "Authentication & Provider Connection";
     static final String SECTION_PROFILE_TITLE = "Default Agent Profile (Phase-Aware Model & Adaptive Thinking)";
     static final String SECTION_APPEARANCE_TITLE = "Appearance & Diagnostics";
@@ -89,7 +89,7 @@ public final class SettingsPanel extends JPanel {
 
     private record SettingsSnapshot(String theme, boolean vertexEnabled, String apiKey, String vertexProjectId,
             String vertexLocation, String vertexCredentialsPath, String agentProfileId, int maxAgentToolTurns,
-            int maxChatMemoryMessages, boolean logToolCalls, boolean googleGroundingEnabled) {
+            int maxChatMemoryMessages, boolean googleGroundingEnabled) {
     }
 
     private final transient SettingsService settingsService;
@@ -121,7 +121,6 @@ public final class SettingsPanel extends JPanel {
     final JLabel testConnectionStatusLabel;
     final Timer testConnectionStatusTimer;
     final JSpinner maxAgentToolTurnsSpinner;
-    final JCheckBox logToolCallsCheckBox;
     final JLabel toolLogPathLabel;
     final JButton openToolLogButton;
     final JCheckBox googleGroundingCheckBox;
@@ -280,11 +279,6 @@ public final class SettingsPanel extends JPanel {
         maxMessagesSpinner = new JSpinner(
                 new SpinnerNumberModel(initialMaxMessages, MIN_CHAT_MEMORY_MESSAGES, MAX_CHAT_MEMORY_MESSAGES, 5));
         maxMessagesSpinner.addChangeListener(e -> updateSaveButtonState());
-
-        logToolCallsCheckBox = new JCheckBox("Log JEXL Tool Calls & Results");
-        logToolCallsCheckBox.setOpaque(false);
-        logToolCallsCheckBox.setSelected(settingsService.getSettings().isLogToolCalls());
-        logToolCallsCheckBox.addActionListener(e -> updateSaveButtonState());
 
         toolLogPathLabel = new JLabel(TOOL_LOG_DISPLAY_PATH);
         toolLogPathLabel.putClientProperty(FlatClientProperties.STYLE, "font: $monospaced.font -1");
@@ -475,13 +469,14 @@ public final class SettingsPanel extends JPanel {
 
         card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
 
-        card.add(logToolCallsCheckBox, GROWX_WMIN_0);
-
-        JPanel logRow = new JPanel(new MigLayout("fillx, insets 0, gapx 8", "[grow, fill][right]", ROW_CENTER));
-        logRow.setOpaque(false);
-        logRow.add(toolLogPathLabel, WMIN_0);
-        logRow.add(openToolLogButton, "right");
-        card.add(logRow, GROWX_WMIN_0);
+        JPanel logControlPanel = new JPanel(new MigLayout("insets 0, gapx 8", "[][right]", ROW_CENTER));
+        logControlPanel.setOpaque(false);
+        logControlPanel.add(toolLogPathLabel);
+        logControlPanel.add(openToolLogButton);
+        card.add(UiComponents.createFieldRow(
+                UiComponents.createFieldTextBlock("JEXL Tool Call Log",
+                        "Always-on structured JSONL log of every JEXL script and result.", null),
+                logControlPanel, "right"), GROWX_WMIN_0);
 
         return card;
     }
@@ -646,7 +641,7 @@ public final class SettingsPanel extends JPanel {
         if (roxyHome == null) {
             roxyHome = SettingsService.getDefaultRoxyHomeDir();
         }
-        return roxyHome.resolve("logs").resolve("toolcalls.log");
+        return roxyHome.resolve("logs").resolve("toolcalls.jsonl");
     }
 
     void openToolCallLog() {
@@ -703,10 +698,9 @@ public final class SettingsPanel extends JPanel {
         }
         int toolTurns = (Integer) maxAgentToolTurnsSpinner.getValue();
         int maxMessages = (Integer) maxMessagesSpinner.getValue();
-        boolean logToolCalls = logToolCallsCheckBox.isSelected();
         boolean groundingEnabled = googleGroundingCheckBox.isSelected();
         return new SettingsSnapshot(theme, vertexEnabled, apiKey, projectId, location, credentialsPath, profileId,
-                toolTurns, maxMessages, logToolCalls, groundingEnabled);
+                toolTurns, maxMessages, groundingEnabled);
     }
 
     void captureSavedBaseline() {
@@ -776,10 +770,6 @@ public final class SettingsPanel extends JPanel {
                     MAX_CHAT_MEMORY_MESSAGES);
             if (!Integer.valueOf(clampedMaxMessages).equals(maxMessagesSpinner.getValue())) {
                 maxMessagesSpinner.setValue(clampedMaxMessages);
-            }
-            boolean logToolCalls = event.settings().isLogToolCalls();
-            if (logToolCalls != logToolCallsCheckBox.isSelected()) {
-                logToolCallsCheckBox.setSelected(logToolCalls);
             }
             boolean groundingEnabled = event.settings().isGoogleGroundingEnabled();
             if (groundingEnabled != googleGroundingCheckBox.isSelected()) {
@@ -914,7 +904,6 @@ public final class SettingsPanel extends JPanel {
         }
         settings.setMaxAgentToolTurns((Integer) maxAgentToolTurnsSpinner.getValue());
         settings.setMaxChatMemoryMessages(newMaxMessages);
-        settings.setLogToolCalls(logToolCallsCheckBox.isSelected());
         settings.setGoogleGroundingEnabled(googleGroundingCheckBox.isSelected());
         settingsService.saveSettings();
         updateOnboardingBannerState();

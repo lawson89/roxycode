@@ -84,7 +84,6 @@ class SettingsPanelTest {
 
         assertNotNull(settingsPanel.profileInfoIcon.getToolTipText());
         turnsEditor.getTextField().setText("85");
-        settingsPanel.logToolCallsCheckBox.setSelected(true);
         settingsPanel.geminiApiKeyField.setText("new-secret-key");
         settingsPanel.saveButton.doClick();
 
@@ -93,7 +92,6 @@ class SettingsPanelTest {
         assertEquals("MAX", settings.getAgentProfile());
         assertEquals("ADAPTIVE", settings.getThinkingLevel());
         assertEquals(85, settings.getMaxAgentToolTurns());
-        assertTrue(settings.isLogToolCalls());
         assertFalse(settingsPanel.onboardingBanner.isVisible());
         assertEquals(1, initialCallbackCount.get());
 
@@ -101,7 +99,6 @@ class SettingsPanelTest {
         assertEquals("new-secret-key", copied.getGeminiApiKey());
         assertEquals("MAX", copied.getAgentProfile());
         assertEquals(85, copied.getMaxAgentToolTurns());
-        assertTrue(copied.isLogToolCalls());
         assertFalse(settingsPanel.hasUnsavedChanges());
         assertEquals(SettingsPanel.SAVE_SETTINGS_TEXT, settingsPanel.saveButton.getText());
         assertEquals(SettingsPanel.SAVED_APPLIED_TEXT, settingsPanel.statusLabel.getText());
@@ -117,7 +114,6 @@ class SettingsPanelTest {
         settings.setAgentProfile("SPEED");
         settings.setMaxAgentToolTurns(100);
         settings.setMaxChatMemoryMessages(250);
-        settings.setLogToolCalls(false);
         settingsPanel.onSettingsChanged(new SettingsChangedEvent(settings));
         SwingTestUtils.flushEdt();
         assertEquals("synced-from-event-key", new String(settingsPanel.geminiApiKeyField.getPassword()));
@@ -125,7 +121,6 @@ class SettingsPanelTest {
         assertEquals(AgentProfile.SPEED.getBadgeSummary(), settingsPanel.modelApiBadgeLabel.getText());
         assertEquals(100, settingsPanel.maxAgentToolTurnsSpinner.getValue());
         assertEquals(250, settingsPanel.maxMessagesSpinner.getValue());
-        assertFalse(settingsPanel.logToolCallsCheckBox.isSelected());
 
         for (ActionListener listener : settingsPanel.statusTimer.getActionListeners()) {
             listener.actionPerformed(null);
@@ -257,6 +252,8 @@ class SettingsPanelTest {
         AtomicReference<java.nio.file.Path> openedLogPath = new AtomicReference<>();
         settingsPanel.setLogFileOpener(openedLogPath::set);
         SwingTestUtils.clickOnEdt(settingsPanel.openToolLogButton);
+        assertEquals(SettingsPanel.TOOL_LOG_DISPLAY_PATH, settingsPanel.toolLogPathLabel.getText());
+        assertEquals("toolcalls.jsonl", settingsPanel.resolveToolCallLogFile().getFileName().toString());
         assertEquals(settingsPanel.resolveToolCallLogFile(), openedLogPath.get());
     }
 }

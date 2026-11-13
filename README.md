@@ -145,7 +145,7 @@ RoxyCode stores user settings, caches, memory, and per-project metadata under `~
 ├── system-tools.toml            # Cached CLI tool detection results
 ├── logs/
 │   ├── roxy.log                 # Application log
-│   └── toolcalls.log            # Optional JEXL tool execution log (when enabled in Settings)
+│   └── toolcalls.jsonl          # Always-on structured JSONL log of JEXL tool executions
 ├── memory/
 │   ├── MEMORY.md                # Pinned global memory cheat-sheet
 │   └── notes/                   # Global topic notes (*.md)
