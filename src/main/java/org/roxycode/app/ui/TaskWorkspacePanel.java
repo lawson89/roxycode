@@ -82,7 +82,7 @@ final class TaskWorkspacePanel extends JPanel {
             }
         });
         applyPlanBadgeStyling();
-        topBar.add(planLabel, "cell 0 0, hidemode 3");
+        topBar.add(planLabel, "cell 0 0, wmin 0, hidemode 3");
 
         progressTracker = new JPanel(new MigLayout("insets 0, gapx 2", "[]", LAYOUT_CENTER));
         applyPhaseTrackerStyling();

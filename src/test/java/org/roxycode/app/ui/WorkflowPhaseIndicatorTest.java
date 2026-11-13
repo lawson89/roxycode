@@ -75,6 +75,17 @@ class WorkflowPhaseIndicatorTest {
         assertTrue(taskWorkspace.progressTracker.getX() > taskWorkspace.planLabel.getX()
                 + taskWorkspace.planLabel.getWidth());
 
+        SwingTestUtils.runOnEdt(() -> {
+            taskWorkspace.topBar.setSize(600, 40);
+            taskWorkspace.topBar.doLayout();
+        });
+        assertEquals(16, taskWorkspace.planLabel.getX());
+        assertEquals(600 - 16, taskWorkspace.workflowInfoIcon.getX() + taskWorkspace.workflowInfoIcon.getWidth());
+        assertEquals(taskWorkspace.workflowInfoIcon.getX() - 8,
+                taskWorkspace.progressTracker.getX() + taskWorkspace.progressTracker.getWidth());
+        assertTrue(taskWorkspace.progressTracker.getX() > taskWorkspace.planLabel.getX()
+                + taskWorkspace.planLabel.getWidth());
+
         assertEquals("Plan", taskWorkspace.taskTabs.getTitleAt(1));
         SwingTestUtils.runOnEdt(() -> taskWorkspace.updatePastPlansTabTitle(5));
         assertEquals("Past Plans (5)", taskWorkspace.taskTabs.getTitleAt(2));
