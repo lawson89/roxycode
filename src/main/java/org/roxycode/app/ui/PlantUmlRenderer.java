@@ -76,15 +76,16 @@ final class PlantUmlRenderer {
     private static final Pattern SVG_ELEMENT_OPEN_PATTERN = Pattern.compile("(?s)<([a-zA-Z][\\w:-]*)(\\s+[^>]*?)(/?)>");
     private static final Pattern SVG_CLASS_ATTR_PATTERN = Pattern
             .compile("(?is)(?<![\\w-])class\\s*=\\s*(?:\\x22([^\\x22]*)\\x22|'([^']*)')");
-    private static final Pattern SVG_TEXT_BLOCK_PATTERN = Pattern.compile("(?is)<text\\b[^>]*>.*?</text>");
-    private static final Pattern XML_TAG_OR_TEXT_PATTERN = Pattern
-            .compile("(?s)(</?[a-zA-Z!?][^>]*>)|((?:[^<]|<(?![/?!a-zA-Z]))+)");
+    private static final Pattern SVG_TEXT_BLOCK_PATTERN = Pattern
+            .compile("(?is)(<(text|title|desc)\\b[^>/]*>)(.*?)(</\\2\\s*>)");
+    private static final Pattern TSPAN_TAG_PATTERN = Pattern.compile("(?is)</?tspan\\b[^>]*>");
     private static final Pattern BARE_AMPERSAND_PATTERN = Pattern
             .compile("&(?!(?:#[0-9]+|#x[0-9a-fA-F]+|[a-zA-Z][a-zA-Z0-9._-]*);)");
     private static final Set<String> SUPPORTED_SVG_PRESENTATION_ATTRS = Set.of("fill", "stroke", "stroke-width",
             "font-family", "font-size", "font-weight", "rx", "ry", "opacity", "stroke-dasharray", "text-anchor",
             "dominant-baseline", "fill-opacity", "stroke-opacity");
     private static final String SMETANA_PRAGMA = "!pragma layout smetana";
+    private static final String SVG_TEXT_TAG = "text";
     private static final String ERROR_DESCRIPTION_MARKER = "(Error)";
     private static final char DOUBLE_QUOTE_CHAR = '"';
     private static final char BACKSLASH_CHAR = '\\';
@@ -543,8 +544,8 @@ final class PlantUmlRenderer {
         if (svgCode == null || svgCode.isBlank()) {
             return svgCode;
         }
-        String inlined = inlineSvgStyleClasses(svgCode);
-        return escapeSvgTextContent(inlined);
+        String escapedText = escapeSvgTextContent(svgCode);
+        return inlineSvgStyleClasses(escapedText);
     }
 
     private static String inlineSvgStyleClasses(String svgCode) {
@@ -566,6 +567,10 @@ final class PlantUmlRenderer {
             String tagName = elemMatcher.group(1);
             String attrs = elemMatcher.group(2);
             String selfClose = elemMatcher.group(3);
+            if (attrs.endsWith("/")) {
+                attrs = attrs.substring(0, attrs.length() - 1);
+                selfClose = "/";
+            }
             Matcher classMatcher = SVG_CLASS_ATTR_PATTERN.matcher(attrs);
             if (!classMatcher.find()) {
                 elemMatcher.appendReplacement(result, Matcher.quoteReplacement(elemMatcher.group(0)));
@@ -663,31 +668,66 @@ final class PlantUmlRenderer {
         Matcher textMatcher = SVG_TEXT_BLOCK_PATTERN.matcher(svgCode);
         StringBuilder result = new StringBuilder(svgCode.length());
         while (textMatcher.find()) {
-            String textBlock = textMatcher.group(0);
-            String escapedBlock = escapeXmlTextSegments(textBlock);
-            textMatcher.appendReplacement(result, Matcher.quoteReplacement(escapedBlock));
+            String openTag = textMatcher.group(1);
+            String tagName = textMatcher.group(2);
+            String innerBody = textMatcher.group(3);
+            String closeTag = textMatcher.group(4);
+            String escapedBody;
+            if (SVG_TEXT_TAG.equalsIgnoreCase(tagName)) {
+                escapedBody = escapeXmlTextSegments(innerBody);
+            } else {
+                escapedBody = escapePlainTextSegment(innerBody);
+            }
+            String replacement = openTag + escapedBody + closeTag;
+            textMatcher.appendReplacement(result, Matcher.quoteReplacement(replacement));
         }
         textMatcher.appendTail(result);
         return result.toString();
     }
 
-    private static String escapeXmlTextSegments(String textBlock) {
-        Matcher segmentMatcher = XML_TAG_OR_TEXT_PATTERN.matcher(textBlock);
-        StringBuilder out = new StringBuilder(textBlock.length());
-        while (segmentMatcher.find()) {
-            String tag = segmentMatcher.group(1);
-            if (tag != null) {
-                out.append(tag);
-            } else {
-                String text = segmentMatcher.group(2);
-                if (text != null) {
-                    String escapedAmp = BARE_AMPERSAND_PATTERN.matcher(text).replaceAll("&amp;");
-                    String escapedLt = escapedAmp.replace("<", "&lt;");
-                    out.append(escapedLt);
-                }
+    private static String escapeXmlTextSegments(String innerBody) {
+        if (!hasBalancedTspanTags(innerBody)) {
+            return escapePlainTextSegment(innerBody);
+        }
+        Matcher tspanMatcher = TSPAN_TAG_PATTERN.matcher(innerBody);
+        StringBuilder out = new StringBuilder(innerBody.length());
+        int lastEnd = 0;
+        while (tspanMatcher.find()) {
+            if (tspanMatcher.start() > lastEnd) {
+                out.append(escapePlainTextSegment(innerBody.substring(lastEnd, tspanMatcher.start())));
             }
+            out.append(tspanMatcher.group());
+            lastEnd = tspanMatcher.end();
+        }
+        if (lastEnd < innerBody.length()) {
+            out.append(escapePlainTextSegment(innerBody.substring(lastEnd)));
         }
         return out.toString();
+    }
+
+    private static boolean hasBalancedTspanTags(String innerBody) {
+        Matcher tspanMatcher = TSPAN_TAG_PATTERN.matcher(innerBody);
+        int depth = 0;
+        while (tspanMatcher.find()) {
+            String tag = tspanMatcher.group();
+            if (tag.startsWith("</")) {
+                depth--;
+                if (depth < 0) {
+                    return false;
+                }
+            } else if (!tag.endsWith("/>")) {
+                depth++;
+            }
+        }
+        return depth == 0;
+    }
+
+    private static String escapePlainTextSegment(String text) {
+        if (text == null || text.isEmpty()) {
+            return "";
+        }
+        String escapedAmp = BARE_AMPERSAND_PATTERN.matcher(text).replaceAll("&amp;");
+        return escapedAmp.replace("<", "&lt;");
     }
 
     static String normalizeRootSvgAttributes(String svgCode) {

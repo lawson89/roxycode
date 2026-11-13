@@ -305,6 +305,34 @@ class PlantUmlRendererTest {
         assertContainsAll(renderedHtml.get(), "width=" + '"' + "600" + '"', "height=" + '"' + "300" + '"');
     }
 
+    @Test
+    void testSvgPlaceholderTagsAndSelfClosingStyledElementsRenderWithoutXmlError() {
+        String svgWithPlaceholders = """
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 320" width="640" height="320">
+                  <style>
+                    .card { fill: #1E293B; stroke: #38BDF8; stroke-width: 2; }
+                    .label { fill: #F8FAFC; font-family: 'Segoe UI', sans-serif; font-size: 13px; }
+                  </style>
+                  <title>Screen <title> & Preview</title>
+                  <rect class="card" x="10" y="10" width="620" height="300" rx="8"/>
+                  <text class="label" x="24" y="45">File: <projectDataDir>/notes/<slug>.md &amp; <title></text>
+                  <text class="label" x="24" y="80">Type: <tspan class="label" x="80" y="80">List<String> & Map</tspan></text>
+                  <text class="label" x="24" y="115">Unbalanced <tspan> tag</text>
+                </svg>
+                """;
+        String sanitized = PlantUmlRenderer.sanitizeSvgForRendering(svgWithPlaceholders);
+        assertContainsAll(sanitized,
+                "rx=" + '"' + "8" + '"' + " fill=" + '"' + "#1E293B" + '"' + " stroke=" + '"' + "#38BDF8" + '"'
+                        + " stroke-width=" + '"' + "2" + '"' + "/>",
+                "Screen &lt;title> &amp; Preview</title>",
+                "File: &lt;projectDataDir>/notes/&lt;slug>.md &amp; &lt;title></text>",
+                "List&lt;String> &amp; Map</tspan>", "Unbalanced &lt;tspan> tag</text>");
+
+        Optional<String> renderedHtml = PlantUmlRenderer.renderDiagramHtml(svgWithPlaceholders, "svg", true);
+        assertTrue(renderedHtml.isPresent());
+        assertContainsAll(renderedHtml.get(), "width=" + '"' + "640" + '"', "height=" + '"' + "320" + '"');
+    }
+
     private static Path extractImagePath(String html) throws Exception {
         Matcher matcher = IMG_SRC_PATTERN.matcher(html);
         assertTrue(matcher.find(), "Expected <img src='file:...'> in HTML: " + html);
