@@ -5,8 +5,8 @@ import java.awt.Color;
 import java.awt.Cursor;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import javax.swing.JButton;
@@ -38,11 +38,17 @@ final class SystemToolsPanel extends JPanel {
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(SystemToolsPanel.class);
     static final String SUBTITLE_TEXT = "External CLI utilities and runtimes used by RoxyCode for search, version control, symbol indexing, and isolated builds.";
-    static final String REQUIRED_BADGE_TEXT = "Required";
-    static final String OPTIONAL_BADGE_TEXT = "Optional";
-    static final String COPY_INSTALL_PREFIX = "Copy Install: ";
+    static final String REQUIRED_BADGE_TEXT = "REQUIRED";
+    static final String SANDBOX_BADGE_TEXT = "SANDBOX";
+    static final String OPTIONAL_BADGE_TEXT = "OPTIONAL";
+    static final String REQUIRED_SECTION_TITLE = "REQUIRED CORE TOOLS  —  Codebase Search & Symbol Outline";
+    static final String OPTIONAL_SECTION_TITLE = "OPTIONAL & SANDBOX RUNTIMES  —  Version Control & Isolated Build Execution";
+    static final String ALL_REQUIRED_OK_TEXT = "✓ All Required OK";
+    static final String COPY_INSTALL_PREFIX = "Copy Cmd";
     static final int COPY_FEEDBACK_DELAY_MS = 1500;
     private static final String GROWX_WMIN_0 = "growx, wmin 0";
+    private static final String COL_GROW_FILL = "[grow, fill]";
+    private static final String ROW_CENTER = "[center]";
 
     private final transient SystemToolService toolService;
     private final JLabel titleLabel;
@@ -52,6 +58,11 @@ final class SystemToolsPanel extends JPanel {
     final JProgressBar progressBar;
     private final JPanel cardsContainer;
     private final JScrollPane scrollPane;
+    final JLabel requiredSectionHeader;
+    final JLabel requiredSectionStatusBadge;
+    final JLabel optionalSectionHeader;
+    final JPanel requiredToolsGrid;
+    final JPanel optionalToolsGrid;
     final List<ToolCard> toolCards = new ArrayList<>();
     private List<String> lastMissingRequiredToolNames = List.of();
     transient volatile CompletableFuture<List<SystemTool>> initialToolsFuture = CompletableFuture
@@ -59,13 +70,14 @@ final class SystemToolsPanel extends JPanel {
 
     public SystemToolsPanel(SystemToolService toolService) {
         this.toolService = toolService;
-        setLayout(new MigLayout("fill, insets 20, hidemode 3", "[grow, fill]", "[]10[]10[]10[grow, fill]"));
+        setLayout(new MigLayout("fill, insets 18, hidemode 3", COL_GROW_FILL, "[]10[]10[]10[grow, fill]"));
         setOpaque(true);
 
         titleLabel = new JLabel("System Tools Status");
         subtitleLabel = new JLabel(SUBTITLE_TEXT);
 
-        refreshBtn = new JButton("Refresh Status");
+        refreshBtn = new JButton("Re-scan System");
+        refreshBtn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         refreshBtn.addActionListener(e -> refreshTools());
 
         add(UiComponents.createPageHeader(titleLabel, subtitleLabel, refreshBtn), "growx, wmin 0, wrap");
@@ -77,8 +89,23 @@ final class SystemToolsPanel extends JPanel {
         progressBar.setVisible(false);
         add(progressBar, "growx, wmin 0, wrap, hidemode 3");
 
+        requiredSectionHeader = new JLabel(REQUIRED_SECTION_TITLE);
+        requiredSectionHeader.putClientProperty(FlatClientProperties.STYLE, "font: bold");
+        requiredSectionStatusBadge = new JLabel(ALL_REQUIRED_OK_TEXT);
+
+        optionalSectionHeader = new JLabel(OPTIONAL_SECTION_TITLE);
+        optionalSectionHeader.putClientProperty(FlatClientProperties.STYLE, "font: bold");
+
+        requiredToolsGrid = new JPanel(new MigLayout("fillx, insets 0, gap 12 12, hidemode 3",
+                "[grow, fill, sg toolcol]14[grow, fill, sg toolcol]", ""));
+        requiredToolsGrid.setOpaque(false);
+
+        optionalToolsGrid = new JPanel(new MigLayout("fillx, insets 0, gap 12 12, hidemode 3",
+                "[grow, fill, sg toolcol]14[grow, fill, sg toolcol]", ""));
+        optionalToolsGrid.setOpaque(false);
+
         cardsContainer = UiComponents.createScrollableCardsPanel(
-                new MigLayout("fillx, wrap 1, insets 4 2 12 6, gapy 12", "[grow, fill]", ""));
+                new MigLayout("fillx, wrap 1, insets 4 2 14 6, gapy 10, hidemode 3", COL_GROW_FILL, ""));
         scrollPane = UiComponents.createBorderlessScrollPane(cardsContainer);
         add(scrollPane, "grow, wmin 0");
 
@@ -140,7 +167,7 @@ final class SystemToolsPanel extends JPanel {
             return "";
         }
         return "Required system tools missing (" + String.join(", ", missingToolNames)
-                + "). Install the missing tools using the commands below and click 'Refresh Status'.";
+                + "). Install the missing tools using the commands below and click 'Re-scan System'.";
     }
 
     void updateWarningBannerState() {
@@ -154,27 +181,101 @@ final class SystemToolsPanel extends JPanel {
 
     private void populateCards(List<SystemTool> tools) {
         cardsContainer.removeAll();
+        requiredToolsGrid.removeAll();
+        optionalToolsGrid.removeAll();
         toolCards.clear();
+
+        List<SystemTool> requiredTools = new ArrayList<>();
+        List<SystemTool> optionalTools = new ArrayList<>();
+
         if (tools != null) {
             lastMissingRequiredToolNames = SystemToolService.getMissingRequiredToolNames(tools);
-            List<SystemTool> sortedTools = new ArrayList<>();
             for (SystemTool tool : tools) {
-                if (tool != null) {
-                    sortedTools.add(tool);
+                if (tool == null) {
+                    continue;
                 }
-            }
-            sortedTools.sort((a, b) -> Boolean.compare(b.required(), a.required()));
-            for (SystemTool tool : sortedTools) {
-                ToolCard card = new ToolCard(tool, UiComponents::openUrlOrCopyToClipboard);
-                toolCards.add(card);
-                cardsContainer.add(card, GROWX_WMIN_0);
+                if (tool.required()) {
+                    requiredTools.add(tool);
+                } else {
+                    optionalTools.add(tool);
+                }
             }
         } else {
             lastMissingRequiredToolNames = List.of();
         }
+
+        if (!requiredTools.isEmpty()) {
+            JPanel requiredHeaderRow = new JPanel(new MigLayout("insets 2 0 2 0, gapx 10", "[][]", ROW_CENTER));
+            requiredHeaderRow.setOpaque(false);
+            requiredHeaderRow.add(requiredSectionHeader);
+            requiredHeaderRow.add(requiredSectionStatusBadge);
+            cardsContainer.add(requiredHeaderRow, GROWX_WMIN_0);
+
+            updateRequiredSectionStatusBadge();
+            addCardsToGrid(requiredTools, requiredToolsGrid);
+            cardsContainer.add(requiredToolsGrid, GROWX_WMIN_0);
+        }
+
+        if (!optionalTools.isEmpty()) {
+            JPanel optionalHeaderRow = new JPanel(new MigLayout("insets 8 0 2 0, gapx 10", COL_GROW_FILL, ROW_CENTER));
+            optionalHeaderRow.setOpaque(false);
+            optionalHeaderRow.add(optionalSectionHeader, "wmin 0");
+            cardsContainer.add(optionalHeaderRow, GROWX_WMIN_0);
+
+            addCardsToGrid(optionalTools, optionalToolsGrid);
+            cardsContainer.add(optionalToolsGrid, GROWX_WMIN_0);
+        }
+
         updateWarningBannerState();
         cardsContainer.revalidate();
         cardsContainer.repaint();
+    }
+
+    private void addCardsToGrid(List<SystemTool> sectionTools, JPanel grid) {
+        for (SystemTool tool : sectionTools) {
+            ToolCard card = new ToolCard(tool, UiComponents::openUrlOrCopyToClipboard);
+            toolCards.add(card);
+            boolean healthy = SystemToolService.STATUS_DETECTED.equalsIgnoreCase(tool.status());
+            if (healthy) {
+                grid.add(card, "grow, wmin 0");
+            } else {
+                grid.add(card, "span 2, growx, wmin 0");
+            }
+        }
+    }
+
+    private void updateRequiredSectionStatusBadge() {
+        int missingCount = 0;
+        if (lastMissingRequiredToolNames != null) {
+            missingCount = lastMissingRequiredToolNames.size();
+        }
+        Color badgeColor;
+        if (missingCount == 0) {
+            requiredSectionStatusBadge.setText(ALL_REQUIRED_OK_TEXT);
+            badgeColor = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
+        } else {
+            requiredSectionStatusBadge.setText(missingCount + " Missing");
+            badgeColor = SwingHtmlUtils.getUiColor(new Color(0xdc, 0x35, 0x45), "Actions.Red");
+        }
+        String hex = SwingHtmlUtils.toHex(badgeColor);
+        requiredSectionStatusBadge.setForeground(badgeColor);
+        requiredSectionStatusBadge.putClientProperty(FlatClientProperties.STYLE,
+                "font: bold -1; arc: 999; border: 2,8,2,8," + hex + ",1,999; background: fade(" + hex + ", 14%)");
+    }
+
+    static String resolveRequirementBadgeText(SystemTool tool) {
+        if (tool == null) {
+            return OPTIONAL_BADGE_TEXT;
+        }
+        if (tool.required()) {
+            return REQUIRED_BADGE_TEXT;
+        }
+        String name = tool.name();
+        if (SystemTool.TOOL_DOCKER.equals(name) || SystemTool.TOOL_BUBBLEWRAP.equals(name)
+                || SystemTool.TOOL_SEATBELT.equals(name)) {
+            return SANDBOX_BADGE_TEXT;
+        }
+        return OPTIONAL_BADGE_TEXT;
     }
 
     static Codicons resolveToolIcon(String toolName) {
@@ -244,6 +345,9 @@ final class SystemToolsPanel extends JPanel {
         if (warningBanner != null) {
             updateWarningBannerState();
         }
+        if (requiredSectionStatusBadge != null) {
+            updateRequiredSectionStatusBadge();
+        }
         toolCards.forEach(ToolCard::applyCardTheme);
     }
 
@@ -265,16 +369,19 @@ final class SystemToolsPanel extends JPanel {
         final JTextArea descriptionArea;
         final JLabel versionBadge;
         final JLabel licenseBadge;
+        final JPanel remediationPanel;
+        final JLabel diagnosticLabel;
+        final JLabel installCommandLabel;
         final JButton copyInstallButton;
         final JButton websiteLinkButton;
         private Timer copyFeedbackTimer;
 
         ToolCard(SystemTool tool, Consumer<String> websiteOpener) {
             this.tool = tool;
-            setLayout(new MigLayout("fillx, wrap 1, insets 14 16 14 16, gapy 8", "[grow, fill]", ""));
+            setLayout(new MigLayout("fillx, wrap 1, insets 12 14 12 14, gapy 7, hidemode 3", COL_GROW_FILL, ""));
             UiComponents.styleCardPanel(this);
 
-            JPanel headerRow = new JPanel(new MigLayout("fillx, insets 0, gapx 8", "[][0:0, grow][right]", "[center]"));
+            JPanel headerRow = new JPanel(new MigLayout("fillx, insets 0, gapx 8", "[][0:0, grow][right]", ROW_CENTER));
             headerRow.setOpaque(false);
 
             nameLabel = new JLabel(tool.name());
@@ -282,13 +389,7 @@ final class SystemToolsPanel extends JPanel {
             nameLabel.setIconTextGap(8);
             headerRow.add(nameLabel, "left, wmin 0");
 
-            String badgeText;
-            if (tool.required()) {
-                badgeText = REQUIRED_BADGE_TEXT;
-            } else {
-                badgeText = OPTIONAL_BADGE_TEXT;
-            }
-            requirementBadge = new JLabel(badgeText);
+            requirementBadge = new JLabel(resolveRequirementBadgeText(tool));
             headerRow.add(requirementBadge, "left");
 
             statusBadge = new JLabel(tool.status());
@@ -301,8 +402,52 @@ final class SystemToolsPanel extends JPanel {
             descriptionArea.setText(tool.description());
             add(descriptionArea, GROWX_WMIN_0);
 
+            boolean isDetected = SystemToolService.STATUS_DETECTED.equalsIgnoreCase(tool.status());
+            String installCmd = resolveInstallCommand(tool.name());
+            boolean hasInstallCmd = StringUtils.isNotBlank(installCmd);
+
+            remediationPanel = new JPanel(
+                    new MigLayout("fillx, insets 8 10 8 10, gapx 10, gapy 4, hidemode 3", "[grow, fill][right]", ""));
+            remediationPanel.setVisible(!isDetected);
+
+            String diagnosticText;
+            if (StringUtils.isNotBlank(tool.version())) {
+                diagnosticText = "Diagnostic: " + tool.version();
+            } else {
+                diagnosticText = "Diagnostic: " + tool.name() + " was not detected on PATH.";
+            }
+            diagnosticLabel = new JLabel(diagnosticText);
+            diagnosticLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
+
+            installCommandLabel = new JLabel("$ " + installCmd);
+            installCommandLabel.putClientProperty(FlatClientProperties.STYLE, "font: $monospaced.font -1");
+            installCommandLabel.setVisible(hasInstallCmd);
+
+            copyInstallButton = new JButton(COPY_INSTALL_PREFIX);
+            copyInstallButton.setVisible(!isDetected && hasInstallCmd);
+            copyInstallButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            copyInstallButton.setFocusable(false);
+            copyInstallButton.setIconTextGap(6);
+            if (!isDetected && hasInstallCmd) {
+                copyInstallButton.setToolTipText("Copy terminal install command: " + installCmd);
+                copyInstallButton.addActionListener(e -> {
+                    copyFeedbackTimer = UiComponents.copyWithFeedback(copyInstallButton, copyFeedbackTimer, installCmd,
+                            COPY_INSTALL_PREFIX, COPY_FEEDBACK_DELAY_MS);
+                });
+            }
+
+            JPanel remediationTextCol = new JPanel(
+                    new MigLayout("fillx, insets 0, wrap 1, gapy 2, hidemode 3", COL_GROW_FILL, ""));
+            remediationTextCol.setOpaque(false);
+            remediationTextCol.add(diagnosticLabel, GROWX_WMIN_0);
+            remediationTextCol.add(installCommandLabel, GROWX_WMIN_0);
+
+            remediationPanel.add(remediationTextCol, "wmin 0");
+            remediationPanel.add(copyInstallButton, "right, hidemode 3");
+            add(remediationPanel, GROWX_WMIN_0);
+
             JPanel footerRow = new JPanel(
-                    new MigLayout("fillx, insets 2 0 0 0, gapx 10", "[]10[]push[][right]", "[center]"));
+                    new MigLayout("fillx, insets 2 0 0 0, gapx 10", "[]10[]push[right]", ROW_CENTER));
             footerRow.setOpaque(false);
 
             versionBadge = new JLabel(StringUtils.defaultIfBlank(tool.version(), "Unknown"));
@@ -320,29 +465,6 @@ final class SystemToolsPanel extends JPanel {
             licenseBadge.setIconTextGap(5);
             licenseBadge.setVisible(hasLicense);
             footerRow.add(licenseBadge, "wmin 0, hidemode 3");
-
-            String installCmd = resolveInstallCommand(tool.name());
-            boolean showInstallCmd = !SystemToolService.STATUS_DETECTED.equalsIgnoreCase(tool.status())
-                    && StringUtils.isNotBlank(installCmd);
-            String copyBtnText;
-            if (showInstallCmd) {
-                copyBtnText = COPY_INSTALL_PREFIX + installCmd;
-            } else {
-                copyBtnText = "";
-            }
-            copyInstallButton = new JButton(copyBtnText);
-            copyInstallButton.setVisible(showInstallCmd);
-            copyInstallButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            copyInstallButton.setFocusable(false);
-            copyInstallButton.setIconTextGap(6);
-            if (showInstallCmd) {
-                copyInstallButton.setToolTipText("Copy terminal install command: " + installCmd);
-                copyInstallButton.addActionListener(e -> {
-                    copyFeedbackTimer = UiComponents.copyWithFeedback(copyInstallButton, copyFeedbackTimer, installCmd,
-                            copyBtnText, COPY_FEEDBACK_DELAY_MS);
-                });
-            }
-            footerRow.add(copyInstallButton, "right, hidemode 3");
 
             String websiteUrl = tool.websiteUrl();
             boolean hasWebsite = StringUtils.isNotBlank(websiteUrl);
@@ -378,8 +500,12 @@ final class SystemToolsPanel extends JPanel {
 
             String pillBg = UiComponents.getPillBackgroundDirective();
             requirementBadge.putClientProperty(FlatClientProperties.STYLE,
-                    "font: -1; arc: 999; border: 2,8,2,8," + borderHex + ",1,999; background: " + pillBg);
-            requirementBadge.setForeground(mutedColor);
+                    "font: bold -2; arc: 6; border: 2,6,2,6," + borderHex + ",1,6; background: " + pillBg);
+            if (tool.required()) {
+                requirementBadge.setForeground(accentColor);
+            } else {
+                requirementBadge.setForeground(mutedColor);
+            }
 
             versionBadge.putClientProperty(FlatClientProperties.STYLE,
                     "font: $monospaced.font -1; arc: 8; border: 3,8,3,8," + borderHex + ",1,8; background: " + pillBg);
@@ -394,10 +520,18 @@ final class SystemToolsPanel extends JPanel {
             }
 
             String accentHex = SwingHtmlUtils.toHex(accentColor);
+            if (remediationPanel != null) {
+                remediationPanel.setOpaque(true);
+                remediationPanel.putClientProperty(FlatClientProperties.STYLE,
+                        "arc: 8; border: 1,1,1,1," + borderHex + ",1,8; background: " + pillBg);
+                diagnosticLabel.setForeground(SwingHtmlUtils.getWarningColor());
+                installCommandLabel.setForeground(accentColor);
+            }
+
             copyInstallButton.putClientProperty(FlatClientProperties.STYLE,
-                    "font: $monospaced.font -1; arc: 8; margin: 2,8,2,8; borderColor: " + borderHex + "; background: "
-                            + pillBg + "; hoverBackground: fade(" + accentHex + ", 14%); pressedBackground: fade("
-                            + accentHex + ", 22%)");
+                    "font: bold -1; arc: 8; margin: 4,10,4,10; borderColor: " + borderHex + "; background: " + pillBg
+                            + "; hoverBackground: fade(" + accentHex + ", 14%); pressedBackground: fade(" + accentHex
+                            + ", 22%)");
             copyInstallButton.setForeground(fgColor);
             if (copyInstallButton.isVisible()) {
                 copyInstallButton.setIcon(FontIcon.of(Codicons.TERMINAL, 13, accentColor));

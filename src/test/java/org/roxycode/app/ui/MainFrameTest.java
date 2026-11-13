@@ -117,6 +117,8 @@ class MainFrameTest {
             assertTrue(settingsPanel.onboardingBanner.isVisible());
             assertFalse(systemToolsPanel.warningBanner.isVisible());
             assertFalse(frame.sidebar.isToolsAttentionNeeded());
+            assertEquals("Credentials Required", frame.aiConnectionReadinessBadge.getText());
+            assertEquals("System Tools (3/3 Ready)", frame.settingsHubTabs.getTitleAt(1));
 
             NavButton settingsBtn = frame.sidebar.getCardButton(MainFrame.SETTINGS_VIEW);
             NavButton qaBtn = frame.sidebar.getCardButton(MainFrame.QA_VIEW);
@@ -535,6 +537,12 @@ class MainFrameTest {
 
             assertTrue(askRoxyItem.isEnabled());
             assertTrue(buildFeatureItem.isEnabled());
+            assertEquals("AI Studio Connected", frame.aiConnectionReadinessBadge.getText());
+            frame.onSystemToolsUpdated(
+                    new SystemToolsUpdatedEvent(List.of(SystemTool.ofKnownTool("Ripgrep", "14.1.0", "Detected"),
+                            SystemTool.ofKnownTool("Universal Ctags", "Not found", "Missing")), false));
+            SwingTestUtils.flushEdt();
+            assertEquals("System Tools (1 Missing)", frame.settingsHubTabs.getTitleAt(1));
 
             SwingTestUtils.runOnEdt(() -> {
                 buildFeatureItem.doClick();

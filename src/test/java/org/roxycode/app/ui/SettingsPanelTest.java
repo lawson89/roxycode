@@ -47,9 +47,23 @@ class SettingsPanelTest {
         assertEquals(AgentProfile.NORMAL.getBadgeSummary(), settingsPanel.modelApiBadgeLabel.getText());
         assertEquals(AgentProfile.NORMAL.getDescription(), settingsPanel.modelDescriptionArea.getText());
 
+        assertTrue(settingsPanel.profileCards.get(AgentProfile.NORMAL).isSelected());
+        assertFalse(settingsPanel.hasUnsavedChanges());
+        assertEquals(SettingsPanel.SAVE_SETTINGS_TEXT, settingsPanel.saveButton.getText());
+
         profileCombo.setSelectedItem(AgentProfile.MAX);
         assertEquals(AgentProfile.MAX.getBadgeSummary(), settingsPanel.modelApiBadgeLabel.getText());
         assertEquals(AgentProfile.MAX.getDescription(), settingsPanel.modelDescriptionArea.getText());
+        assertTrue(settingsPanel.profileCards.get(AgentProfile.MAX).isSelected());
+        assertFalse(settingsPanel.profileCards.get(AgentProfile.NORMAL).isSelected());
+        assertTrue(settingsPanel.hasUnsavedChanges());
+        assertEquals(SettingsPanel.SAVE_CHANGES_DIRTY_TEXT, settingsPanel.saveButton.getText());
+
+        settingsPanel.selectProfileFromCard(AgentProfile.SPEED);
+        assertEquals(AgentProfile.SPEED, profileCombo.getSelectedItem());
+        assertTrue(settingsPanel.profileCards.get(AgentProfile.SPEED).isSelected());
+
+        profileCombo.setSelectedItem(AgentProfile.MAX);
 
         try {
             settingsPanel.themeCombo.setSelectedItem("FlatLaf Dark");
@@ -88,6 +102,8 @@ class SettingsPanelTest {
         assertEquals("MAX", copied.getAgentProfile());
         assertEquals(85, copied.getMaxAgentToolTurns());
         assertTrue(copied.isLogToolCalls());
+        assertFalse(settingsPanel.hasUnsavedChanges());
+        assertEquals(SettingsPanel.SAVE_SETTINGS_TEXT, settingsPanel.saveButton.getText());
         assertEquals(SettingsPanel.SAVED_APPLIED_TEXT, settingsPanel.statusLabel.getText());
 
         settingsPanel.maxMessagesSpinner.setValue(120);
@@ -152,7 +168,8 @@ class SettingsPanelTest {
         assertFalse(settingsPanel.testConnectionProgressBar.isVisible());
         assertFalse(settingsPanel.testConnectionProgressBar.isIndeterminate());
         assertTrue(settingsPanel.testConnectionStatusLabel.isVisible());
-        assertEquals(SettingsPanel.CONNECTION_SUCCESS_TEXT, settingsPanel.testConnectionStatusLabel.getText());
+        assertTrue(settingsPanel.testConnectionStatusLabel.getText().startsWith(SettingsPanel.CONNECTION_SUCCESS_TEXT));
+        assertTrue(settingsPanel.testConnectionStatusLabel.getText().contains("ms)"));
 
         when(aiService.testConnection(eq(GenAiConnectionConfig.forApiKey("invalid-key")), anyString()))
                 .thenThrow(new IllegalStateException("401 UNAUTHORIZED: API key not valid"));
@@ -168,11 +185,24 @@ class SettingsPanelTest {
     @Test
     void testVertexAiProviderSelectionValidationBrowseAndSaveOnboarding() {
         assertEquals(SettingsPanel.AUTH_PROVIDER_API_KEY, settingsPanel.authProviderCombo.getSelectedItem());
+        assertTrue(settingsPanel.apiKeyProviderToggleBtn.isSelected());
+        assertFalse(settingsPanel.vertexAiProviderToggleBtn.isSelected());
+        assertTrue(settingsPanel.apiKeyPanel.isVisible());
+        assertFalse(settingsPanel.vertexAiPanel.isVisible());
+
+        SwingTestUtils.clickOnEdt(settingsPanel.vertexAiProviderToggleBtn);
+        assertEquals(SettingsPanel.AUTH_PROVIDER_VERTEX_AI, settingsPanel.authProviderCombo.getSelectedItem());
+        assertFalse(settingsPanel.apiKeyPanel.isVisible());
+        assertTrue(settingsPanel.vertexAiPanel.isVisible());
+
+        SwingTestUtils.clickOnEdt(settingsPanel.apiKeyProviderToggleBtn);
+        assertEquals(SettingsPanel.AUTH_PROVIDER_API_KEY, settingsPanel.authProviderCombo.getSelectedItem());
         assertTrue(settingsPanel.apiKeyPanel.isVisible());
         assertFalse(settingsPanel.vertexAiPanel.isVisible());
 
         SwingTestUtils
                 .runOnEdt(() -> settingsPanel.authProviderCombo.setSelectedItem(SettingsPanel.AUTH_PROVIDER_VERTEX_AI));
+        assertTrue(settingsPanel.vertexAiProviderToggleBtn.isSelected());
         assertFalse(settingsPanel.apiKeyPanel.isVisible());
         assertTrue(settingsPanel.vertexAiPanel.isVisible());
 
@@ -202,7 +232,7 @@ class SettingsPanelTest {
         SwingTestUtils.clickOnEdt(settingsPanel.testConnectionButton);
         SwingTestUtils.awaitFuture(settingsPanel.lastAsyncFuture);
         assertTrue(settingsPanel.testConnectionStatusLabel.isVisible());
-        assertEquals(SettingsPanel.CONNECTION_SUCCESS_TEXT, settingsPanel.testConnectionStatusLabel.getText());
+        assertTrue(settingsPanel.testConnectionStatusLabel.getText().startsWith(SettingsPanel.CONNECTION_SUCCESS_TEXT));
 
         java.util.concurrent.atomic.AtomicInteger initialCallbackCount = new java.util.concurrent.atomic.AtomicInteger();
         settingsPanel.setOnInitialApiKeyConfiguredCallback(initialCallbackCount::incrementAndGet);
@@ -223,5 +253,10 @@ class SettingsPanelTest {
         assertEquals(SettingsPanel.AUTH_PROVIDER_API_KEY, settingsPanel.authProviderCombo.getSelectedItem());
         assertTrue(settingsPanel.apiKeyPanel.isVisible());
         assertFalse(settingsPanel.vertexAiPanel.isVisible());
+
+        AtomicReference<java.nio.file.Path> openedLogPath = new AtomicReference<>();
+        settingsPanel.setLogFileOpener(openedLogPath::set);
+        SwingTestUtils.clickOnEdt(settingsPanel.openToolLogButton);
+        assertEquals(settingsPanel.resolveToolCallLogFile(), openedLogPath.get());
     }
 }

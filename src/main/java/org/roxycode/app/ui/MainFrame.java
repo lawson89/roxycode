@@ -2,6 +2,7 @@ package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.CardLayout;
+import java.awt.Color;
 import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.Frame;
@@ -28,6 +29,7 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.Action;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
@@ -104,6 +106,7 @@ public final class MainFrame extends JPanel {
     JMenu recentProjectsMenu;
     JTabbedPane contextHubTabs;
     JTabbedPane settingsHubTabs;
+    JLabel aiConnectionReadinessBadge;
     SidebarPanel sidebar;
     String currentCard = QA_VIEW;
     private boolean initialToolsCheckComplete;
@@ -229,7 +232,10 @@ public final class MainFrame extends JPanel {
 
     @EventListener
     public void onSettingsChanged(SettingsChangedEvent event) {
-        Edt.run(this::updateOnboardingAndNavigationState);
+        Edt.run(() -> {
+            updateOnboardingAndNavigationState();
+            updateSettingsHubReadiness(lastStartupTools);
+        });
     }
 
     void updateOnboardingAndNavigationState() {
@@ -239,6 +245,7 @@ public final class MainFrame extends JPanel {
         if (sidebar != null) {
             sidebar.updateNavigationAccess(hasCredentials, hasProject, buildConfirmed);
         }
+        updateSettingsHubReadiness(lastStartupTools);
         refreshRecentProjectsMenu();
         syncMenuAccessWithSidebar();
         if (!hasCredentials) {
@@ -261,9 +268,11 @@ public final class MainFrame extends JPanel {
             return;
         }
         Edt.run(() -> {
+            lastStartupTools = List.copyOf(event.tools());
             if (sidebar != null) {
                 sidebar.setToolsAttentionNeeded(!SystemToolService.areAllRequiredToolsDetected(event.tools()));
             }
+            updateSettingsHubReadiness(lastStartupTools);
         });
     }
 
@@ -620,7 +629,13 @@ public final class MainFrame extends JPanel {
             refreshHubTabIcons();
         });
 
-        settingsHubTabs = UiComponents.createUnderlinedTabbedPane(null);
+        aiConnectionReadinessBadge = new JLabel();
+        aiConnectionReadinessBadge.setIconTextGap(6);
+        JPanel settingsHubTrailing = new JPanel(new MigLayout("insets 4 8 4 12", "[]", "[center]"));
+        settingsHubTrailing.setOpaque(false);
+        settingsHubTrailing.add(aiConnectionReadinessBadge);
+
+        settingsHubTabs = UiComponents.createUnderlinedTabbedPane(settingsHubTrailing);
         if (settingsPanel != null) {
             settingsHubTabs.addTab("General & AI",
                     FontIcon.of(Codicons.SETTINGS_GEAR, 15, SwingHtmlUtils.getAccentColor()), settingsPanel);
@@ -629,6 +644,7 @@ public final class MainFrame extends JPanel {
             settingsHubTabs.addTab("System Tools",
                     FontIcon.of(Codicons.TOOLS, 15, SwingHtmlUtils.getMutedForegroundColor()), systemToolsPanel);
         }
+        updateSettingsHubReadiness(lastStartupTools);
         settingsHubTabs.addChangeListener(e -> {
             if (hubTabGuard.isActive()) {
                 return;
@@ -1010,6 +1026,7 @@ public final class MainFrame extends JPanel {
         if (sidebar != null) {
             sidebar.setToolsAttentionNeeded(missingTools);
         }
+        updateSettingsHubReadiness(lastStartupTools);
         evaluateStartupSetupAlert();
     }
 
@@ -1032,6 +1049,56 @@ public final class MainFrame extends JPanel {
         super.updateUI();
         applyMenuBarStyling();
         refreshHubTabIcons();
+        updateSettingsHubReadiness(lastStartupTools);
+    }
+
+    static String formatSystemToolsTabTitle(@Nullable List<SystemTool> tools) {
+        if (tools == null || tools.isEmpty()) {
+            return "System Tools";
+        }
+        int missingRequired = SystemToolService.getMissingRequiredToolNames(tools).size();
+        if (missingRequired > 0) {
+            return "System Tools (" + missingRequired + " Missing)";
+        }
+        int detectedCount = 0;
+        for (SystemTool tool : tools) {
+            if (tool != null && SystemToolService.STATUS_DETECTED.equalsIgnoreCase(tool.status())) {
+                detectedCount++;
+            }
+        }
+        return "System Tools (" + detectedCount + "/" + tools.size() + " Ready)";
+    }
+
+    void updateSettingsHubReadiness(@Nullable List<SystemTool> tools) {
+        if (settingsHubTabs != null && settingsHubTabs.getTabCount() > TAB_INDEX_SECOND) {
+            settingsHubTabs.setTitleAt(TAB_INDEX_SECOND, formatSystemToolsTabTitle(tools));
+        }
+        if (aiConnectionReadinessBadge == null) {
+            return;
+        }
+        boolean hasCredentials = settingsService != null && settingsService.hasConfiguredCredentials();
+        Color badgeColor;
+        Codicons badgeIcon;
+        String badgeText;
+        if (hasCredentials) {
+            badgeColor = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
+            badgeIcon = Codicons.CHECK;
+            if (settingsService.getSettings() != null && settingsService.getSettings().isVertexAiEnabled()) {
+                badgeText = "Vertex AI Connected";
+            } else {
+                badgeText = "AI Studio Connected";
+            }
+        } else {
+            badgeColor = SwingHtmlUtils.getWarningColor();
+            badgeIcon = Codicons.WARNING;
+            badgeText = "Credentials Required";
+        }
+        String hex = SwingHtmlUtils.toHex(badgeColor);
+        aiConnectionReadinessBadge.setText(badgeText);
+        aiConnectionReadinessBadge.setForeground(badgeColor);
+        aiConnectionReadinessBadge.setIcon(FontIcon.of(badgeIcon, 13, badgeColor));
+        aiConnectionReadinessBadge.putClientProperty(FlatClientProperties.STYLE,
+                "font: bold -1; arc: 999; border: 3,10,3,10," + hex + ",1,999; background: fade(" + hex + ", 14%)");
     }
 
     void applyMenuBarStyling() {

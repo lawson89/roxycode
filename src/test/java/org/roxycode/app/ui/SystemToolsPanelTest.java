@@ -30,13 +30,15 @@ public class SystemToolsPanelTest {
         assertTrue(panel.refreshBtn.isEnabled());
         assertTrue(panel.warningBanner.isVisible());
         SwingTestUtils.assertContainsAll(panel.warningBanner.messageLabel.getText(), "Universal Ctags",
-                "Refresh Status");
+                "Re-scan System");
         assertEquals(1, panel.toolCards.size());
         ToolCard initialCard = panel.toolCards.get(0);
         assertEquals("Ripgrep", initialCard.nameLabel.getText());
-        assertEquals("Required", initialCard.requirementBadge.getText());
+        assertEquals(SystemToolsPanel.REQUIRED_BADGE_TEXT, initialCard.requirementBadge.getText());
         assertEquals("ripgrep 14.1.0", initialCard.versionBadge.getText());
         assertEquals("github.com/BurntSushi/ripgrep", initialCard.websiteLinkButton.getText());
+        assertFalse(initialCard.remediationPanel.isVisible());
+        assertEquals("1 Missing", panel.requiredSectionStatusBadge.getText());
 
         SwingTestUtils.runOnEdt(panel.refreshBtn::doClick);
         SwingTestUtils.runOnEdt(() -> {
@@ -63,10 +65,20 @@ public class SystemToolsPanelTest {
         assertEquals(3, panel.toolCards.size());
         ToolCard ctagsCard = panel.toolCards.get(0);
         assertEquals("Universal Ctags", ctagsCard.nameLabel.getText());
+        assertEquals(SystemToolsPanel.REQUIRED_BADGE_TEXT, ctagsCard.requirementBadge.getText());
         assertEquals("Missing", ctagsCard.statusBadge.getText());
+        assertTrue(ctagsCard.remediationPanel.isVisible());
         assertTrue(ctagsCard.copyInstallButton.isVisible());
-        assertFalse(panel.toolCards.get(1).copyInstallButton.isVisible());
-        assertTrue(panel.toolCards.get(2).copyInstallButton.isVisible());
+
+        ToolCard gitCard = panel.toolCards.get(1);
+        assertEquals(SystemToolsPanel.OPTIONAL_BADGE_TEXT, gitCard.requirementBadge.getText());
+        assertFalse(gitCard.remediationPanel.isVisible());
+        assertFalse(gitCard.copyInstallButton.isVisible());
+
+        ToolCard dockerCard = panel.toolCards.get(2);
+        assertEquals(SystemToolsPanel.SANDBOX_BADGE_TEXT, dockerCard.requirementBadge.getText());
+        assertTrue(dockerCard.remediationPanel.isVisible());
+        assertTrue(dockerCard.copyInstallButton.isVisible());
 
         SwingTestUtils.clickOnEdt(ctagsCard.copyInstallButton);
         assertEquals("Copied!", ctagsCard.copyInstallButton.getText());
@@ -77,6 +89,9 @@ public class SystemToolsPanelTest {
                         SystemTool.ofKnownTool("Universal Ctags", "6.0.0", "Detected")), false));
         SwingTestUtils.flushEdt();
         assertFalse(panel.warningBanner.isVisible());
+        assertEquals(SystemToolsPanel.ALL_REQUIRED_OK_TEXT, panel.requiredSectionStatusBadge.getText());
+        assertEquals(2, panel.requiredToolsGrid.getComponentCount());
+        assertEquals(1, panel.optionalToolsGrid.getComponentCount());
     }
 
     @Test
