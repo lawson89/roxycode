@@ -41,18 +41,15 @@ final class PlantUmlRenderer {
     private static final String LANG_PUML = "puml";
     private static final String LANG_UML = "uml";
     private static final String LANG_DITAA = "ditaa";
-    private static final String LANG_SALT = "salt";
     private static final String LANG_SVG = "svg";
     private static final Set<String> DIAGRAM_LANGUAGES = Set.of(LANG_PLANTUML, LANG_PUML, LANG_UML, LANG_DITAA,
-            LANG_SALT, LANG_SVG);
+            LANG_SVG);
 
     private static final String START_PREFIX = "@start";
     private static final String START_UML = "@startuml";
     private static final String END_UML = "@enduml";
     private static final String START_DITAA = "@startditaa";
     private static final String END_DITAA = "@endditaa";
-    private static final String START_SALT = "@startsalt";
-    private static final String END_SALT = "@endsalt";
     private static final String START_MINDMAP = "@startmindmap";
     private static final String START_WBS = "@startwbs";
     private static final String START_SVG_TAG = "<svg";
@@ -238,7 +235,7 @@ final class PlantUmlRenderer {
         }
         String lower = code.trim().toLowerCase(Locale.ROOT);
         if (lower.startsWith(START_UML) || lower.startsWith(START_DITAA) || lower.startsWith(START_MINDMAP)
-                || lower.startsWith(START_WBS) || lower.startsWith(START_SALT)) {
+                || lower.startsWith(START_WBS)) {
             return true;
         }
         return isRawSvgBlock(lower);
@@ -256,9 +253,6 @@ final class PlantUmlRenderer {
         if (LANG_DITAA.equals(normalized)) {
             return LANG_DITAA;
         }
-        if (LANG_SALT.equals(normalized)) {
-            return LANG_SALT;
-        }
         if (code != null) {
             String lower = code.trim().toLowerCase(Locale.ROOT);
             if (isRawSvgBlock(lower)) {
@@ -266,9 +260,6 @@ final class PlantUmlRenderer {
             }
             if (lower.startsWith(START_DITAA)) {
                 return LANG_DITAA;
-            }
-            if (lower.startsWith(START_SALT)) {
-                return LANG_SALT;
             }
         }
         return LANG_PLANTUML;
@@ -381,12 +372,6 @@ final class PlantUmlRenderer {
             }
             return START_DITAA + "\n" + normalizedLines + "\n" + END_DITAA;
         }
-        if (LANG_SALT.equals(normalizedLanguage) || lowerCode.startsWith(START_SALT)) {
-            if (lowerCode.startsWith(START_PREFIX)) {
-                return normalizedLines;
-            }
-            return START_SALT + "\n" + normalizedLines + "\n" + END_SALT;
-        }
 
         String sanitizedLines = sanitizeMultilineQuotedStrings(normalizedLines);
         String wrapped;
@@ -406,7 +391,7 @@ final class PlantUmlRenderer {
 
         StringBuilder sb = new StringBuilder(wrapped.length() + 512);
         sb.append(startLine).append('\n');
-        if (lowerStartLine.startsWith(START_UML) && !startsWithSaltDirective(bodyAndEnd)) {
+        if (lowerStartLine.startsWith(START_UML)) {
             if (!bodyAndEnd.toLowerCase(Locale.ROOT).contains("!pragma layout")) {
                 sb.append(SMETANA_PRAGMA).append('\n');
             }
@@ -451,12 +436,6 @@ final class PlantUmlRenderer {
             log.debug("Failed to render PlantUML diagram ({}): {}", key.language(), e.getMessage());
             return Optional.empty();
         }
-    }
-
-    private static boolean startsWithSaltDirective(String bodyAndEnd) {
-        String trimmedBody = bodyAndEnd.trim().toLowerCase(Locale.ROOT);
-        return LANG_SALT.equals(trimmedBody) || trimmedBody.startsWith(LANG_SALT + "\n")
-                || trimmedBody.startsWith(LANG_SALT + " ") || trimmedBody.startsWith("startsalt");
     }
 
     private static byte[] renderDiagramPngBytes(DiagramCacheKey key) throws IOException {

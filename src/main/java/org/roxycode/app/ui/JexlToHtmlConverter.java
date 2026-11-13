@@ -22,7 +22,7 @@ final class JexlToHtmlConverter {
             .compile("[a-zA-Z_][a-zA-Z0-9_]*[sS]ervice[a-zA-Z0-9_]*");
 
     private static final Pattern PROSE_LANG_PATTERN = Pattern.compile(
-            "(?<![a-zA-Z0-9_-])language-(?:markdown|md|text|plaintext|txt|ascii|diagram|flowchart|tree|plantuml|puml|uml|ditaa|salt)(?![a-zA-Z0-9_-])",
+            "(?<![a-zA-Z0-9_-])language-(?:markdown|md|text|plaintext|txt|ascii|diagram|flowchart|tree|plantuml|puml|uml|ditaa|svg)(?![a-zA-Z0-9_-])",
             Pattern.CASE_INSENSITIVE);
 
     public static String convert(String script) {

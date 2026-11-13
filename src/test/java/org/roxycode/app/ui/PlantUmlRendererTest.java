@@ -30,7 +30,7 @@ class PlantUmlRendererTest {
         assertTrue(PlantUmlRenderer.isDiagramLanguage("puml"));
         assertTrue(PlantUmlRenderer.isDiagramLanguage("uml"));
         assertTrue(PlantUmlRenderer.isDiagramLanguage("ditaa"));
-        assertTrue(PlantUmlRenderer.isDiagramLanguage("salt"));
+        assertFalse(PlantUmlRenderer.isDiagramLanguage("salt"));
         assertTrue(PlantUmlRenderer.isDiagramLanguage("svg"));
         assertTrue(PlantUmlRenderer.isDiagramLanguage("plantuml title=demo"));
         assertFalse(PlantUmlRenderer.isDiagramLanguage("java"));
@@ -42,8 +42,6 @@ class PlantUmlRendererTest {
         assertTrue(PlantUmlRenderer.isDiagramBlock(null, "  @STARTDITAA\n+---+\n@endditaa"));
         assertTrue(PlantUmlRenderer.isDiagramBlock("", "@startmindmap\n* Root\n@endmindmap"));
         assertTrue(PlantUmlRenderer.isDiagramBlock("", "@startwbs\n* Root\n@endwbs"));
-        assertTrue(PlantUmlRenderer.isDiagramBlock("", "@startsalt\n{\n  [OK]\n}\n@endsalt"));
-        assertTrue(PlantUmlRenderer.isDiagramBlock("salt", "{\n  [OK]\n}"));
         assertTrue(PlantUmlRenderer.isDiagramBlock("svg", "<svg width='100' height='40'></svg>"));
         assertTrue(PlantUmlRenderer.isDiagramBlock("",
                 "<svg width='100' height='40'><rect width='10' height='10'/></svg>"));
@@ -71,15 +69,6 @@ class PlantUmlRendererTest {
         String ditaa = PlantUmlRenderer.buildPlantUmlSource("+------+\n| Box  |\n+------+", "ditaa", false);
         assertEquals("@startditaa\n+------+\n| Box  |\n+------+\n@endditaa", ditaa);
         assertContainsNone(ditaa, "skinparam");
-
-        String bareSalt = PlantUmlRenderer.buildPlantUmlSource("{\n  [OK] | [Cancel]\n}", "salt", false);
-        assertEquals("@startsalt\n{\n  [OK] | [Cancel]\n}\n@endsalt", bareSalt);
-        assertContainsNone(bareSalt, "skinparam", "!pragma layout smetana");
-
-        String umlWrappedSalt = PlantUmlRenderer.buildPlantUmlSource("@startuml\nsalt\n{\n  [OK]\n}\n@enduml",
-                "plantuml", true);
-        assertContainsAll(umlWrappedSalt, "@startuml", "salt", "[OK]", "@enduml");
-        assertContainsNone(umlWrappedSalt, "!pragma layout smetana", "skinparam");
     }
 
     @Test
@@ -202,34 +191,7 @@ class PlantUmlRendererTest {
     }
 
     @Test
-    void testRenderSaltWireframeAndInlineSvgWithDimensionClampingAndFallback() throws Exception {
-        String saltWireframe = """
-                {^"Project Settings"
-                  Profile: | ^Normal^
-                  [X] Auto-approve plan
-                  [Save] | [Cancel]
-                }
-                """;
-        Optional<String> saltHtml = PlantUmlRenderer.renderDiagramHtml(saltWireframe, "salt", false);
-        assertTrue(saltHtml.isPresent());
-        Path saltPng = extractImagePath(saltHtml.get());
-        assertTrue(Files.isRegularFile(saltPng));
-        assertTrue(Files.size(saltPng) > 0);
-
-        String umlSalt = """
-                @startuml
-                salt
-                {
-                  [Apply] | [Close]
-                }
-                @enduml
-                """;
-        Optional<String> umlSaltHtml = PlantUmlRenderer.renderDiagramHtml(umlSalt, "plantuml", false);
-        assertTrue(umlSaltHtml.isPresent());
-        Path umlSaltPng = extractImagePath(umlSaltHtml.get());
-        assertTrue(Files.isRegularFile(umlSaltPng));
-        assertTrue(Files.size(umlSaltPng) > 0);
-
+    void testRenderInlineSvgWithDimensionClampingAndFallback() throws Exception {
         String svgContent = """
                 <svg xmlns="http://www.w3.org/2000/svg" width="240" height="80" viewBox="0 0 240 80">
                   <rect x="4" y="4" width="232" height="72" rx="8" fill="#1E293B" stroke="#38BDF8" stroke-width="2"/>

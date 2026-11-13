@@ -146,21 +146,15 @@ class SwingHtmlUtilsTest {
         assertContainsAll(renderedUmlAndUnlabeled, "diagram-container", "<img src=", "file:");
         assertFalse(renderedUmlAndUnlabeled.contains("Alice -&gt; Bob"));
 
-        String saltAndSvgMd = """
-                ~~~salt
-                {
-                  [Save] | [Cancel]
-                }
-                ~~~
-
+        String svgMd = """
                 ~~~svg
                 <svg xmlns="http://www.w3.org/2000/svg" width="120" height="40">
                   <rect x="1" y="1" width="118" height="38" fill="#0F172A"/>
                 </svg>
                 ~~~
                 """;
-        String renderedSaltAndSvg = SwingHtmlUtils.renderMarkdownToHtml(saltAndSvgMd);
-        assertContainsAll(renderedSaltAndSvg, "diagram-container", "<img src=", "file:");
+        String renderedSvg = SwingHtmlUtils.renderMarkdownToHtml(svgMd);
+        assertContainsAll(renderedSvg, "diagram-container", "<img src=", "file:");
 
         String invalidDiagramMd = """
                 ~~~uml
