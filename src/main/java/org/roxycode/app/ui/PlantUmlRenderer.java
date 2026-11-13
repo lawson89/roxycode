@@ -22,6 +22,8 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
 import net.sourceforge.plantuml.FileFormat;
 import net.sourceforge.plantuml.FileFormatOption;
@@ -57,6 +59,15 @@ final class PlantUmlRenderer {
     private static final int SVG_DEFAULT_WIDTH = 600;
     private static final int SVG_DEFAULT_HEIGHT = 400;
     private static final int SVG_MAX_DIMENSION = 1600;
+    private static final String SVG_ATTR_WIDTH = "width";
+    private static final String SVG_ATTR_HEIGHT = "height";
+    private static final String SVG_ATTR_VIEWBOX = "viewbox";
+    private static final int SVG_VIEWBOX_TOKEN_COUNT = 4;
+    private static final float SVG_DIMENSION_EPSILON = 0.001f;
+    private static final Pattern SVG_OPEN_TAG_PATTERN = Pattern.compile("(?is)<svg\\b([^>]*)>");
+    private static final Pattern SVG_ATTR_PATTERN = Pattern
+            .compile("(?is)(?<![\\w-])(width|height|viewBox)\\s*=\\s*(?:\\x22([^\\x22]*)\\x22|'([^']*)')");
+    private static final Pattern WHITESPACE_OR_COMMA_PATTERN = Pattern.compile("[\\s,]+");
     private static final String SMETANA_PRAGMA = "!pragma layout smetana";
     private static final String ERROR_DESCRIPTION_MARKER = "(Error)";
     private static final char DOUBLE_QUOTE_CHAR = '"';
@@ -470,12 +481,13 @@ final class PlantUmlRenderer {
     }
 
     static byte[] renderSvgPngBytes(String svgCode) throws IOException {
+        String normalizedSvg = normalizeRootSvgAttributes(svgCode);
         SVGLoader loader = new SVGLoader();
-        SVGDocument svgDocument = loader.load(new ByteArrayInputStream(svgCode.getBytes(StandardCharsets.UTF_8)));
+        SVGDocument svgDocument = loader.load(new ByteArrayInputStream(normalizedSvg.getBytes(StandardCharsets.UTF_8)));
         if (svgDocument == null) {
             return new byte[0];
         }
-        FloatSize size = svgDocument.size();
+        FloatSize size = resolveIntrinsicSvgSize(normalizedSvg, svgDocument.size());
         int[] dimensions = resolveSvgRenderDimensions(size);
         int width = dimensions[0];
         int height = dimensions[1];
@@ -509,6 +521,188 @@ final class PlantUmlRenderer {
         int resolvedWidth = Math.max(1, (int) Math.round(width));
         int resolvedHeight = Math.max(1, (int) Math.round(height));
         return new int[]{resolvedWidth, resolvedHeight};
+    }
+
+    static String normalizeRootSvgAttributes(String svgCode) {
+        if (svgCode == null || svgCode.isBlank()) {
+            return svgCode;
+        }
+        Matcher openTagMatcher = SVG_OPEN_TAG_PATTERN.matcher(svgCode);
+        if (!openTagMatcher.find()) {
+            return svgCode;
+        }
+        String attrs = openTagMatcher.group(1);
+        SvgRootAttributes parsed = parseSvgRootAttributes(attrs);
+        boolean widthIsPercent = isPercentageValue(parsed.width());
+        boolean heightIsPercent = isPercentageValue(parsed.height());
+        if (!widthIsPercent && !heightIsPercent) {
+            return svgCode;
+        }
+        FloatSize viewBoxSize = parseViewBoxDimensions(parsed.viewBox());
+        String updatedAttrs = attrs;
+        if (widthIsPercent) {
+            float fallbackWidth;
+            if (viewBoxSize != null) {
+                fallbackWidth = viewBoxSize.width;
+            } else {
+                fallbackWidth = SVG_DEFAULT_WIDTH;
+            }
+            float resolvedWidth = scaleByPercentage(fallbackWidth, parsed.width());
+            updatedAttrs = replaceSvgAttributeValue(updatedAttrs, SVG_ATTR_WIDTH, formatSvgDimension(resolvedWidth));
+        }
+        if (heightIsPercent) {
+            float fallbackHeight;
+            if (viewBoxSize != null) {
+                fallbackHeight = viewBoxSize.height;
+            } else {
+                fallbackHeight = SVG_DEFAULT_HEIGHT;
+            }
+            float resolvedHeight = scaleByPercentage(fallbackHeight, parsed.height());
+            updatedAttrs = replaceSvgAttributeValue(updatedAttrs, SVG_ATTR_HEIGHT, formatSvgDimension(resolvedHeight));
+        }
+        StringBuilder sb = new StringBuilder(svgCode.length() + 16);
+        sb.append(svgCode, 0, openTagMatcher.start(1));
+        sb.append(updatedAttrs);
+        sb.append(svgCode, openTagMatcher.end(1), svgCode.length());
+        return sb.toString();
+    }
+
+    static FloatSize resolveIntrinsicSvgSize(String svgCode, FloatSize documentSize) {
+        if (svgCode == null || svgCode.isBlank()) {
+            return documentSize;
+        }
+        Matcher openTagMatcher = SVG_OPEN_TAG_PATTERN.matcher(svgCode);
+        if (!openTagMatcher.find()) {
+            return documentSize;
+        }
+        SvgRootAttributes parsed = parseSvgRootAttributes(openTagMatcher.group(1));
+        FloatSize viewBoxSize = parseViewBoxDimensions(parsed.viewBox());
+        float vbWidth = -1.0f;
+        float vbHeight = -1.0f;
+        if (viewBoxSize != null) {
+            vbWidth = viewBoxSize.width;
+            vbHeight = viewBoxSize.height;
+        }
+        float docWidth = -1.0f;
+        float docHeight = -1.0f;
+        if (documentSize != null) {
+            docWidth = documentSize.width;
+            docHeight = documentSize.height;
+        }
+        float resolvedWidth = resolveAxisDimension(parsed.width(), vbWidth, docWidth, SVG_DEFAULT_WIDTH);
+        float resolvedHeight = resolveAxisDimension(parsed.height(), vbHeight, docHeight, SVG_DEFAULT_HEIGHT);
+        return new FloatSize(resolvedWidth, resolvedHeight);
+    }
+
+    private record SvgRootAttributes(String width, String height, String viewBox) {
+    }
+
+    private static SvgRootAttributes parseSvgRootAttributes(String attrs) {
+        String width = null;
+        String height = null;
+        String viewBox = null;
+        Matcher attrMatcher = SVG_ATTR_PATTERN.matcher(attrs);
+        while (attrMatcher.find()) {
+            String name = attrMatcher.group(1).toLowerCase(Locale.ROOT);
+            String value = attrMatcher.group(2);
+            if (value == null) {
+                value = attrMatcher.group(3);
+            }
+            if (SVG_ATTR_WIDTH.equals(name)) {
+                width = value;
+            } else if (SVG_ATTR_HEIGHT.equals(name)) {
+                height = value;
+            } else if (SVG_ATTR_VIEWBOX.equals(name)) {
+                viewBox = value;
+            }
+        }
+        return new SvgRootAttributes(width, height, viewBox);
+    }
+
+    private static FloatSize parseViewBoxDimensions(String viewBoxValue) {
+        if (viewBoxValue == null || viewBoxValue.isBlank()) {
+            return null;
+        }
+        String[] parts = WHITESPACE_OR_COMMA_PATTERN.split(viewBoxValue.trim());
+        if (parts.length != SVG_VIEWBOX_TOKEN_COUNT) {
+            return null;
+        }
+        try {
+            double vbWidth = Double.parseDouble(parts[2]);
+            double vbHeight = Double.parseDouble(parts[3]);
+            if (Double.isFinite(vbWidth) && Double.isFinite(vbHeight) && vbWidth > 0.0 && vbHeight > 0.0) {
+                return new FloatSize((float) vbWidth, (float) vbHeight);
+            }
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+        return null;
+    }
+
+    private static boolean isPositiveDimension(float value) {
+        return Float.isFinite(value) && value > 0;
+    }
+
+    private static float resolveAxisDimension(String attrValue, float viewBoxDim, float docDim, float defaultDim) {
+        if (attrValue == null || attrValue.isBlank()) {
+            if (isPositiveDimension(viewBoxDim)) {
+                return viewBoxDim;
+            }
+            if (isPositiveDimension(docDim)) {
+                return docDim;
+            }
+            return defaultDim;
+        }
+        if (isPercentageValue(attrValue)) {
+            if (isPositiveDimension(viewBoxDim)) {
+                return scaleByPercentage(viewBoxDim, attrValue);
+            }
+            return scaleByPercentage(defaultDim, attrValue);
+        }
+        if (isPositiveDimension(docDim)) {
+            return docDim;
+        }
+        if (isPositiveDimension(viewBoxDim)) {
+            return viewBoxDim;
+        }
+        return defaultDim;
+    }
+
+    private static boolean isPercentageValue(String attrValue) {
+        return attrValue != null && attrValue.trim().endsWith("%");
+    }
+
+    private static float scaleByPercentage(float baseValue, String percentAttr) {
+        String trimmed = percentAttr.trim();
+        String numericPart = trimmed.substring(0, trimmed.length() - 1).trim();
+        try {
+            double percent = Double.parseDouble(numericPart);
+            if (Double.isFinite(percent) && percent > 0.0) {
+                return (float) (baseValue * (percent / 100.0));
+            }
+        } catch (NumberFormatException ignored) {
+            return baseValue;
+        }
+        return baseValue;
+    }
+
+    private static String replaceSvgAttributeValue(String attrs, String attrName, String newValue) {
+        Pattern singleAttrPattern = Pattern
+                .compile("(?is)((?<![\\w-])" + attrName + "\\s*=\\s*)(?:\\x22[^\\x22]*\\x22|'[^']*')");
+        Matcher matcher = singleAttrPattern.matcher(attrs);
+        if (!matcher.find()) {
+            return attrs;
+        }
+        String replacement = matcher.group(1) + '"' + newValue + '"';
+        return matcher.replaceFirst(Matcher.quoteReplacement(replacement));
+    }
+
+    private static String formatSvgDimension(float value) {
+        long rounded = Math.round(value);
+        if (Math.abs(value - rounded) < SVG_DIMENSION_EPSILON) {
+            return Long.toString(rounded);
+        }
+        return Float.toString(value);
     }
 
     private static boolean isDitaaSource(DiagramCacheKey key) {

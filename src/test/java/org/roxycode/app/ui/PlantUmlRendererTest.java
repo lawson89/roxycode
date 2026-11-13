@@ -218,6 +218,70 @@ class PlantUmlRendererTest {
         assertTrue(PlantUmlRenderer.renderDiagramHtml("not valid svg", "svg", false).isEmpty());
     }
 
+    @Test
+    void testResolveIntrinsicSvgSizeAndPercentageNormalization() throws Exception {
+        String mixedPercentSvg = """
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 690" width="100%" height="690">
+                  <rect x="0" y="0" width="1040" height="690" fill="#1E293B"/>
+                </svg>
+                """;
+        FloatSize mixedSize = PlantUmlRenderer.resolveIntrinsicSvgSize(mixedPercentSvg, new FloatSize(100, 690));
+        assertEquals(1040.0f, mixedSize.width, 0.01f);
+        assertEquals(690.0f, mixedSize.height, 0.01f);
+        Optional<String> mixedHtml = PlantUmlRenderer.renderDiagramHtml(mixedPercentSvg, "svg", false);
+        assertTrue(mixedHtml.isPresent());
+        assertContainsAll(mixedHtml.get(), "width=" + '"' + "1040" + '"', "height=" + '"' + "690" + '"');
+
+        String bothPercentSvg = """
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 690" width="100%" height="100%">
+                  <rect x="0" y="0" width="1040" height="690" fill="#1E293B"/>
+                </svg>
+                """;
+        Optional<String> bothPercentHtml = PlantUmlRenderer.renderDiagramHtml(bothPercentSvg, "svg", false);
+        assertTrue(bothPercentHtml.isPresent());
+        assertContainsAll(bothPercentHtml.get(), "width=" + '"' + "1040" + '"', "height=" + '"' + "690" + '"');
+
+        String viewBoxOnlySvg = """
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 690">
+                  <rect x="0" y="0" width="1040" height="690" fill="#1E293B"/>
+                </svg>
+                """;
+        Optional<String> viewBoxOnlyHtml = PlantUmlRenderer.renderDiagramHtml(viewBoxOnlySvg, "svg", false);
+        assertTrue(viewBoxOnlyHtml.isPresent());
+        assertContainsAll(viewBoxOnlyHtml.get(), "width=" + '"' + "1040" + '"', "height=" + '"' + "690" + '"');
+
+        String noViewBoxPercentSvg = """
+                <svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%">
+                  <rect x="0" y="0" width="600" height="400" fill="#1E293B"/>
+                </svg>
+                """;
+        Optional<String> noViewBoxHtml = PlantUmlRenderer.renderDiagramHtml(noViewBoxPercentSvg, "svg", false);
+        assertTrue(noViewBoxHtml.isPresent());
+        assertContainsAll(noViewBoxHtml.get(), "width=" + '"' + "600" + '"', "height=" + '"' + "400" + '"');
+
+        String commaViewBoxSvg = """
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0, 0, 800, 450" width="100%" height="100%">
+                  <rect x="0" y="0" width="800" height="450" fill="#1E293B"/>
+                </svg>
+                """;
+        Optional<String> commaViewBoxHtml = PlantUmlRenderer.renderDiagramHtml(commaViewBoxSvg, "svg", false);
+        assertTrue(commaViewBoxHtml.isPresent());
+        assertContainsAll(commaViewBoxHtml.get(), "width=" + '"' + "800" + '"', "height=" + '"' + "450" + '"');
+
+        String hyphenatedAttrsSvg = """
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1040 690" stroke-width="2" line-height="1.5" width="100%" height="690">
+                  <rect x="0" y="0" width="1040" height="690" fill="#1E293B"/>
+                </svg>
+                """;
+        String normalizedHyphenated = PlantUmlRenderer.normalizeRootSvgAttributes(hyphenatedAttrsSvg);
+        assertContainsAll(normalizedHyphenated, "stroke-width=" + '"' + "2" + '"', "line-height=" + '"' + "1.5" + '"',
+                "width=" + '"' + "1040" + '"', "height=" + '"' + "690" + '"');
+        FloatSize hyphenatedSize = PlantUmlRenderer.resolveIntrinsicSvgSize(normalizedHyphenated,
+                new FloatSize(1040, 690));
+        assertEquals(1040.0f, hyphenatedSize.width, 0.01f);
+        assertEquals(690.0f, hyphenatedSize.height, 0.01f);
+    }
+
     private static Path extractImagePath(String html) throws Exception {
         Matcher matcher = IMG_SRC_PATTERN.matcher(html);
         assertTrue(matcher.find(), "Expected <img src='file:...'> in HTML: " + html);
