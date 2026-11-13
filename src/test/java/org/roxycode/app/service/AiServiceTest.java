@@ -655,19 +655,19 @@ class AiServiceTest {
         clearInvocations(eventPublisher);
         assertEquals("Code done",
                 serviceWithRealClient.chat("task:code", WorkflowPhase.CODE, "Implement feature", null));
-        assertEquals(List.of(GoogleGenAiThinkingLevel.LOW, GoogleGenAiThinkingLevel.HIGH, GoogleGenAiThinkingLevel.HIGH,
-                GoogleGenAiThinkingLevel.LOW), capturedCodeThinkingLevels);
+        assertEquals(List.of(GoogleGenAiThinkingLevel.MEDIUM, GoogleGenAiThinkingLevel.HIGH,
+                GoogleGenAiThinkingLevel.HIGH, GoogleGenAiThinkingLevel.MEDIUM), capturedCodeThinkingLevels);
 
         ArgumentCaptor<Object> eventsCaptor = ArgumentCaptor.forClass(Object.class);
         verify(eventPublisher, atLeastOnce()).publishEvent(eventsCaptor.capture());
         List<String> statusMessages = eventsCaptor.getAllValues().stream().filter(AgentActivityEvent.class::isInstance)
                 .map(AgentActivityEvent.class::cast).map(AgentActivityEvent::statusText).toList();
-        assertTrue(statusMessages.stream().anyMatch(s -> s.contains("Thinking with ") && s.contains("(Low)")));
+        assertTrue(statusMessages.stream().anyMatch(s -> s.contains("Thinking with ") && s.contains("(Medium)")));
         assertTrue(statusMessages.stream().anyMatch(s -> s.contains("Thinking with ") && s.contains("(High)")));
         assertTrue(statusMessages.stream().anyMatch(s -> s.contains("API rate limit (429) — waiting ")
                 && s.contains("for quota window to reset (attempt 2/3)")));
 
-        // Verify PLAN phase adaptive transition: HIGH before plan exists -> LOW after submitPlan
+        // Verify PLAN phase adaptive transition: MEDIUM on initial discovery -> LOW after submitPlan
         List<GoogleGenAiThinkingLevel> capturedPlanThinkingLevels = new ArrayList<>();
         AtomicInteger planCallCounter = new AtomicInteger();
         when(planService.getCurrentPlan()).thenReturn(null);
@@ -692,7 +692,8 @@ class AiServiceTest {
 
         assertEquals("Plan submitted",
                 serviceWithRealClient.chat("task:plan", WorkflowPhase.PLAN, "Create plan", null));
-        assertEquals(List.of(GoogleGenAiThinkingLevel.HIGH, GoogleGenAiThinkingLevel.LOW), capturedPlanThinkingLevels);
+        assertEquals(List.of(GoogleGenAiThinkingLevel.MEDIUM, GoogleGenAiThinkingLevel.LOW),
+                capturedPlanThinkingLevels);
     }
 
     @Test
@@ -741,7 +742,7 @@ class AiServiceTest {
         String response = service.chat("task:retry-reset", WorkflowPhase.PLAN, "Design plan", null);
         assertEquals("Recovered on fresh client with LOW thinking", response);
         assertEquals(2, modelFactoryCalls.get());
-        assertEquals(List.of(GoogleGenAiThinkingLevel.HIGH), initialModelThinking);
+        assertEquals(List.of(GoogleGenAiThinkingLevel.MEDIUM), initialModelThinking);
         assertEquals(List.of(GoogleGenAiThinkingLevel.LOW), recreatedModelThinking);
 
         ArgumentCaptor<Object> eventsCaptor = ArgumentCaptor.forClass(Object.class);
@@ -750,6 +751,20 @@ class AiServiceTest {
                 .map(AgentActivityEvent.class::cast).map(AgentActivityEvent::statusText).toList();
         assertTrue(statusMessages.stream()
                 .anyMatch(s -> s.contains("resetting client connection before retry (attempt 2/3)")));
+    }
+
+    @Test
+    void testDowngradeThinkingLevelForRetryStepsDownGradually() {
+        assertEquals(ThinkingLevel.MEDIUM,
+                AiService.downgradeThinkingLevelForRetry(ThinkingLevel.ADAPTIVE, ThinkingLevel.HIGH));
+        assertEquals(ThinkingLevel.MEDIUM,
+                AiService.downgradeThinkingLevelForRetry(ThinkingLevel.HIGH, ThinkingLevel.DEFAULT));
+        assertEquals(ThinkingLevel.LOW,
+                AiService.downgradeThinkingLevelForRetry(ThinkingLevel.ADAPTIVE, ThinkingLevel.MEDIUM));
+        assertEquals(ThinkingLevel.LOW,
+                AiService.downgradeThinkingLevelForRetry(ThinkingLevel.ADAPTIVE, ThinkingLevel.DEFAULT));
+        assertEquals(ThinkingLevel.LOW, AiService.downgradeThinkingLevelForRetry(ThinkingLevel.DEFAULT, null));
+        assertEquals(ThinkingLevel.LOW, AiService.downgradeThinkingLevelForRetry(ThinkingLevel.LOW, ThinkingLevel.LOW));
     }
 
     @Test

@@ -12,10 +12,11 @@ import org.springframework.lang.Nullable;
  */
 public enum ThinkingLevel {
     DEFAULT("DEFAULT", "Model Default", null), ADAPTIVE("ADAPTIVE", "Adaptive (Phase-Aware)", null),
-    MINIMAL("MINIMAL", "Minimal", GoogleGenAiThinkingLevel.MINIMAL), LOW("LOW", "Low", GoogleGenAiThinkingLevel.LOW),
-    MEDIUM("MEDIUM", "Medium", GoogleGenAiThinkingLevel.MEDIUM), HIGH("HIGH", "High", GoogleGenAiThinkingLevel.HIGH);
+    LOW("LOW", "Low", GoogleGenAiThinkingLevel.LOW), MEDIUM("MEDIUM", "Medium", GoogleGenAiThinkingLevel.MEDIUM),
+    HIGH("HIGH", "High", GoogleGenAiThinkingLevel.HIGH);
 
     private static final String ALIAS_NONE = "NONE";
+    private static final String ALIAS_MINIMAL = "MINIMAL";
 
     private final String id;
     private final String displayName;
@@ -54,11 +55,11 @@ public enum ThinkingLevel {
      * Resolves the concrete sub-turn thinking level for a model call. When this level is {@link #ADAPTIVE}, the
      * thinking budget is chosen dynamically based on the active workflow phase and sub-turn state:
      * <ul>
-     * <li>{@code PLAN}: {@link #HIGH} while designing the blueprint, dropping to {@link #LOW} after a plan is
-     * submitted.</li>
-     * <li>{@code CODE}: {@link #LOW} by default for fast mechanical execution, escalating to {@link #HIGH} when the
+     * <li>{@code PLAN}: {@link #MEDIUM} on initial discovery, rising to {@link #HIGH} while designing the blueprint
+     * with codebase context, and dropping to {@link #LOW} after a plan is submitted.</li>
+     * <li>{@code CODE}: {@link #MEDIUM} by default for fast, accurate execution, escalating to {@link #HIGH} when the
      * previous tool execution reported a failure.</li>
-     * <li>{@code REVIEW}: {@link #MEDIUM}.</li>
+     * <li>{@code REVIEW}: {@link #HIGH}.</li>
      * <li>{@code EXPLORE}: {@link #LOW} on initial tool discovery, rising to {@link #MEDIUM} after tool outputs are
      * returned for synthesis.</li>
      * </ul>
@@ -86,15 +87,18 @@ public enum ThinkingLevel {
                 if (planSubmitted) {
                     yield LOW;
                 }
-                yield HIGH;
+                if (hasToolResponses) {
+                    yield HIGH;
+                }
+                yield MEDIUM;
             }
             case CODE -> {
                 if (lastToolCallFailed) {
                     yield HIGH;
                 }
-                yield LOW;
+                yield MEDIUM;
             }
-            case REVIEW -> MEDIUM;
+            case REVIEW -> HIGH;
             case EXPLORE -> {
                 if (hasToolResponses) {
                     yield MEDIUM;
@@ -109,8 +113,8 @@ public enum ThinkingLevel {
             return DEFAULT;
         }
         String normalized = raw.trim().toUpperCase(Locale.ROOT);
-        if (ALIAS_NONE.equals(normalized)) {
-            return MINIMAL;
+        if (ALIAS_NONE.equals(normalized) || ALIAS_MINIMAL.equals(normalized)) {
+            return LOW;
         }
         for (ThinkingLevel level : values()) {
             if (level.id.equalsIgnoreCase(normalized) || level.displayName.equalsIgnoreCase(normalized)) {

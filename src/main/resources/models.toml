@@ -21,9 +21,9 @@ apiName = "gemini-4-hydrogen"
 name = "Gemini 4 Hydrogen"
 description = "High-speed, cost-effective model tuned specifically for rapid execution, high-volume agentic tool-calling loops, and iterative code review."
 contextWindowTokens = 1048576
-inputPricePerMillion = 0.15
-cachedInputPricePerMillion = 0.015
-outputPricePerMillion = 0.60
+inputPricePerMillion = 1.50
+cachedInputPricePerMillion = 0.15
+outputPricePerMillion = 7.50
 
 [[models]]
 apiName = "gemini-3.8-flash"

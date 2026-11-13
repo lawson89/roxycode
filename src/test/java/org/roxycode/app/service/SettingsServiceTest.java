@@ -218,21 +218,23 @@ class SettingsServiceTest {
         assertEquals(ThinkingLevel.DEFAULT, ThinkingLevel.fromString("unknown-level"));
         assertEquals(ThinkingLevel.ADAPTIVE, ThinkingLevel.fromString("ADAPTIVE"));
         assertEquals(ThinkingLevel.ADAPTIVE, ThinkingLevel.fromString("Adaptive (Phase-Aware)"));
-        assertEquals(ThinkingLevel.MINIMAL, ThinkingLevel.fromString("NONE"));
-        assertEquals(ThinkingLevel.MINIMAL, ThinkingLevel.fromString("minimal"));
+        assertEquals(ThinkingLevel.LOW, ThinkingLevel.fromString("NONE"));
+        assertEquals(ThinkingLevel.LOW, ThinkingLevel.fromString("minimal"));
         assertEquals(ThinkingLevel.LOW, ThinkingLevel.fromString("low"));
         assertEquals(ThinkingLevel.MEDIUM, ThinkingLevel.fromString("Medium"));
         assertEquals(ThinkingLevel.HIGH, ThinkingLevel.fromString("HIGH"));
 
-        assertEquals(ThinkingLevel.HIGH, ThinkingLevel.ADAPTIVE
+        assertEquals(ThinkingLevel.MEDIUM, ThinkingLevel.ADAPTIVE
                 .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, false, false, false));
+        assertEquals(ThinkingLevel.HIGH,
+                ThinkingLevel.ADAPTIVE.resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, false, true, false));
         assertEquals(ThinkingLevel.LOW,
                 ThinkingLevel.ADAPTIVE.resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, true, true, false));
-        assertEquals(ThinkingLevel.LOW,
+        assertEquals(ThinkingLevel.MEDIUM,
                 ThinkingLevel.ADAPTIVE.resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.CODE, true, true, false));
         assertEquals(ThinkingLevel.HIGH,
                 ThinkingLevel.ADAPTIVE.resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.CODE, true, true, true));
-        assertEquals(ThinkingLevel.MEDIUM, ThinkingLevel.ADAPTIVE
+        assertEquals(ThinkingLevel.HIGH, ThinkingLevel.ADAPTIVE
                 .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.REVIEW, true, false, false));
         assertEquals(ThinkingLevel.LOW, ThinkingLevel.ADAPTIVE
                 .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.EXPLORE, false, false, false));
@@ -274,6 +276,11 @@ class SettingsServiceTest {
         assertEquals(2.00, proCfg.inputPricePerMillion(), 1e-6);
         assertEquals(0.10, proCfg.cachedInputPricePerMillion(), 1e-6);
         assertEquals(10.00, proCfg.outputPricePerMillion(), 1e-6);
+
+        org.roxycode.app.model.GeminiModelConfig hydrogenCfg = service.resolveModelConfig("gemini-4-hydrogen");
+        assertEquals(1.50, hydrogenCfg.inputPricePerMillion(), 1e-6);
+        assertEquals(0.15, hydrogenCfg.cachedInputPricePerMillion(), 1e-6);
+        assertEquals(7.50, hydrogenCfg.outputPricePerMillion(), 1e-6);
         assertEquals(0.004, proCfg.calculateUncachedInputCostUsd(2_000), 1e-7);
         assertEquals(0.001, proCfg.calculateCachedInputCostUsd(10_000), 1e-7);
         assertEquals(0.006, proCfg.calculateOutputCostUsd(600), 1e-7);

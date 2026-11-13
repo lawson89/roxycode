@@ -618,8 +618,10 @@ public class AiService implements AutoCloseable {
         if (current == null || current == ThinkingLevel.DEFAULT) {
             current = Objects.requireNonNullElse(configuredLevel, ThinkingLevel.DEFAULT);
         }
-        if (current == ThinkingLevel.HIGH || current == ThinkingLevel.MEDIUM || current == ThinkingLevel.ADAPTIVE
-                || current == ThinkingLevel.DEFAULT) {
+        if (current == ThinkingLevel.HIGH) {
+            return ThinkingLevel.MEDIUM;
+        }
+        if (current == ThinkingLevel.MEDIUM || current == ThinkingLevel.ADAPTIVE || current == ThinkingLevel.DEFAULT) {
             return ThinkingLevel.LOW;
         }
         return current;
