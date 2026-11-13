@@ -25,9 +25,13 @@ import org.testcontainers.containers.Container;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.utility.DockerImageName;
 
+/**
+ * Manages build command sandboxing via native OS isolation (Bubblewrap on Linux, Seatbelt on macOS) or Docker
+ * containers via Testcontainers.
+ */
 @Service
 @SuppressWarnings({"PMD.NullAssignment", "PMD.CloseResource"})
-class BuildContainerService {
+public class BuildContainerService {
 
     private static final Logger log = LoggerFactory.getLogger(BuildContainerService.class);
     private static final ExecutorService DOCKER_EXEC_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();

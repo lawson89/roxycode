@@ -569,6 +569,19 @@ public class GenericBuildToolService {
         return parseConfig(getConfigContent());
     }
 
+    /**
+     * Parses and validates a raw {@code build.toml} string using the shared TOML mapper.
+     *
+     * @param rawToml
+     *            the raw TOML configuration content
+     * @return the parsed {@link BuildConfig}
+     * @throws IOException
+     *             if the TOML is empty, malformed, or specifies an invalid sandbox mode
+     */
+    public static BuildConfig parseConfigStatic(String rawToml) throws IOException {
+        return parseConfig(rawToml, org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER);
+    }
+
     BuildConfig parseConfig(String rawToml) throws IOException {
         return parseConfig(rawToml, tomlMapper);
     }
@@ -595,7 +608,16 @@ public class GenericBuildToolService {
         return config;
     }
 
-    BuildConfig validateConfig(String rawToml) throws IOException {
+    /**
+     * Parses and validates a raw {@code build.toml} string including host sandbox availability checks.
+     *
+     * @param rawToml
+     *            the raw TOML configuration content
+     * @return the validated {@link BuildConfig}
+     * @throws IOException
+     *             if the TOML is invalid or the configured sandbox mode is unsupported
+     */
+    public BuildConfig validateConfig(String rawToml) throws IOException {
         BuildConfig config = parseConfig(rawToml);
         validateSandboxSupport(config);
         return config;

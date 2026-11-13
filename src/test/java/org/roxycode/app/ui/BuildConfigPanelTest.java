@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.formdev.flatlaf.FlatClientProperties;
+import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.JComboBox;
@@ -84,8 +85,9 @@ class BuildConfigPanelTest {
         assertEquals(2, panel.settingsTabs.getTabCount());
         assertEquals(BuildConfigPanel.TAB_BUILD_CONFIG_TITLE,
                 panel.settingsTabs.getTitleAt(BuildConfigPanel.TAB_INDEX_BUILD_CONFIG));
-        assertEquals(BuildConfigPanel.TAB_AI_MODEL_TITLE,
+        assertEquals(BuildConfigPanel.TAB_AI_MODEL_TITLE + " (Global)",
                 panel.settingsTabs.getTitleAt(BuildConfigPanel.TAB_INDEX_AI_MODEL));
+        assertEquals("Global (Normal)", panel.modelOverrideStatusPill.getText());
         assertEquals(BuildConfigPanel.TAB_INDEX_BUILD_CONFIG, panel.settingsTabs.getSelectedIndex());
         assertSame(panel.buildTabPanel, panel.settingsTabs.getComponentAt(BuildConfigPanel.TAB_INDEX_BUILD_CONFIG));
         assertSame(panel.modelTabPanel, panel.settingsTabs.getComponentAt(BuildConfigPanel.TAB_INDEX_AI_MODEL));
@@ -94,9 +96,11 @@ class BuildConfigPanelTest {
         assertEquals(BuildConfigPanel.TITLE_TEXT, panel.titleLabel.getText());
         assertEquals(UiComponents.formatWrappingHtml(BuildConfigPanel.SUBTITLE_TEXT), panel.subtitleLabel.getText());
         assertEquals(BuildConfigPanel.BUILD_CONFIG_HINT_TEXT, panel.buildConfigHintLabel.getText());
-        assertSame(panel.buildSectionHeaderLabel.getParent(), panel.buildConfigHintLabel.getParent());
-        assertSame(panel.buildSectionHeaderLabel.getParent(), panel.configureWithRoxyButton.getParent());
-        assertSame(panel.buildSectionHeaderLabel.getParent(), panel.statusLabel.getParent());
+        assertSame(panel.buildTomlFileBadge.getParent(), panel.buildConfigHintLabel.getParent());
+        assertSame(panel.buildTomlFileBadge.getParent(), panel.configureWithRoxyButton.getParent());
+        assertSame(panel.buildTomlFileBadge.getParent(), panel.copyTomlButton.getParent());
+        assertSame(panel.buildTomlFileBadge.getParent(), panel.jumpCommandsButton.getParent());
+        assertSame(panel.buildTomlFileBadge.getParent(), panel.statusLabel.getParent());
         assertNotSame(panel.saveButton.getParent(), panel.statusLabel.getParent());
         assertSame(panel.titleLabel.getParent().getParent(), panel.saveButton.getParent());
         assertFalse(panel.statusLabel.isVisible());
@@ -118,11 +122,14 @@ class BuildConfigPanelTest {
         assertNotNull(panel.profileInfoIcon.getToolTipText());
         assertNull(panel.profileInfoIcon.getClientProperty(FlatClientProperties.STYLE));
 
+        assertTrue(panel.globalDefaultProfileCard.isSelected());
+        assertTrue(panel.globalDefaultProfileCard.currentGlobalBadge.getText().contains("Normal"));
+        assertEquals(AgentProfile.values().length, panel.profileCards.size());
+        for (BuildConfigPanel.ProjectProfileCard card : panel.profileCards.values()) {
+            assertFalse(card.isSelected());
+        }
         JComboBox<AgentProfileOption> profileCombo = panel.profileCombo;
         assertEquals(1 + AgentProfile.values().length, profileCombo.getItemCount());
-        assertEquals("", profileCombo.getItemAt(0).id());
-        assertEquals("Use Global Default (Normal)", profileCombo.getItemAt(0).displayName());
-        assertEquals(AgentProfile.NORMAL.getBadgeSummary(), panel.modelApiBadgeLabel.getText());
 
         java.util.concurrent.atomic.AtomicInteger confirmCallbackCount = new java.util.concurrent.atomic.AtomicInteger();
         panel.setOnConfirmSavedCallback(confirmCallbackCount::incrementAndGet);
@@ -134,11 +141,16 @@ class BuildConfigPanelTest {
                 compile = 'mvn test'
                 """;
         SwingTestUtils.runOnEdt(() -> {
-            UiComponents.selectAgentProfileOptionById(profileCombo, "MAX");
+            panel.selectProfileOverride("MAX");
+            assertFalse(panel.globalDefaultProfileCard.isSelected());
+            assertTrue(panel.profileCards.get(AgentProfile.MAX).isSelected());
+            assertEquals("Override: Max", panel.modelOverrideStatusPill.getText());
+            assertEquals(BuildConfigPanel.TAB_AI_MODEL_TITLE + " (Max)",
+                    panel.settingsTabs.getTitleAt(BuildConfigPanel.TAB_INDEX_AI_MODEL));
             assertEquals(AgentProfile.MAX.getBadgeSummary(), panel.modelApiBadgeLabel.getText());
             assertEquals(AgentProfile.MAX.getDescription(), panel.modelDescriptionArea.getText());
             assertTrue(panel.hasUnsavedModelChanges());
-            assertFalse(panel.hasUnsavedChanges(), "Profile dropdown changes must not mark build.toml dirty");
+            assertFalse(panel.hasUnsavedChanges(), "Profile card changes must not mark build.toml dirty");
 
             panel.textArea.setText(updatedToml);
             assertTrue(panel.hasUnsavedChanges());
@@ -192,6 +204,8 @@ class BuildConfigPanelTest {
         SwingTestUtils.runOnEdt(() -> panel.onProjectChanged(new ProjectChangedEvent(null)));
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
         assertEquals("SPEED", ((AgentProfileOption) profileCombo.getSelectedItem()).id());
+        assertTrue(panel.profileCards.get(AgentProfile.SPEED).isSelected());
+        assertEquals("Override: Speed", panel.modelOverrideStatusPill.getText());
 
         clearInvocations(projectService);
         when(projectService.isBuildConfirmed()).thenReturn(false);
@@ -255,14 +269,16 @@ class BuildConfigPanelTest {
         assertFalse(panel.hasUnsavedChanges());
         assertEquals(BuildConfigPanel.CONFIRMED_BUTTON_TEXT, panel.saveButton.getText());
 
-        // Changing profileCombo marks model tab dirty without affecting build tab confirmed state
-        SwingTestUtils.runOnEdt(() -> UiComponents.selectAgentProfileOptionById(panel.profileCombo, "MAX"));
+        // Changing interactive profile card marks model tab dirty without affecting build tab confirmed state
+        SwingTestUtils.runOnEdt(() -> panel.selectProfileOverride("MAX"));
         assertTrue(panel.hasUnsavedModelChanges());
+        assertTrue(panel.profileCards.get(AgentProfile.MAX).isSelected());
         assertFalse(panel.hasUnsavedChanges());
         assertEquals(BuildConfigPanel.CONFIRMED_BUTTON_TEXT, panel.saveButton.getText());
 
-        SwingTestUtils.runOnEdt(() -> UiComponents.selectAgentProfileOptionById(panel.profileCombo, ""));
+        SwingTestUtils.runOnEdt(() -> panel.selectProfileOverride(""));
         assertFalse(panel.hasUnsavedModelChanges());
+        assertTrue(panel.globalDefaultProfileCard.isSelected());
     }
 
     @Test
@@ -313,5 +329,154 @@ class BuildConfigPanelTest {
         assertEquals(tailoredToml, panel.textArea.getText());
         assertTrue(panel.hasUnsavedChanges());
         assertEquals(BuildConfigPanel.APPLIED_FROM_ASK_ROXY_STATUS, panel.statusLabel.getText());
+    }
+
+    @Test
+    void testLiveSummaryStripUpdatesOnLoadAndEdit() {
+        BuildConfigPanel panel = createPanelOnEdt();
+
+        assertEquals("1 / 8 configured", panel.pipelineSummaryCard.valueLabel.getText());
+        assertEquals("compile", panel.pipelineSummaryCard.subtitleLabel.getText());
+        assertEquals("none (Host execution)", panel.sandboxSummaryCard.valueLabel.getText());
+        assertEquals("Default log tail", panel.parserSummaryCard.valueLabel.getText());
+        assertEquals("600s • Valid TOML", panel.syntaxSummaryCard.valueLabel.getText());
+
+        String fullToml = """
+                timeout_seconds = 120
+
+                [commands]
+                install = "./mvnw dependency:resolve"
+                clean = "./mvnw clean"
+                compile = "./mvnw test-compile"
+                build = "./mvnw package"
+                test_all = "./mvnw test"
+                test_single = "./mvnw test -Dtest={testName}"
+                lint = "./mvnw spotless:check"
+                format = "./mvnw spotless:apply"
+
+                [env]
+                JAVA_HOME = "/opt/jdk"
+
+                [parse]
+                error_regex = "^ERROR"
+                test_failure_regex = "Failures:"
+                context_lines = 5
+                junit_xml_paths = ["target/surefire-reports"]
+
+                [sandbox]
+                mode = "native"
+                readable_paths = ["~/.sdkman"]
+                writable_paths = ["~/.m2"]
+                """;
+        SwingTestUtils.runOnEdt(() -> panel.textArea.setText(fullToml));
+        assertEquals("8 / 8 configured", panel.pipelineSummaryCard.valueLabel.getText());
+        assertEquals("native (OS sandbox)", panel.sandboxSummaryCard.valueLabel.getText());
+        assertEquals("1 read, 1 write paths", panel.sandboxSummaryCard.subtitleLabel.getText());
+        assertEquals("Error & Test regexes", panel.parserSummaryCard.valueLabel.getText());
+        assertEquals("5 lines • 1 JUnit path(s)", panel.parserSummaryCard.subtitleLabel.getText());
+        assertEquals("120s • Valid TOML", panel.syntaxSummaryCard.valueLabel.getText());
+        assertEquals("1 env var(s)", panel.syntaxSummaryCard.subtitleLabel.getText());
+
+        String dockerToml = """
+                [commands]
+                compile = "mvn compile"
+
+                [sandbox]
+                mode = "docker"
+                image = "eclipse-temurin:21-jdk"
+                workdir = "/app"
+                """;
+        try {
+            when(buildToolService.validateConfig(anyString()))
+                    .thenThrow(new IOException("Unsupported [sandbox] mode 'docker': Docker daemon is not running."));
+        } catch (IOException ignored) {
+            // mockito stubbing
+        }
+        SwingTestUtils.runOnEdt(() -> panel.textArea.setText(dockerToml));
+        assertEquals("docker (eclipse-temurin:21-jdk)", panel.sandboxSummaryCard.valueLabel.getText());
+        assertEquals("workdir: /app", panel.sandboxSummaryCard.subtitleLabel.getText());
+        assertEquals("600s • Valid TOML", panel.syntaxSummaryCard.valueLabel.getText());
+
+        SwingTestUtils.runOnEdt(() -> panel.textArea.setText("[[broken"));
+        assertEquals("Invalid TOML Syntax", panel.syntaxSummaryCard.valueLabel.getText());
+        assertEquals("— / 8 configured", panel.pipelineSummaryCard.valueLabel.getText());
+    }
+
+    @Test
+    void testInteractiveProfileCardMouseClicks() {
+        BuildConfigPanel panel = createPanelOnEdt();
+        assertTrue(panel.globalDefaultProfileCard.isSelected());
+        assertFalse(panel.hasUnsavedModelChanges());
+
+        SwingTestUtils.runOnEdt(() -> {
+            BuildConfigPanel.ProjectProfileCard maxCard = panel.profileCards.get(AgentProfile.MAX);
+            maxCard.dispatchEvent(
+                    new MouseEvent(maxCard, MouseEvent.MOUSE_PRESSED, System.currentTimeMillis(), 0, 10, 10, 1, false));
+        });
+        assertFalse(panel.globalDefaultProfileCard.isSelected());
+        assertTrue(panel.profileCards.get(AgentProfile.MAX).isSelected());
+        assertEquals("Override: Max", panel.modelOverrideStatusPill.getText());
+        assertEquals(BuildConfigPanel.TAB_AI_MODEL_TITLE + " (Max)",
+                panel.settingsTabs.getTitleAt(BuildConfigPanel.TAB_INDEX_AI_MODEL));
+        assertTrue(panel.hasUnsavedModelChanges());
+
+        SwingTestUtils.runOnEdt(() -> {
+            BuildConfigPanel.ProjectProfileCard speedCard = panel.profileCards.get(AgentProfile.SPEED);
+            speedCard.dispatchEvent(new MouseEvent(speedCard, MouseEvent.MOUSE_PRESSED, System.currentTimeMillis(), 0,
+                    10, 10, 1, false));
+        });
+        assertFalse(panel.profileCards.get(AgentProfile.MAX).isSelected());
+        assertTrue(panel.profileCards.get(AgentProfile.SPEED).isSelected());
+        assertEquals("Override: Speed", panel.modelOverrideStatusPill.getText());
+
+        SwingTestUtils.runOnEdt(
+                () -> panel.globalDefaultProfileCard.dispatchEvent(new MouseEvent(panel.globalDefaultProfileCard,
+                        MouseEvent.MOUSE_PRESSED, System.currentTimeMillis(), 0, 10, 10, 1, false)));
+        assertTrue(panel.globalDefaultProfileCard.isSelected());
+        assertFalse(panel.profileCards.get(AgentProfile.SPEED).isSelected());
+        assertEquals("Global (Normal)", panel.modelOverrideStatusPill.getText());
+        assertEquals(BuildConfigPanel.TAB_AI_MODEL_TITLE + " (Global)",
+                panel.settingsTabs.getTitleAt(BuildConfigPanel.TAB_INDEX_AI_MODEL));
+        assertFalse(panel.hasUnsavedModelChanges());
+    }
+
+    @Test
+    void testSectionJumpPillsAndToolbarButtons() {
+        BuildConfigPanel panel = createPanelOnEdt();
+        String multiSectionToml = """
+                [commands]
+                compile = "./mvnw test-compile"
+
+                [env]
+                JAVA_HOME = "/opt/jdk"
+
+                [parse]
+                error_regex = "ERROR"
+
+                [sandbox]
+                mode = "none"
+                """;
+        SwingTestUtils.runOnEdt(() -> panel.textArea.setText(multiSectionToml));
+
+        SwingTestUtils.clickOnEdt(panel.jumpEnvButton);
+        assertEquals(multiSectionToml.indexOf("[env]"), panel.textArea.getCaretPosition());
+
+        SwingTestUtils.clickOnEdt(panel.jumpParseButton);
+        assertEquals(multiSectionToml.indexOf("[parse]"), panel.textArea.getCaretPosition());
+
+        SwingTestUtils.clickOnEdt(panel.jumpSandboxButton);
+        assertEquals(multiSectionToml.indexOf("[sandbox]"), panel.textArea.getCaretPosition());
+
+        SwingTestUtils.clickOnEdt(panel.jumpCommandsButton);
+        assertEquals(multiSectionToml.indexOf("[commands]"), panel.textArea.getCaretPosition());
+
+        assertNotNull(panel.configureWithRoxyButton.getIcon());
+        assertEquals(org.kordamp.ikonli.codicons.Codicons.LIGHTBULB_AUTOFIX,
+                ((org.kordamp.ikonli.swing.FontIcon) panel.configureWithRoxyButton.getIcon()).getIkon());
+        assertTrue(String.valueOf(panel.configureWithRoxyButton.getClientProperty(FlatClientProperties.STYLE))
+                .contains("#f5f3ff"));
+
+        SwingTestUtils.clickOnEdt(panel.copyTomlButton);
+        assertEquals("Copied!", panel.copyTomlButton.getText());
     }
 }

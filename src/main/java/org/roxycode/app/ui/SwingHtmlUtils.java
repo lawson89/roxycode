@@ -700,14 +700,23 @@ public final class SwingHtmlUtils {
         applyRSyntaxTheme(textArea, theme);
     }
 
+    static final Color LIGHT_CURRENT_LINE_HIGHLIGHT = new Color(0xEF, 0xF6, 0xFF);
+    static final Color DARK_CURRENT_LINE_HIGHLIGHT = new Color(0x1E, 0x29, 0x3B);
+
     static void applyRSyntaxTheme(RSyntaxTextArea textArea, String themeName) {
         if (textArea == null) {
             return;
         }
+        boolean dark = isDarkTheme(themeName);
         try {
-            getRSyntaxTheme(isDarkTheme(themeName)).apply(textArea);
+            getRSyntaxTheme(dark).apply(textArea);
         } catch (IOException ioe) {
             log.error("Failed to load RSyntaxTextArea theme: {}", ioe.getMessage());
+        }
+        if (dark) {
+            textArea.setCurrentLineHighlightColor(DARK_CURRENT_LINE_HIGHLIGHT);
+        } else {
+            textArea.setCurrentLineHighlightColor(LIGHT_CURRENT_LINE_HIGHLIGHT);
         }
     }
 

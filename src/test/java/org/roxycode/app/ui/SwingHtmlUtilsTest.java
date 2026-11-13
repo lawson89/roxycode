@@ -287,6 +287,18 @@ class SwingHtmlUtilsTest {
     }
 
     @Test
+    void testApplyRSyntaxThemeSetsSoftCurrentLineHighlightColor() {
+        org.roxycode.app.util.Edt.runAndWait(() -> {
+            org.fife.ui.rsyntaxtextarea.RSyntaxTextArea textArea = new org.fife.ui.rsyntaxtextarea.RSyntaxTextArea();
+            SwingHtmlUtils.applyRSyntaxTheme(textArea, "Light");
+            assertEquals(SwingHtmlUtils.LIGHT_CURRENT_LINE_HIGHLIGHT, textArea.getCurrentLineHighlightColor());
+
+            SwingHtmlUtils.applyRSyntaxTheme(textArea, "Dark");
+            assertEquals(SwingHtmlUtils.DARK_CURRENT_LINE_HIGHLIGHT, textArea.getCurrentLineHighlightColor());
+        });
+    }
+
+    @Test
     void testCreateThumbnailDoesNotUpscaleSmallImage() {
         java.awt.image.BufferedImage small = new java.awt.image.BufferedImage(30, 20,
                 java.awt.image.BufferedImage.TYPE_INT_ARGB);
