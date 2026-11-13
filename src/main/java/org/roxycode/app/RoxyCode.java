@@ -141,9 +141,10 @@ public class RoxyCode {
                         props.put(PROP_VERTEX_CREDENTIALS_URI, credentialsUri);
                     }
                 }
-                String model = DEFAULT_GEMINI_MODEL;
-                if (StringUtils.isNotBlank(settings.getGeminiModel())) {
-                    model = settings.getGeminiModel();
+                String model = org.roxycode.app.model.AgentProfile.fromString(settings.getAgentProfile())
+                        .getPlanModel();
+                if (StringUtils.isBlank(model)) {
+                    model = DEFAULT_GEMINI_MODEL;
                 }
                 props.put(PROP_GEMINI_MODEL, model);
             }

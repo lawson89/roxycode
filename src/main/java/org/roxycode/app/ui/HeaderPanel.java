@@ -16,8 +16,8 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
+import org.roxycode.app.model.AgentProfile;
 import org.roxycode.app.model.AppSettings;
-import org.roxycode.app.model.ThinkingLevel;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.util.Edt;
@@ -81,7 +81,7 @@ final class HeaderPanel extends JPanel {
         rightPanel.setOpaque(false);
 
         modelLabel = new JLabel();
-        modelLabel.setToolTipText("Click to configure AI model & thinking level");
+        modelLabel.setToolTipText("Click to configure Agent Profile");
         modelLabel.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         modelLabel.addMouseListener(new MouseAdapter() {
             @Override
@@ -256,19 +256,13 @@ final class HeaderPanel extends JPanel {
     }
 
     private void updateModelDisplay() {
-        String modelName = ProjectService.resolveEffectiveGeminiModel(projectService, settingsService);
-        ThinkingLevel thinkingLevel = ProjectService.resolveEffectiveThinkingLevel(projectService, settingsService);
+        AgentProfile profile = ProjectService.resolveEffectiveAgentProfile(projectService, settingsService);
+        AgentProfile resolvedProfile = java.util.Objects.requireNonNullElse(profile, AgentProfile.DEFAULT);
         groundingLabel.setVisible(settingsService.getSettings().isGoogleGroundingEnabled());
         modelLabel.setIcon(FontIcon.of(Codicons.HUBOT, 14, resolveModelAccentColor()));
-        String baseModelText = java.util.Objects.requireNonNullElse(modelName, "No model selected");
-        ThinkingLevel resolvedLevel = java.util.Objects.requireNonNullElse(thinkingLevel, ThinkingLevel.DEFAULT);
-        if (resolvedLevel != ThinkingLevel.DEFAULT) {
-            modelLabel.setText(baseModelText + " • " + resolvedLevel.getDisplayName());
-        } else {
-            modelLabel.setText(baseModelText);
-        }
-        modelLabel.setToolTipText("Active Gemini model: " + baseModelText + " (Thinking: "
-                + resolvedLevel.getDisplayName() + ") — Click to configure AI model & thinking level");
+        modelLabel.setText(resolvedProfile.formatHeaderLabel());
+        modelLabel.setToolTipText("Active Agent Profile: " + resolvedProfile.getDisplayName() + " ("
+                + resolvedProfile.getBadgeSummary() + ") — Click to configure Agent Profile");
     }
 
     public void setOnNavigateToCard(Consumer<String> onNavigateToCard) {

@@ -65,7 +65,7 @@ class HeaderPanelTest {
         ps.setCurrentProjectRoot(newRoot);
         AppSettings updatedSettings = ss.getSettings();
         updatedSettings.setGeminiApiKey("test-api-key");
-        updatedSettings.setGeminiModel("gemini-4-argon");
+        updatedSettings.setAgentProfile("NORMAL");
 
         Thread bg = new Thread(() -> {
             header.onProjectChanged(new ProjectChangedEvent(newRoot));
@@ -78,9 +78,8 @@ class HeaderPanelTest {
         assertEquals("updated-proj", header.projectSwitcherButton.getText());
         assertEquals(newRoot.toAbsolutePath().toString(), header.projectSwitcherButton.getToolTipText());
         assertFalse(header.noProjectNoticeLabel.isVisible());
-        assertEquals("gemini-4-argon", header.modelLabel.getText());
-        assertEquals(
-                "Active Gemini model: gemini-4-argon (Thinking: Model Default) — Click to configure AI model & thinking level",
+        assertEquals("Normal • Argon → Hydrogen", header.modelLabel.getText());
+        assertEquals("Active Agent Profile: Normal (Argon → Hydrogen) — Click to configure Agent Profile",
                 header.modelLabel.getToolTipText());
 
         // With active project and credentials, clicking modelLabel navigates to PROJECT_MODEL_VIEW, and groundingLabel
@@ -103,19 +102,16 @@ class HeaderPanelTest {
         });
         assertEquals(MainFrame.SETTINGS_VIEW, navigatedCard.get());
 
-        updatedSettings.setThinkingLevel("MEDIUM");
+        updatedSettings.setAgentProfile("SPEED");
         SwingTestUtils.runOnEdt(() -> header.onSettingsChanged(new SettingsChangedEvent(updatedSettings)));
-        assertEquals("gemini-4-argon • Medium", header.modelLabel.getText());
-        assertEquals(
-                "Active Gemini model: gemini-4-argon (Thinking: Medium) — Click to configure AI model & thinking level",
+        assertEquals("Speed • Pure Hydrogen", header.modelLabel.getText());
+        assertEquals("Active Agent Profile: Speed (Pure Hydrogen) — Click to configure Agent Profile",
                 header.modelLabel.getToolTipText());
 
-        ps.setProjectGeminiModel("gemini-project-override");
-        ps.setProjectThinkingLevel("HIGH");
+        ps.setProjectAgentProfile("MAX");
         SwingTestUtils.runOnEdt(() -> header.onSettingsChanged(new SettingsChangedEvent(updatedSettings)));
-        assertEquals("gemini-project-override • High", header.modelLabel.getText());
-        assertEquals(
-                "Active Gemini model: gemini-project-override (Thinking: High) — Click to configure AI model & thinking level",
+        assertEquals("Max • Carbon → Hydrogen", header.modelLabel.getText());
+        assertEquals("Active Agent Profile: Max (Carbon → Hydrogen) — Click to configure Agent Profile",
                 header.modelLabel.getToolTipText());
 
         try {

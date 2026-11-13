@@ -14,6 +14,8 @@ import org.apache.commons.lang3.concurrent.ConcurrentException;
 import org.apache.commons.lang3.concurrent.LazyInitializer;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.SettingsChangedEvent;
+import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.model.AgentProfile;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.model.GeminiModels;
@@ -136,20 +138,31 @@ public class SettingsService {
         return GeminiModelConfig.defaultForApiName(apiName);
     }
 
-    public static String resolveGlobalGeminiModel(SettingsService settingsService) {
+    /**
+     * Resolves the global {@link AgentProfile} configured in {@link SettingsService}, defaulting to
+     * {@link AgentProfile#DEFAULT} ({@link AgentProfile#NORMAL}).
+     *
+     * @param settingsService
+     *            the settings service (may be null)
+     * @return the resolved global {@link AgentProfile}
+     */
+    public static AgentProfile resolveGlobalAgentProfile(SettingsService settingsService) {
         if (settingsService != null && settingsService.getSettings() != null) {
-            return StringUtils
-                    .defaultIfBlank(settingsService.getSettings().getGeminiModel(), AppSettings.DEFAULT_GEMINI_MODEL)
-                    .trim();
+            return AgentProfile.fromString(settingsService.getSettings().getAgentProfile());
         }
-        return AppSettings.DEFAULT_GEMINI_MODEL;
+        return AgentProfile.DEFAULT;
+    }
+
+    public static String resolveGlobalGeminiModel(SettingsService settingsService) {
+        return resolveGlobalGeminiModel(settingsService, null);
+    }
+
+    public static String resolveGlobalGeminiModel(SettingsService settingsService, WorkflowPhase phase) {
+        return resolveGlobalAgentProfile(settingsService).resolveModelForPhase(phase);
     }
 
     public static ThinkingLevel resolveGlobalThinkingLevel(SettingsService settingsService) {
-        if (settingsService != null && settingsService.getSettings() != null) {
-            return ThinkingLevel.fromString(settingsService.getSettings().getThinkingLevel());
-        }
-        return ThinkingLevel.DEFAULT;
+        return ThinkingLevel.ADAPTIVE;
     }
 
     public synchronized boolean hasSettingsFile() {

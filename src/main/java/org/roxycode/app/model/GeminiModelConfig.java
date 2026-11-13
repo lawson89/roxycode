@@ -83,7 +83,7 @@ public record GeminiModelConfig(String apiName, String name, String description,
             return false;
         }
         String lower = apiName.toLowerCase(Locale.ROOT);
-        return lower.contains("pro") || lower.contains("argon");
+        return lower.contains("pro") || lower.contains("argon") || lower.contains("carbon");
     }
 
     private static double defaultInputPrice(String apiName) {

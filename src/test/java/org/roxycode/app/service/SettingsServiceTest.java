@@ -17,6 +17,8 @@ import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.RoxyCode;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.SettingsChangedEvent;
+import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.model.AgentProfile;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ThinkingLevel;
 import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
@@ -56,7 +58,7 @@ class SettingsServiceTest {
         AppSettings settings = service.getSettings();
         settings.setTheme("Darcula");
         settings.setGeminiApiKey("test-api-key");
-        settings.setThinkingLevel("high");
+        settings.setAgentProfile("max");
         settings.setLogToolCalls(true);
         settings.setGlobalContextFolders(List.of("/tmp/global-a", "/tmp/global-b"));
         service.saveSettings();
@@ -64,14 +66,18 @@ class SettingsServiceTest {
         assertTrue(listenerCalled.get(), "SettingsChangedEvent should be published when settings are saved");
         assertTrue(service.hasSettingsFile());
         assertTrue(service.hasConfiguredCredentials());
-        assertEquals(ThinkingLevel.HIGH, SettingsService.resolveGlobalThinkingLevel(service));
+        assertEquals(AgentProfile.MAX, SettingsService.resolveGlobalAgentProfile(service));
+        assertEquals("gemini-4-carbon", SettingsService.resolveGlobalGeminiModel(service, WorkflowPhase.PLAN));
+        assertEquals("gemini-4-hydrogen", SettingsService.resolveGlobalGeminiModel(service, WorkflowPhase.CODE));
+        assertEquals(ThinkingLevel.ADAPTIVE, SettingsService.resolveGlobalThinkingLevel(service));
 
         SettingsService service2 = new SettingsService(null, null);
         service2.setSettingsPathOverride(settingsFile);
         assertEquals("Darcula", service2.getSettings().getTheme());
         assertEquals("test-api-key", service2.getSettings().getGeminiApiKey());
-        assertEquals("HIGH", service2.getSettings().getThinkingLevel());
-        assertEquals(ThinkingLevel.HIGH, SettingsService.resolveGlobalThinkingLevel(service2));
+        assertEquals("MAX", service2.getSettings().getAgentProfile());
+        assertEquals(AgentProfile.MAX, SettingsService.resolveGlobalAgentProfile(service2));
+        assertEquals(ThinkingLevel.ADAPTIVE, SettingsService.resolveGlobalThinkingLevel(service2));
         assertTrue(service2.getSettings().isLogToolCalls());
         assertEquals(List.of("/tmp/global-a", "/tmp/global-b"), service2.getSettings().getGlobalContextFolders());
         assertTrue(Files.exists(settingsFile));
@@ -171,15 +177,41 @@ class SettingsServiceTest {
         Path corruptFile = Files.writeString(tempDir.resolve("corrupt.toml"), "invalid = [toml");
         AppSettings fromCorrupt = SettingsService.loadFromDisk(corruptFile, null);
         assertEquals("FlatLaf Light", fromCorrupt.getTheme());
-        assertEquals("DEFAULT", fromCorrupt.getThinkingLevel());
-        assertEquals(ThinkingLevel.DEFAULT, SettingsService.resolveGlobalThinkingLevel(null));
+        assertEquals("NORMAL", fromCorrupt.getAgentProfile());
+        assertEquals("ADAPTIVE", fromCorrupt.getThinkingLevel());
+        assertEquals(AgentProfile.NORMAL, SettingsService.resolveGlobalAgentProfile(null));
+        assertEquals(ThinkingLevel.ADAPTIVE, SettingsService.resolveGlobalThinkingLevel(null));
 
         Path legacyToml = Files.writeString(tempDir.resolve("legacy.toml"), """
                 theme = "FlatLaf Dark"
                 geminiModel = "gemini-3.5-flash"
                 """);
         AppSettings fromLegacy = SettingsService.loadFromDisk(legacyToml, AiConfig.SHARED_TOML_MAPPER);
-        assertEquals("DEFAULT", fromLegacy.getThinkingLevel());
+        assertEquals("NORMAL", fromLegacy.getAgentProfile());
+        assertEquals("ADAPTIVE", fromLegacy.getThinkingLevel());
+
+        assertEquals(AgentProfile.NORMAL, AgentProfile.fromString(null));
+        assertEquals(AgentProfile.NORMAL, AgentProfile.fromString("  "));
+        assertEquals(AgentProfile.NORMAL, AgentProfile.fromString("unknown-profile"));
+        assertEquals(AgentProfile.MAX, AgentProfile.fromString("max"));
+        assertEquals(AgentProfile.MAX, AgentProfile.fromString("gemini-4-carbon"));
+        assertEquals(AgentProfile.NORMAL, AgentProfile.fromString("Normal"));
+        assertEquals(AgentProfile.NORMAL, AgentProfile.fromString("gemini-4-argon"));
+        assertEquals(AgentProfile.SPEED, AgentProfile.fromString("SPEED"));
+        assertEquals(AgentProfile.SPEED, AgentProfile.fromString("gemini-4-hydrogen"));
+        assertEquals(AgentProfile.SPEED, AgentProfile.fromString("gemini-3.8-flash"));
+        assertEquals("gemini-4-carbon", AgentProfile.MAX.resolveModelForPhase(WorkflowPhase.EXPLORE));
+        assertEquals("gemini-4-carbon", AgentProfile.MAX.resolveModelForPhase(WorkflowPhase.PLAN));
+        assertEquals("gemini-4-hydrogen", AgentProfile.MAX.resolveModelForPhase(WorkflowPhase.CODE));
+        assertEquals("gemini-4-hydrogen", AgentProfile.MAX.resolveModelForPhase(WorkflowPhase.REVIEW));
+        assertEquals("gemini-4-argon", AgentProfile.NORMAL.resolveModelForPhase(WorkflowPhase.EXPLORE));
+        assertEquals("gemini-4-argon", AgentProfile.NORMAL.resolveModelForPhase(WorkflowPhase.PLAN));
+        assertEquals("gemini-4-hydrogen", AgentProfile.NORMAL.resolveModelForPhase(WorkflowPhase.CODE));
+        assertEquals("gemini-4-hydrogen", AgentProfile.NORMAL.resolveModelForPhase(WorkflowPhase.REVIEW));
+        assertEquals("gemini-4-hydrogen", AgentProfile.SPEED.resolveModelForPhase(WorkflowPhase.EXPLORE));
+        assertEquals("gemini-4-hydrogen", AgentProfile.SPEED.resolveModelForPhase(WorkflowPhase.PLAN));
+        assertEquals("gemini-4-hydrogen", AgentProfile.SPEED.resolveModelForPhase(WorkflowPhase.CODE));
+        assertEquals("gemini-4-hydrogen", AgentProfile.SPEED.resolveModelForPhase(WorkflowPhase.REVIEW));
 
         assertEquals(ThinkingLevel.DEFAULT, ThinkingLevel.fromString(null));
         assertEquals(ThinkingLevel.DEFAULT, ThinkingLevel.fromString("  "));
@@ -261,9 +293,10 @@ class SettingsServiceTest {
         SettingsService service = new SettingsService(null, null);
         service.setSettingsPathOverride(tempDir.resolve("nonexistent-settings.toml"));
         assertNotNull(service.resolveModelConfig("gemini-3.8-flash"));
-        assertEquals(AppSettings.DEFAULT_GEMINI_MODEL, SettingsService.resolveGlobalGeminiModel(service));
-        service.getSettings().setGeminiModel("   ");
-        assertEquals(AppSettings.DEFAULT_GEMINI_MODEL, SettingsService.resolveGlobalGeminiModel(service));
+        assertEquals("gemini-4-argon", SettingsService.resolveGlobalGeminiModel(service));
+        assertEquals("gemini-4-hydrogen", SettingsService.resolveGlobalGeminiModel(service, WorkflowPhase.CODE));
+        service.getSettings().setAgentProfile("   ");
+        assertEquals("gemini-4-argon", SettingsService.resolveGlobalGeminiModel(service));
     }
 
     @Test

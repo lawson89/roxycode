@@ -58,8 +58,8 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
 - **Two-Tabbed Project Settings Hub**:
   - **Build Configuration (<projectDataDir>/build.toml — Tab 1)**:
     - Must be reviewed and confirmed (**Confirm & Save Settings**) before Build Feature chat is unlocked for a project. Built-in templates are provided for Maven, Gradle, npm/Node, Python, Rust, Go, CMake, and Default, or click **Configure with Roxy** to open an interactive **Ask Roxy** session where Roxy inspects your project files and installed host toolchains, asks clarifying questions if needed, and generates a tailored `build.toml` with a one-click **[Apply to build.toml]** action.
-  - **AI Model Override (Tab 2 — or click the active model pill in the top header bar)**:
-    - Optionally override the Global Settings Gemini model and thinking level (ADAPTIVE, MINIMAL/NONE, LOW, MEDIUM, HIGH, or model default) for the active project and save independently via **Save Model Settings**. When **Adaptive (Phase-Aware)** is selected, Roxy dynamically adjusts thinking per sub-turn (PLAN: HIGH while designing the blueprint -> LOW after submitPlan; CODE: LOW for fast execution -> HIGH after any tool/build/test failure; REVIEW: MEDIUM; EXPLORE: LOW on initial discovery -> MEDIUM on synthesis).
+  - **AI Model Override (Tab 2 — or click the active profile pill in the top header bar)**:
+    - Optionally override the Global Settings **Agent Profile** (Use Global Default, Max, Normal, or Speed) for the active project and save independently via **Save Model Settings**. Every profile uses phase-aware model routing (EXPLORE/PLAN -> gemini-4-carbon, gemini-4-argon, or gemini-4-hydrogen; CODE/REVIEW -> gemini-4-hydrogen) and automatic **Adaptive (Phase-Aware)** sub-turn thinking (PLAN: HIGH while designing the blueprint -> LOW after submitPlan; CODE: LOW for fast execution -> HIGH after any tool/build/test failure; REVIEW: MEDIUM; EXPLORE: LOW on initial discovery -> MEDIUM on synthesis).
     - **[commands]**: Shell commands executed from the project root:
       - install: Sync dependencies (e.g., './mvnw dependency:resolve', 'npm install').
       - clean: Clean build artifacts.
@@ -81,5 +81,5 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
       - image & workdir: Container image (e.g., "eclipse-temurin:25-jdk") and working directory ("/workspace") when mode = "docker".
 
 ### Global Settings & System Tools (Settings & Tools Sidebar Hub)
-- **Global Settings**: Configures Light/Dark theme, Authentication Provider (**Gemini API Key (Google AI Studio)** or **Google Cloud Vertex AI** with GCP Project ID, Vertex Location, and optional Service Account JSON key file or Application Default Credentials / ADC), default Gemini model & thinking level, max tool turns per request, chat memory window, tool call logging, and Google Search grounding (webSearchService).
+- **Global Settings**: Configures Light/Dark theme, Authentication Provider (**Gemini API Key (Google AI Studio)** or **Google Cloud Vertex AI** with GCP Project ID, Vertex Location, and optional Service Account JSON key file or Application Default Credentials / ADC), default **Agent Profile** (**Max**, **Normal**, or **Speed**), max tool turns per request, chat memory window, tool call logging, and Google Search grounding (webSearchService).
 - **System Tools**: Checks status and install commands for required CLI tools (**Ripgrep**, **Universal Ctags**) and optional tools/sandbox runtimes (**Git**, **Bubblewrap** / **Seatbelt**, **Docker**).

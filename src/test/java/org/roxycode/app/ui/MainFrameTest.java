@@ -55,7 +55,8 @@ class MainFrameTest {
         when(projectService.hasActiveProject()).thenReturn(true);
         when(projectService.isBuildConfirmed()).thenReturn(false);
         when(projectService.getProjectName()).thenReturn("test-project");
-        when(projectService.getEffectiveGeminiModel()).thenReturn("gemini-3.5-flash");
+        lenient().when(projectService.getEffectiveAgentProfile())
+                .thenReturn(org.roxycode.app.model.AgentProfile.NORMAL);
 
         gitService = mock(GitService.class);
         when(gitService.getCurrentBranch()).thenReturn("main");

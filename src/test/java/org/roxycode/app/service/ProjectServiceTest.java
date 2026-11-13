@@ -9,6 +9,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.model.AgentProfile;
 import org.roxycode.app.model.ThinkingLevel;
 
 class ProjectServiceTest {
@@ -113,70 +115,67 @@ class ProjectServiceTest {
     }
 
     @Test
-    void testProjectGeminiModelOverrideAndEffectiveModelResolution() {
+    void testProjectAgentProfileOverrideAndPhaseAwareEffectiveModelResolution() {
         SettingsService settingsService = createSettingsService();
-        settingsService.getSettings().setGeminiModel("gemini-global-default");
+        settingsService.getSettings().setAgentProfile("NORMAL");
         AtomicReference<Object> publishedEvent = new AtomicReference<>();
         ProjectService projectService = new ProjectService(settingsService, publishedEvent::set);
 
-        assertEquals("", projectService.getProjectGeminiModel());
-        assertEquals("gemini-global-default", projectService.getEffectiveGeminiModel());
-        assertThrows(IllegalStateException.class, () -> projectService.setProjectGeminiModel("gemini-project-custom"));
+        assertEquals("", projectService.getProjectAgentProfile());
+        assertEquals(AgentProfile.NORMAL, projectService.getEffectiveAgentProfile());
+        assertEquals("gemini-4-argon", projectService.getEffectiveGeminiModel(WorkflowPhase.PLAN));
+        assertEquals("gemini-4-hydrogen", projectService.getEffectiveGeminiModel(WorkflowPhase.CODE));
+        assertEquals(ThinkingLevel.ADAPTIVE, projectService.getEffectiveThinkingLevel());
+        assertThrows(IllegalStateException.class, () -> projectService.setProjectAgentProfile("MAX"));
 
         Path projectA = tempDir.resolve("project-a");
         projectService.setCurrentProjectRoot(projectA);
-        assertEquals("", projectService.getProjectGeminiModel());
-        assertEquals("gemini-global-default", projectService.getEffectiveGeminiModel());
+        assertEquals("", projectService.getProjectAgentProfile());
+        assertEquals(AgentProfile.NORMAL, projectService.getEffectiveAgentProfile());
+        assertEquals("gemini-4-argon", projectService.getEffectiveGeminiModel(WorkflowPhase.EXPLORE));
 
         publishedEvent.set(null);
-        projectService.setProjectGeminiModel("  gemini-project-custom  ");
-        assertEquals("gemini-project-custom", projectService.getProjectGeminiModel());
-        assertEquals("gemini-project-custom", projectService.getEffectiveGeminiModel());
+        projectService.setProjectAgentProfile("  max  ");
+        assertEquals("MAX", projectService.getProjectAgentProfile());
+        assertEquals(AgentProfile.MAX, projectService.getEffectiveAgentProfile());
+        assertEquals("gemini-4-carbon", projectService.getEffectiveGeminiModel(WorkflowPhase.PLAN));
+        assertEquals("gemini-4-hydrogen", projectService.getEffectiveGeminiModel(WorkflowPhase.CODE));
+        assertEquals("gemini-4-hydrogen", projectService.getEffectiveGeminiModel(WorkflowPhase.REVIEW));
         assertInstanceOf(org.roxycode.app.events.SettingsChangedEvent.class, publishedEvent.get());
 
         Path projectB = tempDir.resolve("project-b");
         projectService.setCurrentProjectRoot(projectB);
-        assertEquals("", projectService.getProjectGeminiModel());
-        assertEquals("gemini-global-default", projectService.getEffectiveGeminiModel());
+        assertEquals("", projectService.getProjectAgentProfile());
+        assertEquals(AgentProfile.NORMAL, projectService.getEffectiveAgentProfile());
+        assertEquals("gemini-4-argon", projectService.getEffectiveGeminiModel(WorkflowPhase.PLAN));
 
         projectService.setCurrentProjectRoot(projectA);
-        assertEquals("gemini-project-custom", projectService.getProjectGeminiModel());
-        assertEquals("gemini-project-custom", projectService.getEffectiveGeminiModel());
+        assertEquals("MAX", projectService.getProjectAgentProfile());
+        assertEquals(AgentProfile.MAX, projectService.getEffectiveAgentProfile());
+        assertEquals("gemini-4-carbon", projectService.getEffectiveGeminiModel(WorkflowPhase.PLAN));
 
-        projectService.setProjectGeminiModel("   ");
-        assertEquals("", projectService.getProjectGeminiModel());
-        assertEquals("gemini-global-default", projectService.getEffectiveGeminiModel());
+        projectService.setProjectAgentProfile("   ");
+        assertEquals("", projectService.getProjectAgentProfile());
+        assertEquals(AgentProfile.NORMAL, projectService.getEffectiveAgentProfile());
+        assertEquals("gemini-4-argon", projectService.getEffectiveGeminiModel(WorkflowPhase.PLAN));
 
         assertFalse(projectService.isBuildConfirmed());
         projectService.setBuildConfirmed(true);
         assertTrue(projectService.isBuildConfirmed());
-        projectService.setProjectGeminiModel("gemini-3.5-pro");
+        projectService.setProjectAgentProfile("speed");
         assertTrue(projectService.isBuildConfirmed());
-        assertEquals("gemini-3.5-pro", projectService.getProjectGeminiModel());
-
-        settingsService.getSettings().setThinkingLevel("MEDIUM");
-        assertEquals("", projectService.getProjectThinkingLevel());
-        assertEquals(ThinkingLevel.MEDIUM, projectService.getEffectiveThinkingLevel());
-
-        publishedEvent.set(null);
-        projectService.setProjectThinkingLevel("  high  ");
-        assertEquals("HIGH", projectService.getProjectThinkingLevel());
-        assertEquals(ThinkingLevel.HIGH, projectService.getEffectiveThinkingLevel());
-        assertEquals("gemini-3.5-pro", projectService.getProjectGeminiModel());
-        assertTrue(projectService.isBuildConfirmed());
-        assertInstanceOf(org.roxycode.app.events.SettingsChangedEvent.class, publishedEvent.get());
-
-        projectService.setProjectThinkingLevel("   ");
-        assertEquals("", projectService.getProjectThinkingLevel());
-        assertEquals(ThinkingLevel.MEDIUM, projectService.getEffectiveThinkingLevel());
+        assertEquals("SPEED", projectService.getProjectAgentProfile());
+        assertEquals(AgentProfile.SPEED, projectService.getEffectiveAgentProfile());
+        assertEquals("gemini-4-hydrogen", projectService.getEffectiveGeminiModel(WorkflowPhase.PLAN));
+        assertEquals("gemini-4-hydrogen", projectService.getEffectiveGeminiModel(WorkflowPhase.CODE));
 
         Path legacyProjectConfig = projectService.resolveProjectDataPath(ProjectService.PROJECT_CONFIG_FILE);
         assertDoesNotThrow(() -> Files.writeString(legacyProjectConfig, """
-                geminiModel = "gemini-legacy"
+                geminiModel = "gemini-4-carbon"
                 buildConfirmed = true
                 """));
-        assertEquals("gemini-legacy", projectService.getProjectGeminiModel());
-        assertEquals("", projectService.getProjectThinkingLevel());
+        assertEquals("MAX", projectService.getProjectAgentProfile());
+        assertEquals(AgentProfile.MAX, projectService.getEffectiveAgentProfile());
         assertTrue(projectService.isBuildConfirmed());
     }
 

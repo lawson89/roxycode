@@ -5,7 +5,6 @@ import static org.mockito.Mockito.*;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import java.io.IOException;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.JComboBox;
 import javax.swing.SwingUtilities;
@@ -13,10 +12,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.model.AgentProfile;
+import org.roxycode.app.model.AgentProfileOption;
 import org.roxycode.app.model.AppSettings;
-import org.roxycode.app.model.GeminiModelConfig;
-import org.roxycode.app.model.ThinkingLevel;
-import org.roxycode.app.model.ThinkingLevelOption;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 
@@ -33,12 +31,8 @@ class BuildConfigPanelTest {
         projectService = mock(ProjectService.class);
 
         when(settingsService.getSettings()).thenReturn(new AppSettings());
-        when(settingsService.getAvailableModels())
-                .thenReturn(List.of(new GeminiModelConfig("gemini-3.8-flash", "Gemini 3.8 Flash", "Fast default model"),
-                        new GeminiModelConfig("gemini-4-argon", "Gemini 4 Argon", "Advanced reasoning model")));
         when(projectService.hasActiveProject()).thenReturn(true);
-        when(projectService.getProjectGeminiModel()).thenReturn("");
-        when(projectService.getProjectThinkingLevel()).thenReturn("");
+        when(projectService.getProjectAgentProfile()).thenReturn("");
         when(buildToolService.getConfigContent()).thenReturn("""
                 [commands]
                 compile = './mvnw test-compile'
@@ -77,7 +71,7 @@ class BuildConfigPanelTest {
         doAnswer(inv -> {
             modelSaveCalledOnEdt.set(SwingUtilities.isEventDispatchThread());
             return null;
-        }).when(projectService).setProjectGeminiModel(anyString());
+        }).when(projectService).setProjectAgentProfile(anyString());
         doAnswer(inv -> {
             when(projectService.isBuildConfirmed()).thenReturn(inv.getArgument(0, Boolean.class));
             return null;
@@ -121,35 +115,30 @@ class BuildConfigPanelTest {
         assertEquals(BuildConfigPanel.MODEL_SAVE_BUTTON_TEXT, panel.modelSaveButton.getText());
         assertSame(panel.modelSaveButton.getParent(), panel.modelStatusLabel.getParent());
         assertSame(panel.modelTitleLabel.getParent().getParent(), panel.modelSaveButton.getParent().getParent());
-        assertNotNull(panel.thinkingLevelInfoIcon.getToolTipText());
-        assertNull(panel.thinkingLevelInfoIcon.getClientProperty(FlatClientProperties.STYLE));
+        assertNotNull(panel.profileInfoIcon.getToolTipText());
+        assertNull(panel.profileInfoIcon.getClientProperty(FlatClientProperties.STYLE));
 
-        JComboBox<GeminiModelConfig> modelCombo = panel.modelCombo;
-        assertEquals(3, modelCombo.getItemCount());
-        assertEquals("", modelCombo.getItemAt(0).apiName());
-        assertEquals("gemini-3.8-flash", panel.modelApiBadgeLabel.getText());
-
-        JComboBox<ThinkingLevelOption> thinkingCombo = panel.thinkingLevelCombo;
-        assertEquals(1 + ThinkingLevel.values().length, thinkingCombo.getItemCount());
-        assertEquals("", thinkingCombo.getItemAt(0).id());
-        assertEquals("Use Global Default (Model Default)", thinkingCombo.getItemAt(0).displayName());
+        JComboBox<AgentProfileOption> profileCombo = panel.profileCombo;
+        assertEquals(1 + AgentProfile.values().length, profileCombo.getItemCount());
+        assertEquals("", profileCombo.getItemAt(0).id());
+        assertEquals("Use Global Default (Normal)", profileCombo.getItemAt(0).displayName());
+        assertEquals(AgentProfile.NORMAL.getBadgeSummary(), panel.modelApiBadgeLabel.getText());
 
         java.util.concurrent.atomic.AtomicInteger confirmCallbackCount = new java.util.concurrent.atomic.AtomicInteger();
         panel.setOnConfirmSavedCallback(confirmCallbackCount::incrementAndGet);
 
-        // Save Tab 1 (Build Configuration) -> saves build.toml & sets buildConfirmed=true WITHOUT touching model
+        // Save Tab 1 (Build Configuration) -> saves build.toml & sets buildConfirmed=true WITHOUT touching profile
         // overrides
         String updatedToml = """
                 [commands]
                 compile = 'mvn test'
                 """;
         SwingTestUtils.runOnEdt(() -> {
-            modelCombo.setSelectedIndex(2);
-            UiComponents.selectThinkingLevelOptionById(thinkingCombo, "HIGH");
-            assertEquals("gemini-4-argon", panel.modelApiBadgeLabel.getText());
-            assertEquals("Advanced reasoning model", panel.modelDescriptionArea.getText());
+            UiComponents.selectAgentProfileOptionById(profileCombo, "MAX");
+            assertEquals(AgentProfile.MAX.getBadgeSummary(), panel.modelApiBadgeLabel.getText());
+            assertEquals(AgentProfile.MAX.getDescription(), panel.modelDescriptionArea.getText());
             assertTrue(panel.hasUnsavedModelChanges());
-            assertFalse(panel.hasUnsavedChanges(), "Model dropdown changes must not mark build.toml dirty");
+            assertFalse(panel.hasUnsavedChanges(), "Profile dropdown changes must not mark build.toml dirty");
 
             panel.textArea.setText(updatedToml);
             assertTrue(panel.hasUnsavedChanges());
@@ -167,11 +156,10 @@ class BuildConfigPanelTest {
         assertEquals(1, confirmCallbackCount.get());
         verify(projectService).setBuildConfirmed(true);
         verify(buildToolService).saveConfigContent(updatedToml);
-        verify(projectService, never()).setProjectGeminiModel(anyString());
-        verify(projectService, never()).setProjectThinkingLevel(anyString());
-        assertTrue(panel.hasUnsavedModelChanges(), "Unsaved model changes remain until modelSaveButton is clicked");
+        verify(projectService, never()).setProjectAgentProfile(anyString());
+        assertTrue(panel.hasUnsavedModelChanges(), "Unsaved profile changes remain until modelSaveButton is clicked");
 
-        // Save Tab 2 (AI Model Override) -> saves model & thinking level WITHOUT touching build.toml
+        // Save Tab 2 (AI Model Override) -> saves project AgentProfile WITHOUT touching build.toml
         clearInvocations(buildToolService);
         SwingTestUtils.runOnEdt(() -> {
             panel.selectAiModelTab();
@@ -185,8 +173,7 @@ class BuildConfigPanelTest {
         assertEquals(BuildConfigPanel.MODEL_SAVED_FEEDBACK_BUTTON_TEXT, panel.modelSaveButton.getText());
         assertEquals(BuildConfigPanel.MODEL_SAVED_STATUS_TEXT, panel.modelStatusLabel.getText());
         assertFalse(panel.hasUnsavedModelChanges());
-        verify(projectService).setProjectGeminiModel("gemini-4-argon");
-        verify(projectService).setProjectThinkingLevel("HIGH");
+        verify(projectService).setProjectAgentProfile("MAX");
         verify(buildToolService, never()).saveConfigContent(anyString());
 
         // Firing modelSaveFeedbackTimer restores "Save Model Settings" button text
@@ -201,12 +188,10 @@ class BuildConfigPanelTest {
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
         assertEquals(1, confirmCallbackCount.get(), "Confirm callback should only fire on first-time confirmation");
 
-        when(projectService.getProjectGeminiModel()).thenReturn("gemini-4-argon");
-        when(projectService.getProjectThinkingLevel()).thenReturn("MEDIUM");
+        when(projectService.getProjectAgentProfile()).thenReturn("SPEED");
         SwingTestUtils.runOnEdt(() -> panel.onProjectChanged(new ProjectChangedEvent(null)));
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
-        assertEquals("gemini-4-argon", ((GeminiModelConfig) modelCombo.getSelectedItem()).apiName());
-        assertEquals("MEDIUM", ((ThinkingLevelOption) thinkingCombo.getSelectedItem()).id());
+        assertEquals("SPEED", ((AgentProfileOption) profileCombo.getSelectedItem()).id());
 
         clearInvocations(projectService);
         when(projectService.isBuildConfirmed()).thenReturn(false);
@@ -270,21 +255,13 @@ class BuildConfigPanelTest {
         assertFalse(panel.hasUnsavedChanges());
         assertEquals(BuildConfigPanel.CONFIRMED_BUTTON_TEXT, panel.saveButton.getText());
 
-        // Changing modelCombo or thinkingLevelCombo marks model tab dirty without affecting build tab confirmed state
-        SwingTestUtils.runOnEdt(() -> panel.modelCombo.setSelectedIndex(1));
+        // Changing profileCombo marks model tab dirty without affecting build tab confirmed state
+        SwingTestUtils.runOnEdt(() -> UiComponents.selectAgentProfileOptionById(panel.profileCombo, "MAX"));
         assertTrue(panel.hasUnsavedModelChanges());
         assertFalse(panel.hasUnsavedChanges());
         assertEquals(BuildConfigPanel.CONFIRMED_BUTTON_TEXT, panel.saveButton.getText());
 
-        SwingTestUtils.runOnEdt(() -> panel.modelCombo.setSelectedIndex(0));
-        assertFalse(panel.hasUnsavedModelChanges());
-
-        SwingTestUtils.runOnEdt(() -> UiComponents.selectThinkingLevelOptionById(panel.thinkingLevelCombo, "HIGH"));
-        assertTrue(panel.hasUnsavedModelChanges());
-        assertFalse(panel.hasUnsavedChanges());
-        assertEquals(BuildConfigPanel.CONFIRMED_BUTTON_TEXT, panel.saveButton.getText());
-
-        SwingTestUtils.runOnEdt(() -> UiComponents.selectThinkingLevelOptionById(panel.thinkingLevelCombo, ""));
+        SwingTestUtils.runOnEdt(() -> UiComponents.selectAgentProfileOptionById(panel.profileCombo, ""));
         assertFalse(panel.hasUnsavedModelChanges());
     }
 

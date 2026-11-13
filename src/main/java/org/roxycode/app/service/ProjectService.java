@@ -20,6 +20,8 @@ import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.ContextChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
+import org.roxycode.app.ai.WorkflowPhase;
+import org.roxycode.app.model.AgentProfile;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ThinkingLevel;
 import org.roxycode.app.util.PathUtils;
@@ -47,12 +49,23 @@ public class ProjectService {
     private static final String NO_PROJECT_ROOT_MSG = "Project root is not set.";
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record ProjectConfig(String geminiModel, String thinkingLevel, boolean buildConfirmed) {
-        public static final ProjectConfig DEFAULT = new ProjectConfig("", "", false);
+    public record ProjectConfig(String agentProfile, String geminiModel, String thinkingLevel, boolean buildConfirmed) {
+        public static final ProjectConfig DEFAULT = new ProjectConfig("", "", "", false);
 
         public ProjectConfig {
             geminiModel = StringUtils.trimToEmpty(geminiModel);
             thinkingLevel = normalizeProjectThinkingLevel(thinkingLevel);
+            if (StringUtils.isNotBlank(agentProfile)) {
+                agentProfile = normalizeProjectAgentProfile(agentProfile);
+            } else if (!geminiModel.isEmpty()) {
+                agentProfile = AgentProfile.fromString(geminiModel).getId();
+            } else {
+                agentProfile = "";
+            }
+        }
+
+        public ProjectConfig(String agentProfile, boolean buildConfirmed) {
+            this(agentProfile, "", "", buildConfirmed);
         }
     }
 
@@ -129,6 +142,13 @@ public class ProjectService {
     }
 
     private record ParsedReferencePath(ReferenceFolderMount mount, String subPath) {
+    }
+
+    private static String normalizeProjectAgentProfile(String rawAgentProfile) {
+        if (StringUtils.isBlank(rawAgentProfile)) {
+            return "";
+        }
+        return AgentProfile.fromString(rawAgentProfile).getId();
     }
 
     private static String normalizeProjectThinkingLevel(String rawThinkingLevel) {
@@ -282,6 +302,30 @@ public class ProjectService {
     }
 
     /**
+     * Returns the Agent Profile ID configured for the current project, or {@code ""} if inheriting the global default.
+     *
+     * @return the project-specific Agent Profile ID, or empty string
+     */
+    public String getProjectAgentProfile() {
+        return readProjectConfig().agentProfile();
+    }
+
+    /**
+     * Sets the Agent Profile override for the current project (pass {@code ""} or null to inherit the global default).
+     *
+     * @param agentProfile
+     *            the project Agent Profile ID or name
+     */
+    public void setProjectAgentProfile(String agentProfile) {
+        if (!hasActiveProject()) {
+            throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
+        }
+        ProjectConfig existing = readProjectConfig();
+        writeProjectConfig(new ProjectConfig(normalizeProjectAgentProfile(agentProfile), existing.buildConfirmed()));
+        publishSettingsChangedSnapshot();
+    }
+
+    /**
      * Returns the Gemini model configured for the current project.
      * 
      * @return the project-specific model name
@@ -301,8 +345,13 @@ public class ProjectService {
             throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
         ProjectConfig existing = readProjectConfig();
-        writeProjectConfig(new ProjectConfig(StringUtils.trimToEmpty(geminiModel), existing.thinkingLevel(),
-                existing.buildConfirmed()));
+        String trimmedModel = StringUtils.trimToEmpty(geminiModel);
+        String resolvedProfile = "";
+        if (!trimmedModel.isEmpty()) {
+            resolvedProfile = AgentProfile.fromString(trimmedModel).getId();
+        }
+        writeProjectConfig(
+                new ProjectConfig(resolvedProfile, trimmedModel, existing.thinkingLevel(), existing.buildConfirmed()));
         publishSettingsChangedSnapshot();
     }
 
@@ -326,8 +375,8 @@ public class ProjectService {
             throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
         ProjectConfig existing = readProjectConfig();
-        writeProjectConfig(new ProjectConfig(existing.geminiModel(), normalizeProjectThinkingLevel(thinkingLevel),
-                existing.buildConfirmed()));
+        writeProjectConfig(new ProjectConfig(existing.agentProfile(), existing.geminiModel(),
+                normalizeProjectThinkingLevel(thinkingLevel), existing.buildConfirmed()));
         publishSettingsChangedSnapshot();
     }
 
@@ -359,41 +408,91 @@ public class ProjectService {
             throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
         ProjectConfig existing = readProjectConfig();
-        writeProjectConfig(new ProjectConfig(existing.geminiModel(), existing.thinkingLevel(), confirmed));
+        writeProjectConfig(new ProjectConfig(existing.agentProfile(), existing.geminiModel(), existing.thinkingLevel(),
+                confirmed));
+    }
+
+    /**
+     * Resolves the effective {@link AgentProfile} for the current project, falling back to the global setting.
+     *
+     * @return the effective {@link AgentProfile}
+     */
+    public AgentProfile getEffectiveAgentProfile() {
+        String projectProfile = getProjectAgentProfile();
+        if (!projectProfile.isEmpty()) {
+            return AgentProfile.fromString(projectProfile);
+        }
+        return SettingsService.resolveGlobalAgentProfile(settingsService);
     }
 
     public String getEffectiveGeminiModel() {
-        String projectModel = getProjectGeminiModel();
-        if (!projectModel.isEmpty()) {
-            return projectModel;
-        }
-        return SettingsService.resolveGlobalGeminiModel(settingsService);
+        return getEffectiveGeminiModel(null);
+    }
+
+    /**
+     * Resolves the effective Gemini model API name for the current project and given workflow phase.
+     *
+     * @param phase
+     *            the workflow phase (may be null)
+     * @return the resolved Gemini model API name
+     */
+    public String getEffectiveGeminiModel(WorkflowPhase phase) {
+        return getEffectiveAgentProfile().resolveModelForPhase(phase);
     }
 
     public ThinkingLevel getEffectiveThinkingLevel() {
-        String projectThinking = getProjectThinkingLevel();
-        if (!projectThinking.isEmpty()) {
-            return ThinkingLevel.fromString(projectThinking);
+        return ThinkingLevel.ADAPTIVE;
+    }
+
+    /**
+     * Resolves the effective {@link AgentProfile} from the given project and settings services.
+     *
+     * @param projectService
+     *            the project service (may be null)
+     * @param settingsService
+     *            the settings service (may be null)
+     * @return the effective {@link AgentProfile}
+     */
+    public static AgentProfile resolveEffectiveAgentProfile(ProjectService projectService,
+            SettingsService settingsService) {
+        if (projectService != null) {
+            AgentProfile profile = projectService.getEffectiveAgentProfile();
+            if (profile != null) {
+                return profile;
+            }
         }
-        return SettingsService.resolveGlobalThinkingLevel(settingsService);
+        return SettingsService.resolveGlobalAgentProfile(settingsService);
     }
 
     public static String resolveEffectiveGeminiModel(ProjectService projectService, SettingsService settingsService) {
+        return resolveEffectiveGeminiModel(projectService, settingsService, null);
+    }
+
+    /**
+     * Resolves the effective Gemini model API name for the given workflow phase using the active {@link AgentProfile}.
+     *
+     * @param projectService
+     *            the project service (may be null)
+     * @param settingsService
+     *            the settings service (may be null)
+     * @param phase
+     *            the workflow phase (may be null)
+     * @return the resolved Gemini model API name
+     */
+    public static String resolveEffectiveGeminiModel(ProjectService projectService, SettingsService settingsService,
+            WorkflowPhase phase) {
         if (projectService != null) {
-            return projectService.getEffectiveGeminiModel();
+            String model = projectService.getEffectiveGeminiModel(phase);
+            if (StringUtils.isNotBlank(model)) {
+                return model;
+            }
         }
-        return SettingsService.resolveGlobalGeminiModel(settingsService);
+        return resolveEffectiveAgentProfile(projectService, settingsService).resolveModelForPhase(phase);
     }
 
     public static ThinkingLevel resolveEffectiveThinkingLevel(ProjectService projectService,
             SettingsService settingsService) {
-        if (projectService != null) {
-            ThinkingLevel projectLevel = projectService.getEffectiveThinkingLevel();
-            if (projectLevel != null) {
-                return projectLevel;
-            }
-        }
-        return SettingsService.resolveGlobalThinkingLevel(settingsService);
+        return ThinkingLevel.ADAPTIVE;
     }
 
     public static String resolveNormalizedProjectPath(ProjectService projectService) {

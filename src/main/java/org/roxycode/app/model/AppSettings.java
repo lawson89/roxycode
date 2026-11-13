@@ -15,8 +15,9 @@ import org.apache.commons.lang3.StringUtils;
 public class AppSettings {
 
     public static final String DEFAULT_THEME = "FlatLaf Light";
-    public static final String DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
-    public static final String DEFAULT_THINKING_LEVEL = ThinkingLevel.DEFAULT.getId();
+    public static final String DEFAULT_AGENT_PROFILE = AgentProfile.DEFAULT.getId();
+    public static final String DEFAULT_GEMINI_MODEL = AgentProfile.DEFAULT.getPlanModel();
+    public static final String DEFAULT_THINKING_LEVEL = ThinkingLevel.ADAPTIVE.getId();
     public static final String DEFAULT_VERTEX_LOCATION = "global";
     public static final int DEFAULT_MAX_AGENT_TOOL_TURNS = 50;
     public static final int MAX_RECENT_PROJECTS = 5;
@@ -31,6 +32,7 @@ public class AppSettings {
     private String vertexCredentialsPath = "";
     private String currentProjectPath = "";
     private List<String> recentProjectPaths = new ArrayList<>();
+    private String agentProfile = DEFAULT_AGENT_PROFILE;
     private String geminiModel = DEFAULT_GEMINI_MODEL;
     private String thinkingLevel = DEFAULT_THINKING_LEVEL;
     private int maxAgentToolTurns = DEFAULT_MAX_AGENT_TOOL_TURNS;
@@ -58,6 +60,7 @@ public class AppSettings {
             this.vertexCredentialsPath = other.vertexCredentialsPath;
             this.currentProjectPath = other.currentProjectPath;
             this.recentProjectPaths = new ArrayList<>(Objects.requireNonNullElse(other.recentProjectPaths, List.of()));
+            this.agentProfile = other.agentProfile;
             this.geminiModel = other.geminiModel;
             this.thinkingLevel = other.thinkingLevel;
             this.maxAgentToolTurns = other.maxAgentToolTurns;
@@ -233,12 +236,37 @@ public class AppSettings {
     }
 
     /**
+     * Gets the configured Agent Profile ID ({@code "MAX"}, {@code "NORMAL"}, or {@code "SPEED"}).
+     *
+     * @return the Agent Profile ID
+     */
+    public String getAgentProfile() {
+        return AgentProfile.fromString(agentProfile).getId();
+    }
+
+    /**
+     * Sets the Agent Profile ID and synchronizes the default plan model and adaptive thinking level.
+     *
+     * @param agentProfile
+     *            the Agent Profile ID or name to set
+     */
+    public void setAgentProfile(String agentProfile) {
+        AgentProfile resolved = AgentProfile.fromString(agentProfile);
+        this.agentProfile = resolved.getId();
+        this.geminiModel = resolved.getPlanModel();
+        this.thinkingLevel = ThinkingLevel.ADAPTIVE.getId();
+    }
+
+    /**
      * Gets the Gemini model API name.
      *
      * @return the Gemini model API name
      */
     public String getGeminiModel() {
-        return StringUtils.defaultIfBlank(geminiModel, DEFAULT_GEMINI_MODEL);
+        if (StringUtils.isNotBlank(geminiModel)) {
+            return geminiModel.trim();
+        }
+        return AgentProfile.fromString(agentProfile).getPlanModel();
     }
 
     /**
@@ -257,6 +285,9 @@ public class AppSettings {
      * @return the thinking level ID
      */
     public String getThinkingLevel() {
+        if (StringUtils.isBlank(thinkingLevel)) {
+            return DEFAULT_THINKING_LEVEL;
+        }
         return ThinkingLevel.fromString(thinkingLevel).getId();
     }
 

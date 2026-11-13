@@ -19,9 +19,8 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
-import org.roxycode.app.model.GeminiModelConfig;
-import org.roxycode.app.model.ThinkingLevel;
-import org.roxycode.app.model.ThinkingLevelOption;
+import org.roxycode.app.model.AgentProfile;
+import org.roxycode.app.model.AgentProfileOption;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.util.Edt;
@@ -47,7 +46,7 @@ final class BuildConfigPanel extends JPanel {
     static final String TITLE_TEXT = "Build Configuration (build.toml)";
     static final String SUBTITLE_TEXT = "Configure project-specific build, test, lint, and sandbox execution commands (build.toml).";
     static final String MODEL_TITLE_TEXT = "AI Model Override";
-    static final String MODEL_SUBTITLE_TEXT = "Override the default Global Settings Gemini model and thinking level specifically for the active project.";
+    static final String MODEL_SUBTITLE_TEXT = "Override the default Global Settings Agent Profile specifically for the active project.";
     static final String SECTION_AI_MODEL_TITLE = "AI Model Override";
     static final String SECTION_BUILD_CONFIG_TITLE = "Build Configuration (build.toml)";
     static final String BUILD_CONFIG_HINT_TEXT = "Need help customizing build.toml or regexes for your stack? Ask Roxy!";
@@ -87,9 +86,8 @@ final class BuildConfigPanel extends JPanel {
     final JPanel modelCardPanel;
     final JPanel buildCardPanel;
     final JLabel modelSectionHeaderLabel;
-    final JComboBox<GeminiModelConfig> modelCombo;
-    final JComboBox<ThinkingLevelOption> thinkingLevelCombo;
-    final JLabel thinkingLevelInfoIcon;
+    final JComboBox<AgentProfileOption> profileCombo;
+    final JLabel profileInfoIcon;
     final JLabel modelApiBadgeLabel;
     final JTextArea modelDescriptionArea;
     final JButton modelSaveButton;
@@ -111,8 +109,7 @@ final class BuildConfigPanel extends JPanel {
     private boolean textEditedByUser = false;
     private boolean lastStatusSuccess = true;
     private String savedTomlContent = "";
-    private String savedModelApiName = "";
-    private String savedThinkingLevelId = "";
+    private String savedProfileId = "";
     String detectedTemplateId = DEFAULT_TEMPLATE_ID;
     private transient Runnable onConfirmSavedCallback;
     private transient Consumer<String> onConfigureWithRoxyCallback;
@@ -216,43 +213,33 @@ final class BuildConfigPanel extends JPanel {
                 HEADER_FONT_STYLE);
         modelCardPanel.add(modelSectionHeaderLabel, "growx, wmin 0, gapbottom 2");
 
-        modelCombo = new JComboBox<>();
+        profileCombo = new JComboBox<>();
+        profileInfoIcon = UiComponents.createInfoIcon(UiComponents.AGENT_PROFILE_TOOLTIP_HTML);
         modelApiBadgeLabel = new JLabel();
         UiComponents.styleCodePillBadge(modelApiBadgeLabel);
 
         modelDescriptionArea = UiComponents.createReadOnlyTextArea();
 
-        JPanel modelControlBox = UiComponents.createModelControlBox(modelApiBadgeLabel, modelCombo, "w 240:280:340");
+        JPanel profileControlBox = UiComponents.createModelControlBox(modelApiBadgeLabel, profileCombo,
+                "w 240:280:340");
 
-        modelCardPanel.add(UiComponents.createFieldRow(
-                UiComponents.createFieldTextBlock("Project Gemini Model",
-                        "Override the default Global Settings Gemini model specifically for the active project.", null),
-                modelControlBox, ""), "growx, wmin 0");
+        modelCardPanel.add(UiComponents.createFieldRow(UiComponents.createFieldTextBlock("Project Agent Profile",
+                "Override the default Global Settings Agent Profile specifically for the active project.",
+                profileInfoIcon), profileControlBox, ""), "growx, wmin 0");
 
         modelCardPanel.add(modelDescriptionArea, "growx, wmin 0, gaptop 2, hidemode 3");
-
-        thinkingLevelCombo = new JComboBox<>();
-        thinkingLevelInfoIcon = UiComponents.createInfoIcon(UiComponents.THINKING_LEVEL_TOOLTIP_HTML);
-        JSeparator modelCardSeparator = new JSeparator(SwingConstants.HORIZONTAL);
-        modelCardSeparator.setOpaque(false);
-        modelCardPanel.add(modelCardSeparator, "growx, gaptop 2, gapbottom 2");
-        modelCardPanel.add(UiComponents.createFieldRow(UiComponents.createFieldTextBlock("Project Thinking Level",
-                "Override the default Global Settings thinking level specifically for the active project.",
-                thinkingLevelInfoIcon), thinkingLevelCombo, "w 240:280:340"), "growx, wmin 0");
 
         JPanel modelCardsContainer = UiComponents
                 .createScrollableCardsPanel(new MigLayout("fillx, wrap 1, insets 4 2 16 6, gapy 14", GROW_FILL, ""));
         modelCardsContainer.add(modelCardPanel, "growx, wmin 0");
         modelTabPanel.add(UiComponents.createBorderlessScrollPane(modelCardsContainer), "grow, wmin 0");
 
-        loadModelOptions();
-        loadThinkingLevelOptions();
-        modelCombo.addActionListener(e -> {
-            updateSelectedModelDetails();
+        loadProfileOptions();
+        profileCombo.addActionListener(e -> {
+            updateSelectedProfileDetails();
             onComboSelectionChanged();
         });
-        thinkingLevelCombo.addActionListener(e -> onComboSelectionChanged());
-        updateSelectedModelDetails();
+        updateSelectedProfileDetails();
 
         settingsTabs = UiComponents.createUnderlinedTabbedPane(null);
         settingsTabs.addTab(TAB_BUILD_CONFIG_TITLE, FontIcon.of(Codicons.PACKAGE, 15, SwingHtmlUtils.getAccentColor()),
@@ -352,79 +339,38 @@ final class BuildConfigPanel extends JPanel {
         return future;
     }
 
-    void loadModelOptions() {
-        String globalModel = SettingsService.resolveGlobalGeminiModel(settingsService);
-        GeminiModelConfig defaultOption = new GeminiModelConfig("", "Use Global Default (" + globalModel + ")",
-                "Inherits the default Gemini model configured in Global Settings (" + globalModel + ").");
-        DefaultComboBoxModel<GeminiModelConfig> comboModel = new DefaultComboBoxModel<>();
-        comboModel.addElement(defaultOption);
+    void loadProfileOptions() {
+        AgentProfile globalProfile = SettingsService.resolveGlobalAgentProfile(settingsService);
+        DefaultComboBoxModel<AgentProfileOption> comboModel = new DefaultComboBoxModel<>();
+        comboModel.addElement(AgentProfileOption.useGlobalDefault(globalProfile));
+        for (AgentProfile profile : AgentProfile.values()) {
+            comboModel.addElement(AgentProfileOption.fromProfile(profile));
+        }
 
-        List<GeminiModelConfig> available = null;
-        if (settingsService != null) {
-            available = settingsService.getAvailableModels();
-        }
-        if (available != null) {
-            for (GeminiModelConfig cfg : available) {
-                comboModel.addElement(cfg);
-            }
-        }
-        String projectModel = "";
+        String projectProfile = "";
         if (projectService != null && projectService.hasActiveProject()) {
-            projectModel = StringUtils.defaultString(projectService.getProjectGeminiModel());
+            projectProfile = StringUtils.defaultString(projectService.getProjectAgentProfile());
         }
-        final String targetModel = projectModel;
+        final String targetProfile = projectProfile;
         textUpdateGuard.run(() -> {
-            modelCombo.setModel(comboModel);
-            UiComponents.selectModelByApiName(modelCombo, targetModel);
-            savedModelApiName = resolveSelectedModelApiName();
+            profileCombo.setModel(comboModel);
+            UiComponents.selectAgentProfileOptionById(profileCombo, targetProfile);
+            savedProfileId = resolveSelectedProfileId();
         });
         updateModelSaveButtonState();
     }
 
-    void loadThinkingLevelOptions() {
-        ThinkingLevel globalLevel = SettingsService.resolveGlobalThinkingLevel(settingsService);
-        DefaultComboBoxModel<ThinkingLevelOption> comboModel = new DefaultComboBoxModel<>();
-        comboModel.addElement(ThinkingLevelOption.useGlobalDefault(globalLevel));
-        for (ThinkingLevel level : ThinkingLevel.values()) {
-            comboModel.addElement(ThinkingLevelOption.fromThinkingLevel(level));
-        }
-
-        String projectThinking = "";
-        if (projectService != null && projectService.hasActiveProject()) {
-            projectThinking = StringUtils.defaultString(projectService.getProjectThinkingLevel());
-        }
-        final String targetThinking = projectThinking;
-        textUpdateGuard.run(() -> {
-            thinkingLevelCombo.setModel(comboModel);
-            UiComponents.selectThinkingLevelOptionById(thinkingLevelCombo, targetThinking);
-            savedThinkingLevelId = resolveSelectedThinkingLevelId();
-        });
-        updateModelSaveButtonState();
+    void updateSelectedProfileDetails() {
+        UiComponents.updateProfileSelectionDetails(profileCombo, modelApiBadgeLabel, modelDescriptionArea);
     }
 
-    void updateSelectedModelDetails() {
-        UiComponents.updateModelSelectionDetails(modelCombo, modelApiBadgeLabel, modelDescriptionArea,
-                SettingsService.resolveGlobalGeminiModel(settingsService));
-    }
-
-    private String resolveSelectedModelApiName() {
-        if (modelCombo == null) {
+    private String resolveSelectedProfileId() {
+        if (profileCombo == null) {
             return "";
         }
-        GeminiModelConfig selectedModel = (GeminiModelConfig) modelCombo.getSelectedItem();
-        if (selectedModel != null && selectedModel.apiName() != null) {
-            return selectedModel.apiName();
-        }
-        return "";
-    }
-
-    private String resolveSelectedThinkingLevelId() {
-        if (thinkingLevelCombo == null) {
-            return "";
-        }
-        ThinkingLevelOption selectedThinking = (ThinkingLevelOption) thinkingLevelCombo.getSelectedItem();
-        if (selectedThinking != null && selectedThinking.id() != null) {
-            return selectedThinking.id();
+        AgentProfileOption selectedOption = (AgentProfileOption) profileCombo.getSelectedItem();
+        if (selectedOption != null && selectedOption.id() != null) {
+            return selectedOption.id();
         }
         return "";
     }
@@ -438,10 +384,7 @@ final class BuildConfigPanel extends JPanel {
     }
 
     boolean hasUnsavedModelChanges() {
-        if (!Objects.equals(resolveSelectedModelApiName(), savedModelApiName)) {
-            return true;
-        }
-        return !Objects.equals(resolveSelectedThinkingLevelId(), savedThinkingLevelId);
+        return !Objects.equals(resolveSelectedProfileId(), savedProfileId);
     }
 
     private static Timer createFeedbackTimer(Runnable onExpire) {
@@ -509,7 +452,7 @@ final class BuildConfigPanel extends JPanel {
         UiComponents.styleCodePillBadge(modelApiBadgeLabel);
         modelSectionHeaderLabel.setIcon(FontIcon.of(Codicons.HUBOT, 18, accentColor));
         buildSectionHeaderLabel.setIcon(FontIcon.of(Codicons.PACKAGE, 18, accentColor));
-        UiComponents.updateInfoIconTheme(thinkingLevelInfoIcon);
+        UiComponents.updateInfoIconTheme(profileInfoIcon);
         UiComponents.updateInfoIconTheme(buildConfigInfoIcon);
         UiComponents.refreshActionButtonIcons(this);
         updateTabIcons();
@@ -528,9 +471,8 @@ final class BuildConfigPanel extends JPanel {
         Edt.run(() -> {
             SwingHtmlUtils.applyRSyntaxTheme(textArea, settingsService);
             applySectionStyling();
-            loadModelOptions();
-            loadThinkingLevelOptions();
-            updateSelectedModelDetails();
+            loadProfileOptions();
+            updateSelectedProfileDetails();
             updateBannerState();
         });
     }
@@ -542,9 +484,8 @@ final class BuildConfigPanel extends JPanel {
             UiComponents.stopTimer(modelSaveFeedbackTimer);
             clearBuildStatus();
             clearModelStatus();
-            loadModelOptions();
-            loadThinkingLevelOptions();
-            updateSelectedModelDetails();
+            loadProfileOptions();
+            updateSelectedProfileDetails();
             refreshDetectedTemplate();
             loadConfig();
             updateBannerState();
@@ -646,18 +587,15 @@ final class BuildConfigPanel extends JPanel {
             lastAsyncFuture = done;
             return done;
         }
-        final String modelOverrideToSave = resolveSelectedModelApiName();
-        final String thinkingOverrideToSave = resolveSelectedThinkingLevelId();
+        final String profileOverrideToSave = resolveSelectedProfileId();
         modelSaveButton.setEnabled(false);
         CompletableFuture<Void> future = Edt.runAsync(() -> {
             if (projectService.hasActiveProject()) {
-                projectService.setProjectGeminiModel(modelOverrideToSave);
-                projectService.setProjectThinkingLevel(thinkingOverrideToSave);
+                projectService.setProjectAgentProfile(profileOverrideToSave);
             }
         }, () -> {
             modelSaveButton.setEnabled(true);
-            savedModelApiName = modelOverrideToSave;
-            savedThinkingLevelId = thinkingOverrideToSave;
+            savedProfileId = profileOverrideToSave;
             modelSaveFeedbackTimer.restart();
             updateModelSaveButtonState();
             showModelStatus(MODEL_SAVED_STATUS_TEXT, true);

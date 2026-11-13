@@ -706,7 +706,8 @@ final class ChatController implements AutoCloseable {
     }
 
     private int resolveConfiguredContextWindowTokens() {
-        String modelName = ProjectService.resolveEffectiveGeminiModel(projectService, settingsService);
+        WorkflowPhase activePhase = model.resolveActivePhase(planService.getCurrentPhase());
+        String modelName = ProjectService.resolveEffectiveGeminiModel(projectService, settingsService, activePhase);
         return SettingsService.resolveModelConfig(settingsService, modelName).contextWindowTokens();
     }
 

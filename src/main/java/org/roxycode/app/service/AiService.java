@@ -19,6 +19,7 @@ import org.roxycode.app.events.AgentActivityEvent;
 import org.roxycode.app.events.AgentTurnCompleteEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.TokenUsageEvent;
+import org.roxycode.app.model.AgentProfile;
 import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.model.ThinkingLevel;
 import org.roxycode.app.util.ExceptionUtils;
@@ -301,12 +302,20 @@ public class AiService implements AutoCloseable {
         return activeConnectionConfig;
     }
 
+    AgentProfile resolveEffectiveAgentProfile() {
+        return ProjectService.resolveEffectiveAgentProfile(projectService, settingsService);
+    }
+
     String resolveEffectiveGeminiModel() {
-        return ProjectService.resolveEffectiveGeminiModel(projectService, settingsService);
+        return resolveEffectiveGeminiModel(null);
+    }
+
+    String resolveEffectiveGeminiModel(@Nullable WorkflowPhase phase) {
+        return ProjectService.resolveEffectiveGeminiModel(projectService, settingsService, phase);
     }
 
     ThinkingLevel resolveEffectiveThinkingLevel() {
-        return ProjectService.resolveEffectiveThinkingLevel(projectService, settingsService);
+        return ThinkingLevel.ADAPTIVE;
     }
 
     void setRetryTemplate(RetryTemplate retryTemplate, int maxRetryAttempts) {
@@ -398,13 +407,8 @@ public class AiService implements AutoCloseable {
         }
         ExceptionUtils.checkInterrupted("Web search interrupted before start");
         GoogleGenAiChatOptions.Builder optionsBuilder = GoogleGenAiChatOptions.builder()
-                .model(resolveEffectiveGeminiModel()).googleSearchRetrieval(true);
-        ThinkingLevel effectiveThinking = resolveEffectiveThinkingLevel();
-        if (effectiveThinking == ThinkingLevel.ADAPTIVE) {
-            ThinkingLevel.LOW.applyTo(optionsBuilder);
-        } else {
-            effectiveThinking.applyTo(optionsBuilder);
-        }
+                .model(resolveEffectiveGeminiModel(WorkflowPhase.EXPLORE)).googleSearchRetrieval(true);
+        ThinkingLevel.LOW.applyTo(optionsBuilder);
         try {
             ChatResponse chatResponse = chatClient.prompt().system(GROUNDED_SEARCH_SYSTEM_PROMPT).user(trimmedQuery)
                     .options(optionsBuilder).call().chatResponse();
@@ -458,8 +462,8 @@ public class AiService implements AutoCloseable {
         @Override
         public ChatClientResponse adviseCall(ChatClientRequest chatClientRequest, CallAdvisorChain callAdvisorChain) {
             String conversationId = resolveConversationId(chatClientRequest);
-            String modelName = resolveRequestModelName(chatClientRequest);
             WorkflowPhase currentPhase = resolveWorkflowPhase(chatClientRequest);
+            String modelName = resolveRequestModelName(chatClientRequest, currentPhase);
             recordToolProgressIfPresent(chatClientRequest);
             ThinkingLevel configuredLevel = resolveEffectiveThinkingLevel();
             ThinkingLevel activeSubTurnLevel = resolveActiveSubTurnThinkingLevel(configuredLevel, currentPhase,
@@ -698,14 +702,14 @@ public class AiService implements AutoCloseable {
         return null;
     }
 
-    private String resolveRequestModelName(ChatClientRequest request) {
+    private String resolveRequestModelName(ChatClientRequest request, @Nullable WorkflowPhase phase) {
         if (request != null && request.prompt() != null && request.prompt().getOptions() != null) {
             String optionModel = request.prompt().getOptions().getModel();
             if (StringUtils.isNotBlank(optionModel)) {
                 return optionModel.trim();
             }
         }
-        return resolveEffectiveGeminiModel();
+        return resolveEffectiveGeminiModel(phase);
     }
 
     private record ExtractedTokenCounts(int promptTokens, int cachedInputTokens, int uncachedInputTokens,
@@ -722,7 +726,7 @@ public class AiService implements AutoCloseable {
             return;
         }
 
-        String resolvedModel = StringUtils.defaultIfBlank(modelName, resolveEffectiveGeminiModel()).trim();
+        String resolvedModel = StringUtils.defaultIfBlank(modelName, resolveEffectiveGeminiModel(phase)).trim();
         GeminiModelConfig modelConfig = SettingsService.resolveModelConfig(settingsService, resolvedModel);
 
         double uncachedInputCostUsd = modelConfig.calculateUncachedInputCostUsd(counts.uncachedInputTokens());
@@ -778,7 +782,7 @@ public class AiService implements AutoCloseable {
             List<byte[]> images) {
         WorkflowPhase currentPhase = turnContext.phase();
         GoogleGenAiChatOptions.Builder optionsBuilder = GoogleGenAiChatOptions.builder()
-                .model(resolveEffectiveGeminiModel());
+                .model(resolveEffectiveGeminiModel(currentPhase));
         resolveEffectiveThinkingLevel().applyTo(optionsBuilder);
         ChatClient.ChatClientRequestSpec promptSpec = chatClient.prompt()
                 .system(promptService.buildSystemPrompt(currentPhase)).user(u -> {

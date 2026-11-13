@@ -42,6 +42,7 @@ import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.model.ImplementationPlan;
+import org.roxycode.app.model.AgentProfile;
 import org.roxycode.app.model.ThinkingLevel;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.google.genai.common.GoogleGenAiThinkingLevel;
@@ -279,7 +280,7 @@ class AiServiceTest {
 
     @Test
     void testChatUsesConfiguredModelDynamicPromptHotReloadAndTurnEvents() {
-        settings.setGeminiModel("test-model-123");
+        settings.setAgentProfile("NORMAL");
         stubChatResponse(WorkflowPhase.CODE, "FULL CODE SYSTEM PROMPT", "AI Response", "STOP", null);
 
         assertEquals("AI Response", aiService.chat("default", null, "Hello", null));
@@ -290,25 +291,37 @@ class AiServiceTest {
                 .forClass(GoogleGenAiChatOptions.Builder.class);
         verify(requestSpec).options(optionsCaptor.capture());
         GoogleGenAiChatOptions builtDefaultOptions = optionsCaptor.getValue().build();
-        assertEquals("test-model-123", builtDefaultOptions.getModel());
+        assertEquals("gemini-4-hydrogen", builtDefaultOptions.getModel());
         assertNull(builtDefaultOptions.getThinkingLevel());
 
+        clearInvocations(requestSpec);
+        when(promptService.buildSystemPrompt(WorkflowPhase.PLAN)).thenReturn("FULL PLAN SYSTEM PROMPT");
+        assertEquals("AI Response", aiService.chat("default", WorkflowPhase.PLAN, "Plan feature", null));
+        ArgumentCaptor<GoogleGenAiChatOptions.Builder> planOptionsCaptor = ArgumentCaptor
+                .forClass(GoogleGenAiChatOptions.Builder.class);
+        verify(requestSpec).options(planOptionsCaptor.capture());
+        assertEquals("gemini-4-argon", planOptionsCaptor.getValue().build().getModel());
+
         ProjectService mockProjectService = mock(ProjectService.class);
-        when(mockProjectService.getEffectiveGeminiModel()).thenReturn("gemini-project-override");
-        when(mockProjectService.getEffectiveThinkingLevel()).thenReturn(ThinkingLevel.HIGH);
+        lenient().when(mockProjectService.getEffectiveAgentProfile()).thenReturn(AgentProfile.MAX);
+        when(mockProjectService.getEffectiveGeminiModel(WorkflowPhase.PLAN)).thenReturn("gemini-4-carbon");
+        when(mockProjectService.getEffectiveGeminiModel(WorkflowPhase.CODE)).thenReturn("gemini-4-hydrogen");
         AiService aiServiceWithProject = new AiService(chatClientBuilder, settingsService, mockProjectService,
                 promptService, jexlTool, planService, chatMemory, toolCallingManager, eventPublisher);
-        assertEquals("gemini-project-override", aiServiceWithProject.resolveEffectiveGeminiModel());
-        assertEquals(ThinkingLevel.HIGH, aiServiceWithProject.resolveEffectiveThinkingLevel());
+        assertEquals(AgentProfile.MAX, aiServiceWithProject.resolveEffectiveAgentProfile());
+        assertEquals("gemini-4-carbon", aiServiceWithProject.resolveEffectiveGeminiModel(WorkflowPhase.PLAN));
+        assertEquals("gemini-4-hydrogen", aiServiceWithProject.resolveEffectiveGeminiModel(WorkflowPhase.CODE));
+        assertEquals(ThinkingLevel.ADAPTIVE, aiServiceWithProject.resolveEffectiveThinkingLevel());
 
         clearInvocations(requestSpec);
-        assertEquals("AI Response", aiServiceWithProject.chat("default", null, "Hello with thinking", null));
+        assertEquals("AI Response",
+                aiServiceWithProject.chat("default", WorkflowPhase.PLAN, "Hello with Max profile", null));
         ArgumentCaptor<GoogleGenAiChatOptions.Builder> projectOptionsCaptor = ArgumentCaptor
                 .forClass(GoogleGenAiChatOptions.Builder.class);
         verify(requestSpec).options(projectOptionsCaptor.capture());
         GoogleGenAiChatOptions builtProjectOptions = projectOptionsCaptor.getValue().build();
-        assertEquals("gemini-project-override", builtProjectOptions.getModel());
-        assertEquals(GoogleGenAiThinkingLevel.HIGH, builtProjectOptions.getThinkingLevel());
+        assertEquals("gemini-4-carbon", builtProjectOptions.getModel());
+        assertNull(builtProjectOptions.getThinkingLevel());
 
         clearInvocations(eventPublisher);
         String msg = "Autonomous execution stopped: Maximum tool turns (2) exceeded.";
@@ -691,9 +704,9 @@ class AiServiceTest {
 
         ToolCallingManager customToolManager = mock(ToolCallingManager.class);
         AiService service = createRealClientService(initialModel, customToolManager);
-        when(promptService.buildSystemPrompt(WorkflowPhase.CODE)).thenReturn("CODE PROMPT");
+        when(promptService.buildSystemPrompt(WorkflowPhase.PLAN)).thenReturn("PLAN PROMPT");
         settings.setGeminiApiKey("valid-api-key");
-        settings.setThinkingLevel("HIGH");
+        settings.setAgentProfile("NORMAL");
 
         AtomicInteger modelFactoryCalls = new AtomicInteger();
         service.setConnectionChatModelFactory(cfg -> {
@@ -725,7 +738,7 @@ class AiServiceTest {
         });
 
         clearInvocations(eventPublisher);
-        String response = service.chat("task:retry-reset", WorkflowPhase.CODE, "Fix issue", null);
+        String response = service.chat("task:retry-reset", WorkflowPhase.PLAN, "Design plan", null);
         assertEquals("Recovered on fresh client with LOW thinking", response);
         assertEquals(2, modelFactoryCalls.get());
         assertEquals(List.of(GoogleGenAiThinkingLevel.HIGH), initialModelThinking);

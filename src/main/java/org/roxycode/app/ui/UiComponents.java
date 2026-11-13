@@ -62,8 +62,9 @@ import net.miginfocom.swing.MigLayout;
 import org.apache.commons.lang3.StringUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
+import org.roxycode.app.model.AgentProfile;
+import org.roxycode.app.model.AgentProfileOption;
 import org.roxycode.app.model.GeminiModelConfig;
-import org.roxycode.app.model.ThinkingLevelOption;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -88,14 +89,12 @@ final class UiComponents {
     static final Color AMBER_DARK = new Color(0xf5, 0x9e, 0x0b);
     static final Color INFO_BLUE_LIGHT = new Color(0x25, 0x63, 0xeb);
     static final Color INFO_BLUE_DARK = new Color(0x3b, 0x82, 0xf6);
-    static final String THINKING_LEVEL_TOOLTIP_HTML = "<html><body style='width: 310px; padding: 4px;'>"
-            + "<b>Thinking Level</b><br>" + "Controls the reasoning depth used by Gemini models:<br><br>"
-            + "• <b>Adaptive (Phase-Aware)</b>: Dynamically adjusts thinking per sub-turn:<br>"
-            + "&nbsp;&nbsp;– <b>PLAN</b>: HIGH while designing blueprint → LOW after submitting plan<br>"
-            + "&nbsp;&nbsp;– <b>CODE</b>: LOW for fast execution → HIGH after any tool/build/test failure<br>"
-            + "&nbsp;&nbsp;– <b>REVIEW</b>: MEDIUM for balanced diff and test auditing<br>"
-            + "&nbsp;&nbsp;– <b>EXPLORE</b>: LOW on initial discovery → MEDIUM on synthesis<br>"
-            + "• <b>Fixed Levels (Minimal/None, Low, Medium, High)</b>: Uses a constant thinking budget on every turn."
+    static final String AGENT_PROFILE_TOOLTIP_HTML = "<html><body style='width: 340px; padding: 4px;'>"
+            + "<b>Agent Profile (Phase-Aware Routing &amp; Adaptive Thinking)</b><br><br>"
+            + "• <b>Max (Carbon → Hydrogen)</b>: Uses <code>gemini-4-carbon</code> for exploration &amp; planning, and <code>gemini-4-hydrogen</code> for coding &amp; review.<br>"
+            + "• <b>Normal (Argon → Hydrogen)</b>: Uses <code>gemini-4-argon</code> for exploration &amp; planning, and <code>gemini-4-hydrogen</code> for coding &amp; review.<br>"
+            + "• <b>Speed (Pure Hydrogen)</b>: Uses <code>gemini-4-hydrogen</code> across all phases with 100% prefix cache retention.<br><br>"
+            + "All profiles automatically apply <b>Adaptive (Phase-Aware)</b> sub-turn thinking (escalating to HIGH when designing plans or recovering from build/test failures)."
             + "</body></html>";
     static final int CHAT_THUMBNAIL_MAX_DIM = 180;
     private static final String TEMP_THUMB_DIR_PREFIX = "roxycode-thumbs-";
@@ -485,8 +484,7 @@ final class UiComponents {
         iconLabel.setOpaque(false);
     }
 
-    static JPanel createModelControlBox(JLabel badgeLabel, JComboBox<GeminiModelConfig> comboBox,
-            String comboConstraints) {
+    static JPanel createModelControlBox(JLabel badgeLabel, JComboBox<?> comboBox, String comboConstraints) {
         JPanel box = new JPanel(new MigLayout("insets 0, gapx 8", "[][]", ROW_CENTER));
         box.setOpaque(false);
         box.add(badgeLabel, "hidemode 3");
@@ -596,11 +594,29 @@ final class UiComponents {
         }
     }
 
-    static void selectThinkingLevelOptionById(JComboBox<ThinkingLevelOption> combo, String id) {
-        String target = StringUtils.defaultString(id).trim();
+    static void selectAgentProfileById(JComboBox<AgentProfile> combo, String id) {
+        AgentProfile target = AgentProfile.fromString(id);
         for (int i = 0; i < combo.getItemCount(); i++) {
-            ThinkingLevelOption item = combo.getItemAt(i);
-            if (item != null && target.equalsIgnoreCase(item.id())) {
+            AgentProfile item = combo.getItemAt(i);
+            if (item == target) {
+                combo.setSelectedIndex(i);
+                return;
+            }
+        }
+        if (combo.getItemCount() > 0) {
+            combo.setSelectedIndex(0);
+        }
+    }
+
+    static void selectAgentProfileOptionById(JComboBox<AgentProfileOption> combo, String id) {
+        String trimmed = StringUtils.defaultString(id).trim();
+        String targetId = "";
+        if (!trimmed.isEmpty()) {
+            targetId = AgentProfile.fromString(trimmed).getId();
+        }
+        for (int i = 0; i < combo.getItemCount(); i++) {
+            AgentProfileOption item = combo.getItemAt(i);
+            if (item != null && targetId.equalsIgnoreCase(item.id())) {
                 combo.setSelectedIndex(i);
                 return;
             }
@@ -611,31 +627,32 @@ final class UiComponents {
     }
 
     /**
-     * Updates model badge and description area based on combo selection.
+     * Updates profile badge and description area based on combo selection.
      */
-    static void updateModelSelectionDetails(JComboBox<GeminiModelConfig> combo, JLabel badge, JTextArea descArea,
-            @Nullable String fallbackApiName) {
-        GeminiModelConfig selected = (GeminiModelConfig) combo.getSelectedItem();
-        if (selected == null) {
-            badge.setText("");
-            badge.setVisible(false);
-            descArea.setText("");
-            descArea.setVisible(false);
+    static void updateProfileSelectionDetails(JComboBox<?> combo, JLabel badge, JTextArea descArea) {
+        Object selected = combo.getSelectedItem();
+        if (selected instanceof AgentProfile profile) {
+            String summary = StringUtils.defaultString(profile.getBadgeSummary());
+            badge.setText(summary);
+            badge.setVisible(!summary.isBlank());
+            String description = StringUtils.defaultString(profile.getDescription());
+            descArea.setText(description);
+            descArea.setVisible(!description.isBlank());
             return;
         }
-
-        String apiName = StringUtils.defaultString(selected.apiName());
-        if (apiName.isBlank() && fallbackApiName != null) {
-            badge.setText(fallbackApiName);
-            badge.setVisible(!fallbackApiName.isBlank());
-        } else {
-            badge.setText(apiName);
-            badge.setVisible(!apiName.isBlank());
+        if (selected instanceof AgentProfileOption option) {
+            String summary = StringUtils.defaultString(option.badgeSummary());
+            badge.setText(summary);
+            badge.setVisible(!summary.isBlank());
+            String description = StringUtils.defaultString(option.description());
+            descArea.setText(description);
+            descArea.setVisible(!description.isBlank());
+            return;
         }
-
-        String description = StringUtils.defaultString(selected.description());
-        descArea.setText(description);
-        descArea.setVisible(!description.isBlank());
+        badge.setText("");
+        badge.setVisible(false);
+        descArea.setText("");
+        descArea.setVisible(false);
     }
 
     static JTabbedPane createUnderlinedTabbedPane(JComponent trailingComponent) {

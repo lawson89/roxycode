@@ -15,9 +15,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.ai.AiConfig.GenAiConnectionConfig;
 import org.roxycode.app.events.SettingsChangedEvent;
+import org.roxycode.app.model.AgentProfile;
 import org.roxycode.app.model.AppSettings;
-import org.roxycode.app.model.GeminiModelConfig;
-import org.roxycode.app.model.ThinkingLevel;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SettingsService;
 
@@ -42,13 +41,15 @@ class SettingsPanelTest {
 
     @Test
     void testModelThemeAndLiveSettingsPersistence() {
-        JComboBox<GeminiModelConfig> modelCombo = settingsPanel.modelCombo;
-        assertTrue(modelCombo.getItemCount() > 1);
+        JComboBox<AgentProfile> profileCombo = settingsPanel.profileCombo;
+        assertEquals(3, profileCombo.getItemCount());
+        assertEquals(AgentProfile.NORMAL, profileCombo.getSelectedItem());
+        assertEquals(AgentProfile.NORMAL.getBadgeSummary(), settingsPanel.modelApiBadgeLabel.getText());
+        assertEquals(AgentProfile.NORMAL.getDescription(), settingsPanel.modelDescriptionArea.getText());
 
-        GeminiModelConfig firstModel = modelCombo.getItemAt(0);
-        modelCombo.setSelectedIndex(0);
-        assertEquals(firstModel.apiName(), settingsPanel.modelApiBadgeLabel.getText());
-        assertEquals(firstModel.description(), settingsPanel.modelDescriptionArea.getText());
+        profileCombo.setSelectedItem(AgentProfile.MAX);
+        assertEquals(AgentProfile.MAX.getBadgeSummary(), settingsPanel.modelApiBadgeLabel.getText());
+        assertEquals(AgentProfile.MAX.getDescription(), settingsPanel.modelDescriptionArea.getText());
 
         try {
             settingsPanel.themeCombo.setSelectedItem("FlatLaf Dark");
@@ -67,9 +68,7 @@ class SettingsPanelTest {
         JSpinner.DefaultEditor turnsEditor = (JSpinner.DefaultEditor) settingsPanel.maxAgentToolTurnsSpinner
                 .getEditor();
 
-        assertNotNull(settingsPanel.thinkingLevelInfoIcon.getToolTipText());
-        assertEquals(ThinkingLevel.DEFAULT, settingsPanel.thinkingLevelCombo.getSelectedItem());
-        settingsPanel.thinkingLevelCombo.setSelectedItem(ThinkingLevel.HIGH);
+        assertNotNull(settingsPanel.profileInfoIcon.getToolTipText());
         turnsEditor.getTextField().setText("85");
         settingsPanel.logToolCallsCheckBox.setSelected(true);
         settingsPanel.geminiApiKeyField.setText("new-secret-key");
@@ -77,7 +76,8 @@ class SettingsPanelTest {
 
         verify(settingsService, times(1)).saveSettings();
         assertEquals("new-secret-key", settings.getGeminiApiKey());
-        assertEquals("HIGH", settings.getThinkingLevel());
+        assertEquals("MAX", settings.getAgentProfile());
+        assertEquals("ADAPTIVE", settings.getThinkingLevel());
         assertEquals(85, settings.getMaxAgentToolTurns());
         assertTrue(settings.isLogToolCalls());
         assertFalse(settingsPanel.onboardingBanner.isVisible());
@@ -85,6 +85,7 @@ class SettingsPanelTest {
 
         AppSettings copied = settings.copy();
         assertEquals("new-secret-key", copied.getGeminiApiKey());
+        assertEquals("MAX", copied.getAgentProfile());
         assertEquals(85, copied.getMaxAgentToolTurns());
         assertTrue(copied.isLogToolCalls());
         assertEquals(SettingsPanel.SAVED_APPLIED_TEXT, settingsPanel.statusLabel.getText());
@@ -97,16 +98,15 @@ class SettingsPanelTest {
                 "Callback should not fire again when API key was already configured");
 
         settings.setGeminiApiKey("synced-from-event-key");
-        settings.setGeminiModel(modelCombo.getItemAt(1).apiName());
-        settings.setThinkingLevel("LOW");
+        settings.setAgentProfile("SPEED");
         settings.setMaxAgentToolTurns(100);
         settings.setMaxChatMemoryMessages(250);
         settings.setLogToolCalls(false);
         settingsPanel.onSettingsChanged(new SettingsChangedEvent(settings));
         SwingTestUtils.flushEdt();
         assertEquals("synced-from-event-key", new String(settingsPanel.geminiApiKeyField.getPassword()));
-        assertEquals(modelCombo.getItemAt(1).apiName(), ((GeminiModelConfig) modelCombo.getSelectedItem()).apiName());
-        assertEquals(ThinkingLevel.LOW, settingsPanel.thinkingLevelCombo.getSelectedItem());
+        assertEquals(AgentProfile.SPEED, profileCombo.getSelectedItem());
+        assertEquals(AgentProfile.SPEED.getBadgeSummary(), settingsPanel.modelApiBadgeLabel.getText());
         assertEquals(100, settingsPanel.maxAgentToolTurnsSpinner.getValue());
         assertEquals(250, settingsPanel.maxMessagesSpinner.getValue());
         assertFalse(settingsPanel.logToolCallsCheckBox.isSelected());

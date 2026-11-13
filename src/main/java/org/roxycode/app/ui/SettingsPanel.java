@@ -12,7 +12,6 @@ import com.formdev.flatlaf.util.SystemFileChooser;
 import java.awt.*;
 import java.io.File;
 import java.text.ParseException;
-import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
@@ -23,9 +22,8 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.AiConfig.GenAiConnectionConfig;
 import org.roxycode.app.events.SettingsChangedEvent;
+import org.roxycode.app.model.AgentProfile;
 import org.roxycode.app.model.AppSettings;
-import org.roxycode.app.model.GeminiModelConfig;
-import org.roxycode.app.model.ThinkingLevel;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.util.Edt;
@@ -76,9 +74,8 @@ public final class SettingsPanel extends JPanel {
     private final JLabel titleLabel;
     private final JLabel subtitleLabel;
     final JComboBox<String> themeCombo;
-    final JComboBox<GeminiModelConfig> modelCombo;
-    final JComboBox<ThinkingLevel> thinkingLevelCombo;
-    final JLabel thinkingLevelInfoIcon = UiComponents.createInfoIcon(UiComponents.THINKING_LEVEL_TOOLTIP_HTML);
+    final JComboBox<AgentProfile> profileCombo;
+    final JLabel profileInfoIcon = UiComponents.createInfoIcon(UiComponents.AGENT_PROFILE_TOOLTIP_HTML);
     final JLabel modelApiBadgeLabel;
     final JTextArea modelDescriptionArea;
     final JSpinner maxMessagesSpinner;
@@ -144,17 +141,14 @@ public final class SettingsPanel extends JPanel {
         themeCombo.setSelectedItem(settingsService.getSettings().getTheme());
         themeCombo.addActionListener(e -> updateTheme());
 
-        modelCombo = new JComboBox<>();
+        profileCombo = new JComboBox<>(AgentProfile.values());
         modelApiBadgeLabel = new JLabel();
         UiComponents.styleCodePillBadge(modelApiBadgeLabel);
 
         modelDescriptionArea = UiComponents.createReadOnlyTextArea();
-        loadModels();
-        modelCombo.addActionListener(e -> updateSelectedModelDetails());
-        updateSelectedModelDetails();
-
-        thinkingLevelCombo = new JComboBox<>(ThinkingLevel.values());
-        thinkingLevelCombo.setSelectedItem(SettingsService.resolveGlobalThinkingLevel(settingsService));
+        loadProfiles();
+        profileCombo.addActionListener(e -> updateSelectedProfileDetails());
+        updateSelectedProfileDetails();
 
         authProviderCombo = new JComboBox<>(new String[]{AUTH_PROVIDER_API_KEY, AUTH_PROVIDER_VERTEX_AI});
         if (settingsService.getSettings().isVertexAiEnabled()) {
@@ -277,23 +271,15 @@ public final class SettingsPanel extends JPanel {
                 HEADER_FONT_STYLE);
         card.add(aiModelHeaderLabel, HEADER_CONSTRAINTS);
 
-        JPanel modelControlBox = UiComponents.createModelControlBox(modelApiBadgeLabel, modelCombo,
+        JPanel profileControlBox = UiComponents.createModelControlBox(modelApiBadgeLabel, profileCombo,
                 CONTROL_WIDTH_CONSTRAINTS);
 
-        card.add(
-                UiComponents.createFieldRow(
-                        UiComponents.createFieldTextBlock("Gemini Model",
-                                "Default Gemini model used for Ask Roxy and Build Feature turns.", null),
-                        modelControlBox, ""),
-                GROWX_WMIN_0);
+        card.add(UiComponents.createFieldRow(
+                UiComponents.createFieldTextBlock("Agent Profile",
+                        "Default phase-aware Gemini model pipeline and adaptive thinking profile.", profileInfoIcon),
+                profileControlBox, ""), GROWX_WMIN_0);
 
         card.add(modelDescriptionArea, "growx, wmin 0, gaptop 2, hidemode 3");
-        card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
-
-        card.add(UiComponents.createFieldRow(UiComponents.createFieldTextBlock("Thinking Level",
-                "Default reasoning effort used by Gemini models when generating responses.", thinkingLevelInfoIcon),
-                thinkingLevelCombo, CONTROL_WIDTH_CONSTRAINTS), GROWX_WMIN_0);
-
         card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
 
         card.add(UiComponents.createFieldRow(UiComponents.createFieldTextBlock("Google Search Grounding",
@@ -384,17 +370,12 @@ public final class SettingsPanel extends JPanel {
         return separator;
     }
 
-    private void loadModels() {
-        List<GeminiModelConfig> modelList = settingsService.getAvailableModels();
-        if (modelList == null) {
-            modelList = List.of();
-        }
-        modelCombo.setModel(new DefaultComboBoxModel<>(modelList.toArray(new GeminiModelConfig[0])));
-        UiComponents.selectModelByApiName(modelCombo, settingsService.getSettings().getGeminiModel());
+    private void loadProfiles() {
+        UiComponents.selectAgentProfileById(profileCombo, settingsService.getSettings().getAgentProfile());
     }
 
-    void updateSelectedModelDetails() {
-        UiComponents.updateModelSelectionDetails(modelCombo, modelApiBadgeLabel, modelDescriptionArea, null);
+    void updateSelectedProfileDetails() {
+        UiComponents.updateProfileSelectionDetails(profileCombo, modelApiBadgeLabel, modelDescriptionArea);
     }
 
     void applyThemeStyling() {
@@ -412,7 +393,7 @@ public final class SettingsPanel extends JPanel {
             agentExecutionHeaderLabel.setIcon(FontIcon.of(Codicons.PULSE, 18, accentColor));
         }
         UiComponents.styleCodePillBadge(modelApiBadgeLabel);
-        UiComponents.updateInfoIconTheme(thinkingLevelInfoIcon);
+        UiComponents.updateInfoIconTheme(profileInfoIcon);
 
         String accentHex = SwingHtmlUtils.toHex(accentColor);
         UiComponents.refreshActionButtonIcons(this);
@@ -517,16 +498,9 @@ public final class SettingsPanel extends JPanel {
             vertexProjectIdField.setText(event.settings().getVertexProjectId());
             vertexLocationField.setText(event.settings().getVertexLocation());
             vertexCredentialsPathField.setText(event.settings().getVertexCredentialsPath());
-            String modelId = event.settings().getGeminiModel();
-            if (modelId != null) {
-                GeminiModelConfig selected = (GeminiModelConfig) modelCombo.getSelectedItem();
-                if (selected == null || !modelId.equals(selected.apiName())) {
-                    UiComponents.selectModelByApiName(modelCombo, modelId);
-                }
-            }
-            ThinkingLevel targetThinking = ThinkingLevel.fromString(event.settings().getThinkingLevel());
-            if (targetThinking != thinkingLevelCombo.getSelectedItem()) {
-                thinkingLevelCombo.setSelectedItem(targetThinking);
+            AgentProfile targetProfile = AgentProfile.fromString(event.settings().getAgentProfile());
+            if (targetProfile != profileCombo.getSelectedItem()) {
+                profileCombo.setSelectedItem(targetProfile);
             }
             int clampedToolTurns = Math.clamp(event.settings().getMaxAgentToolTurns(), MIN_AGENT_TOOL_TURNS,
                     MAX_AGENT_TOOL_TURNS);
@@ -590,12 +564,12 @@ public final class SettingsPanel extends JPanel {
             return CompletableFuture.completedFuture(null);
         }
 
-        GeminiModelConfig selectedModel = (GeminiModelConfig) modelCombo.getSelectedItem();
+        AgentProfile selectedProfile = (AgentProfile) profileCombo.getSelectedItem();
         String modelName;
-        if (selectedModel != null) {
-            modelName = selectedModel.apiName();
+        if (selectedProfile != null) {
+            modelName = selectedProfile.getPlanModel();
         } else {
-            modelName = settingsService.getSettings().getGeminiModel();
+            modelName = SettingsService.resolveGlobalGeminiModel(settingsService);
         }
 
         GenAiConnectionConfig connectionConfig;
@@ -665,13 +639,9 @@ public final class SettingsPanel extends JPanel {
         settings.setVertexProjectId(newProjectId);
         settings.setVertexLocation(newLocation);
         settings.setVertexCredentialsPath(newCredentialsPath);
-        GeminiModelConfig selectedModel = (GeminiModelConfig) modelCombo.getSelectedItem();
-        if (selectedModel != null) {
-            settings.setGeminiModel(selectedModel.apiName());
-        }
-        ThinkingLevel selectedThinkingLevel = (ThinkingLevel) thinkingLevelCombo.getSelectedItem();
-        if (selectedThinkingLevel != null) {
-            settings.setThinkingLevel(selectedThinkingLevel.getId());
+        AgentProfile selectedProfile = (AgentProfile) profileCombo.getSelectedItem();
+        if (selectedProfile != null) {
+            settings.setAgentProfile(selectedProfile.getId());
         }
         settings.setMaxAgentToolTurns((Integer) maxAgentToolTurnsSpinner.getValue());
         settings.setMaxChatMemoryMessages(newMaxMessages);
