@@ -1,11 +1,29 @@
 [[models]]
-apiName = "gemini-4-argon"
-name = "Gemini 4 Argon"
-description = "Google's flagship reasoning model, built for complex software engineering, deep mathematical and scientific problem solving, autonomous multi-step agents, and long decode up to 1M tokens."
+apiName = "gemini-4-carbon"
+name = "Gemini 4 Carbon"
+description = "Google's heaviest reasoning model, designed for maximum depth on complex root-cause debugging, legacy migrations, and structural architecture planning."
 contextWindowTokens = 1048576
 inputPricePerMillion = 2.00
 cachedInputPricePerMillion = 0.10
 outputPricePerMillion = 10.00
+
+[[models]]
+apiName = "gemini-4-argon"
+name = "Gemini 4 Argon"
+description = "Google's flagship efficient frontier model, built for complex software engineering, autonomous multi-step agents, and fast production loops."
+contextWindowTokens = 1048576
+inputPricePerMillion = 2.00
+cachedInputPricePerMillion = 0.10
+outputPricePerMillion = 10.00
+
+[[models]]
+apiName = "gemini-4-hydrogen"
+name = "Gemini 4 Hydrogen"
+description = "High-speed, cost-effective model tuned specifically for rapid execution, high-volume agentic tool-calling loops, and iterative code review."
+contextWindowTokens = 1048576
+inputPricePerMillion = 0.15
+cachedInputPricePerMillion = 0.015
+outputPricePerMillion = 0.60
 
 [[models]]
 apiName = "gemini-3.8-flash"
@@ -15,48 +33,3 @@ contextWindowTokens = 1048576
 inputPricePerMillion = 0.75
 cachedInputPricePerMillion = 0.075
 outputPricePerMillion = 3.75
-
-[[models]]
-apiName = "gemini-3.7-flash"
-name = "Gemini 3.7 Flash"
-description = "Next-iteration Flash model featuring customizable thinking configurations, optimized for complex multi-step reasoning, fast agentic workflows, and enhanced coding fidelity."
-contextWindowTokens = 1048576
-inputPricePerMillion = 0.75
-cachedInputPricePerMillion = 0.075
-outputPricePerMillion = 3.75
-
-[[models]]
-apiName = "gemini-3.5-flash"
-name = "Gemini 3.5 Flash"
-description = "Our most intelligent Flash model for sustained frontier performance on agentic and coding tasks."
-contextWindowTokens = 1048576
-inputPricePerMillion = 0.75
-cachedInputPricePerMillion = 0.075
-outputPricePerMillion = 3.75
-
-[[models]]
-apiName = "gemini-3.6-flash"
-name = "Gemini 3.6 Flash"
-description = "Updated Flash model featuring enhanced token efficiency, improved multi-step agentic planning, and lower output pricing."
-contextWindowTokens = 1048576
-inputPricePerMillion = 0.75
-cachedInputPricePerMillion = 0.075
-outputPricePerMillion = 3.75
-
-[[models]]
-apiName = "gemini-3.1-pro-preview"
-name = "Gemini 3.1 Pro (Preview)"
-description = "Reasoning-first model; caching recommended for active, long-context agent sessions."
-contextWindowTokens = 1048576
-inputPricePerMillion = 2.00
-cachedInputPricePerMillion = 0.20
-outputPricePerMillion = 12.00
-
-[[models]]
-apiName = "gemini-3-flash-preview"
-name = "Gemini 3 Flash (Preview)"
-description = "Designed for complex multimodal understanding and reasoning."
-contextWindowTokens = 1048576
-inputPricePerMillion = 0.50
-cachedInputPricePerMillion = 0.05
-outputPricePerMillion = 3.00

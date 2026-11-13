@@ -226,10 +226,13 @@ class SettingsServiceTest {
         List<org.roxycode.app.model.GeminiModelConfig> models = service.getAvailableModels();
         assertNotNull(models);
         assertFalse(models.isEmpty(), "Available models from /models.toml should not be empty");
-        assertTrue(models.stream().anyMatch(m -> "gemini-3.5-flash".equals(m.apiName())));
+        assertTrue(models.stream().anyMatch(m -> "gemini-4-carbon".equals(m.apiName())));
+        assertTrue(models.stream().anyMatch(m -> "gemini-4-argon".equals(m.apiName())));
+        assertTrue(models.stream().anyMatch(m -> "gemini-4-hydrogen".equals(m.apiName())));
+        assertTrue(models.stream().anyMatch(m -> "gemini-3.8-flash".equals(m.apiName())));
         assertSame(models, service.getAvailableModels(), "Repeated calls should return cached list");
 
-        org.roxycode.app.model.GeminiModelConfig flashCfg = service.resolveModelConfig("gemini-3.5-flash");
+        org.roxycode.app.model.GeminiModelConfig flashCfg = service.resolveModelConfig("gemini-3.8-flash");
         assertEquals(1_048_576, flashCfg.contextWindowTokens());
         assertEquals(0.75, flashCfg.inputPricePerMillion(), 1e-6);
         assertEquals(0.075, flashCfg.cachedInputPricePerMillion(), 1e-6);
@@ -257,7 +260,7 @@ class SettingsServiceTest {
     void testResolveModelConfig() {
         SettingsService service = new SettingsService(null, null);
         service.setSettingsPathOverride(tempDir.resolve("nonexistent-settings.toml"));
-        assertNotNull(service.resolveModelConfig("gemini-3.5-flash"));
+        assertNotNull(service.resolveModelConfig("gemini-3.8-flash"));
         assertEquals(AppSettings.DEFAULT_GEMINI_MODEL, SettingsService.resolveGlobalGeminiModel(service));
         service.getSettings().setGeminiModel("   ");
         assertEquals(AppSettings.DEFAULT_GEMINI_MODEL, SettingsService.resolveGlobalGeminiModel(service));

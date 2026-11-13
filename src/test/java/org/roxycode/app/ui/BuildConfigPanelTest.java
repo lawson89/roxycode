@@ -34,8 +34,8 @@ class BuildConfigPanelTest {
 
         when(settingsService.getSettings()).thenReturn(new AppSettings());
         when(settingsService.getAvailableModels())
-                .thenReturn(List.of(new GeminiModelConfig("gemini-3.5-flash", "Gemini 3.5 Flash", "Fast default model"),
-                        new GeminiModelConfig("gemini-3.5-pro", "Gemini 3.5 Pro", "Advanced reasoning model")));
+                .thenReturn(List.of(new GeminiModelConfig("gemini-3.8-flash", "Gemini 3.8 Flash", "Fast default model"),
+                        new GeminiModelConfig("gemini-4-argon", "Gemini 4 Argon", "Advanced reasoning model")));
         when(projectService.hasActiveProject()).thenReturn(true);
         when(projectService.getProjectGeminiModel()).thenReturn("");
         when(projectService.getProjectThinkingLevel()).thenReturn("");
@@ -127,7 +127,7 @@ class BuildConfigPanelTest {
         JComboBox<GeminiModelConfig> modelCombo = panel.modelCombo;
         assertEquals(3, modelCombo.getItemCount());
         assertEquals("", modelCombo.getItemAt(0).apiName());
-        assertEquals("gemini-3.5-flash", panel.modelApiBadgeLabel.getText());
+        assertEquals("gemini-3.8-flash", panel.modelApiBadgeLabel.getText());
 
         JComboBox<ThinkingLevelOption> thinkingCombo = panel.thinkingLevelCombo;
         assertEquals(1 + ThinkingLevel.values().length, thinkingCombo.getItemCount());
@@ -146,7 +146,7 @@ class BuildConfigPanelTest {
         SwingTestUtils.runOnEdt(() -> {
             modelCombo.setSelectedIndex(2);
             UiComponents.selectThinkingLevelOptionById(thinkingCombo, "HIGH");
-            assertEquals("gemini-3.5-pro", panel.modelApiBadgeLabel.getText());
+            assertEquals("gemini-4-argon", panel.modelApiBadgeLabel.getText());
             assertEquals("Advanced reasoning model", panel.modelDescriptionArea.getText());
             assertTrue(panel.hasUnsavedModelChanges());
             assertFalse(panel.hasUnsavedChanges(), "Model dropdown changes must not mark build.toml dirty");
@@ -185,7 +185,7 @@ class BuildConfigPanelTest {
         assertEquals(BuildConfigPanel.MODEL_SAVED_FEEDBACK_BUTTON_TEXT, panel.modelSaveButton.getText());
         assertEquals(BuildConfigPanel.MODEL_SAVED_STATUS_TEXT, panel.modelStatusLabel.getText());
         assertFalse(panel.hasUnsavedModelChanges());
-        verify(projectService).setProjectGeminiModel("gemini-3.5-pro");
+        verify(projectService).setProjectGeminiModel("gemini-4-argon");
         verify(projectService).setProjectThinkingLevel("HIGH");
         verify(buildToolService, never()).saveConfigContent(anyString());
 
@@ -201,11 +201,11 @@ class BuildConfigPanelTest {
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
         assertEquals(1, confirmCallbackCount.get(), "Confirm callback should only fire on first-time confirmation");
 
-        when(projectService.getProjectGeminiModel()).thenReturn("gemini-3.5-pro");
+        when(projectService.getProjectGeminiModel()).thenReturn("gemini-4-argon");
         when(projectService.getProjectThinkingLevel()).thenReturn("MEDIUM");
         SwingTestUtils.runOnEdt(() -> panel.onProjectChanged(new ProjectChangedEvent(null)));
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
-        assertEquals("gemini-3.5-pro", ((GeminiModelConfig) modelCombo.getSelectedItem()).apiName());
+        assertEquals("gemini-4-argon", ((GeminiModelConfig) modelCombo.getSelectedItem()).apiName());
         assertEquals("MEDIUM", ((ThinkingLevelOption) thinkingCombo.getSelectedItem()).id());
 
         clearInvocations(projectService);

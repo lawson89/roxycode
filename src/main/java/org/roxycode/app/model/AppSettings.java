@@ -15,7 +15,7 @@ import org.apache.commons.lang3.StringUtils;
 public class AppSettings {
 
     public static final String DEFAULT_THEME = "FlatLaf Light";
-    public static final String DEFAULT_GEMINI_MODEL = "gemini-3.5-flash";
+    public static final String DEFAULT_GEMINI_MODEL = "gemini-3.8-flash";
     public static final String DEFAULT_THINKING_LEVEL = ThinkingLevel.DEFAULT.getId();
     public static final String DEFAULT_VERTEX_LOCATION = "global";
     public static final int DEFAULT_MAX_AGENT_TOOL_TURNS = 50;
