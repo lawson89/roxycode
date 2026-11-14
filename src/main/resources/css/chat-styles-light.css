@@ -33,7 +33,7 @@ a { color: #0066cc; text-decoration: none; }
 
 pre { background-color: #eef2f6; color: #1e293b; padding: 10px 12px; margin: 6px 0px 6px 0px; border-color: #cbd5e1; border-style: solid; border-width: 1px; }
 code { font-family: monospace; font-size: 11px; background-color: #e2e8f0; color: #0f172a; padding-left: 2px; padding-right: 2px; }
-.hr-line { background-color: #e2e8f0; }
+.hr-line { border-color: #e2e8f0; border-style: solid; border-width: 1px 0px 0px 0px; font-size: 1px; }
 
 .spec-functional-header { color: #2196F3; }
 .spec-technical-header { color: #4CAF50; }
@@ -48,8 +48,11 @@ code { font-family: monospace; font-size: 11px; background-color: #e2e8f0; color
 .copy-link { font-family: sans-serif; font-size: 10px; color: #666666; text-decoration: none; }
 .copy-feedback { font-family: sans-serif; font-size: 10px; color: #2e7d32; font-weight: bold; }
 .welcome-card { background-color: #f8fafc; border-color: #e2e8f0; border-style: solid; border-width: 1px; }
-.welcome-title { font-family: monospace; font-size: 12px; font-weight: bold; color: #10b981; }
-.welcome-hint { font-size: 12px; color: #555555; }
+.welcome-roxy-badge { font-family: monospace; font-size: 11px; font-weight: bold; background-color: #d1fae5; color: #047857; }
+.welcome-title { font-family: sans-serif; font-size: 14px; font-weight: bold; color: #0f172a; }
+.welcome-hint { font-size: 12px; color: #475569; }
+.welcome-footer-cell { font-family: sans-serif; font-size: 11px; color: #475569; }
+.kbd-pill { font-family: monospace; font-size: 11px; font-weight: bold; background-color: #e2e8f0; color: #0f172a; }
 
 .md-table { margin-top: 6px; margin-bottom: 6px; border-color: #d1d5db; border-style: solid; border-width: 1px 0px 0px 1px; }
 .md-th { background-color: #eef2f6; color: #111827; font-weight: bold; padding: 6px 10px; border-color: #d1d5db; border-style: solid; border-width: 0px 1px 1px 0px; text-align: left; }
@@ -67,7 +70,7 @@ code { font-family: monospace; font-size: 11px; background-color: #e2e8f0; color
 .action-cta-link { font-family: sans-serif; font-size: 10px; font-weight: bold; color: #0066cc; text-decoration: none; }
 .tool-toggle { font-family: sans-serif; font-size: 10px; color: #0066cc; text-decoration: none; }
 .starter-card { background-color: #ffffff; border-color: #dbe3ee; border-style: solid; border-width: 1px; }
-.starter-title-link { font-family: sans-serif; font-size: 12px; font-weight: bold; color: #0f172a; text-decoration: none; }
+.starter-title-link { font-family: sans-serif; font-size: 13px; font-weight: bold; color: #0f172a; text-decoration: none; }
 .starter-desc { font-family: sans-serif; font-size: 11px; color: #475569; margin-top: 4px; }
 .starter-accent-blue { background-color: #0284c7; }
 .starter-badge-blue { background-color: #e0f2fe; color: #0369a1; font-family: sans-serif; font-size: 9px; font-weight: bold; }

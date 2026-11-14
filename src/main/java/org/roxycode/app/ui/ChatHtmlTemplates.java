@@ -8,8 +8,10 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import com.formdev.flatlaf.FlatLaf;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringEscapeUtils;
+import org.kordamp.ikonli.codicons.Codicons;
 import org.roxycode.app.model.ChatTranscriptEntry;
 
 public final class ChatHtmlTemplates {
@@ -353,21 +355,30 @@ public final class ChatHtmlTemplates {
         return "<tr>" + leftCard + rightCard + "</tr>";
     }
 
-    private static String renderStarterCard(String accentVariant, String badgeText, String title, String description,
-            String promptText, String linkLabel) {
+    private static String renderStarterCard(String accentVariant, Codicons icon, String badgeText, String title,
+            String description, String promptText, String linkLabel, boolean dark) {
         String encodedPrompt = URLEncoder.encode(promptText, StandardCharsets.UTF_8);
+        String iconHtml = UiComponents.renderCodiconTileImgTag(icon, accentVariant, dark);
         return """
                 <td width="50%%" valign="top">
                     <table class="starter-card" width="100%%" cellpadding="0" cellspacing="0" border="0">
                         <tr>
                             <td class="starter-accent-%s" width="4" nowrap="nowrap">&nbsp;</td>
                             <td width="100%%" style="padding: 10px 12px;" valign="top">
-                                <div><span class="starter-badge-%s">&nbsp;%s&nbsp;</span>&nbsp;&nbsp;<a class="starter-title-link" href="prompt:%s">%s</a></div>
-                                <div class="starter-desc">%s</div>
-                                <table cellpadding="0" cellspacing="0" border="0" style="margin-top: 6px;">
+                                <table width="100%%" cellpadding="0" cellspacing="0" border="0">
                                     <tr>
-                                        <td class="starter-cta-pill-%s" style="padding: 3px 8px;">
-                                            <a class="starter-link-%s" href="prompt:%s">&#9656; %s</a>
+                                        <td valign="top" style="padding-right: 10px;">%s</td>
+                                        <td width="100%%" valign="top">
+                                            <div><span class="starter-badge-%s">&nbsp;%s&nbsp;</span></div>
+                                            <div style="margin-top: 3px;"><a class="starter-title-link" href="prompt:%s">%s</a></div>
+                                            <div class="starter-desc">%s</div>
+                                            <table cellpadding="0" cellspacing="0" border="0" style="margin-top: 7px;">
+                                                <tr>
+                                                    <td class="starter-cta-pill-%s" style="padding: 3px 8px;">
+                                                        <a class="starter-link-%s" href="prompt:%s">&#9656; %s</a>
+                                                    </td>
+                                                </tr>
+                                            </table>
                                         </td>
                                     </tr>
                                 </table>
@@ -376,37 +387,83 @@ public final class ChatHtmlTemplates {
                     </table>
                 </td>
                 """
-                .formatted(accentVariant, accentVariant, badgeText, encodedPrompt, title, description, accentVariant,
-                        accentVariant, encodedPrompt, linkLabel);
+                .formatted(accentVariant, iconHtml, accentVariant, badgeText, encodedPrompt, title, description,
+                        accentVariant, accentVariant, encodedPrompt, linkLabel);
+    }
+
+    private static String renderWelcomeFooterHints(boolean dark) {
+        String mentionIcon = UiComponents.renderCodiconInlineImgTag(Codicons.MENTION, UiComponents.VARIANT_BLUE, dark);
+        String commandsIcon = UiComponents.renderCodiconInlineImgTag(Codicons.TERMINAL, UiComponents.VARIANT_PURPLE,
+                dark);
+        String attachIcon = UiComponents.renderCodiconInlineImgTag(Codicons.CLIPPY, UiComponents.VARIANT_AMBER, dark);
+        String sendIcon = UiComponents.renderCodiconInlineImgTag(Codicons.CHEVRON_RIGHT, UiComponents.VARIANT_EMERALD,
+                dark);
+        return """
+                <table width="100%%" cellpadding="0" cellspacing="0" border="0" style="margin-top: 4px;">
+                    <tr>
+                        <td class="welcome-footer-cell" width="50%%" valign="middle" style="padding: 3px 8px 3px 0px;">
+                            %s&nbsp;<span class="kbd-pill">&nbsp;@ Mention&nbsp;</span>&nbsp;&nbsp;Reference project files
+                        </td>
+                        <td class="welcome-footer-cell" width="50%%" valign="middle" style="padding: 3px 0px 3px 8px;">
+                            %s&nbsp;<span class="kbd-pill">&nbsp;/ Commands&nbsp;</span>&nbsp;&nbsp;Run slash commands (<code>/reset</code>, <code>/clear</code>, <code>/mem-*</code>)
+                        </td>
+                    </tr>
+                    <tr>
+                        <td class="welcome-footer-cell" width="50%%" valign="middle" style="padding: 3px 8px 0px 0px;">
+                            %s&nbsp;<span class="kbd-pill">&nbsp;Attach&nbsp;</span>&nbsp;&nbsp;Drag &amp; drop or <span class="kbd-pill">&nbsp;Ctrl+V&nbsp;</span> text, PDFs &amp; images
+                        </td>
+                        <td class="welcome-footer-cell" width="50%%" valign="middle" style="padding: 3px 0px 0px 8px;">
+                            %s&nbsp;<span class="kbd-pill">&nbsp;Enter&nbsp;</span>&nbsp;&nbsp;to send &bull; <span class="kbd-pill">&nbsp;Shift+Enter&nbsp;</span> for newline
+                        </td>
+                    </tr>
+                </table>
+                """
+                .formatted(mentionIcon, commandsIcon, attachIcon, sendIcon);
     }
 
     public static String renderWelcomeCard(boolean isTaskMode) {
+        boolean dark = FlatLaf.isLafDark();
+        String footerHtml = renderWelcomeFooterHints(dark);
         if (isTaskMode) {
+            String headerIcon = UiComponents.renderCodiconTileImgTag(Codicons.ROCKET, UiComponents.VARIANT_EMERALD,
+                    dark);
+            String planIcon = UiComponents.renderCodiconInlineImgTag(Codicons.LIST_ORDERED, UiComponents.VARIANT_BLUE,
+                    dark);
+            String codeIcon = UiComponents.renderCodiconInlineImgTag(Codicons.CODE, UiComponents.VARIANT_AMBER, dark);
+            String reviewIcon = UiComponents.renderCodiconInlineImgTag(Codicons.CHECK_ALL, UiComponents.VARIANT_EMERALD,
+                    dark);
             String row1 = renderStarterRow(
-                    renderStarterCard("blue", "FEATURE", "Build a New Feature",
-                            "Plan, implement, and verify new end-to-end functionality",
-                            "I want to implement a new feature: ", "Draft a feature implementation plan"),
-                    renderStarterCard("purple", "BUGFIX", "Fix a Bug or Regression",
+                    renderStarterCard(UiComponents.VARIANT_BLUE, Codicons.LIGHTBULB_AUTOFIX, "FEATURE",
+                            "Build a New Feature", "Plan, implement, and verify new end-to-end functionality",
+                            "I want to implement a new feature: ", "Draft a feature implementation plan", dark),
+                    renderStarterCard(UiComponents.VARIANT_PURPLE, Codicons.BUG, "BUGFIX", "Fix a Bug or Regression",
                             "Diagnose root cause, fix the defect, and add regression tests",
-                            "Help me diagnose and fix a bug in: ", "Diagnose and fix a bug"));
+                            "Help me diagnose and fix a bug in: ", "Diagnose and fix a bug", dark));
             String row2 = renderStarterRow(
-                    renderStarterCard("amber", "REFACTOR", "Refactor &amp; Clean Up Code",
-                            "Eliminate dead, duplicated, or overly complex code",
+                    renderStarterCard(UiComponents.VARIANT_AMBER, Codicons.EDIT, "REFACTOR",
+                            "Refactor &amp; Clean Up Code", "Eliminate dead, duplicated, or overly complex code",
                             "Identify and clean up dead, duplicated, or overly complex code in: ",
-                            "Identify cleanup opportunities"),
-                    renderStarterCard("emerald", "TESTING", "Add Unit Test Coverage",
-                            "Add pragmatic unit tests for business logic and edge cases",
+                            "Identify cleanup opportunities", dark),
+                    renderStarterCard(UiComponents.VARIANT_EMERALD, Codicons.BEAKER, "TESTING",
+                            "Add Unit Test Coverage", "Add pragmatic unit tests for business logic and edge cases",
                             "Add pragmatic unit tests for the business logic and edge cases in: ",
-                            "Add pragmatic unit tests"));
+                            "Add pragmatic unit tests", dark));
             return """
                     <table class="welcome-card" width="100%%" cellpadding="0" cellspacing="0" border="0">
                         <tr>
                             <td class="ai-accent" width="4" nowrap="nowrap">&nbsp;</td>
-                            <td width="100%%" style="padding: 10px 14px;">
-                                <div class="welcome-title">ROXY %s &mdash; Autonomous Feature Development (1. Plan &rarr; 2. Code &rarr; 3. Review)</div>
-                                <div class="welcome-hint" style="margin-top: 4px;">
-                                    Describe a task or click a starter prompt below to populate the composer:
-                                </div>
+                            <td width="100%%" style="padding: 12px 14px;">
+                                <table width="100%%" cellpadding="0" cellspacing="0" border="0">
+                                    <tr>
+                                        <td valign="top" style="padding-right: 12px;">%s</td>
+                                        <td width="100%%" valign="middle">
+                                            <div><span class="welcome-roxy-badge">&nbsp;ROXY %s&nbsp;</span>&nbsp;&nbsp;<span class="welcome-title">Autonomous Feature Development</span></div>
+                                            <div class="welcome-hint" style="margin-top: 3px;">
+                                                Describe a task or click a starter prompt below to populate the composer:
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </table>
                                 <table width="100%%" cellpadding="0" cellspacing="8" border="0" style="margin-top: 6px;">
                                     %s
                                     %s
@@ -414,45 +471,53 @@ public final class ChatHtmlTemplates {
                                 <table width="100%%" cellpadding="0" cellspacing="0" border="0" style="margin-top: 6px; margin-bottom: 6px;">
                                     <tr><td class="hr-line" height="1"></td></tr>
                                 </table>
-                                <div class="welcome-hint" style="margin-top: 4px;">
-                                    1. <b>Plan</b> (draft &amp; approve) &bull; 2. <b>Code</b> (edit, compile &amp; test) &bull; 3. <b>Review</b> (audit diff &amp; sign-off)
+                                <div class="welcome-hint" style="margin-top: 2px; margin-bottom: 4px;">
+                                    %s <b>1. Plan</b> (draft &amp; approve) &nbsp;&bull;&nbsp; %s <b>2. Code</b> (edit, compile &amp; test) &nbsp;&bull;&nbsp; %s <b>3. Review</b> (audit diff &amp; sign-off)
                                 </div>
-                                <div class="welcome-hint" style="margin-top: 4px;">
-                                    Type <b>@</b> (<b>@ Mention</b>) for files &bull; Type <b>/</b> (<b>/ Commands</b>) for slash commands &bull; Drag &amp; drop or <b>Attach</b> text, PDFs &amp; images (<b>Ctrl+V</b>) &bull; <b>Enter</b> to send, <b>Shift+Enter</b> for newline
-                                </div>
+                                %s
                             </td>
                         </tr>
                     </table>
                     """
-                    .formatted(CAT_EARS, row1, row2);
+                    .formatted(headerIcon, CAT_EARS, row1, row2, planIcon, codeIcon, reviewIcon, footerHtml);
         }
+        String headerIcon = UiComponents.renderCodiconTileImgTag(Codicons.SEARCH, UiComponents.VARIANT_EMERALD, dark);
         String row1 = renderStarterRow(
-                renderStarterCard("blue", "ARCHITECTURE", "Architecture &amp; Data Flow",
-                        "Map out core services, entry points, and request lifecycles",
+                renderStarterCard(UiComponents.VARIANT_BLUE, Codicons.SYMBOL_STRUCTURE, "ARCHITECTURE",
+                        "Architecture &amp; Data Flow", "Map out core services, entry points, and request lifecycles",
                         "Explain the high-level architecture and key services in this repository.",
-                        "Explain architecture &amp; key services"),
-                renderStarterCard("purple", "GIT HISTORY", "Recent Git Activity &amp; Diffs",
+                        "Explain architecture &amp; key services", dark),
+                renderStarterCard(UiComponents.VARIANT_PURPLE, Codicons.GIT_COMMIT, "GIT HISTORY",
+                        "Recent Git Activity &amp; Diffs",
                         "Inspect recent commits and uncommitted working-tree changes",
                         "Summarize the recent commits and any uncommitted working-tree changes.",
-                        "Summarize recent commits &amp; diffs"));
+                        "Summarize recent commits &amp; diffs", dark));
         String row2 = renderStarterRow(
-                renderStarterCard("amber", "BUILD &amp; TOOLS", "Configure build.toml &amp; Sandbox",
+                renderStarterCard(UiComponents.VARIANT_AMBER, Codicons.TOOLS, "BUILD &amp; TOOLS",
+                        "Configure build.toml &amp; Sandbox",
                         "Auto-detect project toolchains, test runners, and sandbox paths",
                         "Inspect my project files and toolchain and recommend a build.toml configuration.",
-                        "Recommend a build.toml config"),
-                renderStarterCard("emerald", "BLUEPRINT", "Scope a Feature Blueprint",
-                        "Explore requirements and design before sending to Build Feature",
+                        "Recommend a build.toml config", dark),
+                renderStarterCard(UiComponents.VARIANT_EMERALD, Codicons.LIGHTBULB, "BLUEPRINT",
+                        "Scope a Feature Blueprint", "Explore requirements and design before sending to Build Feature",
                         "Help me explore and design a new feature so I can move it to Build Feature.",
-                        "Design a feature blueprint"));
+                        "Design a feature blueprint", dark));
         return """
                 <table class="welcome-card" width="100%%" cellpadding="0" cellspacing="0" border="0">
                     <tr>
                         <td class="ai-accent" width="4" nowrap="nowrap">&nbsp;</td>
-                        <td width="100%%" style="padding: 10px 14px;">
-                            <div class="welcome-title">ROXY %s &mdash; Technical Mentor (Read-Only Explore Mode)</div>
-                            <div class="welcome-hint" style="margin-top: 4px;">
-                                Explore your codebase in read-only mode, or click a starter prompt below to populate the composer:
-                            </div>
+                        <td width="100%%" style="padding: 12px 14px;">
+                            <table width="100%%" cellpadding="0" cellspacing="0" border="0">
+                                <tr>
+                                    <td valign="top" style="padding-right: 12px;">%s</td>
+                                    <td width="100%%" valign="middle">
+                                        <div><span class="welcome-roxy-badge">&nbsp;ROXY %s&nbsp;</span>&nbsp;&nbsp;<span class="welcome-title">Technical Mentor (Read-Only Explore Mode)</span></div>
+                                        <div class="welcome-hint" style="margin-top: 3px;">
+                                            Explore your codebase in read-only mode, or click a starter prompt below to populate the composer:
+                                        </div>
+                                    </td>
+                                </tr>
+                            </table>
                             <table width="100%%" cellpadding="0" cellspacing="8" border="0" style="margin-top: 6px;">
                                 %s
                                 %s
@@ -460,14 +525,12 @@ public final class ChatHtmlTemplates {
                             <table width="100%%" cellpadding="0" cellspacing="0" border="0" style="margin-top: 6px; margin-bottom: 6px;">
                                 <tr><td class="hr-line" height="1"></td></tr>
                             </table>
-                            <div class="welcome-hint" style="margin-top: 4px;">
-                                Type <b>@</b> (<b>@ Mention</b>) for files &bull; Type <b>/</b> (<b>/ Commands</b>) for slash commands &bull; Drag &amp; drop or <b>Attach</b> text, PDFs &amp; images (<b>Ctrl+V</b>) &bull; <b>Enter</b> to send, <b>Shift+Enter</b> for newline
-                            </div>
+                            %s
                         </td>
                     </tr>
                 </table>
                 """
-                .formatted(CAT_EARS, row1, row2);
+                .formatted(headerIcon, CAT_EARS, row1, row2, footerHtml);
     }
 
     public static String renderSystemNotice(String message) {

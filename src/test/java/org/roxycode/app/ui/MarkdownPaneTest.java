@@ -60,13 +60,34 @@ class MarkdownPaneTest {
     @Test
     void testIncrementalAppendInPlaceCopyFeedbackToolLogsAndTranscript() {
         MarkdownPane pane = new MarkdownPane(false);
-        assertContainsAll(pane.getText(), "welcome-card", "Technical Mentor (Read-Only Explore Mode)", "@ Mention",
-                "slash commands", "Drag &amp; drop", "PDFs", "prompt:", "starter-accent-blue", "starter-badge-blue",
+        String exploreHtml = org.apache.commons.lang3.StringUtils.normalizeSpace(pane.getText());
+        assertContainsAll(exploreHtml, "welcome-card", "welcome-roxy-badge",
+                "Technical Mentor (Read-Only Explore Mode)", "kbd-pill", "@ Mention", "/ Commands", "Shift+Enter",
+                "codicon-search-", "codicon-symbol-structure-", "prompt:", "starter-accent-blue", "starter-badge-blue",
                 "starter-cta-pill-blue", "starter-title-link");
-        String taskHtml = new MarkdownPane(true).getText();
-        assertContainsAll(taskHtml, "Autonomous Feature Development", "@ Mention", "slash commands", "Drag &amp; drop",
-                "PDFs", "prompt:", "starter-accent-blue", "starter-badge-blue", "starter-cta-pill-blue",
-                "starter-title-link");
+        String taskHtml = org.apache.commons.lang3.StringUtils.normalizeSpace(new MarkdownPane(true).getText());
+        assertContainsAll(taskHtml, "welcome-roxy-badge", "Autonomous Feature Development", "kbd-pill", "@ Mention",
+                "/ Commands", "codicon-rocket-", "codicon-lightbulb-autofix-", "codicon-list-ordered-", "prompt:",
+                "starter-accent-blue", "starter-badge-blue", "starter-cta-pill-blue", "starter-title-link");
+
+        assertEquals("", UiComponents.renderCodiconTileImgTag(null, UiComponents.VARIANT_BLUE, false));
+        assertEquals("", UiComponents.renderCodiconInlineImgTag(null, UiComponents.VARIANT_PURPLE, true));
+        assertContainsAll(
+                UiComponents.renderCodiconTileImgTag(org.kordamp.ikonli.codicons.Codicons.SEARCH,
+                        UiComponents.VARIANT_BLUE, false),
+                "codicon-search-blue-light-32-18.png", "width='32'", "height='32'");
+        assertContainsAll(
+                UiComponents.renderCodiconTileImgTag(org.kordamp.ikonli.codicons.Codicons.SEARCH,
+                        UiComponents.VARIANT_BLUE, true),
+                "codicon-search-blue-dark-32-18.png", "width='32'", "height='32'");
+        assertContainsAll(
+                UiComponents.renderCodiconInlineImgTag(org.kordamp.ikonli.codicons.Codicons.TERMINAL,
+                        UiComponents.VARIANT_PURPLE, false),
+                "codicon-terminal-purple-light-16-11.png", "width='16'", "height='16'");
+        assertContainsAll(
+                UiComponents.renderCodiconInlineImgTag(org.kordamp.ikonli.codicons.Codicons.TERMINAL,
+                        UiComponents.VARIANT_PURPLE, true),
+                "codicon-terminal-purple-dark-16-11.png", "width='16'", "height='16'");
 
         String[] clickedStarter = new String[1];
         pane.setOnStarterPromptListener(prompt -> clickedStarter[0] = prompt);

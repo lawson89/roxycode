@@ -39,6 +39,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
@@ -97,10 +100,20 @@ final class UiComponents {
             + "All profiles automatically apply <b>Adaptive (Phase-Aware)</b> sub-turn thinking (escalating to HIGH when designing plans or recovering from build/test failures)."
             + "</body></html>";
     static final int CHAT_THUMBNAIL_MAX_DIM = 180;
+    static final String VARIANT_BLUE = "blue";
+    static final String VARIANT_PURPLE = "purple";
+    static final String VARIANT_AMBER = "amber";
+    static final String VARIANT_EMERALD = "emerald";
+    static final String VARIANT_GREEN = "green";
+    static final String VARIANT_MUTED = "muted";
     private static final String TEMP_THUMB_DIR_PREFIX = "roxycode-thumbs-";
+    private static final Map<String, HtmlImagePreview> CODICON_BADGE_CACHE = new ConcurrentHashMap<>();
     private static Path tempThumbnailDir;
 
     record HtmlImagePreview(String url, int width, int height) {
+    }
+
+    private record CodiconPalette(Color background, Color border, Color foreground) {
     }
 
     private UiComponents() {
@@ -198,6 +211,113 @@ final class UiComponents {
             pngFile.toFile().deleteOnExit();
         }
         return new HtmlImagePreview(pngFile.toUri().toURL().toExternalForm(), image.getWidth(), image.getHeight());
+    }
+
+    static String renderCodiconTileImgTag(Codicons icon, String variant, boolean dark) {
+        return renderCodiconBadgeImgTag(icon, variant, dark, 32, 18, 8, true);
+    }
+
+    static String renderCodiconInlineImgTag(Codicons icon, String variant, boolean dark) {
+        return renderCodiconBadgeImgTag(icon, variant, dark, 16, 11, 4, false);
+    }
+
+    private static String renderCodiconBadgeImgTag(Codicons icon, String variant, boolean dark, int size, int iconSize,
+            int arc, boolean drawBorder) {
+        if (icon == null) {
+            return "";
+        }
+        String normalizedVariant = StringUtils.defaultIfBlank(variant, VARIANT_MUTED).toLowerCase(Locale.ROOT);
+        String themeTag;
+        if (dark) {
+            themeTag = "dark";
+        } else {
+            themeTag = "light";
+        }
+        String cacheKey = icon.name() + "-" + normalizedVariant + "-" + themeTag + "-" + size + "-" + iconSize;
+        HtmlImagePreview preview = CODICON_BADGE_CACHE.computeIfAbsent(cacheKey,
+                key -> createCodiconBadgePreview(key, icon, normalizedVariant, dark, size, iconSize, arc, drawBorder));
+        if (preview == null) {
+            return "";
+        }
+        return "<img src='" + SwingHtmlUtils.escapeHtml(preview.url()) + "' width='" + preview.width() + "' height='"
+                + preview.height() + "' border='0'>";
+    }
+
+    @Nullable
+    private static HtmlImagePreview createCodiconBadgePreview(String cacheKey, Codicons icon, String variant,
+            boolean dark, int size, int iconSize, int arc, boolean drawBorder) {
+        try {
+            CodiconPalette palette = resolveCodiconPalette(variant, dark);
+            BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_ARGB);
+            Graphics2D g2 = image.createGraphics();
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                g2.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+                RoundRectangle2D.Float bgShape = new RoundRectangle2D.Float(0.5f, 0.5f, size - 1f, size - 1f, arc, arc);
+                g2.setColor(palette.background());
+                g2.fill(bgShape);
+                if (drawBorder) {
+                    g2.setColor(palette.border());
+                    g2.setStroke(new BasicStroke(1f));
+                    g2.draw(bgShape);
+                }
+                FontIcon fontIcon = FontIcon.of(icon, iconSize, palette.foreground());
+                int iconX = (size - fontIcon.getIconWidth()) / 2;
+                int iconY = (size - fontIcon.getIconHeight()) / 2;
+                fontIcon.paintIcon(null, g2, iconX, iconY);
+            } finally {
+                g2.dispose();
+            }
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            ImageIO.write(image, "png", baos);
+            Path outputDir = getOrCreateTempThumbnailDir();
+            String fileName = "codicon-" + PathUtils.sanitizeSlug(cacheKey, 64, "icon") + ".png";
+            return writePngBytesToTempPreview(baos.toByteArray(), outputDir, fileName);
+        } catch (Exception e) {
+            log.debug("Failed to render Codicons HTML badge {}: {}", cacheKey, e.getMessage());
+            return null;
+        }
+    }
+
+    private static CodiconPalette resolveCodiconPalette(String variant, boolean dark) {
+        if (VARIANT_BLUE.equals(variant)) {
+            if (dark) {
+                return new CodiconPalette(new Color(0x17, 0x2a, 0x3a), new Color(0x1e, 0x3a, 0x5f),
+                        new Color(0x38, 0xbd, 0xf8));
+            }
+            return new CodiconPalette(new Color(0xe0, 0xf2, 0xfe), new Color(0xba, 0xe6, 0xfd),
+                    new Color(0x02, 0x84, 0xc7));
+        }
+        if (VARIANT_PURPLE.equals(variant)) {
+            if (dark) {
+                return new CodiconPalette(new Color(0x26, 0x1f, 0x3d), new Color(0x3b, 0x2d, 0x66),
+                        new Color(0xa7, 0x8b, 0xfa));
+            }
+            return new CodiconPalette(new Color(0xf3, 0xe8, 0xff), new Color(0xdd, 0xd6, 0xfe),
+                    new Color(0x7c, 0x3a, 0xed));
+        }
+        if (VARIANT_AMBER.equals(variant)) {
+            if (dark) {
+                return new CodiconPalette(new Color(0x33, 0x27, 0x14), new Color(0x4d, 0x3a, 0x1c),
+                        new Color(0xfb, 0xbf, 0x24));
+            }
+            return new CodiconPalette(new Color(0xfe, 0xf3, 0xc7), new Color(0xfd, 0xe6, 0x8a),
+                    new Color(0xb4, 0x53, 0x09));
+        }
+        if (VARIANT_EMERALD.equals(variant) || VARIANT_GREEN.equals(variant)) {
+            if (dark) {
+                return new CodiconPalette(new Color(0x13, 0x2f, 0x28), new Color(0x1c, 0x4a, 0x3e),
+                        new Color(0x34, 0xd3, 0x99));
+            }
+            return new CodiconPalette(new Color(0xd1, 0xfa, 0xe5), new Color(0xa7, 0xf3, 0xd0),
+                    new Color(0x04, 0x78, 0x57));
+        }
+        if (dark) {
+            return new CodiconPalette(new Color(0x2c, 0x31, 0x3a), new Color(0x47, 0x55, 0x69),
+                    new Color(0x94, 0xa3, 0xb8));
+        }
+        return new CodiconPalette(new Color(0xf1, 0xf5, 0xf9), new Color(0xcb, 0xd5, 0xe1),
+                new Color(0x47, 0x55, 0x69));
     }
 
     private static synchronized Path getOrCreateTempThumbnailDir() throws IOException {
