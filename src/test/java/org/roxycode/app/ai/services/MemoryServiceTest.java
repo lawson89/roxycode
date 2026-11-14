@@ -58,7 +58,7 @@ class MemoryServiceTest {
     }
 
     @Test
-    void testUnifiedMemoryCrudFindEventsAndLegacyMigration() throws IOException {
+    void testUnifiedMemoryCrudFindAndEvents() {
         assertTrue(memoryService.put("global", "no-ternary", "Never use ternary operators.").success());
         assertTrue(memoryService
                 .put("global", "Java Style.md", "Java Style Guide", List.of("java", "STYLE"), "Use immutable records.")
@@ -105,39 +105,6 @@ class MemoryServiceTest {
         when(projectService.hasActiveProject()).thenReturn(false);
         assertFalse(memoryService.put("project", "rule-1", "Summary").success());
         assertTrue(memoryService.list("project").isEmpty());
-
-        // Legacy migration from MEMORY.md + notes/*.md when memories.json does not exist yet
-        Path legacyProjectDir = Files.createDirectories(tempDir.resolve("legacy-project"));
-        Path legacyMemDir = Files.createDirectories(legacyProjectDir.resolve("memory"));
-        Path legacyNotesDir = Files.createDirectories(legacyMemDir.resolve("notes"));
-        Files.writeString(legacyMemDir.resolve("MEMORY.md"), """
-                # Project Memory
-                - **Pragmatic Testing**: Only test meaningful business logic.
-                - Never use ThreadLocals in Swing panels.
-                """, StandardCharsets.UTF_8);
-        Files.writeString(legacyNotesDir.resolve("caffeine-cache.md"), """
-                ---
-                title: "Async Caching with Caffeine"
-                tags: "caching, async"
-                updatedAt: "2026-10-30T23:25:46Z"
-                ---
-
-                # Async Caching with Caffeine
-
-                Use Caffeine AsyncCache with virtual threads.
-                """, StandardCharsets.UTF_8);
-
-        when(projectService.hasActiveProject()).thenReturn(true);
-        when(projectService.resolveProjectDataPath(anyString()))
-                .thenAnswer(inv -> legacyProjectDir.resolve(inv.getArgument(0, String.class)));
-        List<MemoryEntry> migrated = memoryService.readAll("project");
-        assertEquals(3, migrated.size());
-        assertTrue(Files.isRegularFile(legacyMemDir.resolve("memories.json")));
-        MemoryEntry migratedNote = memoryService.read("project", "caffeine-cache");
-        assertNotNull(migratedNote);
-        assertEquals("Async Caching with Caffeine", migratedNote.summary());
-        assertEquals(List.of("caching", "async"), migratedNote.tags());
-        assertEquals("Use Caffeine AsyncCache with virtual threads.", migratedNote.details());
     }
 
     @Test

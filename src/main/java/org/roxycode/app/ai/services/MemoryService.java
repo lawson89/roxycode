@@ -14,7 +14,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Stream;
@@ -44,8 +43,6 @@ public class MemoryService {
     public static final String SCOPE_PROJECT = "project";
     static final String MEMORY_DIR = "memory";
     static final String MEMORIES_FILE = "memories.json";
-    static final String MEMORY_INDEX_FILE = "MEMORY.md";
-    static final String NOTES_SUBDIR = "notes";
     static final String ARCHIVE_PLANS_SUBDIR = PlanService.ARCHIVE_PLANS_SUBDIR;
     public static final String ARCHIVE_TOPICS_SUBDIR = "archive/topics";
     public static final String DEFAULT_TOPIC_TITLE = "Codebase Q&A Topic";
@@ -53,15 +50,11 @@ public class MemoryService {
     public static final int MAX_SLUG_LENGTH = 50;
     private static final int SEARCH_CONTEXT_LINES = 2;
     private static final String STRIP_TITLE_CHARS_REGEX = "[#*_~`\"']";
-    private static final Pattern BOLD_BULLET_PATTERN = Pattern.compile("^\\*\\*([^*]+)\\*\\*\\s*(?::|-)\\s*(.+)$");
     private static final char LF = '\n';
-    private static final char CR = '\r';
     private static final String NL = String.valueOf(LF);
     private static final String TYPE_TOPIC = "topic";
     private static final String TYPE_PLAN = "plan";
     private static final String KEY_TITLE = "title";
-    private static final String KEY_TAGS = "tags";
-    private static final String KEY_UPDATED_AT = "updatedAt";
     private static final String ROLE_USER = ChatTranscriptEntry.ROLE_USER;
     private static final String NO_ACTIVE_PROJECT = "No active project";
     private static final String GLOBAL_DIR_UNAVAILABLE = "Global memory directory is unavailable";
@@ -400,19 +393,9 @@ public class MemoryService {
     private List<MemoryEntry> loadEntriesForDir(Path dir) {
         synchronized (storeLock) {
             Path storePath = dir.resolve(MEMORIES_FILE);
-            if (Files.isRegularFile(storePath)) {
-                MemoryStoreFile store = PathUtils.readJsonOrDefault(storePath, MemoryStoreFile.class,
-                        new MemoryStoreFile(List.of()));
-                return sortEntries(store.memories());
-            }
-            List<MemoryEntry> migrated = migrateLegacyStorage(dir);
-            if (!migrated.isEmpty()) {
-                EditorResult writeResult = writeStore(dir, migrated, "Migrated legacy memories");
-                if (!writeResult.success()) {
-                    log.warn("Failed to persist migrated memories in {}: {}", dir, writeResult.errorHint());
-                }
-            }
-            return sortEntries(migrated);
+            MemoryStoreFile store = PathUtils.readJsonOrDefault(storePath, MemoryStoreFile.class,
+                    new MemoryStoreFile(List.of()));
+            return sortEntries(store.memories());
         }
     }
 
@@ -439,140 +422,6 @@ public class MemoryService {
     private static MemoryMetadata toMetadata(String scope, MemoryEntry entry) {
         return new MemoryMetadata(scope, entry.id(), entry.summary(), entry.tags(),
                 StringUtils.isNotBlank(entry.details()), entry.updatedAt());
-    }
-
-    private static List<MemoryEntry> migrateLegacyStorage(Path dir) {
-        List<MemoryEntry> migrated = new ArrayList<>();
-        Set<String> usedIds = new LinkedHashSet<>();
-
-        Path notesDir = dir.resolve(NOTES_SUBDIR);
-        if (Files.isDirectory(notesDir)) {
-            try (Stream<Path> stream = Files.list(notesDir)) {
-                List<Path> noteFiles = stream.filter(Files::isRegularFile)
-                        .filter(p -> p.getFileName().toString().endsWith(MD_EXTENSION))
-                        .sorted(Comparator.comparing(p -> p.getFileName().toString(), String.CASE_INSENSITIVE_ORDER))
-                        .toList();
-                for (Path noteFile : noteFiles) {
-                    MemoryEntry entry = migrateNoteFile(noteFile, usedIds);
-                    if (entry != null) {
-                        migrated.add(entry);
-                    }
-                }
-            } catch (IOException e) {
-                log.warn("Failed to scan legacy notes in {}: {}", notesDir, e.getMessage());
-            }
-        }
-
-        Path memoryIndexFile = dir.resolve(MEMORY_INDEX_FILE);
-        if (Files.isRegularFile(memoryIndexFile)) {
-            String rawIndex = readFileIfExists(memoryIndexFile);
-            if (StringUtils.isNotBlank(rawIndex)) {
-                migrated.addAll(migrateLegacyIndexMarkdown(rawIndex, usedIds));
-            }
-        }
-
-        return migrated;
-    }
-
-    private static @Nullable MemoryEntry migrateNoteFile(Path file, Set<String> usedIds) {
-        String filename = file.getFileName().toString();
-        String baseSlug = StringUtils.removeEndIgnoreCase(filename, MD_EXTENSION);
-        String id;
-        try {
-            id = allocateUniqueId(sanitizeSlug(baseSlug), usedIds);
-        } catch (IllegalArgumentException e) {
-            id = allocateUniqueId(deriveSlugFromSummary(baseSlug), usedIds);
-        }
-        String rawMarkdown = readFileIfExists(file);
-        Map<String, String> fm = FrontmatterUtils.parseFrontmatter(rawMarkdown);
-        String summary = StringUtils.defaultIfBlank(fm.get(KEY_TITLE), baseSlug).trim();
-        List<String> tags = parseTagsString(fm.get(KEY_TAGS));
-        String updated = StringUtils.defaultIfBlank(fm.get(KEY_UPDATED_AT), Instant.now().toString()).trim();
-        String body = extractNoteBody(rawMarkdown, summary);
-        return new MemoryEntry(id, summary, tags, body, updated);
-    }
-
-    static List<MemoryEntry> migrateLegacyIndexMarkdown(String rawIndex, Set<String> usedIds) {
-        List<String> chunks = extractLegacyIndexChunks(rawIndex);
-        List<MemoryEntry> entries = new ArrayList<>();
-        String now = Instant.now().toString();
-        for (String chunk : chunks) {
-            String trimmed = chunk.trim();
-            if (trimmed.isEmpty()) {
-                continue;
-            }
-            String titleForSlug = trimmed;
-            String summary = trimmed;
-            Matcher boldMatcher = BOLD_BULLET_PATTERN.matcher(trimmed);
-            if (boldMatcher.matches()) {
-                titleForSlug = boldMatcher.group(1).trim();
-                summary = titleForSlug + ": " + boldMatcher.group(2).trim();
-            }
-            String baseSlug = deriveSlugFromSummary(titleForSlug);
-            String uniqueId = allocateUniqueId(baseSlug, usedIds);
-            entries.add(new MemoryEntry(uniqueId, summary, List.of(), "", now));
-        }
-        return entries;
-    }
-
-    private static List<String> extractLegacyIndexChunks(String rawIndex) {
-        List<String> chunks = new ArrayList<>();
-        StringBuilder current = new StringBuilder();
-        boolean currentIsBullet = false;
-
-        for (String line : rawIndex.lines().toList()) {
-            String stripped = line.strip();
-            if (stripped.isEmpty()) {
-                flushChunk(chunks, current);
-                currentIsBullet = false;
-                continue;
-            }
-            if (stripped.startsWith("#")) {
-                flushChunk(chunks, current);
-                currentIsBullet = false;
-                continue;
-            }
-            boolean isTopLevelBullet = (line.startsWith("- ") || line.startsWith("* ") || line.startsWith("+ "));
-            if (isTopLevelBullet) {
-                flushChunk(chunks, current);
-                current.append(line.substring(2).trim());
-                currentIsBullet = true;
-            } else if (currentIsBullet) {
-                current.append(' ').append(stripped);
-            } else {
-                if (current.length() > 0) {
-                    current.append(' ');
-                }
-                current.append(stripped);
-            }
-        }
-        flushChunk(chunks, current);
-        return chunks;
-    }
-
-    private static void flushChunk(List<String> chunks, StringBuilder current) {
-        if (current.length() > 0) {
-            chunks.add(current.toString().trim());
-            current.setLength(0);
-        }
-    }
-
-    private static String allocateUniqueId(String baseId, Set<String> usedIds) {
-        if (usedIds.add(baseId)) {
-            return baseId;
-        }
-        int suffix = 2;
-        while (true) {
-            String candidate = baseId + "-" + suffix;
-            if (candidate.length() > MAX_SLUG_LENGTH) {
-                String suffixStr = "-" + suffix;
-                candidate = baseId.substring(0, Math.max(1, MAX_SLUG_LENGTH - suffixStr.length())) + suffixStr;
-            }
-            if (usedIds.add(candidate)) {
-                return candidate;
-            }
-            suffix++;
-        }
     }
 
     private static @Nullable Pattern compileSearchPattern(String query) {
@@ -604,24 +453,6 @@ public class MemoryService {
             return true;
         }
         return StringUtils.containsIgnoreCase(value, query);
-    }
-
-    static String extractNoteBody(String rawMarkdown, String title) {
-        String stripped = FrontmatterUtils.stripFrontmatter(rawMarkdown).stripLeading();
-        if (StringUtils.isNotBlank(title)) {
-            String expectedHeader = "# " + title.trim();
-            if (stripped.startsWith(expectedHeader)) {
-                int afterHeader = expectedHeader.length();
-                if (afterHeader == stripped.length()) {
-                    return "";
-                }
-                char nextChar = stripped.charAt(afterHeader);
-                if (nextChar == LF || nextChar == CR) {
-                    stripped = stripped.substring(afterHeader).stripLeading();
-                }
-            }
-        }
-        return stripped.stripTrailing();
     }
 
     private String readArchivedFile(Path archiveDir, String filename, String label) {
