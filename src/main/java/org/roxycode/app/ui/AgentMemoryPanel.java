@@ -4,12 +4,12 @@ import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Supplier;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
@@ -19,6 +19,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
+import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
@@ -33,7 +34,7 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.MemoryService;
-import org.roxycode.app.ai.services.MemoryService.NoteDetail;
+import org.roxycode.app.ai.services.MemoryService.MemoryEntry;
 import org.roxycode.app.events.MemoryChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
@@ -58,23 +59,21 @@ final class AgentMemoryPanel extends JPanel {
     private static final Logger log = LoggerFactory.getLogger(AgentMemoryPanel.class);
 
     static final String PAGE_TITLE = "Agent Memory";
-    static final String PAGE_SUBTITLE = "Manage persistent Global and Project MEMORY.md cheat-sheets and topic notes injected into agent prompts.";
-    static final String GLOBAL_TAB_TITLE = "Global Memory (~/.roxycode/memory)";
-    static final String PROJECT_TAB_TITLE = "Project Memory (<projectDataDir>/memory)";
+    static final String PAGE_SUBTITLE = "Manage persistent Global and Project memories with always-on summaries and on-demand Markdown details.";
+    static final String PROJECT_TAB_BASE = "Project Memory";
+    static final String GLOBAL_TAB_BASE = "Global Memory";
     static final String NO_PROJECT_MESSAGE = "No active project selected. Select a project folder in the top bar to manage Project Memory.";
-    static final String PINNED_WARNING_TEXT = "Exceeds prompt limit (8,192 chars / 200 lines) — excess content is truncated in prompts";
-    static final String PINNED_MEMORY_TOOLTIP_HTML = "<html><body style='width: 300px; padding: 4px;'>"
-            + "<b>Pinned MEMORY.md Cheat-Sheet</b><br>"
-            + "Automatically injected into Roxy's stable system prompt across all workflow phases (capped at <b>8,192 chars / 200 lines</b> per scope).<br><br>"
-            + "• <b>Global Memory</b>: Personal coding style and cross-project preferences (<code>/rem-g &lt;note&gt;</code> in chat).<br>"
-            + "• <b>Project Memory</b>: Project architecture rules and build/test gotchas (<code>/rem-p &lt;note&gt;</code> in chat)."
-            + "</body></html>";
-    static final String TOPIC_NOTES_TOOLTIP_HTML = "<html><body style='width: 300px; padding: 4px;'>"
-            + "<b>Topic Notes (notes/*.md)</b><br>"
-            + "Structured Markdown notes with YAML frontmatter (title, tags, updated timestamp).<br><br>"
-            + "A compact catalog of note slugs, titles, and tags is listed in the system prompt so Roxy can read or search full notes on demand via <code>memoryService</code> without bloating every prompt."
+    static final String MEMORY_TOOLTIP_HTML = "<html><body style='width: 310px; padding: 4px;'>"
+            + "<b>Unified Symmetrical Agent Memory</b><br>"
+            + "• <b>Summary</b>: Concise rule or takeaway always injected into Gemini's stable system prompt.<br>"
+            + "• <b>Extended Details</b>: Optional Markdown body read on demand via <code>memoryService.read(scope, id)</code> when relevant.<br><br>"
+            + "Chat quick commands: <code>/mem-p-put</code>, <code>/mem-p-view</code>, <code>/mem-p-find</code>, <code>/mem-p-del</code> (and <code>/mem-g-*</code> for Global)."
             + "</body></html>";
     private static final int TIMESTAMP_DISPLAY_LEN = 16;
+    private static final int PROJECT_TAB_INDEX = 0;
+    private static final int GLOBAL_TAB_INDEX = 1;
+    private static final String CONSTRAINTS_GROWX = "growx";
+    private static final String STYLE_FONT_BOLD = "font: bold";
 
     private final transient MemoryService memoryService;
     private final transient ProjectService projectService;
@@ -82,9 +81,10 @@ final class AgentMemoryPanel extends JPanel {
 
     final JLabel titleLabel;
     final JLabel subtitleLabel;
+    final JLabel promptFootprintBadge;
     final JTabbedPane scopeTabbedPane;
-    final MemoryScopeView globalScopeView;
     final MemoryScopeView projectScopeView;
+    final MemoryScopeView globalScopeView;
 
     private final transient UiComponents.UiGuard memoryEventRefreshGuard = new UiComponents.UiGuard();
 
@@ -102,20 +102,46 @@ final class AgentMemoryPanel extends JPanel {
         this.subtitleLabel = new JLabel(PAGE_SUBTITLE);
         add(UiComponents.createPageHeader(titleLabel, subtitleLabel, null), BorderLayout.NORTH);
 
-        this.globalScopeView = new MemoryScopeView(true);
-        this.projectScopeView = new MemoryScopeView(false);
+        this.promptFootprintBadge = new JLabel("Always-On Prompt: ~0 tok");
+        UiComponents.styleCodePillBadge(promptFootprintBadge);
 
-        this.scopeTabbedPane = UiComponents.createUnderlinedTabbedPane(null);
-        this.scopeTabbedPane.addTab(GLOBAL_TAB_TITLE, FontIcon.of(Codicons.GLOBE, 14), globalScopeView);
-        this.scopeTabbedPane.addTab(PROJECT_TAB_TITLE, FontIcon.of(Codicons.FOLDER_OPENED, 14), projectScopeView);
+        this.projectScopeView = new MemoryScopeView(false);
+        this.globalScopeView = new MemoryScopeView(true);
+
+        this.scopeTabbedPane = UiComponents.createUnderlinedTabbedPane(promptFootprintBadge);
+        this.scopeTabbedPane.addTab(PROJECT_TAB_BASE + " (0)", FontIcon.of(Codicons.FOLDER_OPENED, 14),
+                projectScopeView);
+        this.scopeTabbedPane.addTab(GLOBAL_TAB_BASE + " (0)", FontIcon.of(Codicons.GLOBE, 14), globalScopeView);
+        this.scopeTabbedPane.addChangeListener(e -> updatePromptFootprintBadge());
         add(scopeTabbedPane, BorderLayout.CENTER);
 
         refresh();
     }
 
     public void refresh() {
-        globalScopeView.refresh();
         projectScopeView.refresh();
+        globalScopeView.refresh();
+    }
+
+    void updateTabTitle(boolean globalScope, int count) {
+        if (globalScope) {
+            scopeTabbedPane.setTitleAt(GLOBAL_TAB_INDEX, GLOBAL_TAB_BASE + " (" + count + ")");
+        } else {
+            scopeTabbedPane.setTitleAt(PROJECT_TAB_INDEX, PROJECT_TAB_BASE + " (" + count + ")");
+        }
+        updatePromptFootprintBadge();
+    }
+
+    void updatePromptFootprintBadge() {
+        int selectedIndex = scopeTabbedPane.getSelectedIndex();
+        MemoryScopeView activeView;
+        if (selectedIndex == GLOBAL_TAB_INDEX) {
+            activeView = globalScopeView;
+        } else {
+            activeView = projectScopeView;
+        }
+        long tokens = activeView.estimatePromptTokens();
+        promptFootprintBadge.setText("Always-On Prompt: ~" + TokenUtils.formatTokenCount(tokens) + " tok");
     }
 
     @EventListener
@@ -140,234 +166,210 @@ final class AgentMemoryPanel extends JPanel {
     @EventListener
     public void onSettingsChanged(SettingsChangedEvent event) {
         Edt.run(() -> {
-            globalScopeView.updateTheme();
             projectScopeView.updateTheme();
+            globalScopeView.updateTheme();
         });
     }
 
     @Override
     public void updateUI() {
         super.updateUI();
-        if (globalScopeView != null) {
-            globalScopeView.updateTheme();
+        if (promptFootprintBadge != null) {
+            UiComponents.styleCodePillBadge(promptFootprintBadge);
         }
         if (projectScopeView != null) {
             projectScopeView.updateTheme();
         }
-    }
-
-    record ScopeData(String pinnedMemory, List<NoteDetail> notes) {
+        if (globalScopeView != null) {
+            globalScopeView.updateTheme();
+        }
     }
 
     final class MemoryScopeView extends JPanel {
         private static final long serialVersionUID = 1L;
         private static final String CARD_CONTENT = "CONTENT";
         private static final String CARD_EMPTY = "EMPTY";
-        private static final String GROWX = "growx";
-        private static final String GROWX_WRAP = "growx, wrap";
 
-        final boolean globalScope;
-        private final CardLayout scopeCardLayout = new CardLayout();
-        final JPanel emptyProjectPanel;
-        final JLabel emptyProjectLabel;
-        final JPanel pinnedCardPanel;
-        final JPanel notesCardPanel;
+        private final boolean globalScope;
+        private final String scopeName;
+        private final CardLayout cardLayout = new CardLayout();
+        private final JPanel cardContainer = new JPanel(cardLayout);
 
-        final JLabel pinnedHeaderLabel;
-        final JLabel pinnedInfoIcon;
-        final JLabel memoryCounterLabel = new JLabel();
-        final JLabel memoryWarningLabel = new JLabel(PINNED_WARNING_TEXT);
-        final RSyntaxTextArea memoryEditor = new RSyntaxTextArea();
-        final JButton saveMemoryButton = new JButton("Save MEMORY.md");
-        final JButton revertMemoryButton = new JButton("Revert");
-
-        final JLabel notesHeaderLabel;
-        final JLabel notesInfoIcon;
         final JTextField searchField = new JTextField();
-        final JButton newNoteButton = new JButton("New Note");
-        final DefaultListModel<NoteDetail> noteListModel = new DefaultListModel<>();
-        final JList<NoteDetail> noteList = new JList<>(noteListModel);
+        final JButton newButton;
+        final DefaultListModel<MemoryEntry> listModel = new DefaultListModel<>();
+        final JList<MemoryEntry> entryList = new JList<>(listModel);
 
-        final JTextField noteTitleField = new JTextField();
-        final JTextField noteSlugField = new JTextField();
-        final JTextField noteTagsField = new JTextField();
-        final RSyntaxTextArea noteBodyEditor = new RSyntaxTextArea();
-        final JButton saveNoteButton = new JButton("Save Note");
-        final JButton deleteNoteButton = new JButton("Delete Note");
+        final JTextField idField = new JTextField();
+        final JTextField tagsField = new JTextField();
+        final JLabel summaryTitleLabel = new JLabel("Summary (Always passed to Gemini)");
+        final JLabel summaryStatsLabel = new JLabel("0 chars  •  ~0 tok");
+        final JLabel memoryInfoIcon = UiComponents.createInfoIcon(MEMORY_TOOLTIP_HTML);
+        final JTextArea summaryArea = new JTextArea(3, 40);
+        final JScrollPane summaryScrollPane;
+        final RSyntaxTextArea detailsEditor = new RSyntaxTextArea(12, 40);
+        final RTextScrollPane detailsScrollPane;
+
+        final JButton saveButton;
+        final JButton revertButton;
+        final JButton deleteButton;
+        final JLabel statusLabel = new JLabel(" ");
         final UiComponents.InlineConfirmBar deleteConfirmBar = new UiComponents.InlineConfirmBar();
-        final JLabel statusLabel = new JLabel("");
+
         private final Timer statusTimer;
-
-        private String loadedMemoryContent = "";
-        private final transient UiComponents.UiGuard memoryUpdateGuard = new UiComponents.UiGuard();
-        private boolean memoryDirty;
-
-        private List<NoteDetail> allNotes = List.of();
-        private transient NoteDetail selectedNote;
-        private boolean creatingNewNote = true;
-        private boolean slugManuallyEdited;
-        private final transient UiComponents.UiGuard noteFieldsUpdateGuard = new UiComponents.UiGuard();
         transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
+        private final transient UiComponents.UiGuard editorSyncGuard = new UiComponents.UiGuard();
+
+        private List<MemoryEntry> allEntries = List.of();
+        private transient @Nullable MemoryEntry selectedEntry;
+        private boolean creatingNewEntry = true;
+        private boolean idManuallyEdited = false;
+        private String loadedId = "";
+        private String loadedTags = "";
+        private String loadedSummary = "";
+        private String loadedDetails = "";
 
         MemoryScopeView(boolean globalScope) {
+            super(new BorderLayout());
             this.globalScope = globalScope;
-            setLayout(scopeCardLayout);
-            setOpaque(false);
+            if (globalScope) {
+                this.scopeName = MemoryService.SCOPE_GLOBAL;
+            } else {
+                this.scopeName = MemoryService.SCOPE_PROJECT;
+            }
 
-            emptyProjectPanel = new JPanel(new MigLayout("fill, insets 24", "[grow, center]", "[grow, center]"));
-            UiComponents.styleCardPanel(emptyProjectPanel);
-            emptyProjectLabel = new JLabel(NO_PROJECT_MESSAGE, SwingConstants.CENTER);
-            emptyProjectLabel.setIcon(FontIcon.of(Codicons.INFO, 18, SwingHtmlUtils.getMutedForegroundColor()));
-            emptyProjectLabel.setIconTextGap(8);
-            emptyProjectPanel.add(emptyProjectLabel);
+            this.newButton = UiComponents.createActionButton("New", Codicons.ADD, null, false, null, null);
+            this.saveButton = UiComponents.createActionButton("Save Memory", Codicons.SAVE, null, false, "accent",
+                    null);
+            this.revertButton = UiComponents.createActionButton("Revert", Codicons.DISCARD, null, false, null, null);
+            this.deleteButton = UiComponents.createActionButton("Delete", Codicons.TRASH, null, false, "danger", null);
+            this.statusTimer = UiComponents.createStatusTimer(statusLabel, 4000);
 
-            pinnedHeaderLabel = UiComponents.createSectionHeader("Pinned MEMORY.md Cheat-Sheet", Codicons.PIN,
-                    "font: bold");
-            pinnedInfoIcon = UiComponents.createInfoIcon(PINNED_MEMORY_TOOLTIP_HTML);
-            notesHeaderLabel = UiComponents.createSectionHeader("Topic Notes (notes/*.md)", Codicons.BOOK,
-                    "font: bold");
-            notesInfoIcon = UiComponents.createInfoIcon(TOPIC_NOTES_TOOLTIP_HTML);
+            this.summaryArea.setLineWrap(true);
+            this.summaryArea.setWrapStyleWord(true);
+            this.summaryScrollPane = new JScrollPane(summaryArea);
 
-            pinnedCardPanel = buildPinnedMemoryCard();
-            notesCardPanel = buildTopicNotesCard();
+            UiComponents.configureSyntaxTextArea(detailsEditor, SyntaxConstants.SYNTAX_STYLE_MARKDOWN, true, true);
+            this.detailsScrollPane = new RTextScrollPane(detailsEditor);
+            this.detailsScrollPane.setFoldIndicatorEnabled(false);
+            this.detailsScrollPane.setLineNumbersEnabled(false);
 
-            JSplitPane verticalSplit = new JSplitPane(JSplitPane.VERTICAL_SPLIT, pinnedCardPanel, notesCardPanel);
-            verticalSplit.setDividerLocation(230);
-            verticalSplit.setResizeWeight(0.35);
-            verticalSplit.setBorder(null);
-            verticalSplit.setOpaque(false);
+            JPanel masterPanel = buildMasterPanel();
+            JPanel detailPanel = buildDetailPanel();
 
-            add(verticalSplit, CARD_CONTENT);
-            add(emptyProjectPanel, CARD_EMPTY);
+            JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, masterPanel, detailPanel);
+            splitPane.setResizeWeight(0.34);
+            splitPane.setContinuousLayout(true);
+            splitPane.setBorder(null);
 
-            statusTimer = UiComponents.createStatusTimer(statusLabel, 4000);
+            JPanel emptyPanel = new JPanel(new BorderLayout());
+            JLabel emptyLabel = new JLabel(NO_PROJECT_MESSAGE, SwingConstants.CENTER);
+            emptyLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Label.disabledForeground");
+            emptyPanel.add(emptyLabel, BorderLayout.CENTER);
+
+            cardContainer.add(splitPane, CARD_CONTENT);
+            cardContainer.add(emptyPanel, CARD_EMPTY);
+            add(cardContainer, BorderLayout.CENTER);
 
             setupListeners();
             updateTheme();
-            updateMemoryStatsAndButtons();
-            startNewNote();
+            startNewEntry();
         }
 
-        private JPanel buildPinnedMemoryCard() {
-            JPanel card = new JPanel(
-                    new MigLayout("fill, insets 8 12 10 12, hidemode 3", "[grow, fill]", "[][][grow]"));
-            UiComponents.styleCardPanel(card);
+        private JPanel buildMasterPanel() {
+            JPanel panel = new JPanel(new MigLayout("insets 8 4 8 8, fill, wrap 1", "[grow, fill]", "[][grow, fill]"));
+            panel.setMinimumSize(new Dimension(250, 200));
 
-            JPanel toolbar = new JPanel(new MigLayout("fillx, insets 0", "[]6[]12[grow, fill][][]", "center"));
-            toolbar.setOpaque(false);
-            toolbar.add(pinnedHeaderLabel);
-            toolbar.add(pinnedInfoIcon);
-            memoryCounterLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
-            toolbar.add(memoryCounterLabel, GROWX);
-
-            revertMemoryButton
-                    .setIcon(FontIcon.of(Codicons.DISCARD, 14, UiComponents.resolveActionButtonIconColor(null)));
-            revertMemoryButton.setEnabled(false);
-            saveMemoryButton.putClientProperty(FlatClientProperties.STYLE, UiComponents.ACCENT_BUTTON_STYLE);
-            saveMemoryButton.setIcon(FontIcon.of(Codicons.SAVE, 14,
-                    UiComponents.resolveActionButtonIconColor(UiComponents.ACCENT_BUTTON_STYLE)));
-            saveMemoryButton.setEnabled(false);
-            toolbar.add(revertMemoryButton);
-            toolbar.add(saveMemoryButton);
-            card.add(toolbar, GROWX_WRAP);
-
-            memoryWarningLabel.setVisible(false);
-            card.add(memoryWarningLabel, "growx, wrap, hidemode 3");
-
-            UiComponents.configureSyntaxTextArea(memoryEditor, SyntaxConstants.SYNTAX_STYLE_MARKDOWN, true, true);
-            card.add(new RTextScrollPane(memoryEditor), "grow, push");
-            return card;
-        }
-
-        private JPanel buildTopicNotesCard() {
-            JPanel card = new JPanel(
-                    new MigLayout("fill, insets 8 12 10 12, gapy 6", "[grow, fill]", "[][grow, fill]"));
-            UiComponents.styleCardPanel(card);
-            JPanel notesHeaderRow = new JPanel(new MigLayout("insets 0, gapx 6", "[][]", "center"));
-            notesHeaderRow.setOpaque(false);
-            notesHeaderRow.add(notesHeaderLabel);
-            notesHeaderRow.add(notesInfoIcon);
-            card.add(notesHeaderRow, GROWX_WRAP);
-            JPanel leftPane = new JPanel(new BorderLayout(0, 6));
-            leftPane.setOpaque(false);
-
-            JPanel filterBar = new JPanel(new MigLayout("insets 0, fillx", "[grow, fill]6[]", "center"));
-            filterBar.setOpaque(false);
-            searchField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT,
-                    "Filter notes by title, slug, or tag...");
-            searchField.putClientProperty(FlatClientProperties.TEXT_FIELD_LEADING_ICON,
-                    FontIcon.of(Codicons.SEARCH, 14, SwingHtmlUtils.getMutedForegroundColor()));
+            searchField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Search id, summary, tags...");
             searchField.putClientProperty(FlatClientProperties.TEXT_FIELD_SHOW_CLEAR_BUTTON, true);
-            newNoteButton.setIcon(FontIcon.of(Codicons.ADD, 14, UiComponents.resolveActionButtonIconColor(null)));
-            filterBar.add(searchField, GROWX);
-            filterBar.add(newNoteButton);
-            leftPane.add(filterBar, BorderLayout.NORTH);
+            JPanel searchRow = new JPanel(new MigLayout("insets 0, fillx", "[grow, fill][]", "[]"));
+            searchRow.setOpaque(false);
+            searchRow.add(searchField, CONSTRAINTS_GROWX);
+            searchRow.add(newButton);
+            panel.add(searchRow, CONSTRAINTS_GROWX);
 
-            noteList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-            noteList.setCellRenderer(new NoteCellRenderer());
-            leftPane.add(new JScrollPane(noteList), BorderLayout.CENTER);
+            entryList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+            entryList.setCellRenderer(new MemoryEntryCellRenderer());
+            JScrollPane listScroll = new JScrollPane(entryList);
+            panel.add(listScroll, "grow");
+            return panel;
+        }
 
-            JPanel rightPane = new JPanel(
-                    new MigLayout("fill, insets 0 8 0 0", "[right][grow, fill][right][grow, fill]", "[][][grow][]"));
-            rightPane.setOpaque(false);
+        private JPanel buildDetailPanel() {
+            JPanel panel = new JPanel(
+                    new MigLayout("insets 8 8 8 4, fill, wrap 1", "[grow, fill]", "[][][][][grow, fill][][]"));
+            panel.setMinimumSize(new Dimension(340, 200));
 
-            noteTitleField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT,
-                    "Note title (e.g. Swing Table Rules)");
-            noteSlugField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "note-slug");
-            noteTagsField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "ui, swing, html");
+            idField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "e.g., swing-html-tables");
+            tagsField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "tag1, tag2");
 
-            rightPane.add(new JLabel("Title:"));
-            rightPane.add(noteTitleField, "growx, wmin 100");
-            rightPane.add(new JLabel("Slug:"));
-            rightPane.add(noteSlugField, "growx, wmin 80, wrap");
+            JPanel metaRow = new JPanel(new MigLayout("insets 0, fillx", "[][grow, fill]12[][grow, fill]", "[]"));
+            metaRow.setOpaque(false);
+            JLabel idLabel = new JLabel("ID / Slug:");
+            idLabel.putClientProperty(FlatClientProperties.STYLE, STYLE_FONT_BOLD);
+            JLabel tagsLabel = new JLabel("Tags:");
+            tagsLabel.putClientProperty(FlatClientProperties.STYLE, STYLE_FONT_BOLD);
+            metaRow.add(idLabel);
+            metaRow.add(idField, CONSTRAINTS_GROWX);
+            metaRow.add(tagsLabel);
+            metaRow.add(tagsField, CONSTRAINTS_GROWX);
+            panel.add(metaRow, CONSTRAINTS_GROWX);
 
-            rightPane.add(new JLabel("Tags:"));
-            rightPane.add(noteTagsField, "span 3, growx, wrap");
+            JPanel summaryHeaderRow = new JPanel(new MigLayout("insets 4 0 0 0, fillx", "[][][grow, fill][]", "[]"));
+            summaryHeaderRow.setOpaque(false);
+            summaryTitleLabel.putClientProperty(FlatClientProperties.STYLE, STYLE_FONT_BOLD);
+            summaryStatsLabel.putClientProperty(FlatClientProperties.STYLE,
+                    "font: -1; foreground: $Label.disabledForeground");
+            summaryHeaderRow.add(summaryTitleLabel);
+            summaryHeaderRow.add(memoryInfoIcon, "gapleft 4");
+            summaryHeaderRow.add(new JPanel() {
+                private static final long serialVersionUID = 1L;
+                {
+                    setOpaque(false);
+                }
+            }, CONSTRAINTS_GROWX);
+            summaryHeaderRow.add(summaryStatsLabel);
+            panel.add(summaryHeaderRow, CONSTRAINTS_GROWX);
 
-            UiComponents.configureSyntaxTextArea(noteBodyEditor, SyntaxConstants.SYNTAX_STYLE_MARKDOWN, true, true);
-            rightPane.add(new RTextScrollPane(noteBodyEditor), "span 4, grow, push, wrap");
+            summaryScrollPane.setMinimumSize(new Dimension(200, 72));
+            panel.add(summaryScrollPane, "growx, hmin 72, hmax 110");
 
-            JPanel noteButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-            noteButtons.setOpaque(false);
-            saveNoteButton.putClientProperty(FlatClientProperties.STYLE, UiComponents.ACCENT_BUTTON_STYLE);
-            saveNoteButton.setIcon(FontIcon.of(Codicons.SAVE, 14,
-                    UiComponents.resolveActionButtonIconColor(UiComponents.ACCENT_BUTTON_STYLE)));
-            deleteNoteButton.putClientProperty(FlatClientProperties.STYLE, UiComponents.SUBTLE_RED_BUTTON_STYLE);
-            deleteNoteButton.setIcon(FontIcon.of(Codicons.TRASH, 14,
-                    UiComponents.resolveActionButtonIconColor(UiComponents.SUBTLE_RED_BUTTON_STYLE)));
-            deleteNoteButton.setEnabled(false);
-            noteButtons.add(saveNoteButton);
-            noteButtons.add(deleteNoteButton);
-            noteButtons.add(deleteConfirmBar);
-            noteButtons.add(statusLabel);
-            rightPane.add(noteButtons, "span 4, growx");
+            JLabel detailsLabel = new JLabel("Extended Details (Optional Markdown — read on demand by Gemini)");
+            detailsLabel.putClientProperty(FlatClientProperties.STYLE, STYLE_FONT_BOLD);
+            panel.add(detailsLabel, "gapy 4");
 
-            JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, leftPane, rightPane);
-            splitPane.setDividerLocation(290);
-            splitPane.setResizeWeight(0.32);
-            splitPane.setBorder(null);
-            splitPane.setOpaque(false);
-            card.add(splitPane, "grow, push");
-            return card;
+            panel.add(detailsScrollPane, "grow");
+
+            JPanel buttonRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+            buttonRow.setOpaque(false);
+            buttonRow.add(saveButton);
+            buttonRow.add(revertButton);
+            buttonRow.add(deleteButton);
+            statusLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
+            buttonRow.add(statusLabel);
+            panel.add(buttonRow, CONSTRAINTS_GROWX);
+
+            panel.add(deleteConfirmBar, "growx, hidemode 3");
+            return panel;
         }
 
         private void setupListeners() {
-            SwingHtmlUtils.addChangeListener(memoryEditor, this::onPinnedMemoryEdited);
-            saveMemoryButton.addActionListener(e -> savePinnedMemory());
-            revertMemoryButton.addActionListener(e -> revertPinnedMemory());
+            SwingHtmlUtils.addChangeListener(searchField, this::applyFilter);
+            newButton.addActionListener(e -> startNewEntry());
+            saveButton.addActionListener(e -> saveCurrentMemory());
+            revertButton.addActionListener(e -> revertCurrentMemory());
+            deleteButton.addActionListener(e -> promptDeleteCurrentMemory());
 
-            SwingHtmlUtils.addChangeListener(searchField, this::applyNoteFilter);
-            newNoteButton.addActionListener(e -> startNewNote());
-            noteList.addListSelectionListener(e -> {
+            entryList.addListSelectionListener(e -> {
                 if (!e.getValueIsAdjusting()) {
-                    onNoteSelected(noteList.getSelectedValue());
+                    onEntrySelected(entryList.getSelectedValue());
                 }
             });
 
-            SwingHtmlUtils.addChangeListener(noteTitleField, this::onTitleFieldEdited);
-            SwingHtmlUtils.addChangeListener(noteSlugField, this::onSlugFieldEdited);
-            saveNoteButton.addActionListener(e -> saveCurrentNote());
-            deleteNoteButton.addActionListener(e -> deleteCurrentNote());
+            SwingHtmlUtils.addChangeListener(idField, this::onIdFieldEdited);
+            SwingHtmlUtils.addChangeListener(tagsField, this::updateEditorButtonsAndStats);
+            SwingHtmlUtils.addChangeListener(summaryArea, this::onSummaryEdited);
+            SwingHtmlUtils.addChangeListener(detailsEditor, this::updateEditorButtonsAndStats);
         }
 
         boolean isScopeAvailable() {
@@ -377,376 +379,392 @@ final class AgentMemoryPanel extends JPanel {
             return projectService != null && projectService.hasActiveProject();
         }
 
-        private void onPinnedMemoryEdited() {
-            if (!memoryUpdateGuard.isActive()) {
-                memoryDirty = !Objects.equals(memoryEditor.getText(), loadedMemoryContent);
+        long estimatePromptTokens() {
+            if (!isScopeAvailable() || allEntries.isEmpty()) {
+                return 0L;
             }
-            updateMemoryStatsAndButtons();
+            StringBuilder sb = new StringBuilder();
+            for (MemoryEntry entry : allEntries) {
+                sb.append("- ").append(entry.id()).append(' ');
+                if (!entry.tags().isEmpty()) {
+                    sb.append(String.join(", ", entry.tags())).append(' ');
+                }
+                if (StringUtils.isNotBlank(entry.details())) {
+                    sb.append("(+details) ");
+                }
+                sb.append(entry.summary()).append('\n');
+            }
+            return TokenUtils.estimateTokens(sb.toString());
         }
 
-        void updateMemoryStatsAndButtons() {
-            String text = StringUtils.defaultString(memoryEditor.getText());
-            int chars = text.length();
-            int lines = 0;
-            if (!text.isEmpty()) {
-                lines = memoryEditor.getLineCount();
-            }
-            long tokens = TokenUtils.estimateTokens(text);
-            memoryCounterLabel.setText(String.format("%,d / %,d chars  •  %,d / %,d lines  •  ~%s tokens", chars,
-                    MemoryService.MAX_PINNED_MEMORY_CHARS, lines, MemoryService.MAX_PINNED_MEMORY_LINES,
-                    TokenUtils.formatTokenCount(tokens)));
-
-            boolean overLimit = chars > MemoryService.MAX_PINNED_MEMORY_CHARS
-                    || lines > MemoryService.MAX_PINNED_MEMORY_LINES;
-            memoryWarningLabel.setVisible(overLimit);
-
-            boolean available = isScopeAvailable();
-            saveMemoryButton.setEnabled(available && memoryDirty);
-            revertMemoryButton.setEnabled(available && memoryDirty);
-        }
-
-        private void onTitleFieldEdited() {
-            if (noteFieldsUpdateGuard.isActive()) {
+        private void onIdFieldEdited() {
+            if (editorSyncGuard.isActive()) {
                 return;
             }
-            if (creatingNewNote && !slugManuallyEdited) {
-                String rawTitle = noteTitleField.getText();
-                String autoSlug = PathUtils.sanitizeSlug(rawTitle, MemoryService.MAX_SLUG_LENGTH, "");
-                noteFieldsUpdateGuard.run(() -> noteSlugField.setText(autoSlug));
+            if (creatingNewEntry) {
+                idManuallyEdited = !idField.getText().trim().isEmpty();
             }
+            updateEditorButtonsAndStats();
         }
 
-        private void onSlugFieldEdited() {
-            if (!noteFieldsUpdateGuard.isActive() && creatingNewNote) {
-                slugManuallyEdited = !StringUtils.isBlank(noteSlugField.getText());
+        private void onSummaryEdited() {
+            if (editorSyncGuard.isActive()) {
+                return;
             }
+            if (creatingNewEntry && !idManuallyEdited) {
+                editorSyncGuard.run(() -> {
+                    String summaryText = summaryArea.getText();
+                    if (StringUtils.isBlank(summaryText)) {
+                        idField.setText("");
+                    } else {
+                        idField.setText(MemoryService.deriveSlugFromSummary(summaryText));
+                    }
+                });
+            }
+            updateEditorButtonsAndStats();
         }
 
-        CompletableFuture<ScopeData> refresh() {
-            deleteConfirmBar.cancel();
+        void updateEditorButtonsAndStats() {
+            String summaryText = StringUtils.defaultString(summaryArea.getText());
+            long tokens = TokenUtils.estimateTokens(summaryText);
+            summaryStatsLabel.setText(summaryText.length() + " chars  •  ~" + tokens + " tok");
+
             boolean available = isScopeAvailable();
-            if (!available) {
-                scopeCardLayout.show(this, CARD_EMPTY);
-                CompletableFuture<ScopeData> emptyFuture = CompletableFuture
-                        .completedFuture(new ScopeData("", List.of()));
-                lastAsyncFuture = emptyFuture;
-                return emptyFuture;
-            }
-            scopeCardLayout.show(this, CARD_CONTENT);
-
-            CompletableFuture<ScopeData> future = Edt.supplyAsync(this::loadScopeDataFromDisk, this::applyScopeData,
-                    ex -> log.warn("Failed to load agent memory scope (global={}): {}", globalScope, ex.getMessage()));
-            lastAsyncFuture = future;
-            return future;
+            boolean dirty = isEditorDirty();
+            boolean hasSummary = StringUtils.isNotBlank(summaryText);
+            saveButton.setEnabled(available && hasSummary && (creatingNewEntry || dirty));
+            revertButton.setEnabled(available && dirty);
+            deleteButton.setEnabled(available && selectedEntry != null && !creatingNewEntry);
         }
 
-        private ScopeData loadScopeDataFromDisk() {
-            if (memoryService == null) {
-                return new ScopeData("", List.of());
-            }
-            if (globalScope) {
-                return new ScopeData(StringUtils.defaultString(memoryService.readGlobalMemory()),
-                        Objects.requireNonNullElse(memoryService.listGlobalNoteDetails(), List.of()));
-            }
-            return new ScopeData(StringUtils.defaultString(memoryService.readProjectMemory()),
-                    Objects.requireNonNullElse(memoryService.listProjectNoteDetails(), List.of()));
+        boolean isEditorDirty() {
+            return !Objects.equals(idField.getText().trim(), loadedId)
+                    || !Objects.equals(tagsField.getText().trim(), loadedTags)
+                    || !Objects.equals(summaryArea.getText(), loadedSummary)
+                    || !Objects.equals(detailsEditor.getText(), loadedDetails);
         }
 
-        private void applyScopeData(ScopeData data) {
-            loadedMemoryContent = StringUtils.defaultString(data.pinnedMemory());
-            if (!memoryDirty) {
-                memoryUpdateGuard.run(this::resetMemoryEditorToLoadedContent);
-            } else {
-                memoryDirty = !Objects.equals(memoryEditor.getText(), loadedMemoryContent);
+        CompletableFuture<List<MemoryEntry>> refresh() {
+            if (!isScopeAvailable()) {
+                cardLayout.show(cardContainer, CARD_EMPTY);
+                allEntries = List.of();
+                listModel.clear();
+                updateTabTitle(globalScope, 0);
+                startNewEntry();
+                return CompletableFuture.completedFuture(List.of());
             }
-            updateMemoryStatsAndButtons();
-
-            allNotes = List.copyOf(Objects.requireNonNullElse(data.notes(), List.of()));
-            applyNoteFilter();
+            cardLayout.show(cardContainer, CARD_CONTENT);
+            lastAsyncFuture = Edt.supplyAsync(() -> memoryService.readAll(scopeName), this::applyLoadedEntries,
+                    ex -> log.warn("Failed to load {} memories: {}", scopeName,
+                            ExceptionUtils.getRootCauseMessage(ex)));
+            return (CompletableFuture<List<MemoryEntry>>) lastAsyncFuture;
         }
 
-        private void resetMemoryEditorToLoadedContent() {
-            memoryEditor.setText(loadedMemoryContent);
-            memoryEditor.setCaretPosition(0);
-            memoryDirty = false;
-        }
-
-        private void applyNoteFilter() {
-            String previousSlug = null;
-            if (selectedNote != null) {
-                previousSlug = selectedNote.slug();
-            }
-            String query = StringUtils.trimToEmpty(searchField.getText());
-            List<NoteDetail> filtered = new ArrayList<>();
-            for (NoteDetail note : allNotes) {
-                if (matchesFilter(note, query)) {
-                    filtered.add(note);
+        private void applyLoadedEntries(List<MemoryEntry> entries) {
+            allEntries = Objects.requireNonNullElse(entries, List.of());
+            updateTabTitle(globalScope, allEntries.size());
+            applyFilter();
+            if (selectedEntry != null) {
+                MemoryEntry refreshed = findEntryById(allEntries, selectedEntry.id());
+                if (refreshed != null) {
+                    if (!isEditorDirty()) {
+                        populateEditor(refreshed);
+                    }
+                } else if (!isEditorDirty()) {
+                    startNewEntry();
                 }
             }
-            UiComponents.replaceListItemsPreservingSelection(noteListModel, noteList, filtered, NoteDetail::slug,
-                    previousSlug, !creatingNewNote);
         }
 
-        private boolean matchesFilter(NoteDetail note, String query) {
+        private static @Nullable MemoryEntry findEntryById(List<MemoryEntry> entries, String id) {
+            for (MemoryEntry candidate : entries) {
+                if (candidate.id().equals(id)) {
+                    return candidate;
+                }
+            }
+            return null;
+        }
+
+        private void applyFilter() {
+            String query = StringUtils.trimToEmpty(searchField.getText());
+            List<MemoryEntry> filtered = new ArrayList<>();
+            for (MemoryEntry entry : allEntries) {
+                if (matchesFilter(entry, query)) {
+                    filtered.add(entry);
+                }
+            }
+            String previouslySelectedId = null;
+            if (selectedEntry != null) {
+                previouslySelectedId = selectedEntry.id();
+            }
+            final String targetId = previouslySelectedId;
+            editorSyncGuard.run(() -> UiComponents.replaceListItemsPreservingSelection(listModel, entryList, filtered,
+                    MemoryEntry::id, targetId, false));
+        }
+
+        private static boolean matchesFilter(MemoryEntry entry, String query) {
             if (query.isEmpty()) {
                 return true;
             }
-            return StringUtils.containsIgnoreCase(note.title(), query)
-                    || StringUtils.containsIgnoreCase(note.slug(), query)
-                    || StringUtils.containsIgnoreCase(note.tags(), query)
-                    || StringUtils.containsIgnoreCase(note.body(), query);
+            if (StringUtils.containsIgnoreCase(entry.id(), query)
+                    || StringUtils.containsIgnoreCase(entry.summary(), query)
+                    || StringUtils.containsIgnoreCase(entry.details(), query)) {
+                return true;
+            }
+            for (String tag : entry.tags()) {
+                if (StringUtils.containsIgnoreCase(tag, query)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         @SuppressWarnings("PMD.NullAssignment")
-        void startNewNote() {
-            selectedNote = null;
-            creatingNewNote = true;
-            slugManuallyEdited = false;
-            noteList.clearSelection();
-            noteFieldsUpdateGuard.run(this::clearNoteEditorFields);
-            deleteNoteButton.setEnabled(false);
-            statusLabel.setText("");
+        void startNewEntry() {
+            selectedEntry = null;
+            creatingNewEntry = true;
+            idManuallyEdited = false;
+            deleteConfirmBar.cancel();
+            editorSyncGuard.run(() -> {
+                entryList.clearSelection();
+                loadedId = "";
+                loadedTags = "";
+                loadedSummary = "";
+                loadedDetails = "";
+                idField.setText("");
+                tagsField.setText("");
+                summaryArea.setText("");
+                detailsEditor.setText("");
+            });
+            updateEditorButtonsAndStats();
         }
 
-        private void clearNoteEditorFields() {
-            deleteConfirmBar.cancel();
-            noteTitleField.setText("");
-            noteSlugField.setText("");
-            noteSlugField.setEditable(true);
-            noteTagsField.setText("");
-            noteBodyEditor.setText("");
-            noteBodyEditor.setCaretPosition(0);
-        }
-
-        void onNoteSelected(@Nullable NoteDetail note) {
-            deleteConfirmBar.cancel();
-            if (note == null) {
+        void onEntrySelected(@Nullable MemoryEntry entry) {
+            if (editorSyncGuard.isActive()) {
                 return;
             }
-            selectedNote = note;
-            creatingNewNote = false;
-            slugManuallyEdited = true;
-            noteFieldsUpdateGuard.run(() -> populateNoteEditorFields(note));
-            deleteNoteButton.setEnabled(isScopeAvailable());
-            statusLabel.setText("");
-        }
-
-        private void populateNoteEditorFields(NoteDetail note) {
-            noteTitleField.setText(StringUtils.defaultString(note.title()));
-            noteSlugField.setText(StringUtils.defaultString(note.slug()));
-            noteSlugField.setEditable(false);
-            noteTagsField.setText(StringUtils.defaultString(note.tags()));
-            noteBodyEditor.setText(StringUtils.defaultString(note.body()));
-            noteBodyEditor.setCaretPosition(0);
-        }
-
-        CompletableFuture<EditorResult> savePinnedMemory() {
-            if (memoryService == null || !isScopeAvailable()) {
-                return CompletableFuture.completedFuture(new EditorResult(false, "", "Memory service unavailable"));
-            }
-            String contentToSave = StringUtils.defaultString(memoryEditor.getText());
-            saveMemoryButton.setEnabled(false);
-            revertMemoryButton.setEnabled(false);
-
-            CompletableFuture<EditorResult> future = Edt.supplyAsync(
-                    () -> supplyInMemoryScope(() -> memoryService.updateGlobalMemory(contentToSave),
-                            () -> memoryService.updateProjectMemory(contentToSave)),
-                    result -> handlePinnedMemorySaved(result, contentToSave), this::handlePinnedMemorySaveError);
-            lastAsyncFuture = future;
-            return future;
-        }
-
-        private EditorResult supplyInMemoryScope(Supplier<EditorResult> globalAction,
-                Supplier<EditorResult> projectAction) {
-            return memoryEventRefreshGuard.supply(() -> {
-                if (globalScope) {
-                    return globalAction.get();
+            if (entry == null) {
+                if (!creatingNewEntry) {
+                    startNewEntry();
                 }
-                return projectAction.get();
+                return;
+            }
+            populateEditor(entry);
+        }
+
+        private void populateEditor(MemoryEntry entry) {
+            selectedEntry = entry;
+            creatingNewEntry = false;
+            idManuallyEdited = true;
+            deleteConfirmBar.cancel();
+            editorSyncGuard.run(() -> {
+                loadedId = entry.id();
+                loadedTags = MemoryService.formatTagsDisplay(entry.tags());
+                loadedSummary = entry.summary();
+                loadedDetails = entry.details();
+                idField.setText(loadedId);
+                tagsField.setText(loadedTags);
+                summaryArea.setText(loadedSummary);
+                summaryArea.setCaretPosition(0);
+                detailsEditor.setText(loadedDetails);
+                detailsEditor.setCaretPosition(0);
             });
+            updateEditorButtonsAndStats();
+        }
+
+        void revertCurrentMemory() {
+            deleteConfirmBar.cancel();
+            if (selectedEntry != null && !creatingNewEntry) {
+                populateEditor(selectedEntry);
+            } else {
+                startNewEntry();
+            }
+            showStatus("Reverted changes", true);
+        }
+
+        CompletableFuture<EditorResult> saveCurrentMemory() {
+            if (!isScopeAvailable()) {
+                return CompletableFuture.completedFuture(new EditorResult(false, "", NO_PROJECT_MESSAGE));
+            }
+            String summary = summaryArea.getText().trim();
+            if (summary.isEmpty()) {
+                showStatus("Summary must not be blank.", false);
+                return CompletableFuture.completedFuture(new EditorResult(false, "", "Summary must not be blank."));
+            }
+            String rawId = idField.getText().trim();
+            if (rawId.isEmpty()) {
+                rawId = MemoryService.deriveSlugFromSummary(summary);
+            }
+            String sanitizedId;
+            try {
+                sanitizedId = MemoryService.sanitizeSlug(rawId);
+            } catch (IllegalArgumentException e) {
+                showStatus(e.getMessage(), false);
+                return CompletableFuture.completedFuture(new EditorResult(false, "", e.getMessage()));
+            }
+            List<String> tags = MemoryService.parseTagsString(tagsField.getText());
+            String details = detailsEditor.getText();
+            final String targetId = sanitizedId;
+            saveButton.setEnabled(false);
+
+            lastAsyncFuture = Edt.supplyAsync(
+                    () -> memoryEventRefreshGuard
+                            .supply(() -> memoryService.put(scopeName, targetId, summary, tags, details)),
+                    result -> handleMemorySaved(result, targetId), ex -> {
+                        updateEditorButtonsAndStats();
+                        showStatus("Failed to save memory: " + ExceptionUtils.getRootCauseMessage(ex), false);
+                    });
+            return (CompletableFuture<EditorResult>) lastAsyncFuture;
+        }
+
+        private void handleMemorySaved(@Nullable EditorResult result, String savedId) {
+            if (result != null && result.success()) {
+                creatingNewEntry = false;
+                idManuallyEdited = true;
+                editorSyncGuard.run(() -> {
+                    loadedId = savedId;
+                    loadedTags = MemoryService.formatTagsDisplay(MemoryService.parseTagsString(tagsField.getText()));
+                    loadedSummary = summaryArea.getText().trim();
+                    loadedDetails = detailsEditor.getText().stripTrailing();
+                    idField.setText(loadedId);
+                    tagsField.setText(loadedTags);
+                    summaryArea.setText(loadedSummary);
+                    detailsEditor.setText(loadedDetails);
+                    selectedEntry = new MemoryEntry(loadedId, loadedSummary, MemoryService.parseTagsString(loadedTags),
+                            loadedDetails, "");
+                });
+                showStatus("Saved memory '" + savedId + "'", true);
+                refresh();
+            } else {
+                String err = "Failed to save memory";
+                if (result != null && StringUtils.isNotBlank(result.errorHint())) {
+                    err = result.errorHint();
+                }
+                showStatus(err, false);
+                updateEditorButtonsAndStats();
+            }
+        }
+
+        void promptDeleteCurrentMemory() {
+            if (!isScopeAvailable() || selectedEntry == null || creatingNewEntry) {
+                return;
+            }
+            String id = selectedEntry.id();
+            deleteConfirmBar.prompt("Delete memory '" + id + "'?", "Confirm Delete", true, () -> performDelete(id));
+        }
+
+        CompletableFuture<EditorResult> performDelete(String id) {
+            deleteButton.setEnabled(false);
+            lastAsyncFuture = Edt.supplyAsync(
+                    () -> memoryEventRefreshGuard.supply(() -> memoryService.delete(scopeName, id)),
+                    result -> handleMemoryDeleted(result, id), ex -> {
+                        updateEditorButtonsAndStats();
+                        showStatus("Failed to delete memory: " + ExceptionUtils.getRootCauseMessage(ex), false);
+                    });
+            return (CompletableFuture<EditorResult>) lastAsyncFuture;
+        }
+
+        private void handleMemoryDeleted(@Nullable EditorResult result, String deletedId) {
+            if (result != null && result.success()) {
+                showStatus("Deleted memory '" + deletedId + "'", true);
+                startNewEntry();
+                refresh();
+            } else {
+                String err = "Failed to delete memory";
+                if (result != null && StringUtils.isNotBlank(result.errorHint())) {
+                    err = result.errorHint();
+                }
+                showStatus(err, false);
+                updateEditorButtonsAndStats();
+            }
         }
 
         void showStatus(String message, boolean success) {
             UiComponents.showStatusMessage(statusLabel, statusTimer, message, success);
         }
 
-        private void handlePinnedMemorySaved(@Nullable EditorResult result, String contentToSave) {
-            if (result != null && result.success()) {
-                loadedMemoryContent = contentToSave;
-                memoryDirty = false;
-                showStatus("Saved MEMORY.md", true);
-            } else {
-                showStatus(resolveErrorMessage(result, "Failed to save MEMORY.md"), false);
-            }
-            updateMemoryStatsAndButtons();
-        }
-
-        private void handlePinnedMemorySaveError(Throwable ex) {
-            showStatus("Failed to save MEMORY.md: " + ExceptionUtils.getRootCauseMessage(ex), false);
-            updateMemoryStatsAndButtons();
-        }
-
-        void revertPinnedMemory() {
-            memoryUpdateGuard.run(this::resetMemoryEditorToLoadedContent);
-            updateMemoryStatsAndButtons();
-            showStatus("Reverted MEMORY.md changes", true);
-        }
-
-        CompletableFuture<EditorResult> saveCurrentNote() {
-            if (memoryService == null || !isScopeAvailable()) {
-                return CompletableFuture.completedFuture(new EditorResult(false, "", "Memory service unavailable"));
-            }
-            String title = StringUtils.trimToEmpty(noteTitleField.getText());
-            String rawSlug = StringUtils.trimToEmpty(noteSlugField.getText());
-            if (rawSlug.isEmpty()) {
-                rawSlug = title;
-            }
-            String sanitizedSlug;
-            try {
-                sanitizedSlug = MemoryService.sanitizeSlug(rawSlug);
-            } catch (IllegalArgumentException ex) {
-                showStatus(ex.getMessage(), false);
-                return CompletableFuture.completedFuture(new EditorResult(false, "", ex.getMessage()));
-            }
-            String resolvedTitle = StringUtils.defaultIfBlank(title, sanitizedSlug);
-            String tags = StringUtils.trimToEmpty(noteTagsField.getText());
-            String body = StringUtils.defaultString(noteBodyEditor.getText());
-
-            CompletableFuture<EditorResult> future = Edt
-                    .supplyAsync(
-                            () -> supplyInMemoryScope(
-                                    () -> memoryService.saveGlobalNote(sanitizedSlug, resolvedTitle, tags, body),
-                                    () -> memoryService.saveProjectNote(sanitizedSlug, resolvedTitle, tags, body)),
-                            result -> handleNoteSaved(result, sanitizedSlug, resolvedTitle, tags, body),
-                            ex -> showStatus("Failed to save note: " + ExceptionUtils.getRootCauseMessage(ex), false))
-                    .thenCompose(result -> refresh().thenApply(v -> result));
-            lastAsyncFuture = future;
-            return future;
-        }
-
-        private void handleNoteSaved(@Nullable EditorResult result, String sanitizedSlug, String resolvedTitle,
-                String tags, String body) {
-            if (result != null && result.success()) {
-                creatingNewNote = false;
-                selectedNote = new NoteDetail(sanitizedSlug, resolvedTitle, tags, "", body, "");
-                showStatus("Saved note: " + sanitizedSlug, true);
-            } else {
-                showStatus(resolveErrorMessage(result, "Failed to save note"), false);
-            }
-        }
-
-        void deleteCurrentNote() {
-            if (memoryService == null || selectedNote == null || !isScopeAvailable()) {
-                return;
-            }
-            String slug = selectedNote.slug();
-            deleteConfirmBar.prompt("Delete '" + slug + "'?", "Confirm Delete", true,
-                    () -> performDeleteCurrentNote(slug));
-        }
-
-        CompletableFuture<EditorResult> performDeleteCurrentNote(String slug) {
-            CompletableFuture<EditorResult> future = Edt
-                    .supplyAsync(
-                            () -> supplyInMemoryScope(() -> memoryService.deleteGlobalNote(slug),
-                                    () -> memoryService.deleteProjectNote(slug)),
-                            result -> handleNoteDeleted(result, slug),
-                            ex -> showStatus("Failed to delete note: " + ExceptionUtils.getRootCauseMessage(ex), false))
-                    .thenCompose(result -> refresh().thenApply(v -> result));
-            lastAsyncFuture = future;
-            return future;
-        }
-
-        private void handleNoteDeleted(@Nullable EditorResult result, String slug) {
-            if (result != null && result.success()) {
-                startNewNote();
-                showStatus("Deleted note: " + slug, true);
-            } else {
-                showStatus(resolveErrorMessage(result, "Failed to delete note"), false);
-            }
-        }
-
-        private static String resolveErrorMessage(@Nullable EditorResult result, String fallback) {
-            if (result != null && StringUtils.isNotBlank(result.errorHint())) {
-                return result.errorHint();
-            }
-            return fallback;
-        }
-
-        boolean isMemoryWarningVisible() {
-            return memoryWarningLabel.isVisible();
-        }
-
-        boolean isMemoryDirty() {
-            return memoryDirty;
-        }
-
         void updateTheme() {
-            if (pinnedCardPanel != null) {
-                UiComponents.styleCardPanel(pinnedCardPanel);
-            }
-            if (notesCardPanel != null) {
-                UiComponents.styleCardPanel(notesCardPanel);
-            }
-            if (emptyProjectPanel != null) {
-                UiComponents.styleCardPanel(emptyProjectPanel);
-            }
-            Color warnColor = SwingHtmlUtils.getWarningColor();
+            Color accent = SwingHtmlUtils.getAccentColor();
             Color mutedColor = SwingHtmlUtils.getMutedForegroundColor();
-            memoryWarningLabel.setForeground(warnColor);
-            memoryWarningLabel.setIcon(FontIcon.of(Codicons.WARNING, 14, warnColor));
-            memoryCounterLabel.setForeground(mutedColor);
-            statusLabel.setForeground(mutedColor);
             searchField.putClientProperty(FlatClientProperties.TEXT_FIELD_LEADING_ICON,
                     FontIcon.of(Codicons.SEARCH, 14, mutedColor));
-            UiComponents.updateInfoIconTheme(pinnedInfoIcon);
-            UiComponents.updateInfoIconTheme(notesInfoIcon);
+            summaryTitleLabel.setForeground(accent);
+            Color tintedBg = SwingHtmlUtils.getTintedBackground(accent, 0.08);
+            summaryArea.setBackground(tintedBg);
+            summaryScrollPane
+                    .setBorder(BorderFactory.createLineBorder(SwingHtmlUtils.blendColor(accent, tintedBg, 0.5)));
+            UiComponents.updateInfoIconTheme(memoryInfoIcon);
             UiComponents.refreshActionButtonIcons(this);
-            SwingHtmlUtils.applyRSyntaxTheme(memoryEditor, settingsService);
-            SwingHtmlUtils.applyRSyntaxTheme(noteBodyEditor, settingsService);
-            noteList.repaint();
+            SwingHtmlUtils.applyRSyntaxTheme(detailsEditor, settingsService);
+            entryList.repaint();
         }
     }
 
-    private static final class NoteCellRenderer extends JPanel implements ListCellRenderer<NoteDetail> {
+    private static final class MemoryEntryCellRenderer extends JPanel implements ListCellRenderer<MemoryEntry> {
         private static final long serialVersionUID = 1L;
-        private final JLabel titleLabel = new JLabel();
+        private final JLabel idLabel = new JLabel();
+        private final JLabel detailsPill = new JLabel("+details");
+        private final JLabel summaryLabel = new JLabel();
         private final JLabel metaLabel = new JLabel();
 
-        NoteCellRenderer() {
+        MemoryEntryCellRenderer() {
             super(new MigLayout("insets 6 10 6 10, fillx, wrap 1, gapy 2", "[grow, fill]"));
             setOpaque(true);
-            titleLabel.setIconTextGap(6);
-            titleLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold 0");
+            idLabel.setIconTextGap(6);
+            idLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold $monospaced.font");
+            detailsPill.putClientProperty(FlatClientProperties.STYLE, "font: -2 bold; border: 1,6,1,6; arc: 10");
+            detailsPill.setOpaque(true);
+            summaryLabel.putClientProperty(FlatClientProperties.STYLE, "font: 0");
             metaLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
-            add(titleLabel, "growx");
-            add(metaLabel, "growx");
+
+            JPanel topRow = new JPanel(new MigLayout("insets 0, fillx", "[grow, fill][]", "[]"));
+            topRow.setOpaque(false);
+            topRow.add(idLabel, CONSTRAINTS_GROWX);
+            topRow.add(detailsPill, "hidemode 3");
+            add(topRow, CONSTRAINTS_GROWX);
+            add(summaryLabel, CONSTRAINTS_GROWX);
+            add(metaLabel, CONSTRAINTS_GROWX);
         }
 
         @Override
-        public java.awt.Component getListCellRendererComponent(JList<? extends NoteDetail> list, NoteDetail value,
+        public java.awt.Component getListCellRendererComponent(JList<? extends MemoryEntry> list, MemoryEntry value,
                 int index, boolean isSelected, boolean cellHasFocus) {
             UiComponents.ListCellColors colors = UiComponents.resolveListCellColors(list, isSelected);
             setBackground(colors.background());
             setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));
 
             if (value != null) {
-                titleLabel.setText(value.title());
-                titleLabel.setForeground(colors.foreground());
-                titleLabel.setIcon(FontIcon.of(Codicons.NOTE, 14, colors.iconColor()));
+                idLabel.setText(value.id());
+                idLabel.setForeground(colors.foreground());
+                idLabel.setIcon(FontIcon.of(Codicons.NOTE, 14, colors.iconColor()));
 
-                StringBuilder meta = new StringBuilder(value.slug());
-                if (StringUtils.isNotBlank(value.tags())) {
-                    meta.append("  •  [").append(value.tags()).append(']');
+                boolean hasDetails = StringUtils.isNotBlank(value.details());
+                detailsPill.setVisible(hasDetails);
+                if (hasDetails) {
+                    Color accent = SwingHtmlUtils.getAccentColor();
+                    detailsPill.setForeground(accent);
+                    detailsPill.setBackground(SwingHtmlUtils.getTintedBackground(accent, 0.16));
                 }
-                if (StringUtils.isNotBlank(value.updated())) {
-                    String formattedTs = PathUtils.formatTimestampDisplay(value.updated(), TIMESTAMP_DISPLAY_LEN, "");
+
+                summaryLabel.setText(value.summary());
+                summaryLabel.setForeground(colors.foreground());
+
+                StringBuilder meta = new StringBuilder();
+                if (!value.tags().isEmpty()) {
+                    meta.append('[').append(MemoryService.formatTagsDisplay(value.tags())).append(']');
+                }
+                if (StringUtils.isNotBlank(value.updatedAt())) {
+                    String formattedTs = PathUtils.formatTimestampDisplay(value.updatedAt(), TIMESTAMP_DISPLAY_LEN, "");
                     if (!formattedTs.isEmpty()) {
-                        meta.append("  •  ").append(formattedTs);
+                        if (meta.length() > 0) {
+                            meta.append("  •  ");
+                        }
+                        meta.append(formattedTs);
                     }
                 }
                 metaLabel.setText(meta.toString());
                 metaLabel.setForeground(colors.muted());
-                setToolTipText(value.title() + " (notes/" + value.slug() + ".md)");
+                setToolTipText(value.id() + ": " + value.summary());
             }
             return this;
         }

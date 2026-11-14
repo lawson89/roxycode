@@ -8,10 +8,12 @@ import static org.mockito.Mockito.when;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.services.MemoryService;
+import org.roxycode.app.ai.services.MemoryService.MemoryEntry;
 import org.roxycode.app.events.MemoryChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.service.ProjectService;
@@ -42,121 +44,89 @@ class AgentMemoryPanelTest {
     }
 
     @Test
-    void testPinnedMemoryEditorCounterWarningSaveAndRevert() {
-        memoryService.updateGlobalMemory("# Initial Global Memory");
+    void testMasterDetailCrudAutoSlugRevertSearchAndTabBadges() {
+        when(projectService.hasActiveProject()).thenReturn(false);
+        memoryService.put("global", "no-ternary", "Never use ternary operators.", List.of("java"),
+                "Always use explicit if/else blocks.");
+
         AgentMemoryPanel panel = new AgentMemoryPanel(memoryService, projectService, settingsService);
         SwingTestUtils.awaitFuture(panel.globalScopeView.lastAsyncFuture);
         SwingTestUtils.awaitFuture(panel.projectScopeView.lastAsyncFuture);
 
-        assertEquals("# Initial Global Memory", panel.globalScopeView.memoryEditor.getText());
-        assertNotNull(panel.globalScopeView.pinnedInfoIcon.getToolTipText());
-        assertNotNull(panel.globalScopeView.notesInfoIcon.getToolTipText());
-        assertFalse(panel.globalScopeView.isMemoryDirty());
-        assertFalse(panel.globalScopeView.saveMemoryButton.isEnabled());
-        assertFalse(panel.globalScopeView.isMemoryWarningVisible());
-
-        SwingTestUtils.runOnEdt(() -> panel.globalScopeView.memoryEditor.setText("# Modified Memory\nLine 2"));
-        assertTrue(panel.globalScopeView.isMemoryDirty());
-        assertTrue(panel.globalScopeView.saveMemoryButton.isEnabled());
-        assertTrue(panel.globalScopeView.revertMemoryButton.isEnabled());
-        assertTrue(panel.globalScopeView.memoryCounterLabel.getText().contains("2 / 200 lines"));
-
-        SwingTestUtils.clickOnEdt(panel.globalScopeView.revertMemoryButton);
-        assertEquals("# Initial Global Memory", panel.globalScopeView.memoryEditor.getText());
-        assertFalse(panel.globalScopeView.isMemoryDirty());
-
-        String oversized = "x".repeat(MemoryService.MAX_PINNED_MEMORY_CHARS + 50);
-        SwingTestUtils.runOnEdt(() -> panel.globalScopeView.memoryEditor.setText(oversized));
-        assertTrue(panel.globalScopeView.isMemoryWarningVisible());
-
-        SwingTestUtils.runOnEdt(() -> panel.globalScopeView.memoryEditor.setText("# Saved Global Memory"));
-        assertFalse(panel.globalScopeView.isMemoryWarningVisible());
-        SwingTestUtils.clickOnEdt(panel.globalScopeView.saveMemoryButton);
-        SwingTestUtils.awaitFuture(panel.globalScopeView.lastAsyncFuture);
-
-        assertEquals("# Saved Global Memory", memoryService.readGlobalMemory());
-        assertFalse(panel.globalScopeView.isMemoryDirty());
-    }
-
-    @Test
-    void testTopicNotesCrudAutoSlugSearchAndProjectScopeState() {
-        when(projectService.hasActiveProject()).thenReturn(false);
-        AgentMemoryPanel panel = new AgentMemoryPanel(memoryService, projectService, settingsService);
-        SwingTestUtils.awaitFuture(panel.globalScopeView.lastAsyncFuture);
         assertFalse(panel.projectScopeView.isScopeAvailable());
+        assertEquals("Project Memory (0)", panel.scopeTabbedPane.getTitleAt(0));
+        assertEquals("Global Memory (1)", panel.scopeTabbedPane.getTitleAt(1));
+        assertEquals(1, panel.globalScopeView.listModel.size());
 
+        SwingTestUtils.runOnEdt(() -> panel.scopeTabbedPane.setSelectedIndex(1));
+        assertTrue(panel.promptFootprintBadge.getText().contains("Always-On Prompt: ~"));
+
+        // Switch project on
         when(projectService.hasActiveProject()).thenReturn(true);
         panel.onProjectChanged(new ProjectChangedEvent(projectDataDir));
         SwingTestUtils.flushEdt();
         SwingTestUtils.awaitFuture(panel.projectScopeView.lastAsyncFuture);
         assertTrue(panel.projectScopeView.isScopeAvailable());
 
+        // Create new entry with auto-derived slug
         SwingTestUtils.runOnEdt(() -> {
-            panel.projectScopeView.memoryEditor.setText("# Unsaved Draft Memory");
-            panel.projectScopeView.startNewNote();
-            panel.projectScopeView.noteTitleField.setText("Swing HTML 3.2 Rules!");
-            panel.projectScopeView.noteTagsField.setText("ui, swing");
-            panel.projectScopeView.noteBodyEditor.setText("Always use HTML tables for layout.");
+            panel.projectScopeView.startNewEntry();
+            panel.projectScopeView.summaryArea.setText("Swing HTML 3.2 Rules!");
+            panel.projectScopeView.tagsField.setText("ui, swing");
+            panel.projectScopeView.detailsEditor.setText("Always use HTML tables for layout.");
         });
-        assertTrue(panel.projectScopeView.isMemoryDirty());
-        assertEquals("swing-html-3-2-rules", panel.projectScopeView.noteSlugField.getText());
+        assertEquals("swing-html-3-2-rules", panel.projectScopeView.idField.getText());
+        assertTrue(panel.projectScopeView.saveButton.isEnabled());
+        assertTrue(panel.projectScopeView.revertButton.isEnabled());
 
-        SwingTestUtils.clickOnEdt(panel.projectScopeView.saveNoteButton);
+        SwingTestUtils.clickOnEdt(panel.projectScopeView.saveButton);
+        SwingTestUtils.awaitFuture(panel.projectScopeView.lastAsyncFuture);
+        SwingTestUtils.flushEdt();
         SwingTestUtils.awaitFuture(panel.projectScopeView.lastAsyncFuture);
 
-        assertEquals("# Unsaved Draft Memory", panel.projectScopeView.memoryEditor.getText());
-        assertTrue(panel.projectScopeView.isMemoryDirty());
-        assertEquals(1, panel.projectScopeView.noteListModel.size());
-        assertEquals("Always use HTML tables for layout.", memoryService.listProjectNoteDetails().get(0).body());
+        assertEquals(1, panel.projectScopeView.listModel.size());
+        assertEquals("Project Memory (1)", panel.scopeTabbedPane.getTitleAt(0));
+        MemoryEntry saved = memoryService.read("project", "swing-html-3-2-rules");
+        assertNotNull(saved);
+        assertEquals("Always use HTML tables for layout.", saved.details());
 
-        memoryService.saveProjectNote("caffeine-cache", "Caffeine Async Cache", "cache, async", "Use AsyncCache.");
+        // External memory update via event
+        memoryService.put("project", "caffeine-cache", "Use AsyncCache.", List.of("cache", "async"), "");
         panel.onMemoryChanged(new MemoryChangedEvent(false));
         SwingTestUtils.flushEdt();
         SwingTestUtils.awaitFuture(panel.projectScopeView.lastAsyncFuture);
-        assertEquals(2, panel.projectScopeView.noteListModel.size());
+        assertEquals(2, panel.projectScopeView.listModel.size());
 
+        // Search filter
         SwingTestUtils.runOnEdt(() -> panel.projectScopeView.searchField.setText("caffeine"));
-        assertEquals(1, panel.projectScopeView.noteListModel.size());
-        assertEquals("caffeine-cache", panel.projectScopeView.noteListModel.get(0).slug());
+        assertEquals(1, panel.projectScopeView.listModel.size());
+        assertEquals("caffeine-cache", panel.projectScopeView.listModel.get(0).id());
 
         SwingTestUtils.runOnEdt(() -> {
             panel.projectScopeView.searchField.setText("");
-            panel.projectScopeView.noteList.setSelectedIndex(0);
+            panel.projectScopeView.entryList.setSelectedIndex(0);
         });
-        assertEquals(2, panel.projectScopeView.noteListModel.size());
+        assertEquals(2, panel.projectScopeView.listModel.size());
 
-        String selectedSlug = panel.projectScopeView.noteList.getSelectedValue().slug();
-        SwingTestUtils.clickOnEdt(panel.projectScopeView.deleteNoteButton);
+        // Revert dirty edits
+        SwingTestUtils.runOnEdt(() -> panel.projectScopeView.summaryArea.setText("Unsaved summary edit"));
+        assertTrue(panel.projectScopeView.isEditorDirty());
+        SwingTestUtils.clickOnEdt(panel.projectScopeView.revertButton);
+        assertFalse(panel.projectScopeView.isEditorDirty());
+
+        // Delete with InlineConfirmBar
+        String selectedId = panel.projectScopeView.entryList.getSelectedValue().id();
+        SwingTestUtils.clickOnEdt(panel.projectScopeView.deleteButton);
         UiComponents.InlineConfirmBar confirmBar = panel.projectScopeView.deleteConfirmBar;
         assertTrue(confirmBar.isPromptVisible());
-        assertEquals("Delete '" + selectedSlug + "'?", confirmBar.getMessage());
-        assertEquals("Confirm Delete", confirmBar.confirmButton.getText());
-        SwingTestUtils.runOnEdt(confirmBar::cancel);
-        assertFalse(confirmBar.isPromptVisible());
-        assertEquals(2, panel.projectScopeView.noteListModel.size());
-
-        SwingTestUtils.clickOnEdt(panel.projectScopeView.deleteNoteButton);
-        assertTrue(confirmBar.isPromptVisible());
-        SwingTestUtils.runOnEdt(() -> panel.projectScopeView.noteList.setSelectedIndex(1));
-        assertFalse(confirmBar.isPromptVisible());
-
-        SwingTestUtils.runOnEdt(() -> panel.projectScopeView.noteList.setSelectedIndex(0));
-        SwingTestUtils.clickOnEdt(panel.projectScopeView.deleteNoteButton);
-        assertTrue(confirmBar.isPromptVisible());
+        assertEquals("Delete memory '" + selectedId + "'?", confirmBar.getMessage());
         SwingTestUtils.clickOnEdt(confirmBar.confirmButton);
+        SwingTestUtils.awaitFuture(panel.projectScopeView.lastAsyncFuture);
+        SwingTestUtils.flushEdt();
         SwingTestUtils.awaitFuture(panel.projectScopeView.lastAsyncFuture);
 
         assertFalse(confirmBar.isPromptVisible());
-        assertEquals(1, panel.projectScopeView.noteListModel.size());
-        assertEquals("Deleted note: " + selectedSlug, panel.projectScopeView.statusLabel.getText());
-
-        SwingTestUtils.runOnEdt(() -> {
-            panel.projectScopeView.startNewNote();
-            panel.projectScopeView.noteTitleField.setText("   ");
-            panel.projectScopeView.noteSlugField.setText("!!!");
-        });
-        SwingTestUtils.clickOnEdt(panel.projectScopeView.saveNoteButton);
-        assertTrue(panel.projectScopeView.statusLabel.getText().contains("Note slug"));
-        assertNotNull(panel.projectScopeView.statusLabel.getToolTipText());
+        assertEquals(1, panel.projectScopeView.listModel.size());
+        assertNull(memoryService.read("project", selectedId));
     }
 }

@@ -20,6 +20,7 @@ import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.FileReadService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.MemoryService;
+import org.roxycode.app.ai.services.MemoryService.MemoryMetadata;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.model.AppSettings;
@@ -127,45 +128,73 @@ public class PromptService {
     }
 
     private void appendGlobalAgentMemorySection(StringBuilder sb) {
-        String globalMemory = MemoryService.capPinnedMemoryForPrompt(memoryService.readGlobalMemory());
-        List<String> globalNotes = Objects.requireNonNullElse(memoryService.listGlobalNotes(), List.of());
-        if (globalMemory.isBlank() && globalNotes.isEmpty()) {
+        List<MemoryMetadata> globalMemories = Objects.requireNonNullElse(memoryService.list(MemoryService.SCOPE_GLOBAL),
+                List.of());
+        if (globalMemories.isEmpty()) {
             return;
         }
         sb.append(HEADER_GLOBAL_AGENT_MEMORY);
-        boolean hasContent = appendMemoryBlock(sb, globalMemory);
-        appendCatalog(sb, "Available Global Notes", globalNotes, 0, hasContent);
-        if (!globalNotes.isEmpty()) {
-            sb.append("Use memoryService.readGlobalNote(slug) or memoryService.search(pattern) to inspect.\n");
+        boolean hasDetails = appendMemoryCatalog(sb, "Global Memories", globalMemories, false);
+        if (hasDetails) {
+            sb.append(
+                    "Call memoryService.read('global', id) or memoryService.readAll('global') when entries marked (+details) are relevant.\n");
         }
     }
 
     private void appendProjectAgentMemorySection(StringBuilder sb) {
-        String projectMemory = MemoryService.capPinnedMemoryForPrompt(memoryService.readProjectMemory());
-        List<String> projectNotes = Objects.requireNonNullElse(memoryService.listProjectNotes(), List.of());
+        List<MemoryMetadata> projectMemories = Objects
+                .requireNonNullElse(memoryService.list(MemoryService.SCOPE_PROJECT), List.of());
         List<String> archivedPlans = Objects.requireNonNullElse(memoryService.listArchivedPlans(), List.of());
         List<String> archivedTopics = Objects.requireNonNullElse(memoryService.listArchivedTopics(), List.of());
-        boolean hasCatalogs = !projectNotes.isEmpty() || !archivedPlans.isEmpty() || !archivedTopics.isEmpty();
-        if (projectMemory.isBlank() && !hasCatalogs) {
+        boolean hasArchives = !archivedPlans.isEmpty() || !archivedTopics.isEmpty();
+        if (projectMemories.isEmpty() && !hasArchives) {
             return;
         }
         sb.append(HEADER_PROJECT_AGENT_MEMORY);
-        boolean hasContent = appendMemoryBlock(sb, projectMemory);
-        hasContent = appendCatalog(sb, "Available Project Notes", projectNotes, 0, hasContent);
-        hasContent = appendCatalog(sb, "Recent Archived Plans", archivedPlans, MAX_RECENT_ARCHIVED_PLANS, hasContent);
-        appendCatalog(sb, "Recent Archived Topics", archivedTopics, MAX_RECENT_ARCHIVED_PLANS, hasContent);
-        if (hasCatalogs) {
+        boolean hasPreceding = !projectMemories.isEmpty();
+        boolean hasDetails = appendMemoryCatalog(sb, "Project Memories", projectMemories, false);
+        hasPreceding = appendCatalog(sb, "Recent Archived Plans", archivedPlans, MAX_RECENT_ARCHIVED_PLANS,
+                hasPreceding);
+        appendCatalog(sb, "Recent Archived Topics", archivedTopics, MAX_RECENT_ARCHIVED_PLANS, hasPreceding);
+        if (hasDetails) {
             sb.append(
-                    "Use memoryService.readProjectNote(slug), memoryService.readArchivedPlan(filename), memoryService.readArchivedTopic(filename), or memoryService.search(pattern) to inspect.\n");
+                    "Call memoryService.read('project', id) or memoryService.readAll('project') when entries marked (+details) are relevant.\n");
+        }
+        if (hasArchives) {
+            sb.append(
+                    "Use memoryService.readArchivedPlan(filename), memoryService.readArchivedTopic(filename), or memoryService.search(pattern) to inspect archives.\n");
         }
     }
 
-    private static boolean appendMemoryBlock(StringBuilder sb, String memory) {
-        if (memory.isBlank()) {
-            return false;
+    private static boolean appendMemoryCatalog(StringBuilder sb, String title, List<MemoryMetadata> entries,
+            boolean hasPreceding) {
+        if (entries.isEmpty()) {
+            return hasPreceding;
         }
-        sb.append(memory.stripTrailing()).append("\n");
-        return true;
+        if (hasPreceding) {
+            sb.append("\n");
+        }
+        sb.append("### ").append(title).append("\n");
+        boolean anyHasDetails = false;
+        for (MemoryMetadata entry : entries) {
+            sb.append(formatMemoryCatalogLine(entry)).append("\n");
+            if (entry.hasDetails()) {
+                anyHasDetails = true;
+            }
+        }
+        return anyHasDetails;
+    }
+
+    static String formatMemoryCatalogLine(MemoryMetadata entry) {
+        StringBuilder line = new StringBuilder("- `").append(entry.id()).append("`");
+        if (entry.tags() != null && !entry.tags().isEmpty()) {
+            line.append(" [").append(String.join(", ", entry.tags())).append("]");
+        }
+        if (entry.hasDetails()) {
+            line.append(" (+details)");
+        }
+        line.append(": ").append(entry.summary());
+        return line.toString();
     }
 
     private static boolean appendCatalog(StringBuilder sb, String title, List<String> items, int limit,

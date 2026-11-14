@@ -46,6 +46,9 @@ import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.GrepService;
+import org.roxycode.app.ai.services.MemoryService;
+import org.roxycode.app.ai.services.MemoryService.MemoryEntry;
+import org.roxycode.app.ai.services.MemoryService.MemoryMetadata;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.*;
 import org.roxycode.app.model.AppSettings;
@@ -943,7 +946,8 @@ class ChatControllerTest extends ChatTestFixture {
         assertTrue(panel.outputArea.getText().contains("Available Commands"));
         assertTrue(panel.outputArea.getText().contains("/reset"));
         assertTrue(panel.outputArea.getText().contains("/clear"));
-        assertTrue(panel.outputArea.getText().contains("/rem-p"));
+        assertTrue(panel.outputArea.getText().contains("/mem-p-put"));
+        assertTrue(panel.outputArea.getText().contains("/mem-g-view"));
 
         // 2. /clear
         panel.appendMessage("user", "Clear me");
@@ -952,21 +956,46 @@ class ChatControllerTest extends ChatTestFixture {
         flushEdt();
         assertFalse(panel.outputArea.getText().contains("Clear me"));
 
-        // 3. /rem-p (Project Memory)
-        when(memoryService.readProjectMemory()).thenReturn("Existing");
-        when(memoryService.updateProjectMemory(anyString())).thenReturn(new EditorResult(true, "ok", null));
-        sendOnEdt(panel, "/rem-p New project note");
+        // 3. /mem-p-put & /mem-g-put
+        when(memoryService.put(eq(MemoryService.SCOPE_PROJECT), eq("swing-rule"), eq("Use HTML tables")))
+                .thenReturn(new EditorResult(true, "ok", null));
+        sendOnEdt(panel, "/mem-p-put swing-rule: Use HTML tables");
         flushEdt();
-        verify(memoryService).updateProjectMemory("Existing\nNew project note");
-        assertTrue(panel.outputArea.getText().contains("Project memory updated successfully"));
+        verify(memoryService).put(MemoryService.SCOPE_PROJECT, "swing-rule", "Use HTML tables");
+        assertContainsAll(panel.outputArea.getText(), "Saved project memory", "swing-rule");
 
-        // 4. /rem-g (Global Memory)
-        when(memoryService.readGlobalMemory()).thenReturn("");
-        when(memoryService.updateGlobalMemory(anyString())).thenReturn(new EditorResult(true, "ok", null));
-        sendOnEdt(panel, "/rem-g Global note");
+        when(memoryService.put(eq(MemoryService.SCOPE_GLOBAL), eq("global-note"), eq("Global note")))
+                .thenReturn(new EditorResult(true, "ok", null));
+        sendOnEdt(panel, "/mem-g-put Global note");
         flushEdt();
-        verify(memoryService).updateGlobalMemory("Global note");
-        assertTrue(panel.outputArea.getText().contains("Global memory updated successfully"));
+        verify(memoryService).put(MemoryService.SCOPE_GLOBAL, "global-note", "Global note");
+        assertContainsAll(panel.outputArea.getText(), "Saved global memory", "global-note");
+
+        // 4. /mem-p-view, /mem-g-view, /mem-p-find, /mem-g-del
+        when(memoryService.list(MemoryService.SCOPE_PROJECT)).thenReturn(List
+                .of(new MemoryMetadata("project", "swing-rule", "Use HTML tables", List.of("ui"), true, "2026-01-01")));
+        sendOnEdt(panel, "/mem-p-view");
+        flushEdt();
+        assertContainsAll(panel.outputArea.getText(), "Project Memories (1)", "swing-rule", "(+details)");
+
+        when(memoryService.read(MemoryService.SCOPE_GLOBAL, "global-note"))
+                .thenReturn(new MemoryEntry("global-note", "Global note", List.of(), "Extended body", "2026-01-01"));
+        sendOnEdt(panel, "/mem-g-view global-note");
+        flushEdt();
+        assertContainsAll(panel.outputArea.getText(), "Global Memory:", "global-note", "Extended body");
+
+        when(memoryService.find(MemoryService.SCOPE_PROJECT, "swing")).thenReturn(List
+                .of(new MemoryMetadata("project", "swing-rule", "Use HTML tables", List.of("ui"), true, "2026-01-01")));
+        sendOnEdt(panel, "/mem-p-find swing");
+        flushEdt();
+        assertContainsAll(panel.outputArea.getText(), "Matching Project Memories (1)", "swing-rule");
+
+        when(memoryService.delete(MemoryService.SCOPE_GLOBAL, "global-note"))
+                .thenReturn(new EditorResult(true, "ok", null));
+        sendOnEdt(panel, "/mem-g-del global-note");
+        flushEdt();
+        verify(memoryService).delete(MemoryService.SCOPE_GLOBAL, "global-note");
+        assertContainsAll(panel.outputArea.getText(), "Deleted global memory", "global-note");
 
         // 5. /reset
         panel.appendMessage("user", "Reset me");
@@ -976,14 +1005,18 @@ class ChatControllerTest extends ChatTestFixture {
         assertFalse(panel.userInputPromptPanel.isVisible());
         verify(chatMemory).clear("qa:default");
 
-        // 6. Bare /rem-p and /rem-g usage hints
-        sendOnEdt(panel, "/rem-p");
+        // 6. Bare /mem-p-put, /mem-g-find, /mem-p-del usage hints
+        sendOnEdt(panel, "/mem-p-put");
         flushEdt();
-        assertTrue(panel.outputArea.getText().contains("Please provide content to remember. Usage: /rem-p"));
+        assertTrue(panel.outputArea.getText().contains("Usage:"));
 
-        sendOnEdt(panel, "/rem-g");
+        sendOnEdt(panel, "/mem-g-find");
         flushEdt();
-        assertTrue(panel.outputArea.getText().contains("Please provide content to remember. Usage: /rem-g"));
+        assertTrue(panel.outputArea.getText().contains("Usage:"));
+
+        sendOnEdt(panel, "/mem-p-del");
+        flushEdt();
+        assertTrue(panel.outputArea.getText().contains("Usage:"));
 
         // 7. Unknown command
         sendOnEdt(panel, "/unknown");

@@ -24,7 +24,7 @@ class FileMentionPopupTest {
         assertEquals(new MentionToken(0, 1, "", '@'), FileMentionPopup.extractMentionToken("@", 1));
         assertEquals(new MentionToken(0, 6, "ChatP", '@'), FileMentionPopup.extractMentionToken("@ChatP", 6));
         assertEquals(new MentionToken(0, 1, "", '/'), FileMentionPopup.extractMentionToken("/", 1));
-        assertEquals(new MentionToken(0, 5, "rem-", '/'), FileMentionPopup.extractMentionToken("/rem-", 5));
+        assertEquals(new MentionToken(0, 6, "mem-p", '/'), FileMentionPopup.extractMentionToken("/mem-p", 6));
 
         String sentence = "Please inspect @src/main/ChatPanel.java for details";
         int caretAfterPath = "Please inspect @src/main/ChatPanel.java".length();
@@ -86,15 +86,17 @@ class FileMentionPopupTest {
                 FileMentionPopup.rankCandidates(manyFiles, new MentionToken(0, 4, "File", '@')).size());
 
         List<MentionItem> allCommands = FileMentionPopup.rankCandidates(null, new MentionToken(0, 0, "", '/'));
-        assertEquals(5, allCommands.size());
+        assertEquals(11, allCommands.size());
         assertEquals("/reset", allCommands.get(0).replacement());
         assertEquals("/clear", allCommands.get(1).replacement());
         assertEquals("/help", allCommands.get(2).replacement());
 
-        List<MentionItem> commands = FileMentionPopup.rankCandidates(null, new MentionToken(0, 1, "rem", '/'));
-        assertEquals(2, commands.size());
-        assertEquals("/rem-p ", commands.get(0).replacement());
-        assertEquals("/rem-g ", commands.get(1).replacement());
+        List<MentionItem> commands = FileMentionPopup.rankCandidates(null, new MentionToken(0, 1, "mem-p", '/'));
+        assertEquals(4, commands.size());
+        assertEquals("/mem-p-view ", commands.get(0).replacement());
+        assertEquals("/mem-p-put ", commands.get(1).replacement());
+        assertEquals("/mem-p-find ", commands.get(2).replacement());
+        assertEquals("/mem-p-del ", commands.get(3).replacement());
     }
 
     @Test

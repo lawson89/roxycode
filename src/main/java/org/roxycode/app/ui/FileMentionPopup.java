@@ -88,8 +88,22 @@ public final class FileMentionPopup {
             new CommandCandidate("Reset Session", "Reset the current session or topic", "/reset", Codicons.REFRESH),
             new CommandCandidate("Clear Output", "Clear the chat output area", "/clear", Codicons.CLEAR_ALL),
             new CommandCandidate("Help", "Show available commands", "/help", Codicons.QUESTION),
-            new CommandCandidate("Remember (Project)", "Append to project MEMORY.md", "/rem-p ", Codicons.PROJECT),
-            new CommandCandidate("Remember (Global)", "Append to global MEMORY.md", "/rem-g ", Codicons.GLOBE));
+            new CommandCandidate("Project Memory: View", "List project memories or view <id>", "/mem-p-view ",
+                    Codicons.PROJECT),
+            new CommandCandidate("Project Memory: Put", "Save project memory ([id:] summary)", "/mem-p-put ",
+                    Codicons.PROJECT),
+            new CommandCandidate("Project Memory: Find", "Search project memories (<query>)", "/mem-p-find ",
+                    Codicons.PROJECT),
+            new CommandCandidate("Project Memory: Delete", "Delete project memory (<id>)", "/mem-p-del ",
+                    Codicons.PROJECT),
+            new CommandCandidate("Global Memory: View", "List global memories or view <id>", "/mem-g-view ",
+                    Codicons.GLOBE),
+            new CommandCandidate("Global Memory: Put", "Save global memory ([id:] summary)", "/mem-g-put ",
+                    Codicons.GLOBE),
+            new CommandCandidate("Global Memory: Find", "Search global memories (<query>)", "/mem-g-find ",
+                    Codicons.GLOBE),
+            new CommandCandidate("Global Memory: Delete", "Delete global memory (<id>)", "/mem-g-del ",
+                    Codicons.GLOBE));
 
     public record FileCandidate(String relativePath, String fileName, String parentDir, String fileNameLower,
             String pathLower) implements MentionItem {

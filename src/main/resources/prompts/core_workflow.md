@@ -66,11 +66,12 @@ The workflow follows a structured sequence:
 
 ## 🧠 AGENT MEMORY PROTOCOL
 
-RoxyCode provides a persistent Two-Tier Agent Memory system accessible via `memoryService` inside `executeJexl` across **all** workflow phases (`EXPLORE`, `PLAN`, `CODE`, `REVIEW`):
-- **Global Memory (`memoryService.*Global*`):** For user preferences, coding style, and cross-project habits (`~/.roxycode/memory/MEMORY.md` and `notes/<slug>.md`).
-- **Project Memory (`memoryService.*Project*`):** For project-specific architecture decisions, build/test gotchas, and domain conventions (`<projectDataDir>/memory/MEMORY.md` and `notes/<slug>.md`).
+RoxyCode provides a symmetrical Unified Agent Memory system accessible via `memoryService` inside `executeJexl` across **all** workflow phases (`EXPLORE`, `PLAN`, `CODE`, `REVIEW`):
+- **Global & Project Scopes (`global` / `project`):** Stored in `~/.roxycode/memory/memories.json` (`'global'` for user preferences and coding style) and `<projectDataDir>/memory/memories.json` (`'project'` for project architecture, build/test gotchas, and conventions).
+- **Progressive Disclosure:** Concise `summary` entries are always injected into the prompt; entries marked `(+details)` have extended Markdown details readable on demand via `memoryService.read(scope, id)` or `memoryService.readAll(scope)`.
+- **Symmetrical API:** Use `memoryService.list(scope)`, `listAll()`, `read(scope, id)`, `readAll(scope)`, `put(scope, id, summary)` or `put(scope, id, summary, tags, details)`, `delete(scope, id)`, and `find(query)` / `find(scope, query)`.
 - **Unified Search (`memoryService.search(pattern)` / `memoryService.searchIgnoreCase(pattern)`):** Searches Global Memory, Project Memory, Archived Implementation Plans (`archive/plans/`), and Archived Q&A Topics (`archive/topics/` — also readable via `memoryService.readArchivedTopic(filename)`).
-- **Immediate Persistence:** Whenever the user explicitly states a preference or asks you to remember something, immediately persist it in Global or Project memory via `memoryService` (available in all phases).
+- **Immediate Persistence:** Whenever the user explicitly states a preference or asks you to remember something, immediately persist it in `'global'` or `'project'` memory via `memoryService.put(...)` (available in all phases).
 
 ---
 

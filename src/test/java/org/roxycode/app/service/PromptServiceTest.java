@@ -242,27 +242,33 @@ class PromptServiceTest {
         PromptService psWithMemory = new PromptService(projectService, settingsService, planService,
                 jexlServiceRegistry, gitService, projectAnalysisService, repoMapPackerService, memoryService);
 
-        when(memoryService.readGlobalMemory()).thenReturn("");
-        when(memoryService.listGlobalNotes()).thenReturn(List.of());
-        when(memoryService.readProjectMemory()).thenReturn("");
-        when(memoryService.listProjectNotes()).thenReturn(List.of());
+        when(memoryService.list(MemoryService.SCOPE_GLOBAL)).thenReturn(List.of());
+        when(memoryService.list(MemoryService.SCOPE_PROJECT)).thenReturn(List.of());
         when(memoryService.listArchivedPlans()).thenReturn(List.of());
+        when(memoryService.listArchivedTopics()).thenReturn(List.of());
 
         assertEquals("", psWithMemory.loadAgentMemoryContext());
 
-        when(memoryService.readGlobalMemory()).thenReturn("# Global Prefs\n- Use Java 21");
-        when(memoryService.listGlobalNotes()).thenReturn(List.of("style.md - 'Style Guide' [java]"));
-        when(memoryService.readProjectMemory()).thenReturn("# Project Rules\n- Use MigLayout");
-        when(memoryService.listProjectNotes()).thenReturn(List.of("swing-tables.md - 'Swing Tables' [ui]"));
+        when(memoryService.list(MemoryService.SCOPE_GLOBAL)).thenReturn(List.of(
+                new MemoryService.MemoryMetadata("global", "no-ternary", "Use explicit if/else", List.of("java"), false,
+                        "2026-01-01T00:00:00Z"),
+                new MemoryService.MemoryMetadata("global", "style-guide", "Follow style guide",
+                        List.of("java", "style"), true, "2026-01-01T00:00:00Z")));
+        when(memoryService.list(MemoryService.SCOPE_PROJECT))
+                .thenReturn(List.of(new MemoryService.MemoryMetadata("project", "swing-tables", "Use HTML 3.2 tables",
+                        List.of("ui", "swing"), true, "2026-01-01T00:00:00Z")));
         when(memoryService.listArchivedPlans()).thenReturn(
                 List.of("p6.md: Plan 6", "p5.md: Plan 5", "p4.md: Plan 4", "p3.md: Plan 3", "p2.md: Plan 2", "p1.md"));
         when(memoryService.listArchivedTopics()).thenReturn(List.of("t6.md: Topic 6", "t5.md: Topic 5",
                 "t4.md: Topic 4", "t3.md: Topic 3", "t2.md: Topic 2", "t1.md"));
 
         String stable = psWithMemory.getStableContext();
-        SwingTestUtils.assertContainsAll(stable, "## GLOBAL AGENT MEMORY", "# Global Prefs\n- Use Java 21", "style.md",
-                "## PROJECT AGENT MEMORY & ARCHIVE", "# Project Rules\n- Use MigLayout", "swing-tables.md",
-                "- p6.md: Plan 6", "- p2.md: Plan 2", "- t6.md: Topic 6", "- t2.md: Topic 2");
+        SwingTestUtils.assertContainsAll(stable, "## GLOBAL AGENT MEMORY",
+                "- `no-ternary` [java]: Use explicit if/else",
+                "- `style-guide` [java, style] (+details): Follow style guide", "memoryService.read('global', id)",
+                "## PROJECT AGENT MEMORY & ARCHIVE", "- `swing-tables` [ui, swing] (+details): Use HTML 3.2 tables",
+                "memoryService.read('project', id)", "- p6.md: Plan 6", "- p2.md: Plan 2", "- t6.md: Topic 6",
+                "- t2.md: Topic 2");
         SwingTestUtils.assertContainsNone(stable, "- p1.md", "- t1.md");
     }
 }

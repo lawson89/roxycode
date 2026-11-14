@@ -9,7 +9,7 @@ Your mission is to translate user requirements into a rigorous, testable, and ma
 * **Plain-Text Proposal:** Before invoking any tools to create a formal plan, describe your intended approach in plain text. This allows the user to provide feedback and corrections early.
 * **Tool Gate:** Do NOT submit a formal plan via `planService.submitPlan` until the requirements are sufficiently clear and the user has indicated agreement with your proposed direction.
 
-* **Consult Agent Memory:** Check `## GLOBAL AGENT MEMORY` and `## PROJECT AGENT MEMORY & ARCHIVE` (and call `memoryService.search(...)`, `memoryService.readProjectNote(...)`, `memoryService.readArchivedPlan(...)`, or `memoryService.readArchivedTopic(...)` if relevant notes/plans/topics are listed) before submitting a plan.
+* **Consult Agent Memory:** Check `## GLOBAL AGENT MEMORY` and `## PROJECT AGENT MEMORY & ARCHIVE` (and call `memoryService.read(scope, id)`, `memoryService.find(...)`, `memoryService.search(...)`, `memoryService.readArchivedPlan(...)`, or `memoryService.readArchivedTopic(...)` if relevant `(+details)` memories, plans, or topics are listed) before submitting a plan.
 
 #### 2. Blueprinting & Specification
 * **Plan Creation & Submission:** Once requirements are locked, invoke `planService.submitPlan(title, goal, requirements, technicalSteps)` inside `executeJexl` to submit the formal implementation plan covering the title, goal, functional requirements, and technical steps.

@@ -9,7 +9,7 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
 - **Capabilities**: Uses fileReadService, grepService, symbolService, gitService, buildToolService (read/test commands), memoryService, userInputService, and webSearchService via executeJexl. File mutation (fileEditorService) is disabled.
 - **Composer & Action Features**:
   - Type '@' or click **@ Mention** to fuzzy-search and attach project file paths.
-  - Type '/' or click **/ Commands** to run slash commands: `/reset` (reset session), `/clear` (clear chat view), `/help` (list commands), `/rem-p <note>` (save note to Project Memory), and `/rem-g <note>` (save note to Global Memory).
+  - Type '/' or click **/ Commands** to run slash commands: `/reset` (reset session), `/clear` (clear chat view), `/help` (list commands), and symmetrical memory commands `/mem-p-view`, `/mem-p-put`, `/mem-p-find`, `/mem-p-del` (Project) and `/mem-g-view`, `/mem-g-put`, `/mem-g-find`, `/mem-g-del` (Global).
   - Press **Enter** to send, **Shift+Enter** for a newline, and **Ctrl+V** (or the image button) to attach screenshots/images.
   - Click **[Move to Feature Request]** on any Roxy response to copy that architectural finding or prompt directly into the **Build Feature** workspace.
   - Click **[Apply to build.toml]** on any Roxy response containing a valid `build.toml` code block to populate the **Project Settings** editor and switch to it for confirmation.
@@ -48,10 +48,10 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
 - Interactive reference of all `@AgentService` methods exposed inside `executeJexl`.
 
 ### Agent Memory (Agent Memory Sidebar View)
-- Two-tier persistent memory (memoryService) shared across all phases:
-  - **Global Memory (~/.roxycode/memory/)**: User-wide preferences and coding style (MEMORY.md + notes/<slug>.md; quick-add via `/rem-g <note>`).
-  - **Project Memory (<projectDataDir>/memory/)**: Project architecture decisions and build/test gotchas (MEMORY.md + notes/<slug>.md; quick-add via `/rem-p <note>`).
-- Pinned MEMORY.md files (capped at 8,192 chars / 200 lines each in the prompt) and note catalogs are injected into the stable prompt; full notes and archives are searchable via memoryService.search(pattern).
+- Symmetrical Unified Agent Memory (memoryService) shared across all phases with a 2-column Master-Detail editor:
+  - **Global Memory (~/.roxycode/memory/memories.json)**: User-wide preferences and coding style (quick commands: `/mem-g-view`, `/mem-g-put`, `/mem-g-find`, `/mem-g-del`).
+  - **Project Memory (<projectDataDir>/memory/memories.json)**: Project architecture decisions and build/test gotchas (quick commands: `/mem-p-view`, `/mem-p-put`, `/mem-p-find`, `/mem-p-del`).
+- Concise memory summaries are always injected into the stable prompt; entries with extended Markdown details (`+details`) are read on demand via `memoryService.read(scope, id)` or `memoryService.readAll(scope)`, and memories + archives are searchable via `memoryService.find(query)` and `memoryService.search(pattern)`.
 
 ## 3. Configuration & Settings & Tools Hub
 

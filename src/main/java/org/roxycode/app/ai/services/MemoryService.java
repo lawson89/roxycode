@@ -6,10 +6,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import java.util.stream.Stream;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.math.NumberUtils;
@@ -29,11 +36,14 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.lang.Nullable;
 
 @AgentService(value = "memoryService", phases = {"*"})
-@AgentDoc("Provides two-tier Global and Project Agent Memory (MEMORY.md cheat-sheets, frontmatter topic notes, archived plans, archived Q&A topics, and unified RipGrep search) across all workflow phases.")
+@AgentDoc("Provides unified Global and Project Agent Memory (memories.json with always-on summaries and on-demand details, archived plans, archived Q&A topics, and unified RipGrep search) across all workflow phases.")
 public class MemoryService {
     private static final Logger log = LoggerFactory.getLogger(MemoryService.class);
 
+    public static final String SCOPE_GLOBAL = "global";
+    public static final String SCOPE_PROJECT = "project";
     static final String MEMORY_DIR = "memory";
+    static final String MEMORIES_FILE = "memories.json";
     static final String MEMORY_INDEX_FILE = "MEMORY.md";
     static final String NOTES_SUBDIR = "notes";
     static final String ARCHIVE_PLANS_SUBDIR = PlanService.ARCHIVE_PLANS_SUBDIR;
@@ -41,15 +51,12 @@ public class MemoryService {
     public static final String DEFAULT_TOPIC_TITLE = "Codebase Q&A Topic";
     public static final int MAX_TOPIC_TITLE_LENGTH = 80;
     public static final int MAX_SLUG_LENGTH = 50;
-    public static final int MAX_PINNED_MEMORY_LINES = 200;
-    public static final int MAX_PINNED_MEMORY_CHARS = 8192;
     private static final int SEARCH_CONTEXT_LINES = 2;
     private static final String STRIP_TITLE_CHARS_REGEX = "[#*_~`\"']";
+    private static final Pattern BOLD_BULLET_PATTERN = Pattern.compile("^\\*\\*([^*]+)\\*\\*\\s*(?::|-)\\s*(.+)$");
     private static final char LF = '\n';
     private static final char CR = '\r';
     private static final String NL = String.valueOf(LF);
-    private static final String SCOPE_GLOBAL = "global";
-    private static final String SCOPE_PROJECT = "project";
     private static final String TYPE_TOPIC = "topic";
     private static final String TYPE_PLAN = "plan";
     private static final String KEY_TITLE = "title";
@@ -61,13 +68,113 @@ public class MemoryService {
     private static final String MD_EXTENSION = ".md";
     private static final String TOPIC_HEADING_PREFIX = "# Topic: ";
     private static final String PLAN_HEADING_PREFIX = "# Implementation Plan: ";
+    private static final String DOC_SCOPE = "The memory scope: 'global' or 'project'";
+    private static final String DOC_ID_UPSERT = "The memory id/slug (lowercase alphanumeric and hyphens)";
+    private static final String DOC_SUMMARY = "The concise always-on summary";
+    private static final String DOC_DETAILS = "Optional extended Markdown details (read on demand)";
 
-    public record NoteDetail(String slug, String title, String tags, String updated, String body, String rawMarkdown) {
+    /**
+     * A single persisted memory entry in {@code memories.json}. Provides both record accessors and JavaBean getters for
+     * JEXL evaluation.
+     */
+    public record MemoryEntry(String id, String summary, List<String> tags, String details, String updatedAt) {
+        public MemoryEntry {
+            id = StringUtils.defaultString(id).trim();
+            summary = StringUtils.defaultString(summary).trim();
+            if (tags == null) {
+                tags = List.of();
+            } else {
+                tags = List.copyOf(tags);
+            }
+            details = StringUtils.defaultString(details).stripTrailing();
+            updatedAt = StringUtils.defaultString(updatedAt).trim();
+        }
+
+        public String getId() {
+            return id;
+        }
+
+        public String getSummary() {
+            return summary;
+        }
+
+        public List<String> getTags() {
+            return tags;
+        }
+
+        public String getDetails() {
+            return details;
+        }
+
+        public String getUpdatedAt() {
+            return updatedAt;
+        }
+    }
+
+    /**
+     * Lightweight metadata view of a memory entry for prompt injection and listing. Provides both record accessors and
+     * JavaBean getters for JEXL evaluation.
+     */
+    public record MemoryMetadata(String scope, String id, String summary, List<String> tags, boolean hasDetails,
+            String updatedAt) {
+        public MemoryMetadata {
+            scope = StringUtils.defaultString(scope).trim();
+            id = StringUtils.defaultString(id).trim();
+            summary = StringUtils.defaultString(summary).trim();
+            if (tags == null) {
+                tags = List.of();
+            } else {
+                tags = List.copyOf(tags);
+            }
+            updatedAt = StringUtils.defaultString(updatedAt).trim();
+        }
+
+        public String getScope() {
+            return scope;
+        }
+
+        public String getId() {
+            return id;
+        }
+
+        public String getSummary() {
+            return summary;
+        }
+
+        public List<String> getTags() {
+            return tags;
+        }
+
+        public boolean getHasDetails() {
+            return hasDetails;
+        }
+
+        public boolean isHasDetails() {
+            return hasDetails;
+        }
+
+        public String getUpdatedAt() {
+            return updatedAt;
+        }
+    }
+
+    /**
+     * JSON root wrapper for {@code memories.json}.
+     */
+    public record MemoryStoreFile(List<MemoryEntry> memories) {
+        public MemoryStoreFile {
+            if (memories == null) {
+                memories = List.of();
+            } else {
+                memories = List.copyOf(memories);
+            }
+        }
     }
 
     private final SettingsService settingsService;
     private final ProjectService projectService;
     private final ApplicationEventPublisher eventPublisher;
+    private final Object storeLock = new Object();
 
     @Autowired
     public MemoryService(SettingsService settingsService, ProjectService projectService,
@@ -77,104 +184,166 @@ public class MemoryService {
         this.eventPublisher = eventPublisher;
     }
 
-    @AgentDoc(value = "Reads the pinned global memory cheat-sheet (~/.roxycode/memory/MEMORY.md). Returns empty string if not present.", examples = "memoryService.readGlobalMemory()")
-    public String readGlobalMemory() {
-        return readMemory(getGlobalMemoryDir());
-    }
-
-    @AgentDoc(value = "Writes or overwrites the pinned global memory cheat-sheet (~/.roxycode/memory/MEMORY.md).", examples = "memoryService.updateGlobalMemory('# Global Preferences')")
-    public EditorResult updateGlobalMemory(@AgentDoc("The Markdown content for global MEMORY.md") String content) {
-        EditorResult result = updateMemory(getGlobalMemoryDir(), GLOBAL_DIR_UNAVAILABLE,
-                "Global MEMORY.md updated successfully", content);
-        if (result.success()) {
-            publishMemoryChanged(true);
+    @AgentDoc(value = "Lists metadata (scope, id, summary, tags, hasDetails, updatedAt) for all memories in the given scope ('global' or 'project').", examples = "memoryService.list('project')")
+    public List<MemoryMetadata> list(@AgentDoc(DOC_SCOPE) String scope) {
+        String normalizedScope = normalizeScope(scope);
+        Path dir = resolveScopeDir(normalizedScope);
+        if (dir == null) {
+            return List.of();
         }
-        return result;
-    }
-
-    @AgentDoc(value = "Reads the pinned project memory cheat-sheet (<projectDataDir>/memory/MEMORY.md). Returns empty string if not present or no active project.", examples = "memoryService.readProjectMemory()")
-    public String readProjectMemory() {
-        return readMemory(resolveProjectSubdir(MEMORY_DIR));
-    }
-
-    @AgentDoc(value = "Writes or overwrites the pinned project memory cheat-sheet (<projectDataDir>/memory/MEMORY.md).", examples = "memoryService.updateProjectMemory('# Project Architecture')")
-    public EditorResult updateProjectMemory(@AgentDoc("The Markdown content for project MEMORY.md") String content) {
-        EditorResult result = updateMemory(resolveProjectSubdir(MEMORY_DIR), NO_ACTIVE_PROJECT,
-                "Project MEMORY.md updated successfully", content);
-        if (result.success()) {
-            publishMemoryChanged(false);
+        List<MemoryEntry> entries = loadEntriesForDir(dir);
+        List<MemoryMetadata> metadata = new ArrayList<>(entries.size());
+        for (MemoryEntry entry : entries) {
+            metadata.add(toMetadata(normalizedScope, entry));
         }
-        return result;
+        return List.copyOf(metadata);
     }
 
-    @AgentDoc(value = "Saves or overwrites a global topic note with structured frontmatter in ~/.roxycode/memory/notes/<slug>.md.", examples = "memoryService.saveGlobalNote('coding-style', 'Coding Style Preferences', 'style, java', 'Use final fields where possible.')")
-    public EditorResult saveGlobalNote(@AgentDoc("The note slug (lowercase alphanumeric and hyphens)") String slug,
-            @AgentDoc("The note title") String title, @AgentDoc("Comma-separated tags") String tags,
-            @AgentDoc("The Markdown note body content") String content) {
-        EditorResult result = saveNote(getGlobalMemoryDir(), GLOBAL_DIR_UNAVAILABLE, SCOPE_GLOBAL, slug, title, tags,
-                content);
-        if (result.success()) {
-            publishMemoryChanged(true);
+    @AgentDoc(value = "Lists metadata for all memories across both 'global' and 'project' scopes.", examples = "memoryService.listAll()")
+    public List<MemoryMetadata> listAll() {
+        List<MemoryMetadata> all = new ArrayList<>();
+        all.addAll(list(SCOPE_GLOBAL));
+        all.addAll(list(SCOPE_PROJECT));
+        return List.copyOf(all);
+    }
+
+    @AgentDoc(value = "Reads a single full memory entry (including extended details) from the given scope ('global' or 'project') by id. Returns null if not found.", examples = "memoryService.read('project', 'swing-html-tables')")
+    public @Nullable MemoryEntry read(@AgentDoc(DOC_SCOPE) String scope, @AgentDoc("The memory id/slug") String id) {
+        String normalizedScope = normalizeScope(scope);
+        String sanitizedId = sanitizeSlug(id);
+        Path dir = resolveScopeDir(normalizedScope);
+        if (dir == null) {
+            return null;
         }
-        return result;
-    }
-
-    @AgentDoc(value = "Saves or overwrites a project topic note with structured frontmatter in <projectDataDir>/memory/notes/<slug>.md.", examples = "memoryService.saveProjectNote('swing-html-tables', 'Swing HTML 3.2 Table Layout Rules', 'ui, swing, html', 'Use HTML tables for layout.')")
-    public EditorResult saveProjectNote(@AgentDoc("The note slug (lowercase alphanumeric and hyphens)") String slug,
-            @AgentDoc("The note title") String title, @AgentDoc("Comma-separated tags") String tags,
-            @AgentDoc("The Markdown note body content") String content) {
-        EditorResult result = saveNote(resolveProjectSubdir(MEMORY_DIR), NO_ACTIVE_PROJECT, SCOPE_PROJECT, slug, title,
-                tags, content);
-        if (result.success()) {
-            publishMemoryChanged(false);
+        List<MemoryEntry> entries = loadEntriesForDir(dir);
+        for (MemoryEntry entry : entries) {
+            if (entry.id().equals(sanitizedId)) {
+                return entry;
+            }
         }
-        return result;
+        return null;
     }
 
-    @AgentDoc(value = "Reads a global topic note from ~/.roxycode/memory/notes/<slug>.md.", examples = "memoryService.readGlobalNote('coding-style')")
-    public String readGlobalNote(@AgentDoc("The note slug") String slug) {
-        return readNote(getGlobalMemoryDir(), slug);
-    }
-
-    @AgentDoc(value = "Reads a project topic note from <projectDataDir>/memory/notes/<slug>.md.", examples = "memoryService.readProjectNote('swing-html-tables')")
-    public String readProjectNote(@AgentDoc("The note slug") String slug) {
-        return readNote(resolveProjectSubdir(MEMORY_DIR), slug);
-    }
-
-    @AgentDoc(value = "Deletes an obsolete global topic note from ~/.roxycode/memory/notes/<slug>.md.", examples = "memoryService.deleteGlobalNote('old-note')")
-    public EditorResult deleteGlobalNote(@AgentDoc("The note slug to delete") String slug) {
-        EditorResult result = deleteNote(getGlobalMemoryDir(), GLOBAL_DIR_UNAVAILABLE, slug);
-        if (result.success()) {
-            publishMemoryChanged(true);
+    @AgentDoc(value = "Reads all full memory entries (including extended details) in the given scope ('global' or 'project').", examples = "memoryService.readAll('global')")
+    public List<MemoryEntry> readAll(@AgentDoc(DOC_SCOPE) String scope) {
+        String normalizedScope = normalizeScope(scope);
+        Path dir = resolveScopeDir(normalizedScope);
+        if (dir == null) {
+            return List.of();
         }
-        return result;
+        return loadEntriesForDir(dir);
     }
 
-    @AgentDoc(value = "Deletes an obsolete project topic note from <projectDataDir>/memory/notes/<slug>.md.", examples = "memoryService.deleteProjectNote('old-note')")
-    public EditorResult deleteProjectNote(@AgentDoc("The note slug to delete") String slug) {
-        EditorResult result = deleteNote(resolveProjectSubdir(MEMORY_DIR), NO_ACTIVE_PROJECT, slug);
-        if (result.success()) {
-            publishMemoryChanged(false);
+    @AgentDoc(value = "Creates or updates a concise memory entry (summary only) in the given scope ('global' or 'project').", examples = "memoryService.put('global', 'no-ternary', 'Never use ternary operators; always use explicit if/else blocks.')")
+    public EditorResult put(@AgentDoc(DOC_SCOPE) String scope, @AgentDoc(DOC_ID_UPSERT) String id,
+            @AgentDoc(DOC_SUMMARY) String summary) {
+        return put(scope, id, summary, List.of(), "");
+    }
+
+    @AgentDoc(value = "Creates or updates a full memory entry (summary, tags, and optional Markdown details) in the given scope ('global' or 'project').", examples = "memoryService.put('project', 'swing-html-tables', 'Use HTML 3.2 tables for Swing layouts.', ['ui', 'swing'], '## Details\nUse HTML tables.')")
+    public EditorResult put(@AgentDoc(DOC_SCOPE) String scope, @AgentDoc(DOC_ID_UPSERT) String id,
+            @AgentDoc(DOC_SUMMARY) String summary, @AgentDoc("Optional array of tags") @Nullable String[] tags,
+            @AgentDoc(DOC_DETAILS) @Nullable String details) {
+        List<String> tagList;
+        if (tags == null) {
+            tagList = List.of();
+        } else {
+            tagList = Arrays.asList(tags);
         }
-        return result;
+        return put(scope, id, summary, tagList, details);
     }
 
-    @AgentDoc(value = "Returns a list of formatted summary lines for each global note in ~/.roxycode/memory/notes/*.md.", examples = "memoryService.listGlobalNotes()")
-    public List<String> listGlobalNotes() {
-        return listNotes(getGlobalMemoryDir());
+    @AgentDoc(value = "Creates or updates a full memory entry (summary, tags, and optional Markdown details) in the given scope ('global' or 'project').", examples = "memoryService.put('project', 'swing-html-tables', 'Use HTML 3.2 tables for Swing layouts.', ['ui', 'swing'], '## Details\nUse HTML tables.')")
+    public EditorResult put(@AgentDoc(DOC_SCOPE) String scope, @AgentDoc(DOC_ID_UPSERT) String id,
+            @AgentDoc(DOC_SUMMARY) String summary, @AgentDoc("Optional list of tags") @Nullable List<String> tags,
+            @AgentDoc(DOC_DETAILS) @Nullable String details) {
+        String normalizedScope = normalizeScope(scope);
+        String sanitizedId = sanitizeSlug(id);
+        String cleanedSummary = StringUtils.defaultString(summary).trim();
+        if (cleanedSummary.isEmpty()) {
+            return new EditorResult(false, "", "Memory summary must not be blank");
+        }
+        Path dir = resolveScopeDir(normalizedScope);
+        if (dir == null) {
+            return new EditorResult(false, "", missingScopeMessage(normalizedScope));
+        }
+
+        List<String> normalizedTags = normalizeTags(tags);
+        String cleanedDetails = StringUtils.defaultString(details).stripTrailing();
+        MemoryEntry updatedEntry = new MemoryEntry(sanitizedId, cleanedSummary, normalizedTags, cleanedDetails,
+                Instant.now().toString());
+
+        synchronized (storeLock) {
+            List<MemoryEntry> existing = new ArrayList<>(loadEntriesForDir(dir));
+            boolean replaced = false;
+            for (int i = 0; i < existing.size(); i++) {
+                if (existing.get(i).id().equals(sanitizedId)) {
+                    existing.set(i, updatedEntry);
+                    replaced = true;
+                    break;
+                }
+            }
+            if (!replaced) {
+                existing.add(updatedEntry);
+            }
+            EditorResult writeResult = writeStore(dir, existing,
+                    "Saved " + normalizedScope + " memory: " + sanitizedId);
+            if (writeResult.success()) {
+                publishMemoryChanged(SCOPE_GLOBAL.equals(normalizedScope));
+            }
+            return writeResult;
+        }
     }
 
-    @AgentDoc(value = "Returns a list of formatted summary lines for each project note in <projectDataDir>/memory/notes/*.md.", examples = "memoryService.listProjectNotes()")
-    public List<String> listProjectNotes() {
-        return listNotes(resolveProjectSubdir(MEMORY_DIR));
+    @AgentDoc(value = "Deletes a memory entry by id from the given scope ('global' or 'project').", examples = "memoryService.delete('project', 'obsolete-rule')")
+    public EditorResult delete(@AgentDoc(DOC_SCOPE) String scope, @AgentDoc("The memory id/slug to delete") String id) {
+        String normalizedScope = normalizeScope(scope);
+        String sanitizedId = sanitizeSlug(id);
+        Path dir = resolveScopeDir(normalizedScope);
+        if (dir == null) {
+            return new EditorResult(false, "", missingScopeMessage(normalizedScope));
+        }
+
+        synchronized (storeLock) {
+            List<MemoryEntry> existing = new ArrayList<>(loadEntriesForDir(dir));
+            boolean removed = existing.removeIf(entry -> entry.id().equals(sanitizedId));
+            if (!removed) {
+                return new EditorResult(false, "", "Memory not found in " + normalizedScope + " scope: " + sanitizedId);
+            }
+            EditorResult writeResult = writeStore(dir, existing,
+                    "Deleted " + normalizedScope + " memory: " + sanitizedId);
+            if (writeResult.success()) {
+                publishMemoryChanged(SCOPE_GLOBAL.equals(normalizedScope));
+            }
+            return writeResult;
+        }
     }
 
-    public List<NoteDetail> listGlobalNoteDetails() {
-        return listNoteDetails(getGlobalMemoryDir());
+    @AgentDoc(value = "Searches memories across both 'global' and 'project' scopes by case-insensitive regex or substring across id, summary, tags, and details.", examples = "memoryService.find('caffeine')")
+    public List<MemoryMetadata> find(@AgentDoc("The search query or regex pattern") String query) {
+        List<MemoryMetadata> results = new ArrayList<>();
+        results.addAll(find(SCOPE_GLOBAL, query));
+        results.addAll(find(SCOPE_PROJECT, query));
+        return List.copyOf(results);
     }
 
-    public List<NoteDetail> listProjectNoteDetails() {
-        return listNoteDetails(resolveProjectSubdir(MEMORY_DIR));
+    @AgentDoc(value = "Searches memories within the given scope ('global' or 'project') by case-insensitive regex or substring across id, summary, tags, and details.", examples = "memoryService.find('project', 'swing')")
+    public List<MemoryMetadata> find(@AgentDoc(DOC_SCOPE) String scope,
+            @AgentDoc("The search query or regex pattern") String query) {
+        String normalizedScope = normalizeScope(scope);
+        if (StringUtils.isBlank(query)) {
+            return list(normalizedScope);
+        }
+        String trimmedQuery = query.trim();
+        Pattern compiledPattern = compileSearchPattern(trimmedQuery);
+        List<MemoryEntry> entries = readAll(normalizedScope);
+        List<MemoryMetadata> matches = new ArrayList<>();
+        for (MemoryEntry entry : entries) {
+            if (matchesEntry(entry, trimmedQuery, compiledPattern)) {
+                matches.add(toMetadata(normalizedScope, entry));
+            }
+        }
+        return List.copyOf(matches);
     }
 
     @AgentDoc(value = "Lists archived completed implementation plans from <projectDataDir>/archive/plans/*.md (most recent first).", examples = "memoryService.listArchivedPlans()")
@@ -203,42 +372,238 @@ public class MemoryService {
         }
     }
 
-    private static String readMemory(Path dir) {
-        if (dir == null) {
-            return "";
+    private static String normalizeScope(String scope) {
+        if (StringUtils.isBlank(scope)) {
+            throw new IllegalArgumentException("Memory scope must be 'global' or 'project'");
         }
-        return readFileIfExists(dir.resolve(MEMORY_INDEX_FILE));
-    }
-
-    private static EditorResult updateMemory(Path dir, String missingMsg, String successMsg, String content) {
-        if (dir == null) {
-            return new EditorResult(false, "", missingMsg);
+        String normalized = scope.trim().toLowerCase(Locale.ROOT);
+        if (SCOPE_GLOBAL.equals(normalized) || SCOPE_PROJECT.equals(normalized)) {
+            return normalized;
         }
-        return writeMarkdownFile(dir.resolve(MEMORY_INDEX_FILE), StringUtils.defaultString(content), successMsg);
+        throw new IllegalArgumentException("Invalid memory scope: '" + scope + "'. Must be 'global' or 'project'.");
     }
 
-    private static Path resolveNotePath(Path dir, String sanitizedSlug) {
-        return dir.resolve(NOTES_SUBDIR).resolve(sanitizedSlug + MD_EXTENSION);
-    }
-
-    private static String readNote(Path dir, String slug) {
-        String sanitized = sanitizeSlug(slug);
-        if (dir == null) {
-            return "";
+    private static String missingScopeMessage(String normalizedScope) {
+        if (SCOPE_GLOBAL.equals(normalizedScope)) {
+            return GLOBAL_DIR_UNAVAILABLE;
         }
-        return readFileIfExists(resolveNotePath(dir, sanitized));
+        return NO_ACTIVE_PROJECT;
     }
 
-    private static NoteDetail buildNoteDetail(Path file) {
+    private @Nullable Path resolveScopeDir(String normalizedScope) {
+        if (SCOPE_GLOBAL.equals(normalizedScope)) {
+            return getGlobalMemoryDir();
+        }
+        return resolveProjectSubdir(MEMORY_DIR);
+    }
+
+    private List<MemoryEntry> loadEntriesForDir(Path dir) {
+        synchronized (storeLock) {
+            Path storePath = dir.resolve(MEMORIES_FILE);
+            if (Files.isRegularFile(storePath)) {
+                MemoryStoreFile store = PathUtils.readJsonOrDefault(storePath, MemoryStoreFile.class,
+                        new MemoryStoreFile(List.of()));
+                return sortEntries(store.memories());
+            }
+            List<MemoryEntry> migrated = migrateLegacyStorage(dir);
+            if (!migrated.isEmpty()) {
+                EditorResult writeResult = writeStore(dir, migrated, "Migrated legacy memories");
+                if (!writeResult.success()) {
+                    log.warn("Failed to persist migrated memories in {}: {}", dir, writeResult.errorHint());
+                }
+            }
+            return sortEntries(migrated);
+        }
+    }
+
+    private static List<MemoryEntry> sortEntries(List<MemoryEntry> entries) {
+        if (entries == null || entries.isEmpty()) {
+            return List.of();
+        }
+        List<MemoryEntry> sorted = new ArrayList<>(entries);
+        sorted.sort(Comparator.comparing(MemoryEntry::id, String.CASE_INSENSITIVE_ORDER));
+        return List.copyOf(sorted);
+    }
+
+    private static EditorResult writeStore(Path dir, List<MemoryEntry> entries, String successMessage) {
+        Path storePath = dir.resolve(MEMORIES_FILE);
+        try {
+            PathUtils.writeJson(storePath, new MemoryStoreFile(sortEntries(entries)));
+            return new EditorResult(true, successMessage, null);
+        } catch (IOException e) {
+            log.error("Failed to write memories store {}: {}", storePath, e.getMessage());
+            return new EditorResult(false, "", "Failed to write memories store: " + e.getMessage());
+        }
+    }
+
+    private static MemoryMetadata toMetadata(String scope, MemoryEntry entry) {
+        return new MemoryMetadata(scope, entry.id(), entry.summary(), entry.tags(),
+                StringUtils.isNotBlank(entry.details()), entry.updatedAt());
+    }
+
+    private static List<MemoryEntry> migrateLegacyStorage(Path dir) {
+        List<MemoryEntry> migrated = new ArrayList<>();
+        Set<String> usedIds = new LinkedHashSet<>();
+
+        Path notesDir = dir.resolve(NOTES_SUBDIR);
+        if (Files.isDirectory(notesDir)) {
+            try (Stream<Path> stream = Files.list(notesDir)) {
+                List<Path> noteFiles = stream.filter(Files::isRegularFile)
+                        .filter(p -> p.getFileName().toString().endsWith(MD_EXTENSION))
+                        .sorted(Comparator.comparing(p -> p.getFileName().toString(), String.CASE_INSENSITIVE_ORDER))
+                        .toList();
+                for (Path noteFile : noteFiles) {
+                    MemoryEntry entry = migrateNoteFile(noteFile, usedIds);
+                    if (entry != null) {
+                        migrated.add(entry);
+                    }
+                }
+            } catch (IOException e) {
+                log.warn("Failed to scan legacy notes in {}: {}", notesDir, e.getMessage());
+            }
+        }
+
+        Path memoryIndexFile = dir.resolve(MEMORY_INDEX_FILE);
+        if (Files.isRegularFile(memoryIndexFile)) {
+            String rawIndex = readFileIfExists(memoryIndexFile);
+            if (StringUtils.isNotBlank(rawIndex)) {
+                migrated.addAll(migrateLegacyIndexMarkdown(rawIndex, usedIds));
+            }
+        }
+
+        return migrated;
+    }
+
+    private static @Nullable MemoryEntry migrateNoteFile(Path file, Set<String> usedIds) {
         String filename = file.getFileName().toString();
-        String slug = StringUtils.removeEndIgnoreCase(filename, MD_EXTENSION);
+        String baseSlug = StringUtils.removeEndIgnoreCase(filename, MD_EXTENSION);
+        String id;
+        try {
+            id = allocateUniqueId(sanitizeSlug(baseSlug), usedIds);
+        } catch (IllegalArgumentException e) {
+            id = allocateUniqueId(deriveSlugFromSummary(baseSlug), usedIds);
+        }
         String rawMarkdown = readFileIfExists(file);
         Map<String, String> fm = FrontmatterUtils.parseFrontmatter(rawMarkdown);
-        String title = StringUtils.defaultIfBlank(fm.get(KEY_TITLE), slug).trim();
-        String tags = StringUtils.defaultString(fm.get(KEY_TAGS)).trim();
-        String updated = StringUtils.defaultString(fm.get(KEY_UPDATED_AT)).trim();
-        String body = extractNoteBody(rawMarkdown, title);
-        return new NoteDetail(slug, title, tags, updated, body, rawMarkdown);
+        String summary = StringUtils.defaultIfBlank(fm.get(KEY_TITLE), baseSlug).trim();
+        List<String> tags = parseTagsString(fm.get(KEY_TAGS));
+        String updated = StringUtils.defaultIfBlank(fm.get(KEY_UPDATED_AT), Instant.now().toString()).trim();
+        String body = extractNoteBody(rawMarkdown, summary);
+        return new MemoryEntry(id, summary, tags, body, updated);
+    }
+
+    static List<MemoryEntry> migrateLegacyIndexMarkdown(String rawIndex, Set<String> usedIds) {
+        List<String> chunks = extractLegacyIndexChunks(rawIndex);
+        List<MemoryEntry> entries = new ArrayList<>();
+        String now = Instant.now().toString();
+        for (String chunk : chunks) {
+            String trimmed = chunk.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            String titleForSlug = trimmed;
+            String summary = trimmed;
+            Matcher boldMatcher = BOLD_BULLET_PATTERN.matcher(trimmed);
+            if (boldMatcher.matches()) {
+                titleForSlug = boldMatcher.group(1).trim();
+                summary = titleForSlug + ": " + boldMatcher.group(2).trim();
+            }
+            String baseSlug = deriveSlugFromSummary(titleForSlug);
+            String uniqueId = allocateUniqueId(baseSlug, usedIds);
+            entries.add(new MemoryEntry(uniqueId, summary, List.of(), "", now));
+        }
+        return entries;
+    }
+
+    private static List<String> extractLegacyIndexChunks(String rawIndex) {
+        List<String> chunks = new ArrayList<>();
+        StringBuilder current = new StringBuilder();
+        boolean currentIsBullet = false;
+
+        for (String line : rawIndex.lines().toList()) {
+            String stripped = line.strip();
+            if (stripped.isEmpty()) {
+                flushChunk(chunks, current);
+                currentIsBullet = false;
+                continue;
+            }
+            if (stripped.startsWith("#")) {
+                flushChunk(chunks, current);
+                currentIsBullet = false;
+                continue;
+            }
+            boolean isTopLevelBullet = (line.startsWith("- ") || line.startsWith("* ") || line.startsWith("+ "));
+            if (isTopLevelBullet) {
+                flushChunk(chunks, current);
+                current.append(line.substring(2).trim());
+                currentIsBullet = true;
+            } else if (currentIsBullet) {
+                current.append(' ').append(stripped);
+            } else {
+                if (current.length() > 0) {
+                    current.append(' ');
+                }
+                current.append(stripped);
+            }
+        }
+        flushChunk(chunks, current);
+        return chunks;
+    }
+
+    private static void flushChunk(List<String> chunks, StringBuilder current) {
+        if (current.length() > 0) {
+            chunks.add(current.toString().trim());
+            current.setLength(0);
+        }
+    }
+
+    private static String allocateUniqueId(String baseId, Set<String> usedIds) {
+        if (usedIds.add(baseId)) {
+            return baseId;
+        }
+        int suffix = 2;
+        while (true) {
+            String candidate = baseId + "-" + suffix;
+            if (candidate.length() > MAX_SLUG_LENGTH) {
+                String suffixStr = "-" + suffix;
+                candidate = baseId.substring(0, Math.max(1, MAX_SLUG_LENGTH - suffixStr.length())) + suffixStr;
+            }
+            if (usedIds.add(candidate)) {
+                return candidate;
+            }
+            suffix++;
+        }
+    }
+
+    private static @Nullable Pattern compileSearchPattern(String query) {
+        try {
+            return Pattern.compile(query, Pattern.CASE_INSENSITIVE);
+        } catch (PatternSyntaxException e) {
+            return null;
+        }
+    }
+
+    private static boolean matchesEntry(MemoryEntry entry, String query, @Nullable Pattern pattern) {
+        if (matchesField(entry.id(), query, pattern) || matchesField(entry.summary(), query, pattern)
+                || matchesField(entry.details(), query, pattern)) {
+            return true;
+        }
+        for (String tag : entry.tags()) {
+            if (matchesField(tag, query, pattern)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean matchesField(String value, String query, @Nullable Pattern pattern) {
+        if (StringUtils.isEmpty(value)) {
+            return false;
+        }
+        if (pattern != null && pattern.matcher(value).find()) {
+            return true;
+        }
+        return StringUtils.containsIgnoreCase(value, query);
     }
 
     static String extractNoteBody(String rawMarkdown, String title) {
@@ -644,17 +1009,68 @@ public class MemoryService {
 
     public static String sanitizeSlug(String rawSlug) {
         if (StringUtils.isBlank(rawSlug)) {
-            throw new IllegalArgumentException("Note slug must not be blank");
+            throw new IllegalArgumentException("Memory id must not be blank");
         }
         if (rawSlug.contains("..") || rawSlug.indexOf('/') >= 0 || rawSlug.indexOf('\\') >= 0) {
-            throw new IllegalArgumentException("Invalid note slug (path traversal not allowed): " + rawSlug);
+            throw new IllegalArgumentException("Invalid memory id (path traversal not allowed): " + rawSlug);
         }
         String trimmed = StringUtils.removeEndIgnoreCase(rawSlug.trim(), MD_EXTENSION).trim();
         String sanitized = PathUtils.sanitizeSlug(trimmed, MAX_SLUG_LENGTH, "");
         if (sanitized.isEmpty()) {
-            throw new IllegalArgumentException("Note slug must contain alphanumeric characters: " + rawSlug);
+            throw new IllegalArgumentException("Memory id must contain alphanumeric characters: " + rawSlug);
         }
         return sanitized;
+    }
+
+    public static String deriveSlugFromSummary(String summary) {
+        if (StringUtils.isBlank(summary)) {
+            return "memory";
+        }
+        String[] words = summary.trim().split("\\s+");
+        StringBuilder sb = new StringBuilder();
+        int limit = Math.min(words.length, 6);
+        for (int i = 0; i < limit; i++) {
+            if (i > 0) {
+                sb.append(' ');
+            }
+            sb.append(words[i]);
+        }
+        return PathUtils.sanitizeSlug(sb.toString(), MAX_SLUG_LENGTH, "memory");
+    }
+
+    public static List<String> normalizeTags(@Nullable List<String> rawTags) {
+        if (rawTags == null || rawTags.isEmpty()) {
+            return List.of();
+        }
+        Set<String> normalized = new LinkedHashSet<>();
+        for (String tag : rawTags) {
+            if (StringUtils.isNotBlank(tag)) {
+                String cleaned = tag.trim().toLowerCase(Locale.ROOT);
+                if (!cleaned.isEmpty()) {
+                    normalized.add(cleaned);
+                }
+            }
+        }
+        return List.copyOf(normalized);
+    }
+
+    public static List<String> parseTagsString(@Nullable String rawTags) {
+        if (StringUtils.isBlank(rawTags)) {
+            return List.of();
+        }
+        String[] parts = rawTags.split(",");
+        List<String> list = new ArrayList<>(parts.length);
+        for (String part : parts) {
+            list.add(part);
+        }
+        return normalizeTags(list);
+    }
+
+    public static String formatTagsDisplay(@Nullable List<String> tags) {
+        if (tags == null || tags.isEmpty()) {
+            return "";
+        }
+        return String.join(", ", tags);
     }
 
     static String sanitizeArchiveFilename(String filename) {
@@ -670,124 +1086,6 @@ public class MemoryService {
             throw new IllegalArgumentException("Invalid archived filename (path traversal not allowed): " + filename);
         }
         return StringUtils.appendIfMissingIgnoreCase(trimmed, MD_EXTENSION);
-    }
-
-    public static String capPinnedMemoryForPrompt(String content) {
-        if (StringUtils.isBlank(content)) {
-            return "";
-        }
-        String result = content;
-        boolean truncated = false;
-        List<String> lines = result.lines().toList();
-        if (lines.size() > MAX_PINNED_MEMORY_LINES) {
-            result = String.join(NL, lines.subList(0, MAX_PINNED_MEMORY_LINES));
-            truncated = true;
-        }
-        if (result.length() > MAX_PINNED_MEMORY_CHARS) {
-            result = result.substring(0, MAX_PINNED_MEMORY_CHARS);
-            truncated = true;
-        }
-        if (truncated) {
-            return result + NL
-                    + "... (MEMORY.md truncated at 200 lines / 8 KB limit; move detailed content into topic notes)";
-        }
-        return result;
-    }
-
-    private EditorResult saveNote(Path memoryRoot, String missingMsg, String scope, String rawSlug, String title,
-            String tags, String content) {
-        String sanitizedSlug = sanitizeSlug(rawSlug);
-        if (memoryRoot == null) {
-            return new EditorResult(false, "", missingMsg);
-        }
-        String resolvedTitle = StringUtils.defaultIfBlank(title, sanitizedSlug).trim();
-        String resolvedTags = StringUtils.defaultString(tags).trim();
-        String body = StringUtils.defaultString(content).stripLeading();
-
-        Map<String, Object> frontmatter = new LinkedHashMap<>();
-        frontmatter.put("id", sanitizedSlug);
-        frontmatter.put("scope", scope);
-        frontmatter.put(KEY_TITLE, resolvedTitle);
-        frontmatter.put(KEY_TAGS, resolvedTags);
-        frontmatter.put(KEY_UPDATED_AT, Instant.now().toString());
-
-        StringBuilder md = new StringBuilder(FrontmatterUtils.formatFrontmatter(frontmatter));
-
-        if (!body.startsWith("# ") && !body.startsWith("#\t")) {
-            md.append("# ").append(resolvedTitle).append(NL).append(NL);
-        }
-        md.append(body);
-        if (!body.endsWith(NL)) {
-            md.append(NL);
-        }
-
-        return writeMarkdownFile(resolveNotePath(memoryRoot, sanitizedSlug), md.toString(),
-                "Saved " + scope + " note: notes/" + sanitizedSlug + MD_EXTENSION);
-    }
-
-    private EditorResult deleteNote(Path dir, String missingMsg, String slug) {
-        String sanitizedSlug = sanitizeSlug(slug);
-        if (dir == null) {
-            return new EditorResult(false, "", missingMsg);
-        }
-        Path notePath = resolveNotePath(dir, sanitizedSlug);
-        try {
-            if (!Files.exists(notePath)) {
-                return new EditorResult(false, "", "Note does not exist: notes/" + sanitizedSlug + MD_EXTENSION);
-            }
-            Files.delete(notePath);
-            return new EditorResult(true, "Deleted note: notes/" + sanitizedSlug + MD_EXTENSION, null);
-        } catch (IOException e) {
-            log.warn("Failed to delete note {}: {}", notePath, e.getMessage());
-            return new EditorResult(false, "", "Failed to delete note: " + e.getMessage());
-        }
-    }
-
-    private List<NoteDetail> listNoteDetails(Path memoryRoot) {
-        if (memoryRoot == null) {
-            return List.of();
-        }
-        Path notesDir = memoryRoot.resolve(NOTES_SUBDIR);
-        if (!Files.isDirectory(notesDir)) {
-            return List.of();
-        }
-        try (Stream<Path> stream = Files.list(notesDir)) {
-            return stream.filter(Files::isRegularFile).filter(p -> p.getFileName().toString().endsWith(MD_EXTENSION))
-                    .sorted(Comparator.comparing(p -> p.getFileName().toString(), String.CASE_INSENSITIVE_ORDER))
-                    .map(MemoryService::buildNoteDetail).toList();
-        } catch (IOException e) {
-            log.warn("Failed to list note details in {}: {}", notesDir, e.getMessage());
-            return List.of();
-        }
-    }
-
-    private List<String> listNotes(Path memoryRoot) {
-        List<NoteDetail> details = listNoteDetails(memoryRoot);
-        List<String> summaries = new ArrayList<>(details.size());
-        for (NoteDetail detail : details) {
-            summaries.add(formatNoteSummaryLine(detail));
-        }
-        return summaries;
-    }
-
-    private static String formatNoteSummaryLine(NoteDetail detail) {
-        String filename = detail.slug() + MD_EXTENSION;
-        String updatedAtSuffix = "";
-        if (!detail.updated().isEmpty()) {
-            updatedAtSuffix = " (" + detail.updated() + ")";
-        }
-        return filename + " - " + '"' + detail.title() + '"' + " [" + detail.tags() + "]" + updatedAtSuffix;
-    }
-
-    private static EditorResult writeMarkdownFile(Path path, String content, String successMessage) {
-        try {
-            PathUtils.createParentDirectories(path);
-            Files.writeString(path, content, StandardCharsets.UTF_8);
-            return new EditorResult(true, successMessage, null);
-        } catch (IOException e) {
-            log.error("Failed to write memory file {}: {}", path, e.getMessage());
-            return new EditorResult(false, "", "Failed to write memory file: " + e.getMessage());
-        }
     }
 
     private static String readFileIfExists(Path path) {

@@ -3,7 +3,7 @@ Your mission is to execute the approved implementation plan with precision and h
 
 Key Instructions:
 1. Strict Adherence: Execute the steps as defined in the approved plan. Use `executeJexl` for all workspace and workflow services (`fileEditorService`, `fileReadService`, `grepService`, `symbolService`, `gitService`, `buildToolService`, `memoryService`, `planService`, `userInputService`, `webSearchService`).
-- **Record Gotchas in Project Memory:** If a non-obvious build, test, or static-analysis (PMD/Spotless) gotcha is encountered and solved during coding, record it via `memoryService.saveProjectNote(...)` or `memoryService.updateProjectMemory(...)`.
+- **Record Gotchas in Project Memory:** If a non-obvious build, test, or static-analysis (PMD/Spotless) gotcha is encountered and solved during coding, record it via `memoryService.put('project', id, summary, tags, details)`.
 2. Quality Gates & Pragmatic Unit Testing Guidelines: Every functional change must be verified by compiling, running relevant tests, formatting, and linting via `buildToolService` (`compile()`, `runRelatedTests()`, `runTests()`, `runSingleTest()`, `format()`, `lint()`, or `install()` when dependencies change) inside `executeJexl`.
 - **High-Value Tests Only:** Write or update unit tests **only** for meaningful business logic, non-trivial algorithms, state transitions, parsing/serialization edge cases, and bug regressions.
 - **No Trivial or Low-Value Tests:** Do **NOT** write tests for plain getters/setters, records, enum constants, Java annotations or field modifiers via reflection (e.g., `Modifier.isVolatile`), static Markdown/prompt prose substrings, or third-party library behavior.

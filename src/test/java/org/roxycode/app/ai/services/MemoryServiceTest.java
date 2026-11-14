@@ -17,7 +17,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.MockedStatic;
-import org.roxycode.app.ai.services.MemoryService.NoteDetail;
+import org.roxycode.app.ai.services.MemoryService.MemoryEntry;
+import org.roxycode.app.ai.services.MemoryService.MemoryMetadata;
 import org.roxycode.app.events.MemoryChangedEvent;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
@@ -57,56 +58,86 @@ class MemoryServiceTest {
     }
 
     @Test
-    void testMemoryIndexNotesCrudStructuredDetailsAndEvents() {
-        assertTrue(memoryService.updateGlobalMemory("# Global Prefs").success());
-        assertEquals("# Global Prefs", memoryService.readGlobalMemory());
-        assertEquals(1, publishedEvents.size());
-        assertTrue(publishedEvents.get(0).globalScope());
-
-        assertTrue(memoryService.updateProjectMemory("# Project Rules").success());
-        assertEquals("# Project Rules", memoryService.readProjectMemory());
+    void testUnifiedMemoryCrudFindEventsAndLegacyMigration() throws IOException {
+        assertTrue(memoryService.put("global", "no-ternary", "Never use ternary operators.").success());
+        assertTrue(memoryService
+                .put("global", "Java Style.md", "Java Style Guide", List.of("java", "STYLE"), "Use immutable records.")
+                .success());
         assertEquals(2, publishedEvents.size());
-        assertFalse(publishedEvents.get(1).globalScope());
+        assertTrue(publishedEvents.get(0).globalScope());
+        assertTrue(Files.isRegularFile(roxyHomeDir.resolve("memory/memories.json")));
+
+        MemoryEntry globalEntry = memoryService.read("global", "java-style");
+        assertNotNull(globalEntry);
+        assertEquals("java-style", globalEntry.id());
+        assertEquals("Java Style Guide", globalEntry.summary());
+        assertEquals(List.of("java", "style"), globalEntry.tags());
+        assertEquals("Use immutable records.", globalEntry.details());
+        assertFalse(globalEntry.updatedAt().isEmpty());
 
         assertTrue(memoryService
-                .saveGlobalNote("Java Style.md", "Java Style Guide", "java, style", "Use immutable records.")
-                .success());
-        assertContainsAll(memoryService.readGlobalNote("java-style"), "id: ", "java-style", "Java Style Guide");
-        assertEquals(1, memoryService.listGlobalNotes().size());
+                .put("project", "swing-tables", "Swing Tables", List.of("ui", "swing"), "Use HTML tables.").success());
+        assertEquals(3, publishedEvents.size());
+        assertFalse(publishedEvents.get(2).globalScope());
 
-        List<NoteDetail> globalDetails = memoryService.listGlobalNoteDetails();
-        assertEquals(1, globalDetails.size());
-        NoteDetail globalDetail = globalDetails.get(0);
-        assertEquals("java-style", globalDetail.slug());
-        assertEquals("Java Style Guide", globalDetail.title());
-        assertEquals("java, style", globalDetail.tags());
-        assertEquals("Use immutable records.", globalDetail.body());
-        assertFalse(globalDetail.updated().isEmpty());
+        assertEquals(2, memoryService.list("global").size());
+        assertEquals(1, memoryService.list("project").size());
+        assertEquals(3, memoryService.listAll().size());
 
-        assertTrue(memoryService.saveProjectNote("swing-tables", "Swing Tables", "ui, swing", "Use HTML tables.")
-                .success());
-        assertContainsAll(memoryService.readProjectNote("swing-tables.md"), "swing-tables", "Swing Tables");
-        assertEquals(1, memoryService.listProjectNotes().size());
+        List<MemoryMetadata> found = memoryService.find("immutable");
+        assertEquals(1, found.size());
+        assertEquals("java-style", found.get(0).id());
+        assertTrue(found.get(0).hasDetails());
+        assertEquals(1, memoryService.find("project", "swing").size());
 
-        List<NoteDetail> projectDetails = memoryService.listProjectNoteDetails();
-        assertEquals(1, projectDetails.size());
-        NoteDetail projectDetail = projectDetails.get(0);
-        assertEquals("Swing Tables", projectDetail.title());
-        assertEquals("ui, swing", projectDetail.tags());
-        assertEquals("Use HTML tables.", projectDetail.body());
-
-        assertTrue(memoryService.deleteGlobalNote("java-style").success());
-        assertEquals("", memoryService.readGlobalNote("java-style"));
-        assertTrue(memoryService.deleteProjectNote("swing-tables").success());
-        assertEquals(6, publishedEvents.size());
+        assertTrue(memoryService.delete("global", "java-style").success());
+        assertNull(memoryService.read("global", "java-style"));
+        assertTrue(memoryService.delete("project", "swing-tables").success());
+        assertFalse(memoryService.delete("project", "swing-tables").success());
+        assertEquals(5, publishedEvents.size());
 
         for (String invalid : new String[]{null, "", "   ", "../secret", "notes/sub", "---"}) {
             assertThrows(IllegalArgumentException.class, () -> MemoryService.sanitizeSlug(invalid));
         }
+        assertThrows(IllegalArgumentException.class, () -> memoryService.list("invalid"));
         assertThrows(IllegalArgumentException.class, () -> memoryService.readArchivedPlan("../secret.md"));
 
         when(projectService.hasActiveProject()).thenReturn(false);
-        assertFalse(memoryService.updateProjectMemory("content").success());
+        assertFalse(memoryService.put("project", "rule-1", "Summary").success());
+        assertTrue(memoryService.list("project").isEmpty());
+
+        // Legacy migration from MEMORY.md + notes/*.md when memories.json does not exist yet
+        Path legacyProjectDir = Files.createDirectories(tempDir.resolve("legacy-project"));
+        Path legacyMemDir = Files.createDirectories(legacyProjectDir.resolve("memory"));
+        Path legacyNotesDir = Files.createDirectories(legacyMemDir.resolve("notes"));
+        Files.writeString(legacyMemDir.resolve("MEMORY.md"), """
+                # Project Memory
+                - **Pragmatic Testing**: Only test meaningful business logic.
+                - Never use ThreadLocals in Swing panels.
+                """, StandardCharsets.UTF_8);
+        Files.writeString(legacyNotesDir.resolve("caffeine-cache.md"), """
+                ---
+                title: "Async Caching with Caffeine"
+                tags: "caching, async"
+                updatedAt: "2026-10-30T23:25:46Z"
+                ---
+
+                # Async Caching with Caffeine
+
+                Use Caffeine AsyncCache with virtual threads.
+                """, StandardCharsets.UTF_8);
+
+        when(projectService.hasActiveProject()).thenReturn(true);
+        when(projectService.resolveProjectDataPath(anyString()))
+                .thenAnswer(inv -> legacyProjectDir.resolve(inv.getArgument(0, String.class)));
+        List<MemoryEntry> migrated = memoryService.readAll("project");
+        assertEquals(3, migrated.size());
+        assertTrue(Files.isRegularFile(legacyMemDir.resolve("memories.json")));
+        MemoryEntry migratedNote = memoryService.read("project", "caffeine-cache");
+        assertNotNull(migratedNote);
+        assertEquals("Async Caching with Caffeine", migratedNote.summary());
+        assertEquals(List.of("caching", "async"), migratedNote.tags());
+        assertEquals("Use Caffeine AsyncCache with virtual threads.", migratedNote.details());
     }
 
     @Test
@@ -153,22 +184,20 @@ class MemoryServiceTest {
 
     @Test
     void testUnifiedRipgrepSearchCappingAndTitleDerivation() {
-        memoryService.saveGlobalNote("foo", "Global Foo", "global", "UniqueCrossScopeToken alpha");
-        memoryService.saveProjectNote("bar", "Project Bar", "project", "UniqueCrossScopeToken beta");
-        String simulatedRgStdout = roxyHomeDir.resolve("memory/notes/foo.md").toAbsolutePath().normalize()
+        memoryService.put("global", "foo", "Global Foo", List.of("global"), "UniqueCrossScopeToken alpha");
+        memoryService.put("project", "bar", "Project Bar", List.of("project"), "UniqueCrossScopeToken beta");
+        String simulatedRgStdout = roxyHomeDir.resolve("memory/memories.json").toAbsolutePath().normalize()
                 + ":12:UniqueCrossScopeToken alpha\n"
-                + projectDataDir.resolve("memory/notes/bar.md").toAbsolutePath().normalize()
+                + projectDataDir.resolve("memory/memories.json").toAbsolutePath().normalize()
                 + ":5:UniqueCrossScopeToken beta\n";
 
         try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
             runnerMock.when(() -> ProcessRunner.run(anyList(), any(), anyBoolean()))
                     .thenReturn(new ProcessResult(0, simulatedRgStdout, "", false));
-            assertContainsAll(memoryService.search("UniqueCrossScopeToken").content(), "foo.md:12:", "bar.md:5:");
-            assertContainsAll(memoryService.searchIgnoreCase("uniquecrossscopetoken").content(), "foo.md:12:");
+            assertContainsAll(memoryService.search("UniqueCrossScopeToken").content(), "memories.json:12:",
+                    "memories.json:5:");
+            assertContainsAll(memoryService.searchIgnoreCase("uniquecrossscopetoken").content(), "memories.json:12:");
         }
-
-        assertTrue(MemoryService.capPinnedMemoryForPrompt("line\n".repeat(250))
-                .contains("truncated at 200 lines / 8 KB limit"));
         assertTrue(FrontmatterUtils.stripFrontmatter("---\nid: '1'\n---\n\n# Body").startsWith("# Body"));
         List<ChatTranscriptEntry> entries = List
                 .of(new ChatTranscriptEntry("user", "  # How does repo map packing work?  ", "10:00:00"));

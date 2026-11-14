@@ -19,6 +19,8 @@ import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.MemoryService;
+import org.roxycode.app.ai.services.MemoryService.MemoryEntry;
+import org.roxycode.app.ai.services.MemoryService.MemoryMetadata;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.UserInputService;
 import org.springframework.lang.Nullable;
@@ -72,8 +74,14 @@ final class ChatController implements AutoCloseable {
     private static final String CMD_RESET = "/reset";
     private static final String CMD_CLEAR = "/clear";
     private static final String CMD_HELP = "/help";
-    private static final String CMD_REM_PROJECT = "/rem-p ";
-    private static final String CMD_REM_GLOBAL = "/rem-g ";
+    private static final String CMD_MEM_P_VIEW = "/mem-p-view";
+    private static final String CMD_MEM_P_PUT = "/mem-p-put";
+    private static final String CMD_MEM_P_FIND = "/mem-p-find";
+    private static final String CMD_MEM_P_DEL = "/mem-p-del";
+    private static final String CMD_MEM_G_VIEW = "/mem-g-view";
+    private static final String CMD_MEM_G_PUT = "/mem-g-put";
+    private static final String CMD_MEM_G_FIND = "/mem-g-find";
+    private static final String CMD_MEM_G_DEL = "/mem-g-del";
     static final String IMAGE_REQUIRES_TEXT_MESSAGE = "Please enter a prompt message to accompany the attached image.";
     static final String INITIAL_ACTIVITY_STATUS = "Preparing prompt Context & Repo Map...";
     private static final String BT = "`";
@@ -253,67 +261,191 @@ final class ChatController implements AutoCloseable {
             String helpText = "### Available Commands\n" + helpItem + BT + CMD_RESET + BT
                     + ": Reset the current session or topic.\n" + helpItem + BT + CMD_CLEAR + BT
                     + ": Clear the chat output area.\n" + helpItem + BT + CMD_HELP + BT + ": Show this help message.\n"
-                    + helpItem + BT + CMD_REM_PROJECT + BT + ": Append text to project memory.\n" + helpItem + BT
-                    + CMD_REM_GLOBAL + BT + ": Append text to global memory.";
+                    + helpItem + BT + CMD_MEM_P_VIEW + " [id]" + BT
+                    + ": List project memories or view a specific entry.\n" + helpItem + BT + CMD_MEM_P_PUT
+                    + " [<id>:] <summary>" + BT + ": Save a project memory.\n" + helpItem + BT + CMD_MEM_P_FIND
+                    + " <query>" + BT + ": Search project memories.\n" + helpItem + BT + CMD_MEM_P_DEL + " <id>" + BT
+                    + ": Delete a project memory.\n" + helpItem + BT + CMD_MEM_G_VIEW + " [id]" + BT
+                    + ": List global memories or view a specific entry.\n" + helpItem + BT + CMD_MEM_G_PUT
+                    + " [<id>:] <summary>" + BT + ": Save a global memory.\n" + helpItem + BT + CMD_MEM_G_FIND
+                    + " <query>" + BT + ": Search global memories.\n" + helpItem + BT + CMD_MEM_G_DEL + " <id>" + BT
+                    + ": Delete a global memory.";
             view.appendMessage(ROLE_SYSTEM, helpText);
             return;
         }
-        if (CMD_REM_PROJECT.trim().equals(command)) {
-            handleMemoryCommand(argument, false);
+        if (CMD_MEM_P_VIEW.equals(command)) {
+            handleMemoryViewCommand(MemoryService.SCOPE_PROJECT, argument);
             return;
         }
-        if (CMD_REM_GLOBAL.trim().equals(command)) {
-            handleMemoryCommand(argument, true);
+        if (CMD_MEM_G_VIEW.equals(command)) {
+            handleMemoryViewCommand(MemoryService.SCOPE_GLOBAL, argument);
+            return;
+        }
+        if (CMD_MEM_P_PUT.equals(command)) {
+            handleMemoryPutCommand(MemoryService.SCOPE_PROJECT, argument, CMD_MEM_P_PUT);
+            return;
+        }
+        if (CMD_MEM_G_PUT.equals(command)) {
+            handleMemoryPutCommand(MemoryService.SCOPE_GLOBAL, argument, CMD_MEM_G_PUT);
+            return;
+        }
+        if (CMD_MEM_P_FIND.equals(command)) {
+            handleMemoryFindCommand(MemoryService.SCOPE_PROJECT, argument, CMD_MEM_P_FIND);
+            return;
+        }
+        if (CMD_MEM_G_FIND.equals(command)) {
+            handleMemoryFindCommand(MemoryService.SCOPE_GLOBAL, argument, CMD_MEM_G_FIND);
+            return;
+        }
+        if (CMD_MEM_P_DEL.equals(command)) {
+            handleMemoryDeleteCommand(MemoryService.SCOPE_PROJECT, argument, CMD_MEM_P_DEL);
+            return;
+        }
+        if (CMD_MEM_G_DEL.equals(command)) {
+            handleMemoryDeleteCommand(MemoryService.SCOPE_GLOBAL, argument, CMD_MEM_G_DEL);
             return;
         }
         view.appendMessage(ROLE_SYSTEM,
                 "Unknown command: " + text + ". Type " + BT + CMD_HELP + BT + " for available commands.");
     }
 
-    private void handleMemoryCommand(String content, boolean global) {
+    private boolean ensureMemoryServiceAvailable() {
         if (memoryService == null) {
             view.appendMessage(ROLE_SYSTEM, "Memory service is not available.");
+            return false;
+        }
+        return true;
+    }
+
+    private void handleMemoryViewCommand(String scope, String idArg) {
+        if (!ensureMemoryServiceAvailable()) {
             return;
         }
-
-        String prefix = CMD_REM_PROJECT;
-        if (global) {
-            prefix = CMD_REM_GLOBAL;
-        }
-        if (content.isEmpty()) {
-            view.appendMessage(ROLE_SYSTEM, "Please provide content to remember. Usage: " + prefix + "<text>");
-            return;
-        }
-
-        String current;
-        if (global) {
-            current = memoryService.readGlobalMemory();
-        } else {
-            current = memoryService.readProjectMemory();
-        }
-
-        String newContent = content;
-        if (!current.isEmpty()) {
-            newContent = current + "\n" + content;
-        }
-
-        EditorResult result;
-        if (global) {
-            result = memoryService.updateGlobalMemory(newContent);
-        } else {
-            result = memoryService.updateProjectMemory(newContent);
-        }
-
-        if (result.success()) {
-            String scope = "Project";
-            if (global) {
-                scope = "Global";
+        if (idArg.isEmpty()) {
+            List<MemoryMetadata> entries = memoryService.list(scope);
+            if (entries.isEmpty()) {
+                view.appendMessage(ROLE_SYSTEM, "No " + scope + " memories saved.");
+                return;
             }
-            view.appendMessage(ROLE_SYSTEM, scope + " memory updated successfully.");
+            StringBuilder sb = new StringBuilder("### ").append(StringUtils.capitalize(scope)).append(" Memories (")
+                    .append(entries.size()).append(")\n");
+            for (MemoryMetadata entry : entries) {
+                sb.append(formatMemoryListLine(entry)).append("\n");
+            }
+            view.appendMessage(ROLE_SYSTEM, sb.toString().stripTrailing());
+            return;
+        }
+        try {
+            MemoryEntry entry = memoryService.read(scope, idArg);
+            if (entry == null) {
+                view.appendMessage(ROLE_SYSTEM, "Memory not found in " + scope + " scope: " + BT + idArg + BT);
+                return;
+            }
+            StringBuilder sb = new StringBuilder("### ").append(StringUtils.capitalize(scope)).append(" Memory: ")
+                    .append(BT).append(entry.id()).append(BT).append("\n");
+            if (!entry.tags().isEmpty()) {
+                sb.append("**Tags:** ").append(MemoryService.formatTagsDisplay(entry.tags())).append("\n");
+            }
+            sb.append("**Summary:** ").append(entry.summary());
+            if (!entry.details().isBlank()) {
+                sb.append("\n\n").append(entry.details());
+            }
+            view.appendMessage(ROLE_SYSTEM, sb.toString());
+        } catch (IllegalArgumentException e) {
+            view.appendMessage(ROLE_SYSTEM, "Invalid memory id: " + e.getMessage());
+        }
+    }
+
+    private void handleMemoryPutCommand(String scope, String argument, String commandName) {
+        if (!ensureMemoryServiceAvailable()) {
+            return;
+        }
+        if (argument.isEmpty()) {
+            view.appendMessage(ROLE_SYSTEM,
+                    "Please provide a summary. Usage: " + BT + commandName + " [<id>:] <summary>" + BT);
+            return;
+        }
+        String id;
+        String summary;
+        int colonIdx = argument.indexOf(':');
+        if (colonIdx > 0) {
+            String candidateId = argument.substring(0, colonIdx).trim();
+            String remainder = argument.substring(colonIdx + 1).trim();
+            if (!candidateId.isEmpty() && !remainder.isEmpty() && candidateId.matches("[a-zA-Z0-9_-]+")) {
+                id = MemoryService.sanitizeSlug(candidateId);
+                summary = remainder;
+            } else {
+                summary = argument;
+                id = MemoryService.deriveSlugFromSummary(summary);
+            }
+        } else {
+            summary = argument;
+            id = MemoryService.deriveSlugFromSummary(summary);
+        }
+
+        EditorResult result = memoryService.put(scope, id, summary);
+        if (result.success()) {
+            view.appendMessage(ROLE_SYSTEM, "Saved " + scope + " memory " + BT + id + BT + ": " + summary);
             persistActiveChatSession();
         } else {
-            view.appendMessage(ROLE_SYSTEM, "Failed to update memory: " + result.errorHint());
+            view.appendMessage(ROLE_SYSTEM, "Failed to save " + scope + " memory: " + result.errorHint());
         }
+    }
+
+    private void handleMemoryFindCommand(String scope, String query, String commandName) {
+        if (!ensureMemoryServiceAvailable()) {
+            return;
+        }
+        if (query.isEmpty()) {
+            view.appendMessage(ROLE_SYSTEM,
+                    "Please provide a search query. Usage: " + BT + commandName + " <query>" + BT);
+            return;
+        }
+        List<MemoryMetadata> matches = memoryService.find(scope, query);
+        if (matches.isEmpty()) {
+            view.appendMessage(ROLE_SYSTEM, "No " + scope + " memories matching " + BT + query + BT + ".");
+            return;
+        }
+        StringBuilder sb = new StringBuilder("### Matching ").append(StringUtils.capitalize(scope))
+                .append(" Memories (").append(matches.size()).append(")\n");
+        for (MemoryMetadata entry : matches) {
+            sb.append(formatMemoryListLine(entry)).append("\n");
+        }
+        view.appendMessage(ROLE_SYSTEM, sb.toString().stripTrailing());
+    }
+
+    private void handleMemoryDeleteCommand(String scope, String idArg, String commandName) {
+        if (!ensureMemoryServiceAvailable()) {
+            return;
+        }
+        if (idArg.isEmpty()) {
+            view.appendMessage(ROLE_SYSTEM, "Please provide a memory id. Usage: " + BT + commandName + " <id>" + BT);
+            return;
+        }
+        try {
+            String sanitizedId = MemoryService.sanitizeSlug(idArg);
+            EditorResult result = memoryService.delete(scope, sanitizedId);
+            if (result.success()) {
+                view.appendMessage(ROLE_SYSTEM, "Deleted " + scope + " memory " + BT + sanitizedId + BT + ".");
+                persistActiveChatSession();
+            } else {
+                view.appendMessage(ROLE_SYSTEM, "Failed to delete " + scope + " memory: " + result.errorHint());
+            }
+        } catch (IllegalArgumentException e) {
+            view.appendMessage(ROLE_SYSTEM, "Invalid memory id: " + e.getMessage());
+        }
+    }
+
+    private static String formatMemoryListLine(MemoryMetadata entry) {
+        StringBuilder line = new StringBuilder("- ").append(BT).append(entry.id()).append(BT);
+        if (!entry.tags().isEmpty()) {
+            line.append(" [").append(MemoryService.formatTagsDisplay(entry.tags())).append("]");
+        }
+        if (entry.hasDetails()) {
+            line.append(" (+details)");
+        }
+        line.append(": ").append(entry.summary());
+        return line.toString();
     }
 
     private boolean cancelActiveTurnState(boolean markCancelled) {
