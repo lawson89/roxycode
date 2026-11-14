@@ -139,9 +139,11 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         @Lazy
         ChatPanel featureChatPanel(AiService aiService, PlanService planService,
                 ApplicationEventPublisher eventPublisher, ChatMemory chatMemory, SettingsService settingsService,
-                ExecutorService chatTurnExecutor) {
-            return createFeaturePanel(aiService, planService, eventPublisher, chatMemory, settingsService,
+                ExecutorService chatTurnExecutor, MemoryService memoryService) {
+            ChatPanel panel = createFeaturePanel(aiService, planService, eventPublisher, chatMemory, settingsService,
                     chatTurnExecutor);
+            panel.setMemoryService(memoryService);
+            return panel;
         }
 
         @Bean("exploreChatController")
@@ -163,6 +165,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         ChatPanel panel = new ChatPanel(aiService, planService, eventPublisher, chatMemory, ChatModel.QA_SESSION_PREFIX,
                 WorkflowPhase.EXPLORE, false, settingsService, turnExecutor);
         panel.controller.setTopicArchiveServices(memoryService, environmentService);
+        panel.fileMentionPopup.setMemoryService(memoryService);
         return panel;
     }
 
@@ -627,6 +630,12 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     @Autowired(required = false)
     public void setGrepService(GrepService grepService) {
         fileMentionPopup.setGrepService(grepService);
+    }
+
+    @Autowired(required = false)
+    public void setMemoryService(MemoryService memoryService) {
+        fileMentionPopup.setMemoryService(memoryService);
+        controller.setMemoryService(memoryService);
     }
 
     @Autowired(required = false)

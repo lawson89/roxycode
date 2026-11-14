@@ -13,7 +13,10 @@ import javax.swing.JTextArea;
 import org.junit.jupiter.api.Test;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.roxycode.app.ai.services.GrepService;
+import org.roxycode.app.ai.services.MemoryService;
+import org.roxycode.app.ai.services.MemoryService.MemoryMetadata;
 import org.roxycode.app.ui.FileMentionPopup.FileCandidate;
+import org.roxycode.app.ui.FileMentionPopup.MemoryCandidate;
 import org.roxycode.app.ui.FileMentionPopup.MentionItem;
 import org.roxycode.app.ui.FileMentionPopup.MentionToken;
 
@@ -149,5 +152,78 @@ class FileMentionPopupTest {
         });
         assertEquals(Codicons.FILE_CODE, FileMentionPopup.resolveFileIcon("chatpanel.java"));
         assertEquals(Codicons.FILE, FileMentionPopup.resolveFileIcon("license"));
+    }
+
+    @Test
+    void testMemoryIdTokenExtractionRankingAndTwoStageAutocomplete() {
+        assertEquals(new MentionToken(0, 12, "mem-g-view ", '/'),
+                FileMentionPopup.extractMentionToken("/mem-g-view ", 12));
+        assertEquals(new MentionToken(0, 15, "mem-g-view no-", '/'),
+                FileMentionPopup.extractMentionToken("/mem-g-view no-", 15));
+        assertEquals(new MentionToken(0, 12, "mem-p-view ", '/'),
+                FileMentionPopup.extractMentionToken("/mem-p-view ", 12));
+        assertEquals(new MentionToken(0, 11, "mem-p-del ", '/'),
+                FileMentionPopup.extractMentionToken("/mem-p-del ", 11));
+        assertEquals(new MentionToken(0, 14, "mem-g-del foo", '/'),
+                FileMentionPopup.extractMentionToken("/mem-g-del foo", 14));
+
+        assertNull(FileMentionPopup.extractMentionToken("/mem-g-view foo bar", 19));
+        assertNull(FileMentionPopup.extractMentionToken("/mem-p-put ", 11));
+        assertNull(FileMentionPopup.extractMentionToken("/mem-g-find ", 12));
+
+        JTextArea docArea = new JTextArea("/mem-p-view arch");
+        assertEquals(new MentionToken(0, docArea.getText().length(), "mem-p-view arch", '/'),
+                FileMentionPopup.extractMentionTokenFromDocument(docArea.getDocument(), docArea.getText().length()));
+
+        MemoryService memoryService = mock(MemoryService.class);
+        when(memoryService.list("global")).thenReturn(List.of(
+                new MemoryMetadata("global", "prefer-libs", "Use open source libraries for tern", List.of(), false, ""),
+                new MemoryMetadata("global", "my-tern-rule", "Custom rule", List.of(), false, ""),
+                new MemoryMetadata("global", "no-var", "Do not use local var", List.of(), false, ""),
+                new MemoryMetadata("global", "tern-style", "Tern style guide", List.of(), false, "")));
+        when(memoryService.list("project")).thenReturn(List.of(
+                new MemoryMetadata("project", "swing-html", "Swing HTML 3.2 constraints", List.of("ui"), true, "")));
+
+        List<MentionItem> globalRanked = FileMentionPopup.rankCandidates(null,
+                new MentionToken(0, 16, "mem-g-view tern", '/'), memoryService);
+        assertEquals(3, globalRanked.size());
+        assertEquals("tern-style", globalRanked.get(0).label());
+        assertEquals("my-tern-rule", globalRanked.get(1).label());
+        assertEquals("prefer-libs", globalRanked.get(2).label());
+        assertEquals("/mem-g-view tern-style", globalRanked.get(0).replacement());
+
+        List<MentionItem> projectRanked = FileMentionPopup.rankCandidates(null,
+                new MentionToken(0, 11, "mem-p-del ", '/'), memoryService);
+        assertEquals(1, projectRanked.size());
+        assertEquals("/mem-p-del swing-html", projectRanked.get(0).replacement());
+
+        JTextArea inputArea = new JTextArea(3, 40);
+        inputArea.setSize(new Dimension(400, 70));
+        JScrollPane scrollPane = new JScrollPane(inputArea);
+        scrollPane.setSize(new Dimension(400, 70));
+
+        FileMentionPopup popup = new FileMentionPopup(inputArea, scrollPane);
+        popup.setBackgroundExecutor(Runnable::run);
+        popup.setMemoryService(memoryService);
+
+        inputArea.setText("/mem-g-v");
+        inputArea.setCaretPosition(inputArea.getText().length());
+        SwingTestUtils.flushEdt();
+
+        assertTrue(popup.isPopupVisible());
+        assertEquals("/mem-g-view ", popup.candidateList.getSelectedValue().replacement());
+
+        assertTrue(popup.acceptSelected());
+        assertEquals("/mem-g-view ", inputArea.getText());
+        SwingTestUtils.flushEdt();
+
+        assertTrue(popup.isPopupVisible());
+        assertEquals(4, popup.listModel.size());
+        assertInstanceOf(MemoryCandidate.class, popup.listModel.getElementAt(0));
+
+        popup.candidateList.setSelectedIndex(2);
+        assertTrue(popup.acceptSelected());
+        assertEquals("/mem-g-view no-var", inputArea.getText());
+        assertFalse(popup.isPopupVisible());
     }
 }

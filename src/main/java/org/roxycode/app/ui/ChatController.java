@@ -143,6 +143,10 @@ final class ChatController implements AutoCloseable {
         this.environmentService = environmentService;
     }
 
+    void setMemoryService(MemoryService memoryService) {
+        this.memoryService = memoryService;
+    }
+
     void setUserInputService(UserInputService userInputService) {
         this.userInputService = userInputService;
     }
