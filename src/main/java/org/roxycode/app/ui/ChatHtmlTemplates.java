@@ -417,6 +417,9 @@ public final class ChatHtmlTemplates {
                                 <div class="welcome-hint" style="margin-top: 4px;">
                                     1. <b>Plan</b> (draft &amp; approve) &bull; 2. <b>Code</b> (edit, compile &amp; test) &bull; 3. <b>Review</b> (audit diff &amp; sign-off)
                                 </div>
+                                <div class="welcome-hint" style="margin-top: 4px;">
+                                    Type <b>@</b> (<b>@ Mention</b>) for files &bull; Type <b>/</b> (<b>/ Commands</b>) for slash commands &bull; Drag &amp; drop or <b>Attach</b> text, PDFs &amp; images (<b>Ctrl+V</b>) &bull; <b>Enter</b> to send, <b>Shift+Enter</b> for newline
+                                </div>
                             </td>
                         </tr>
                     </table>
@@ -458,7 +461,7 @@ public final class ChatHtmlTemplates {
                                 <tr><td class="hr-line" height="1"></td></tr>
                             </table>
                             <div class="welcome-hint" style="margin-top: 4px;">
-                                Type <b>@</b> or click <b>@ Mention</b> to reference files &bull; <b>Enter</b> to send, <b>Shift+Enter</b> for newline &bull; <b>Ctrl+V</b> to paste images
+                                Type <b>@</b> (<b>@ Mention</b>) for files &bull; Type <b>/</b> (<b>/ Commands</b>) for slash commands &bull; Drag &amp; drop or <b>Attach</b> text, PDFs &amp; images (<b>Ctrl+V</b>) &bull; <b>Enter</b> to send, <b>Shift+Enter</b> for newline
                             </div>
                         </td>
                     </tr>

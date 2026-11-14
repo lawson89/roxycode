@@ -61,10 +61,12 @@ class MarkdownPaneTest {
     void testIncrementalAppendInPlaceCopyFeedbackToolLogsAndTranscript() {
         MarkdownPane pane = new MarkdownPane(false);
         assertContainsAll(pane.getText(), "welcome-card", "Technical Mentor (Read-Only Explore Mode)", "@ Mention",
-                "prompt:", "starter-accent-blue", "starter-badge-blue", "starter-cta-pill-blue", "starter-title-link");
+                "slash commands", "Drag &amp; drop", "PDFs", "prompt:", "starter-accent-blue", "starter-badge-blue",
+                "starter-cta-pill-blue", "starter-title-link");
         String taskHtml = new MarkdownPane(true).getText();
-        assertContainsAll(taskHtml, "Autonomous Feature Development", "prompt:", "starter-accent-blue",
-                "starter-badge-blue", "starter-cta-pill-blue", "starter-title-link");
+        assertContainsAll(taskHtml, "Autonomous Feature Development", "@ Mention", "slash commands", "Drag &amp; drop",
+                "PDFs", "prompt:", "starter-accent-blue", "starter-badge-blue", "starter-cta-pill-blue",
+                "starter-title-link");
 
         String[] clickedStarter = new String[1];
         pane.setOnStarterPromptListener(prompt -> clickedStarter[0] = prompt);

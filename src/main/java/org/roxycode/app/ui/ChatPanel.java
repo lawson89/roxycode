@@ -67,7 +67,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     static final String NEW_TOPIC_BUTTON_TEXT = "New Topic";
     static final String RESET_SESSION_BUTTON_TEXT = "Reset Session";
     static final String NEW_TOPIC_TOOLTIP = "Archive current conversation and start a new Q&A topic";
-    static final String DEFAULT_PLACEHOLDER_TEXT = "Type a message... (Enter to send, Shift+Enter for newline, @ to mention files, / to run commands, Ctrl+V to paste image)";
+    static final String DEFAULT_PLACEHOLDER_TEXT = "Type a message... (Enter to send, Shift+Enter for newline, @ to mention files, / for commands, drag & drop or Ctrl+V to attach text, PDFs & images)";
     static final String NO_PROJECT_PLACEHOLDER_TEXT = "Select a project folder in the top bar (Change Project...) to start chatting...";
     static final String BUSY_PLACEHOLDER_TEXT = "Roxy is working... Press Esc or click Stop to interrupt.";
     private static final String TOOLBAR_BUTTON_STYLE = "font: -1; foreground: $Label.disabledForeground; focusWidth: 0; innerFocusWidth: 0";
