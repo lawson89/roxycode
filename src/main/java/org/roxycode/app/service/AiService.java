@@ -552,7 +552,7 @@ public class AiService implements AutoCloseable {
             recordToolProgressIfPresent(chatClientRequest);
             ThinkingLevel configuredLevel = resolveEffectiveThinkingLevel();
             ThinkingLevel activeSubTurnLevel = resolveActiveSubTurnThinkingLevel(configuredLevel, currentPhase,
-                    chatClientRequest);
+                    modelName, chatClientRequest);
             ChatClientRequest resolvedRequest = chatClientRequest;
             if (currentPhase != null || !hasExplicitThinkingLevel(chatClientRequest)) {
                 resolvedRequest = applySubTurnThinkingLevel(chatClientRequest, configuredLevel, activeSubTurnLevel);
@@ -632,13 +632,19 @@ public class AiService implements AutoCloseable {
 
     ThinkingLevel resolveActiveSubTurnThinkingLevel(ThinkingLevel configuredLevel, @Nullable WorkflowPhase phase,
             @Nullable ChatClientRequest request) {
+        return resolveActiveSubTurnThinkingLevel(configuredLevel, phase, resolveRequestModelName(request, phase),
+                request);
+    }
+
+    ThinkingLevel resolveActiveSubTurnThinkingLevel(ThinkingLevel configuredLevel, @Nullable WorkflowPhase phase,
+            @Nullable String modelName, @Nullable ChatClientRequest request) {
         ThinkingLevel resolvedConfigured = Objects.requireNonNullElse(configuredLevel, ThinkingLevel.DEFAULT);
         if (resolvedConfigured != ThinkingLevel.ADAPTIVE) {
             return resolvedConfigured;
         }
         boolean planSubmitted = planService != null && planService.getCurrentPlan() != null;
         ToolResponseState toolState = inspectPromptToolResponses(request);
-        return resolvedConfigured.resolveSubTurnLevel(phase, planSubmitted, toolState.hasToolResponses(),
+        return resolvedConfigured.resolveSubTurnLevel(phase, modelName, planSubmitted, toolState.hasToolResponses(),
                 toolState.lastToolCallFailed());
     }
 

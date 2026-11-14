@@ -228,6 +228,24 @@ class SettingsServiceTest {
                 ThinkingLevel.ADAPTIVE.resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, false, true, false));
         assertEquals(ThinkingLevel.LOW,
                 ThinkingLevel.ADAPTIVE.resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, true, true, false));
+        assertEquals(ThinkingLevel.LOW, ThinkingLevel.ADAPTIVE
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, "gemini-4-carbon", false, false, false));
+        assertEquals(ThinkingLevel.MEDIUM, ThinkingLevel.ADAPTIVE
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, "gemini-4-carbon", false, true, false));
+        assertEquals(ThinkingLevel.HIGH, ThinkingLevel.ADAPTIVE
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, "gemini-4-carbon", false, true, true));
+        assertEquals(ThinkingLevel.LOW, ThinkingLevel.ADAPTIVE
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, "gemini-4-carbon", true, true, true));
+        assertEquals(ThinkingLevel.MEDIUM, ThinkingLevel.ADAPTIVE
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, "gemini-4-argon", false, false, false));
+        assertEquals(ThinkingLevel.HIGH, ThinkingLevel.ADAPTIVE
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, "gemini-4-argon", false, true, false));
+        assertEquals(ThinkingLevel.LOW, ThinkingLevel.ADAPTIVE
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, "gemini-4-argon", true, true, false));
+        assertEquals(ThinkingLevel.MEDIUM, ThinkingLevel.ADAPTIVE
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, "gemini-4-hydrogen", false, false, false));
+        assertEquals(ThinkingLevel.HIGH, ThinkingLevel.ADAPTIVE
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, "gemini-4-hydrogen", false, true, false));
         assertEquals(ThinkingLevel.MEDIUM,
                 ThinkingLevel.ADAPTIVE.resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.CODE, true, true, false));
         assertEquals(ThinkingLevel.HIGH,

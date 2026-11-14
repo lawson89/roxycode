@@ -701,6 +701,73 @@ class AiServiceTest {
     }
 
     @Test
+    void testPlanPhaseAdaptiveThinkingCapsGemini4CarbonToExploreCadence() {
+        ChatModel mockChatModel = mock(ChatModel.class);
+        ToolCallingManager customToolManager = mock(ToolCallingManager.class);
+        AiService serviceWithRealClient = createRealClientService(mockChatModel, customToolManager);
+        settings.setAgentProfile("MAX");
+        settings.setThinkingLevel("ADAPTIVE");
+        when(promptService.buildSystemPrompt(any())).thenReturn("SYSTEM PROMPT");
+        when(planService.getCurrentPlan()).thenReturn(null);
+
+        AssistantMessage toolCall = createToolCallMessage();
+        ChatResponse toolCallResponse = createToolCallResponse(toolCall);
+        ChatResponse finalPlanResp = buildChatResponse("Carbon plan ready", "STOP", null);
+
+        List<GoogleGenAiThinkingLevel> capturedThinkingLevels = new ArrayList<>();
+        AtomicInteger callCounter = new AtomicInteger();
+        when(mockChatModel.call(any(Prompt.class))).thenAnswer(inv -> {
+            Prompt p = inv.getArgument(0);
+            if (p.getOptions() instanceof GoogleGenAiChatOptions genAiOpts) {
+                capturedThinkingLevels.add(genAiOpts.getThinkingLevel());
+            }
+            int callNum = callCounter.incrementAndGet();
+            if (callNum <= 3) {
+                return toolCallResponse;
+            }
+            return finalPlanResp;
+        });
+
+        ToolResponseMessage successToolMsg = ToolResponseMessage.builder()
+                .responses(List.of(new ToolResponseMessage.ToolResponse("call-1", "executeJexl", """
+                        {"success":true,"content":"OK"}"""))).build();
+        ToolResponseMessage failedToolMsg = ToolResponseMessage.builder()
+                .responses(List.of(new ToolResponseMessage.ToolResponse("call-1", "executeJexl", """
+                        {"success":false,"errorHint":"Syntax error"}"""))).build();
+        ImplementationPlan mockPlan = mock(ImplementationPlan.class);
+
+        AtomicInteger toolExecCounter = new AtomicInteger();
+        when(customToolManager.executeToolCalls(any(Prompt.class), any(ChatResponse.class))).thenAnswer(inv -> {
+            int execNum = toolExecCounter.incrementAndGet();
+            ToolResponseMessage toolMsg;
+            if (execNum == 1) {
+                toolMsg = successToolMsg;
+            } else if (execNum == 2) {
+                toolMsg = failedToolMsg;
+            } else {
+                when(planService.getCurrentPlan()).thenReturn(mockPlan);
+                toolMsg = successToolMsg;
+            }
+            return DefaultToolExecutionResult.builder()
+                    .conversationHistory(List.of(new UserMessage("Plan feature"), toolCall, toolMsg))
+                    .returnDirect(false).build();
+        });
+
+        assertEquals("Carbon plan ready",
+                serviceWithRealClient.chat("task:carbon-plan", WorkflowPhase.PLAN, "Plan feature", null));
+        assertEquals(List.of(GoogleGenAiThinkingLevel.LOW, GoogleGenAiThinkingLevel.MEDIUM,
+                GoogleGenAiThinkingLevel.HIGH, GoogleGenAiThinkingLevel.LOW), capturedThinkingLevels);
+
+        when(planService.getCurrentPlan()).thenReturn(null);
+        assertEquals(ThinkingLevel.MEDIUM, serviceWithRealClient
+                .resolveActiveSubTurnThinkingLevel(ThinkingLevel.ADAPTIVE, WorkflowPhase.PLAN, "gemini-4-argon", null));
+        assertEquals(ThinkingLevel.MEDIUM, serviceWithRealClient.resolveActiveSubTurnThinkingLevel(
+                ThinkingLevel.ADAPTIVE, WorkflowPhase.PLAN, "gemini-4-hydrogen", null));
+        assertEquals(ThinkingLevel.LOW, serviceWithRealClient.resolveActiveSubTurnThinkingLevel(ThinkingLevel.ADAPTIVE,
+                WorkflowPhase.PLAN, "gemini-4-carbon", null));
+    }
+
+    @Test
     void testNonRateLimitRetryRecreatesClientModelAndDowngradesThinkingLevelToLow() {
         ChatModel initialModel = mock(ChatModel.class);
         ChatModel recreatedModel = mock(ChatModel.class);

@@ -52,17 +52,8 @@ public enum ThinkingLevel {
     }
 
     /**
-     * Resolves the concrete sub-turn thinking level for a model call. When this level is {@link #ADAPTIVE}, the
-     * thinking budget is chosen dynamically based on the active workflow phase and sub-turn state:
-     * <ul>
-     * <li>{@code PLAN}: {@link #MEDIUM} on initial discovery, rising to {@link #HIGH} while designing the blueprint
-     * with codebase context, and dropping to {@link #LOW} after a plan is submitted.</li>
-     * <li>{@code CODE}: {@link #MEDIUM} by default for fast, accurate execution, escalating to {@link #HIGH} when the
-     * previous tool execution reported a failure.</li>
-     * <li>{@code REVIEW}: {@link #HIGH}.</li>
-     * <li>{@code EXPLORE}: {@link #LOW} on initial tool discovery, rising to {@link #MEDIUM} after tool outputs are
-     * returned for synthesis.</li>
-     * </ul>
+     * Resolves the concrete sub-turn thinking level for a model call using the default (non-model-specific) adaptive
+     * trajectory.
      *
      * @param phase
      *            the current workflow phase
@@ -76,6 +67,39 @@ public enum ThinkingLevel {
      */
     public ThinkingLevel resolveSubTurnLevel(@Nullable WorkflowPhase phase, boolean planSubmitted,
             boolean hasToolResponses, boolean lastToolCallFailed) {
+        return resolveSubTurnLevel(phase, null, planSubmitted, hasToolResponses, lastToolCallFailed);
+    }
+
+    /**
+     * Resolves the concrete sub-turn thinking level for a model call. When this level is {@link #ADAPTIVE}, the
+     * thinking budget is chosen dynamically based on the active workflow phase, target model, and sub-turn state:
+     * <ul>
+     * <li>{@code PLAN} (Carbon models): {@link #LOW} on initial discovery, rising to {@link #MEDIUM} after successful
+     * tool responses, escalating to {@link #HIGH} only if the previous tool call failed, and dropping to {@link #LOW}
+     * after a plan is submitted.</li>
+     * <li>{@code PLAN} (non-Carbon models): {@link #MEDIUM} on initial discovery, rising to {@link #HIGH} while
+     * designing the blueprint with codebase context, and dropping to {@link #LOW} after a plan is submitted.</li>
+     * <li>{@code CODE}: {@link #MEDIUM} by default for fast, accurate execution, escalating to {@link #HIGH} when the
+     * previous tool execution reported a failure.</li>
+     * <li>{@code REVIEW}: {@link #HIGH}.</li>
+     * <li>{@code EXPLORE}: {@link #LOW} on initial tool discovery, rising to {@link #MEDIUM} after tool outputs are
+     * returned for synthesis.</li>
+     * </ul>
+     *
+     * @param phase
+     *            the current workflow phase
+     * @param modelName
+     *            the target Gemini model identifier, or {@code null}
+     * @param planSubmitted
+     *            whether an implementation plan is currently submitted
+     * @param hasToolResponses
+     *            whether the prompt already contains tool execution responses
+     * @param lastToolCallFailed
+     *            whether the most recent tool execution response contains a failure or error
+     * @return the concrete {@link ThinkingLevel} to apply to the model call
+     */
+    public ThinkingLevel resolveSubTurnLevel(@Nullable WorkflowPhase phase, @Nullable String modelName,
+            boolean planSubmitted, boolean hasToolResponses, boolean lastToolCallFailed) {
         if (this != ADAPTIVE) {
             return this;
         }
@@ -85,6 +109,15 @@ public enum ThinkingLevel {
         return switch (phase) {
             case PLAN -> {
                 if (planSubmitted) {
+                    yield LOW;
+                }
+                if (isCarbonModel(modelName)) {
+                    if (lastToolCallFailed) {
+                        yield HIGH;
+                    }
+                    if (hasToolResponses) {
+                        yield MEDIUM;
+                    }
                     yield LOW;
                 }
                 if (hasToolResponses) {
@@ -106,6 +139,10 @@ public enum ThinkingLevel {
                 yield LOW;
             }
         };
+    }
+
+    static boolean isCarbonModel(@Nullable String modelName) {
+        return modelName != null && modelName.toLowerCase(Locale.ROOT).contains("carbon");
     }
 
     public static ThinkingLevel fromString(@Nullable String raw) {
