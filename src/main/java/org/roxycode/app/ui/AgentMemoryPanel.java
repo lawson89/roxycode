@@ -239,10 +239,11 @@ final class AgentMemoryPanel extends JPanel {
             }
 
             this.newButton = UiComponents.createActionButton("New", Codicons.ADD, null, false, null, null);
-            this.saveButton = UiComponents.createActionButton("Save Memory", Codicons.SAVE, null, false, "accent",
-                    null);
+            this.saveButton = UiComponents.createActionButton("Save Memory", Codicons.SAVE, null, false,
+                    UiComponents.ACCENT_BUTTON_STYLE, null);
             this.revertButton = UiComponents.createActionButton("Revert", Codicons.DISCARD, null, false, null, null);
-            this.deleteButton = UiComponents.createActionButton("Delete", Codicons.TRASH, null, false, "danger", null);
+            this.deleteButton = UiComponents.createActionButton("Delete", Codicons.TRASH, null, false,
+                    UiComponents.SUBTLE_RED_BUTTON_STYLE, null);
             this.statusTimer = UiComponents.createStatusTimer(statusLabel, 4000);
 
             this.summaryArea.setLineWrap(true);

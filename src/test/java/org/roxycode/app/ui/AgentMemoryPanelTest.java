@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.formdev.flatlaf.FlatClientProperties;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -57,6 +58,16 @@ class AgentMemoryPanelTest {
         assertEquals("Project Memory (0)", panel.scopeTabbedPane.getTitleAt(0));
         assertEquals("Global Memory (1)", panel.scopeTabbedPane.getTitleAt(1));
         assertEquals(1, panel.globalScopeView.listModel.size());
+        assertEquals(UiComponents.ACCENT_BUTTON_STYLE,
+                panel.projectScopeView.saveButton.getClientProperty(FlatClientProperties.STYLE));
+        assertEquals(UiComponents.SUBTLE_RED_BUTTON_STYLE,
+                panel.projectScopeView.deleteButton.getClientProperty(FlatClientProperties.STYLE));
+        assertEquals(UiComponents.ACCENT_BUTTON_STYLE,
+                panel.globalScopeView.saveButton.getClientProperty(FlatClientProperties.STYLE));
+        assertEquals(UiComponents.SUBTLE_RED_BUTTON_STYLE,
+                panel.globalScopeView.deleteButton.getClientProperty(FlatClientProperties.STYLE));
+        SwingTestUtils.runOnEdt(panel::updateUI);
+        SwingTestUtils.withDarkTheme(panel, () -> SwingTestUtils.runOnEdt(panel::updateUI));
 
         SwingTestUtils.runOnEdt(() -> panel.scopeTabbedPane.setSelectedIndex(1));
         assertTrue(panel.promptFootprintBadge.getText().contains("Always-On Prompt: ~"));
