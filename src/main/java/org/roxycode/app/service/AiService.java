@@ -56,6 +56,7 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.retry.RetryTemplate;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
+import org.springframework.util.MimeType;
 import org.springframework.util.MimeTypeUtils;
 
 /**
@@ -346,14 +347,34 @@ public class AiService implements AutoCloseable {
      *            optional list of images to include in the prompt
      * @return the formatted AI response content
      */
-    @SuppressWarnings("PMD.PreserveStackTrace")
     public String chat(String conversationId, WorkflowPhase phase, String message, List<byte[]> images) {
+        return chat(conversationId, phase, message, images, List.of());
+    }
+
+    /**
+     * Executes a chat turn with optional PNG image and PDF attachments.
+     *
+     * @param conversationId
+     *            the conversation identifier
+     * @param phase
+     *            the workflow phase
+     * @param message
+     *            the user prompt message
+     * @param images
+     *            optional list of PNG-encoded images
+     * @param pdfs
+     *            optional list of PDF byte payloads
+     * @return the formatted AI response content
+     */
+    @SuppressWarnings("PMD.PreserveStackTrace")
+    public String chat(String conversationId, WorkflowPhase phase, String message, List<byte[]> images,
+            List<byte[]> pdfs) {
         ExceptionUtils.checkInterrupted("Chat turn interrupted before start");
         WorkflowPhase resolvedPhase = Objects.requireNonNullElseGet(phase, planService::getCurrentPhase);
         TurnToolContext turnContext = new TurnToolContext(conversationId, resolvedPhase, new AtomicInteger(0));
         String convId = turnContext.conversationId();
         try {
-            ChatClient.ChatClientRequestSpec promptSpec = buildPrompt(turnContext, message, images);
+            ChatClient.ChatClientRequestSpec promptSpec = buildPrompt(turnContext, message, images, pdfs);
             int autoContinueCount = 0;
             ChatResponse chatResponse;
             while (true) {
@@ -381,7 +402,7 @@ public class AiService implements AutoCloseable {
                     WorkflowPhase currentPhase = Objects.requireNonNullElseGet(planService.getCurrentPhase(),
                             () -> resolvedPhase);
                     turnContext = new TurnToolContext(convId, currentPhase, turnContext.turnCounter());
-                    promptSpec = buildPrompt(turnContext, buildAutoContinuePrompt(completedToolTurns), null);
+                    promptSpec = buildPrompt(turnContext, buildAutoContinuePrompt(completedToolTurns), null, null);
                 }
             }
             ExceptionUtils.checkInterrupted("Chat turn interrupted after model call");
@@ -859,7 +880,7 @@ public class AiService implements AutoCloseable {
     }
 
     private ChatClient.ChatClientRequestSpec buildPrompt(TurnToolContext turnContext, String message,
-            List<byte[]> images) {
+            List<byte[]> images, List<byte[]> pdfs) {
         WorkflowPhase currentPhase = turnContext.phase();
         GoogleGenAiChatOptions.Builder optionsBuilder = GoogleGenAiChatOptions.builder()
                 .model(resolveEffectiveGeminiModel(currentPhase));
@@ -870,6 +891,14 @@ public class AiService implements AutoCloseable {
                     if (images != null) {
                         for (byte[] img : images) {
                             u.media(MimeTypeUtils.IMAGE_PNG, new ByteArrayResource(img));
+                        }
+                    }
+                    if (pdfs != null) {
+                        MimeType pdfMimeType = MimeType.valueOf("application/pdf");
+                        for (byte[] pdf : pdfs) {
+                            if (pdf != null && pdf.length > 0) {
+                                u.media(pdfMimeType, new ByteArrayResource(pdf));
+                            }
                         }
                     }
                 }).options(optionsBuilder);

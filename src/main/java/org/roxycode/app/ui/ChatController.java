@@ -41,7 +41,9 @@ import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.SettingsService;
+import java.awt.image.BufferedImage;
 import org.roxycode.app.model.ChatTranscriptEntry;
+import org.roxycode.app.ui.ChatModel.PendingAttachment;
 import org.roxycode.app.ui.MarkdownPane.PersistedChatEntry;
 import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.ExceptionUtils;
@@ -199,7 +201,7 @@ final class ChatController implements AutoCloseable {
         }
         String text = rawText.trim();
         if (text.isEmpty()) {
-            if (model.hasPendingImages()) {
+            if (model.hasPendingAttachments()) {
                 view.appendMessage(ROLE_SYSTEM, IMAGE_REQUIRES_TEXT_MESSAGE);
             }
             return;
@@ -220,16 +222,18 @@ final class ChatController implements AutoCloseable {
                 view.hideTransitionBanner();
             }
         }
-        List<java.awt.image.BufferedImage> pendingImages = model.drainPendingImages();
+        List<PendingAttachment> pendingAttachments = model.drainPendingAttachments();
         view.clearAttachments();
+        List<BufferedImage> pendingImages = ChatModel.extractAttachedImages(pendingAttachments);
         List<String> thumbnailBase64List = UiComponents.encodeThumbnailsToBase64Png(pendingImages,
                 UiComponents.CHAT_THUMBNAIL_MAX_DIM);
+        List<String> attachedFileNames = ChatModel.extractAttachedFileNames(pendingAttachments);
         view.hideUserInputPrompt();
-        view.appendMessage(ROLE_USER, text, thumbnailBase64List);
+        view.appendMessage(ROLE_USER, text, thumbnailBase64List, attachedFileNames);
         persistActiveChatSession();
         view.clearInputText();
 
-        triggerTurn(text, pendingImages);
+        triggerTurn(text, pendingAttachments);
     }
 
     private void handleSlashCommand(String text) {
@@ -472,7 +476,7 @@ final class ChatController implements AutoCloseable {
         if (model.isTaskMode() && planService != null) {
             planService.resetWorkflow();
         }
-        model.clearPendingImages();
+        model.clearPendingAttachments();
         model.setCurrentTurn(0);
         resetTelemetry();
         if (clearMemory) {
@@ -501,19 +505,19 @@ final class ChatController implements AutoCloseable {
     }
 
     public void triggerTurn(String text) {
-        List<java.awt.image.BufferedImage> pendingImages = model.drainPendingImages();
+        List<PendingAttachment> pendingAttachments = model.drainPendingAttachments();
         view.clearAttachments();
-        triggerTurn(text, pendingImages);
+        triggerTurn(text, pendingAttachments);
     }
 
-    private void triggerTurn(String text, List<java.awt.image.BufferedImage> pendingImages) {
+    private void triggerTurn(String text, List<PendingAttachment> pendingAttachments) {
         if (text == null || text.trim().isEmpty()) {
             return;
         }
-        triggerTurn(() -> text, pendingImages);
+        triggerTurn(() -> text, pendingAttachments);
     }
 
-    private void triggerTurn(Supplier<String> promptSupplier, List<java.awt.image.BufferedImage> pendingImages) {
+    private void triggerTurn(Supplier<String> promptSupplier, List<PendingAttachment> pendingAttachments) {
         if (promptSupplier == null) {
             return;
         }
@@ -529,14 +533,17 @@ final class ChatController implements AutoCloseable {
 
         FutureTask<Void> task = new FutureTask<>(() -> {
             try {
-                String promptText = promptSupplier.get();
-                if (promptText == null || promptText.trim().isEmpty()) {
+                String rawPromptText = promptSupplier.get();
+                if (rawPromptText == null || rawPromptText.trim().isEmpty()) {
                     Edt.run(() -> finishTurnCancelled(turnId));
                     return;
                 }
-                List<byte[]> imageBytes = ChatModel.encodeImagesToPngBytes(pendingImages);
+                String promptText = ChatModel.formatPromptWithTextAttachments(rawPromptText, pendingAttachments);
+                List<byte[]> imageBytes = ChatModel.encodeImageAttachments(pendingAttachments);
+                List<byte[]> pdfBytes = ChatModel.encodePdfAttachments(pendingAttachments);
                 WorkflowPhase activePhase = model.resolveActivePhase(planService.getCurrentPhase());
-                String response = aiService.chat(model.getConversationId(), activePhase, promptText, imageBytes);
+                String response = aiService.chat(model.getConversationId(), activePhase, promptText, imageBytes,
+                        pdfBytes);
                 if (Thread.currentThread().isInterrupted() || model.isTurnCancelled()) {
                     Edt.run(() -> finishTurnCancelled(turnId));
                     return;
@@ -747,7 +754,7 @@ final class ChatController implements AutoCloseable {
 
     void restoreSessionForCurrentProject() {
         cancelActiveTurnState(false);
-        model.clearPendingImages();
+        model.clearPendingAttachments();
         model.setCurrentTurn(0);
         Path sessionPath = resolveActiveChatSessionPath();
         ActiveChatSessionState saved = PathUtils.readJsonOrDefault(sessionPath, ActiveChatSessionState.class, null);

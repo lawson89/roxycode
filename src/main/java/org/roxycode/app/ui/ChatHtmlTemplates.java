@@ -90,16 +90,40 @@ public final class ChatHtmlTemplates {
     }
 
     public static String renderUserAttachmentsHtml(List<String> thumbnailBase64List) {
-        if (thumbnailBase64List == null || thumbnailBase64List.isEmpty()) {
+        return renderUserAttachmentsHtml(thumbnailBase64List, List.of());
+    }
+
+    public static String renderUserAttachmentsHtml(List<String> thumbnailBase64List, List<String> attachedFileNames) {
+        boolean hasThumbs = thumbnailBase64List != null && !thumbnailBase64List.isEmpty();
+        boolean hasFiles = attachedFileNames != null && !attachedFileNames.isEmpty();
+        if (!hasThumbs && !hasFiles) {
             return "";
         }
         StringBuilder cells = new StringBuilder();
-        for (String base64Png : thumbnailBase64List) {
-            UiComponents.HtmlImagePreview preview = UiComponents.writeBase64ThumbnailToTempUrl(base64Png);
-            if (preview != null) {
-                cells.append("<td valign='middle' style='padding-right: 8px; padding-bottom: 6px;'>")
-                        .append("<img src='").append(SwingHtmlUtils.escapeHtml(preview.url())).append("' width='")
-                        .append(preview.width()).append("' height='").append(preview.height()).append("'></td>");
+        if (hasThumbs) {
+            for (String base64Png : thumbnailBase64List) {
+                UiComponents.HtmlImagePreview preview = UiComponents.writeBase64ThumbnailToTempUrl(base64Png);
+                if (preview != null) {
+                    cells.append("<td valign='middle' style='padding-right: 8px; padding-bottom: 6px;'>")
+                            .append("<img src='").append(SwingHtmlUtils.escapeHtml(preview.url())).append("' width='")
+                            .append(preview.width()).append("' height='").append(preview.height()).append("'></td>");
+                }
+            }
+        }
+        if (hasFiles) {
+            for (String fileName : attachedFileNames) {
+                if (StringUtils.isBlank(fileName)) {
+                    continue;
+                }
+                String prefix;
+                if (fileName.toLowerCase(java.util.Locale.ROOT).endsWith(".pdf")) {
+                    prefix = "[PDF] ";
+                } else {
+                    prefix = "[FILE] ";
+                }
+                cells.append("<td valign='middle' style='padding-right: 6px; padding-bottom: 6px;'>")
+                        .append("<span class='attachment-file-badge'>")
+                        .append(SwingHtmlUtils.escapeHtml(prefix + fileName)).append("</span></td>");
             }
         }
         if (cells.isEmpty()) {
@@ -120,6 +144,13 @@ public final class ChatHtmlTemplates {
     public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,
             boolean copied, boolean showMoveAction, boolean movedToFeature, boolean showApplyBuildTomlAction,
             boolean appliedToBuildToml, List<String> thumbnailBase64List) {
+        return renderChatEntry(role, content, timestamp, messageIndex, copied, showMoveAction, movedToFeature,
+                showApplyBuildTomlAction, appliedToBuildToml, thumbnailBase64List, List.of());
+    }
+
+    public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,
+            boolean copied, boolean showMoveAction, boolean movedToFeature, boolean showApplyBuildTomlAction,
+            boolean appliedToBuildToml, List<String> thumbnailBase64List, List<String> attachedFileNames) {
         String normalizedRole = StringUtils.defaultString(role).toLowerCase(java.util.Locale.ROOT);
         if (ROLE_SYSTEM.equalsIgnoreCase(normalizedRole)) {
             String inlineContent = unwrapSingleParagraph(content);
@@ -146,7 +177,7 @@ public final class ChatHtmlTemplates {
         }
         String attachmentsHtml = "";
         if (ROLE_USER.equals(normalizedRole)) {
-            attachmentsHtml = renderUserAttachmentsHtml(thumbnailBase64List);
+            attachmentsHtml = renderUserAttachmentsHtml(thumbnailBase64List, attachedFileNames);
         }
         String renderedBody = StringUtils.defaultString(content);
         if (ROLE_AI.equals(normalizedRole) && showMoveAction && messageIndex >= 0) {

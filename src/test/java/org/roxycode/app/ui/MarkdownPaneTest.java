@@ -230,4 +230,21 @@ class MarkdownPaneTest {
         assertEquals("Old 50", pane.exportMessages().get(0).content());
         assertTrue(pane.getText().contains("Older messages pruned from UI to save memory"));
     }
+
+    @Test
+    void testAttachedFileBadgesRenderAndPersist() {
+        MarkdownPane pane = new MarkdownPane(false);
+        pane.appendMessage("user", "Check these attachments", List.of(), List.of("build.log", "architecture.pdf"));
+
+        String html = pane.getText();
+        assertContainsAll(html, "[FILE] build.log", "[PDF] architecture.pdf", "Check these attachments");
+
+        List<MarkdownPane.PersistedChatEntry> exported = pane.exportMessages();
+        assertEquals(1, exported.size());
+        assertEquals(List.of("build.log", "architecture.pdf"), exported.get(0).attachedFileNames());
+
+        MarkdownPane restored = new MarkdownPane(false);
+        restored.restoreMessages(exported);
+        assertContainsAll(restored.getText(), "[FILE] build.log", "[PDF] architecture.pdf");
+    }
 }

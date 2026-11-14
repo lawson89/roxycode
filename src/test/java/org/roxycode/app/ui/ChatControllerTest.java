@@ -6,6 +6,9 @@ import static org.mockito.Mockito.*;
 import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
 import com.formdev.flatlaf.FlatClientProperties;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.Transferable;
+import java.awt.datatransfer.UnsupportedFlavorException;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.KeyEvent;
@@ -83,7 +86,7 @@ class ChatControllerTest extends ChatTestFixture {
         try {
             CountDownLatch turnStarted = new CountDownLatch(1);
             CountDownLatch turnInterrupted = new CountDownLatch(1);
-            when(aiService.chat(anyString(), any(), anyString(), any())).thenAnswer(inv -> {
+            when(aiService.chat(anyString(), any(), anyString(), any(), any())).thenAnswer(inv -> {
                 turnStarted.countDown();
                 try {
                     Thread.sleep(10_000);
@@ -203,7 +206,7 @@ class ChatControllerTest extends ChatTestFixture {
         CountDownLatch allowExit = new CountDownLatch(1);
         AtomicInteger chatCalls = new AtomicInteger(0);
 
-        when(aiService.chat(anyString(), any(), anyString(), any())).thenAnswer(inv -> {
+        when(aiService.chat(anyString(), any(), anyString(), any(), any())).thenAnswer(inv -> {
             chatCalls.incrementAndGet();
             callStarted.countDown();
             try {
@@ -252,14 +255,14 @@ class ChatControllerTest extends ChatTestFixture {
         chatPanel.controller
                 .onWorkflowTransition(transitionEvent(WorkflowPhase.CODE, WorkflowPhase.PLAN, "Test reason", true));
         flushEdt();
-        verify(aiService, never()).chat(anyString(), any(), anyString(), any());
+        verify(aiService, never()).chat(anyString(), any(), anyString(), any(), any());
 
         GitService mockGitService = mock(GitService.class);
         when(mockGitService.getStatus()).thenReturn("M src/App.java");
         when(mockGitService.getDiff()).thenReturn("diff --git a/src/App.java b/src/App.java\n+int x = 1;");
         chatPanel.setGitService(mockGitService);
 
-        when(aiService.chat(anyString(), any(), anyString(), any())).thenReturn("Reviewing now");
+        when(aiService.chat(anyString(), any(), anyString(), any(), any())).thenReturn("Reviewing now");
         chatPanel.controller
                 .onWorkflowTransition(transitionEvent(WorkflowPhase.CODE, WorkflowPhase.REVIEW, "Test reason", true));
         flushEdt();
@@ -268,7 +271,7 @@ class ChatControllerTest extends ChatTestFixture {
                         && prompt.contains("### Pre-Loaded Working Tree Status & Diff")
                         && prompt.contains("M src/App.java") && prompt.contains("+int x = 1;")
                         && prompt.contains("complete the review in a single turn")),
-                any());
+                any(), any());
 
         // Verify 30,000-char diff truncation notice in buildAutonomousTransitionPrompt
         when(mockGitService.getDiff()).thenReturn("a".repeat(30_500));
@@ -278,7 +281,7 @@ class ChatControllerTest extends ChatTestFixture {
                 "[... diff truncated; use gitService.getDiff(relativePath) to inspect remaining files ...]");
 
         clearInvocations(aiService);
-        when(aiService.chat(anyString(), any(), anyString(), any())).thenAnswer(inv -> {
+        when(aiService.chat(anyString(), any(), anyString(), any(), any())).thenAnswer(inv -> {
             chatPanel.controller
                     .onWorkflowTransition(transitionEvent(WorkflowPhase.PLAN, WorkflowPhase.CODE, "Ready", false));
             return "FINAL_PLAN_SUMMARY";
@@ -298,7 +301,7 @@ class ChatControllerTest extends ChatTestFixture {
         chatPanel.controller.rejectPhase();
         flushEdt();
         verify(planService).rejectTransition();
-        verify(aiService, never()).chat(anyString(), any(), anyString(), any());
+        verify(aiService, never()).chat(anyString(), any(), anyString(), any(), any());
         assertFalse(chatPanel.inlineActionPanel.isVisible());
         assertContainsAll(chatPanel.outputArea.getText(), "Transition to", "rejected", "revise the plan");
         assertEquals("Describe what to adjust in the plan...",
@@ -311,12 +314,12 @@ class ChatControllerTest extends ChatTestFixture {
         chatPanel.controller.rejectPhase();
         flushEdt();
         verify(planService).rejectCompletionAndReturnToCode("User rejected completion.");
-        verify(aiService, never()).chat(anyString(), any(), anyString(), any());
+        verify(aiService, never()).chat(anyString(), any(), anyString(), any(), any());
         assertTrue(chatPanel.outputArea.getText().contains("Completion rejected"));
 
         // Root cause message is surfaced in chat transcript when retries exhaust with a wrapper RetryException
         clearInvocations(aiService);
-        when(aiService.chat(anyString(), any(), eq("Trigger 503"), any())).thenThrow(
+        when(aiService.chat(anyString(), any(), eq("Trigger 503"), any(), any())).thenThrow(
                 new RuntimeException("Retry policy for operation 'LambdaRetryable' exhausted; aborting execution",
                         new com.google.genai.errors.ServerException(503, "The model is overloaded", "UNAVAILABLE")));
         sendOnEdt(chatPanel, "Trigger 503");
@@ -327,11 +330,12 @@ class ChatControllerTest extends ChatTestFixture {
         clearInvocations(aiService, planService);
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
         when(planService.getPendingPhase()).thenReturn(WorkflowPhase.CODE);
-        when(aiService.chat(anyString(), any(), anyString(), any())).thenReturn("Revised plan.");
+        when(aiService.chat(anyString(), any(), anyString(), any(), any())).thenReturn("Revised plan.");
         sendOnEdt(chatPanel, "Split step 1 into two steps");
         flushEdt();
         verify(planService).rejectTransition();
-        verify(aiService).chat(eq("task:default"), eq(WorkflowPhase.PLAN), eq("Split step 1 into two steps"), any());
+        verify(aiService).chat(eq("task:default"), eq(WorkflowPhase.PLAN), eq("Split step 1 into two steps"), any(),
+                any());
         assertEquals(ChatPanel.DEFAULT_PLACEHOLDER_TEXT,
                 chatPanel.inputArea.getClientProperty(FlatClientProperties.PLACEHOLDER_TEXT));
 
@@ -344,11 +348,11 @@ class ChatControllerTest extends ChatTestFixture {
             when(planService.getPendingPhase()).thenReturn(null);
             return null;
         }).when(planService).rejectCompletionAndReturnToCode("Add missing null check");
-        when(aiService.chat(anyString(), any(), anyString(), any())).thenReturn("Fixed in CODE.");
+        when(aiService.chat(anyString(), any(), anyString(), any(), any())).thenReturn("Fixed in CODE.");
         sendOnEdt(chatPanel, "Add missing null check");
         flushEdt();
         verify(planService).rejectCompletionAndReturnToCode("Add missing null check");
-        verify(aiService).chat(eq("task:default"), eq(WorkflowPhase.CODE), eq("Add missing null check"), any());
+        verify(aiService).chat(eq("task:default"), eq(WorkflowPhase.CODE), eq("Add missing null check"), any(), any());
 
         // Auto-approve Plan toggle: automatically invokes approvePhase() for PLAN -> CODE, but never for REVIEW -> PLAN
         clearInvocations(aiService, planService);
@@ -362,13 +366,13 @@ class ChatControllerTest extends ChatTestFixture {
             when(planService.getPendingPhase()).thenReturn(null);
             return null;
         }).when(planService).approveTransition();
-        when(aiService.chat(anyString(), any(), anyString(), any())).thenReturn("Auto-started coding.");
+        when(aiService.chat(anyString(), any(), anyString(), any(), any())).thenReturn("Auto-started coding.");
         chatPanel.controller
                 .onWorkflowTransition(transitionEvent(WorkflowPhase.PLAN, WorkflowPhase.CODE, "Plan ready", false));
         flushEdt();
         verify(planService).approveTransition();
         verify(aiService).chat(eq("task:default"), eq(WorkflowPhase.CODE), contains("I approve the transition to Code"),
-                any());
+                any(), any());
         chatPanel.setAutoApprovePlanEnabled(false);
 
         clearInvocations(aiService, chatMemory);
@@ -376,7 +380,7 @@ class ChatControllerTest extends ChatTestFixture {
         when(planService.getPendingPhase()).thenReturn(WorkflowPhase.PLAN);
         SwingTestUtils.runOnEdt(() -> chatPanel.controller.approvePhase());
         flushEdt();
-        verify(aiService, never()).chat(anyString(), any(), anyString(), any());
+        verify(aiService, never()).chat(anyString(), any(), anyString(), any(), any());
         verify(chatMemory).clear("task:default");
         assertTrue(chatPanel.outputArea.getText().contains("Task complete"));
 
@@ -390,7 +394,7 @@ class ChatControllerTest extends ChatTestFixture {
             when(planService.getPendingPhase()).thenReturn(null);
             return null;
         }).when(planService).approveTransition();
-        when(aiService.chat(anyString(), any(), anyString(), any())).thenAnswer(inv -> {
+        when(aiService.chat(anyString(), any(), anyString(), any(), any())).thenAnswer(inv -> {
             capturedImages.set(inv.getArgument(3));
             return "Proceeding in CODE";
         });
@@ -423,7 +427,7 @@ class ChatControllerTest extends ChatTestFixture {
         assertFalse(chatPanel.resetSessionButton.isEnabled());
         assertTrue(chatPanel.stopButton.isVisible());
         assertFalse(chatPanel.approveButton.isEnabled());
-        assertEquals("Image", chatPanel.attachImageButton.getText());
+        assertEquals("Attach", chatPanel.attachImageButton.getText());
         assertEquals("Send message (Enter)", chatPanel.sendButton.getToolTipText());
         assertEquals("Stop", chatPanel.stopButton.getText());
         assertEquals("Stop active turn (Esc)", chatPanel.stopButton.getToolTipText());
@@ -608,7 +612,7 @@ class ChatControllerTest extends ChatTestFixture {
         taskPanel.setProjectService(projectService);
 
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
-        when(aiService.chat(eq("task:default"), any(), eq("Create plan"), any())).thenAnswer(inv -> {
+        when(aiService.chat(eq("task:default"), any(), eq("Create plan"), any(), any())).thenAnswer(inv -> {
             realMemory.add("task:default",
                     List.of(new UserMessage("Create plan"), new AssistantMessage("Plan submitted.")));
             taskPanel.controller.onToolExecution(new ToolExecutionEvent("task:default",
@@ -869,7 +873,7 @@ class ChatControllerTest extends ChatTestFixture {
     @Test
     void testSendMessageWithAttachmentRendersThumbnailAutoSubmitMoveToFeatureAndSmartScroll() {
         ChatPanel taskPanel = createFeatureChatPanel(directExecutor);
-        when(aiService.chat(eq("task:default"), any(), anyString(), any())).thenReturn("Plan drafted.");
+        when(aiService.chat(eq("task:default"), any(), anyString(), any(), any())).thenReturn("Plan drafted.");
 
         // 1. Sending a user message with an attached image renders thumbnail in USER bubble and persists it
         BufferedImage screenshot = new BufferedImage(240, 120, BufferedImage.TYPE_INT_ARGB);
@@ -892,7 +896,7 @@ class ChatControllerTest extends ChatTestFixture {
             assertTrue(taskPanel.submitMovedFeatureRequest(movedPrompt));
         });
         assertEquals("", taskPanel.inputArea.getText());
-        verify(aiService).chat(eq("task:default"), any(), eq("Implement feature X"), any());
+        verify(aiService).chat(eq("task:default"), any(), eq("Implement feature X"), any(), any());
 
         clearInvocations(aiService);
         SwingTestUtils.runOnEdt(() -> {
@@ -993,7 +997,127 @@ class ChatControllerTest extends ChatTestFixture {
         sendOnEdt(featurePanel, "/help");
         flushEdt();
         verify(planService, never()).rejectTransition();
-        verify(aiService, never()).chat(anyString(), any(), anyString(), any());
+        verify(aiService, never()).chat(anyString(), any(), anyString(), any(), any());
         assertTrue(featurePanel.outputArea.getText().contains("Available Commands"));
+    }
+
+    @Test
+    void testMultiTypeAttachmentsLogTruncationDragAndDropAndSend(@TempDir Path tempDir) throws Exception {
+        Path logFile = tempDir.resolve("app.log");
+        Files.writeString(logFile, "INFO Booted\nERROR NullPointerException at App.java:42");
+
+        Path largeLogFile = tempDir.resolve("huge.jsonl");
+        String headMarker = "HEAD_MARKER_LINE\n";
+        String tailMarker = "\nTAIL_MARKER_LINE";
+        String middlePad = "x".repeat(600_000);
+        Files.writeString(largeLogFile, headMarker + middlePad + tailMarker);
+
+        Path pdfFile = tempDir.resolve("spec.pdf");
+        byte[] pdfBytes = "%PDF-1.4\n1 0 obj\n<<>>\nendobj\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        Files.write(pdfFile, pdfBytes);
+
+        Path pngFile = tempDir.resolve("chart.png");
+        BufferedImage img = new BufferedImage(8, 8, BufferedImage.TYPE_INT_ARGB);
+        ImageIO.write(img, "png", pngFile.toFile());
+
+        Path binaryFile = tempDir.resolve("binary.bin");
+        Files.write(binaryFile, new byte[]{0x00, 0x01, 0x02, 0x03});
+
+        ChatModel.PendingAttachment logAtt = ChatModel.loadFileAttachment(logFile);
+        assertNotNull(logAtt);
+        assertEquals(ChatModel.AttachmentType.TEXT, logAtt.type());
+        assertEquals("app.log", logAtt.fileName());
+        assertTrue(logAtt.textContent().contains("ERROR NullPointerException"));
+
+        ChatModel.PendingAttachment largeAtt = ChatModel.loadFileAttachment(largeLogFile);
+        assertNotNull(largeAtt);
+        assertEquals(ChatModel.AttachmentType.TEXT, largeAtt.type());
+        assertTrue(largeAtt.textContent().startsWith("HEAD_MARKER_LINE"));
+        assertTrue(largeAtt.textContent().endsWith("TAIL_MARKER_LINE"));
+        assertTrue(largeAtt.textContent().contains("truncated"));
+        assertTrue(largeAtt.textContent().length() < ChatModel.MAX_TEXT_ATTACHMENT_CHARS + 500);
+
+        ChatModel.PendingAttachment pdfAtt = ChatModel.loadFileAttachment(pdfFile);
+        assertNotNull(pdfAtt);
+        assertEquals(ChatModel.AttachmentType.PDF, pdfAtt.type());
+        assertArrayEquals(pdfBytes, pdfAtt.pdfBytes());
+
+        ChatModel.PendingAttachment imgAtt = ChatModel.loadFileAttachment(pngFile);
+        assertNotNull(imgAtt);
+        assertEquals(ChatModel.AttachmentType.IMAGE, imgAtt.type());
+        assertNotNull(imgAtt.image());
+
+        assertNull(ChatModel.loadFileAttachment(binaryFile));
+
+        ChatPanel panel = createExploreChatPanel(directExecutor);
+        assertNotNull(panel.getDropTarget());
+        assertNotNull(panel.inputArea.getDropTarget());
+        assertNotNull(panel.outputArea.getDropTarget());
+
+        List<File> droppedFiles = List.of(logFile.toFile(), pdfFile.toFile(), pngFile.toFile());
+        Transferable transferable = new Transferable() {
+            @Override
+            public DataFlavor[] getTransferDataFlavors() {
+                return new DataFlavor[]{DataFlavor.javaFileListFlavor};
+            }
+
+            @Override
+            public boolean isDataFlavorSupported(DataFlavor flavor) {
+                return DataFlavor.javaFileListFlavor.equals(flavor);
+            }
+
+            @Override
+            public Object getTransferData(DataFlavor flavor) throws UnsupportedFlavorException {
+                if (!isDataFlavorSupported(flavor)) {
+                    throw new UnsupportedFlavorException(flavor);
+                }
+                return droppedFiles;
+            }
+        };
+
+        assertTrue(panel.ingestTransferable(transferable));
+        panel.loadAttachmentsAsync(droppedFiles).get(5, TimeUnit.SECONDS);
+        flushEdt();
+        assertTrue(panel.model.hasPendingAttachments());
+
+        // Clear and re-attach cleanly via addPendingAttachment to verify exact count & chip removal
+        panel.model.clearPendingAttachments();
+        SwingUtilities.invokeAndWait(panel::clearAttachments);
+        SwingUtilities.invokeAndWait(() -> {
+            panel.addPendingAttachment(logAtt);
+            panel.addPendingAttachment(pdfAtt);
+            panel.addPendingAttachment(imgAtt);
+        });
+        assertEquals(3, panel.model.drainPendingAttachments().size());
+
+        SwingUtilities.invokeAndWait(() -> {
+            panel.addPendingAttachment(logAtt);
+            panel.addPendingAttachment(pdfAtt);
+            panel.addPendingAttachment(imgAtt);
+        });
+
+        when(aiService.chat(eq("qa:default"), eq(WorkflowPhase.EXPLORE), anyString(), anyList(), anyList()))
+                .thenReturn("Analyzed all attachments.");
+
+        sendOnEdt(panel, "Analyze these files");
+        flushEdt();
+
+        org.mockito.ArgumentCaptor<String> promptCaptor = org.mockito.ArgumentCaptor.forClass(String.class);
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<byte[]>> imagesCaptor = org.mockito.ArgumentCaptor.forClass(List.class);
+        @SuppressWarnings("unchecked")
+        org.mockito.ArgumentCaptor<List<byte[]>> pdfsCaptor = org.mockito.ArgumentCaptor.forClass(List.class);
+
+        verify(aiService).chat(eq("qa:default"), eq(WorkflowPhase.EXPLORE), promptCaptor.capture(),
+                imagesCaptor.capture(), pdfsCaptor.capture());
+
+        assertContainsAll(promptCaptor.getValue(), "Analyze these files",
+                "<attached_file name=" + '"' + "app.log" + '"', "ERROR NullPointerException at App.java:42",
+                "</attached_file>");
+        assertEquals(1, imagesCaptor.getValue().size());
+        assertEquals(1, pdfsCaptor.getValue().size());
+        assertArrayEquals(pdfBytes, pdfsCaptor.getValue().get(0));
+        assertFalse(panel.model.hasPendingAttachments());
+        assertContainsAll(panel.outputArea.getText(), "[FILE] app.log", "[PDF] spec.pdf");
     }
 }

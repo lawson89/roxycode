@@ -47,6 +47,8 @@ import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.model.AgentProfile;
 import org.roxycode.app.model.ThinkingLevel;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.content.Media;
 import org.springframework.ai.google.genai.common.GoogleGenAiThinkingLevel;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
@@ -886,5 +888,29 @@ class AiServiceTest {
 
         when(titleModel.call(any(Prompt.class))).thenThrow(new RuntimeException("transient failure"));
         assertEquals("How does Spring AI retry work", service.generateTopicTitle(transcript));
+    }
+
+    @Test
+    void testChatAttachesImagesAndPdfsToUserMessageMedia() {
+        ChatModel mockChatModel = mock(ChatModel.class);
+        ToolCallingManager customToolManager = mock(ToolCallingManager.class);
+        AiService serviceWithRealClient = createRealClientService(mockChatModel, customToolManager);
+        when(promptService.buildSystemPrompt(any())).thenReturn("SYSTEM PROMPT");
+
+        ArgumentCaptor<Prompt> promptCaptor = ArgumentCaptor.forClass(Prompt.class);
+        when(mockChatModel.call(promptCaptor.capture())).thenReturn(buildChatResponse("PDF analyzed", "STOP", null));
+
+        byte[] pngBytes = new byte[]{1, 2, 3};
+        byte[] pdfBytes = new byte[]{37, 80, 68, 70};
+        String reply = serviceWithRealClient.chat("qa:pdf", WorkflowPhase.EXPLORE, "Summarize attached PDF",
+                List.of(pngBytes), List.of(pdfBytes));
+
+        assertEquals("PDF analyzed", reply);
+        UserMessage userMsg = promptCaptor.getValue().getInstructions().stream().filter(UserMessage.class::isInstance)
+                .map(UserMessage.class::cast).findFirst().orElseThrow();
+        List<Media> mediaList = userMsg.getMedia();
+        assertEquals(2, mediaList.size());
+        assertEquals("image/png", mediaList.get(0).getMimeType().toString());
+        assertEquals("application/pdf", mediaList.get(1).getMimeType().toString());
     }
 }

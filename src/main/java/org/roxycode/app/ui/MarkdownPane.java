@@ -46,7 +46,12 @@ final class MarkdownPane extends JTextPane {
     private static final DateTimeFormatter TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm:ss");
 
     public record PersistedChatEntry(String role, String content, String timestamp, boolean isTool, boolean success,
-            String error, boolean toolExpanded, List<String> thumbnailBase64List) {
+            String error, boolean toolExpanded, List<String> thumbnailBase64List, List<String> attachedFileNames) {
+
+        public PersistedChatEntry(String role, String content, String timestamp, boolean isTool, boolean success,
+                String error, boolean toolExpanded, List<String> thumbnailBase64List) {
+            this(role, content, timestamp, isTool, success, error, toolExpanded, thumbnailBase64List, List.of());
+        }
 
         public PersistedChatEntry {
             if (thumbnailBase64List == null || thumbnailBase64List.isEmpty()) {
@@ -54,12 +59,17 @@ final class MarkdownPane extends JTextPane {
             } else {
                 thumbnailBase64List = List.copyOf(thumbnailBase64List);
             }
+            if (attachedFileNames == null || attachedFileNames.isEmpty()) {
+                attachedFileNames = List.of();
+            } else {
+                attachedFileNames = List.copyOf(attachedFileNames);
+            }
         }
     }
 
     private record Message(String role, String content, String timestamp, boolean isTool, boolean success, String error,
             String renderedHtml, boolean toolExpanded, boolean movedToFeature, String extractedBuildToml,
-            boolean appliedToBuildToml, List<String> thumbnailBase64List) {
+            boolean appliedToBuildToml, List<String> thumbnailBase64List, List<String> attachedFileNames) {
     }
 
     public MarkdownPane(boolean taskMode) {
@@ -167,14 +177,24 @@ final class MarkdownPane extends JTextPane {
     }
 
     public void appendMessage(String role, String content, List<String> thumbnailBase64List) {
+        appendMessage(role, content, thumbnailBase64List, List.of());
+    }
+
+    public void appendMessage(String role, String content, List<String> thumbnailBase64List,
+            List<String> attachedFileNames) {
         String safeContent = StringUtils.defaultString(content);
         String extractedToml = resolveExtractedBuildToml(role, safeContent);
         appendPreRenderedMessage(role, safeContent, renderMarkdownBodySafely(safeContent), extractedToml,
-                thumbnailBase64List);
+                thumbnailBase64List, attachedFileNames);
     }
 
     public void appendPreRenderedMessage(String role, String content, String renderedHtml, String extractedToml,
             List<String> thumbnailBase64List) {
+        appendPreRenderedMessage(role, content, renderedHtml, extractedToml, thumbnailBase64List, List.of());
+    }
+
+    public void appendPreRenderedMessage(String role, String content, String renderedHtml, String extractedToml,
+            List<String> thumbnailBase64List, List<String> attachedFileNames) {
         String safeContent = StringUtils.defaultString(content);
         String timestamp = LocalDateTime.now().format(TIME_FORMATTER);
         List<String> safeThumbs;
@@ -183,12 +203,18 @@ final class MarkdownPane extends JTextPane {
         } else {
             safeThumbs = List.copyOf(thumbnailBase64List);
         }
+        List<String> safeFiles;
+        if (attachedFileNames == null || attachedFileNames.isEmpty()) {
+            safeFiles = List.of();
+        } else {
+            safeFiles = List.copyOf(attachedFileNames);
+        }
         String safeHtml = renderedHtml;
         if (safeHtml == null) {
             safeHtml = renderMarkdownBodySafely(safeContent);
         }
         addAndRenderMessage(new Message(role, safeContent, timestamp, false, true, null, safeHtml, true, false,
-                extractedToml, false, safeThumbs));
+                extractedToml, false, safeThumbs, safeFiles));
     }
 
     public void appendToolLog(String output, boolean success, String error) {
@@ -196,7 +222,7 @@ final class MarkdownPane extends JTextPane {
         String timestamp = LocalDateTime.now().format(TIME_FORMATTER);
         boolean expanded = ChatHtmlTemplates.shouldDefaultToolExpanded(safeOutput, success);
         addAndRenderMessage(new Message(null, safeOutput, timestamp, true, success, error, null, expanded, false, null,
-                false, List.of()));
+                false, List.of(), List.of()));
     }
 
     private void addAndRenderMessage(Message msg) {
@@ -230,7 +256,7 @@ final class MarkdownPane extends JTextPane {
         }
         Message updated = new Message(msg.role(), msg.content(), msg.timestamp(), true, msg.success(), msg.error(),
                 msg.renderedHtml(), !msg.toolExpanded(), msg.movedToFeature(), msg.extractedBuildToml(),
-                msg.appliedToBuildToml(), msg.thumbnailBase64List());
+                msg.appliedToBuildToml(), msg.thumbnailBase64List(), msg.attachedFileNames());
         messages.set(index, updated);
         if (!updateToolCellInPlace(index, updated)) {
             renderAll(false);
@@ -303,7 +329,7 @@ final class MarkdownPane extends JTextPane {
         if (!msg.movedToFeature()) {
             Message updated = new Message(msg.role(), msg.content(), msg.timestamp(), msg.isTool(), msg.success(),
                     msg.error(), msg.renderedHtml(), msg.toolExpanded(), true, msg.extractedBuildToml(),
-                    msg.appliedToBuildToml(), msg.thumbnailBase64List());
+                    msg.appliedToBuildToml(), msg.thumbnailBase64List(), msg.attachedFileNames());
             messages.set(index, updated);
             if (!updateActionCellInPlace(index)) {
                 renderAll(false);
@@ -325,7 +351,7 @@ final class MarkdownPane extends JTextPane {
         if (!msg.appliedToBuildToml()) {
             Message updated = new Message(msg.role(), msg.content(), msg.timestamp(), msg.isTool(), msg.success(),
                     msg.error(), msg.renderedHtml(), msg.toolExpanded(), msg.movedToFeature(), msg.extractedBuildToml(),
-                    true, msg.thumbnailBase64List());
+                    true, msg.thumbnailBase64List(), msg.attachedFileNames());
             messages.set(index, updated);
             if (!updateActionCellInPlace(index)) {
                 renderAll(false);
@@ -435,7 +461,7 @@ final class MarkdownPane extends JTextPane {
             boolean showApplyBuildToml = !taskMode && StringUtils.isNotBlank(msg.extractedBuildToml());
             return ChatHtmlTemplates.renderChatEntry(safeRole, msg.renderedHtml(), msg.timestamp(), index,
                     index == copiedMessageIndex, !taskMode, msg.movedToFeature(), showApplyBuildToml,
-                    msg.appliedToBuildToml(), msg.thumbnailBase64List());
+                    msg.appliedToBuildToml(), msg.thumbnailBase64List(), msg.attachedFileNames());
         } catch (Exception e) {
             return ERROR_RENDERING_HTML;
         }
@@ -478,7 +504,7 @@ final class MarkdownPane extends JTextPane {
         List<PersistedChatEntry> exported = new ArrayList<>(messages.size());
         for (Message msg : messages) {
             exported.add(new PersistedChatEntry(msg.role(), msg.content(), msg.timestamp(), msg.isTool(), msg.success(),
-                    msg.error(), msg.toolExpanded(), msg.thumbnailBase64List()));
+                    msg.error(), msg.toolExpanded(), msg.thumbnailBase64List(), msg.attachedFileNames()));
         }
         return List.copyOf(exported);
     }
@@ -495,12 +521,12 @@ final class MarkdownPane extends JTextPane {
                         LocalDateTime.now().format(TIME_FORMATTER));
                 if (entry.isTool()) {
                     messages.add(new Message(null, safeContent, safeTimestamp, true, entry.success(), entry.error(),
-                            null, entry.toolExpanded(), false, null, false, List.of()));
+                            null, entry.toolExpanded(), false, null, false, List.of(), List.of()));
                 } else {
                     String extractedToml = resolveExtractedBuildToml(entry.role(), safeContent);
                     messages.add(new Message(entry.role(), safeContent, safeTimestamp, false, true, null,
                             renderMarkdownBodySafely(safeContent), true, false, extractedToml, false,
-                            entry.thumbnailBase64List()));
+                            entry.thumbnailBase64List(), entry.attachedFileNames()));
                 }
             }
         }
