@@ -363,13 +363,12 @@ public final class ChatHtmlTemplates {
                 <td width="50%%" valign="top">
                     <table class="starter-card" width="100%%" cellpadding="0" cellspacing="0" border="0">
                         <tr>
-                            <td class="starter-accent-%s" width="4" nowrap="nowrap">&nbsp;</td>
                             <td width="100%%" style="padding: 10px 12px;" valign="top">
                                 <table width="100%%" cellpadding="0" cellspacing="0" border="0">
                                     <tr>
-                                        <td valign="top" style="padding-right: 10px;">%s</td>
+                                        <td width="42" valign="top" style="padding-right: 10px;">%s</td>
                                         <td width="100%%" valign="top">
-                                            <div><span class="starter-badge-%s">&nbsp;%s&nbsp;</span></div>
+                                            <div><span class="starter-badge">&nbsp;%s&nbsp;</span></div>
                                             <div style="margin-top: 3px;"><a class="starter-title-link" href="prompt:%s">%s</a></div>
                                             <div class="starter-desc">%s</div>
                                             <table cellpadding="0" cellspacing="0" border="0" style="margin-top: 7px;">
@@ -387,46 +386,38 @@ public final class ChatHtmlTemplates {
                     </table>
                 </td>
                 """
-                .formatted(accentVariant, iconHtml, accentVariant, badgeText, encodedPrompt, title, description,
-                        accentVariant, accentVariant, encodedPrompt, linkLabel);
+                .formatted(iconHtml, badgeText, encodedPrompt, title, description, accentVariant, accentVariant,
+                        encodedPrompt, linkLabel);
     }
 
-    private static String renderWelcomeFooterHints(boolean dark) {
-        String mentionIcon = UiComponents.renderCodiconInlineImgTag(Codicons.MENTION, UiComponents.VARIANT_BLUE, dark);
-        String commandsIcon = UiComponents.renderCodiconInlineImgTag(Codicons.TERMINAL, UiComponents.VARIANT_PURPLE,
-                dark);
-        String attachIcon = UiComponents.renderCodiconInlineImgTag(Codicons.CLIPPY, UiComponents.VARIANT_AMBER, dark);
-        String sendIcon = UiComponents.renderCodiconInlineImgTag(Codicons.CHEVRON_RIGHT, UiComponents.VARIANT_EMERALD,
-                dark);
+    private static String renderWelcomeFooterHints() {
         return """
-                <table width="100%%" cellpadding="0" cellspacing="0" border="0" style="margin-top: 4px;">
+                <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top: 4px;">
                     <tr>
-                        <td class="welcome-footer-cell" width="50%%" valign="middle" style="padding: 3px 8px 3px 0px;">
-                            %s&nbsp;<span class="kbd-pill">&nbsp;@ Mention&nbsp;</span>&nbsp;&nbsp;Reference project files
+                        <td class="welcome-footer-cell" width="50%" valign="middle" style="padding: 3px 8px 3px 0px;">
+                            <span class="kbd-pill">&nbsp;@ Mention&nbsp;</span>&nbsp;&nbsp;Reference project files
                         </td>
-                        <td class="welcome-footer-cell" width="50%%" valign="middle" style="padding: 3px 0px 3px 8px;">
-                            %s&nbsp;<span class="kbd-pill">&nbsp;/ Commands&nbsp;</span>&nbsp;&nbsp;Run slash commands (<code>/reset</code>, <code>/clear</code>, <code>/mem-*</code>)
+                        <td class="welcome-footer-cell" width="50%" valign="middle" style="padding: 3px 0px 3px 8px;">
+                            <span class="kbd-pill">&nbsp;/ Commands&nbsp;</span>&nbsp;&nbsp;Run slash commands (<code>/reset</code>, <code>/clear</code>, <code>/mem-*</code>)
                         </td>
                     </tr>
                     <tr>
-                        <td class="welcome-footer-cell" width="50%%" valign="middle" style="padding: 3px 8px 0px 0px;">
-                            %s&nbsp;<span class="kbd-pill">&nbsp;Attach&nbsp;</span>&nbsp;&nbsp;Drag &amp; drop or <span class="kbd-pill">&nbsp;Ctrl+V&nbsp;</span> text, PDFs &amp; images
+                        <td class="welcome-footer-cell" width="50%" valign="middle" style="padding: 3px 8px 0px 0px;">
+                            <span class="kbd-pill">&nbsp;Attach&nbsp;</span>&nbsp;&nbsp;Drag &amp; drop or <span class="kbd-pill">&nbsp;Ctrl+V&nbsp;</span> text, PDFs &amp; images
                         </td>
-                        <td class="welcome-footer-cell" width="50%%" valign="middle" style="padding: 3px 0px 0px 8px;">
-                            %s&nbsp;<span class="kbd-pill">&nbsp;Enter&nbsp;</span>&nbsp;&nbsp;to send &bull; <span class="kbd-pill">&nbsp;Shift+Enter&nbsp;</span> for newline
+                        <td class="welcome-footer-cell" width="50%" valign="middle" style="padding: 3px 0px 0px 8px;">
+                            <span class="kbd-pill">&nbsp;Enter&nbsp;</span>&nbsp;&nbsp;to send &bull; <span class="kbd-pill">&nbsp;Shift+Enter&nbsp;</span> for newline
                         </td>
                     </tr>
                 </table>
-                """
-                .formatted(mentionIcon, commandsIcon, attachIcon, sendIcon);
+                """;
     }
 
     public static String renderWelcomeCard(boolean isTaskMode) {
         boolean dark = FlatLaf.isLafDark();
-        String footerHtml = renderWelcomeFooterHints(dark);
+        String footerHtml = renderWelcomeFooterHints();
         if (isTaskMode) {
-            String headerIcon = UiComponents.renderCodiconTileImgTag(Codicons.ROCKET, UiComponents.VARIANT_EMERALD,
-                    dark);
+            String headerIcon = UiComponents.renderCodiconTileImgTag(Codicons.ROCKET, UiComponents.VARIANT_BLUE, dark);
             String planIcon = UiComponents.renderCodiconInlineImgTag(Codicons.LIST_ORDERED, UiComponents.VARIANT_BLUE,
                     dark);
             String codeIcon = UiComponents.renderCodiconInlineImgTag(Codicons.CODE, UiComponents.VARIANT_AMBER, dark);
@@ -436,16 +427,16 @@ public final class ChatHtmlTemplates {
                     renderStarterCard(UiComponents.VARIANT_BLUE, Codicons.LIGHTBULB_AUTOFIX, "FEATURE",
                             "Build a New Feature", "Plan, implement, and verify new end-to-end functionality",
                             "I want to implement a new feature: ", "Draft a feature implementation plan", dark),
-                    renderStarterCard(UiComponents.VARIANT_PURPLE, Codicons.BUG, "BUGFIX", "Fix a Bug or Regression",
+                    renderStarterCard(UiComponents.VARIANT_BLUE, Codicons.BUG, "BUGFIX", "Fix a Bug or Regression",
                             "Diagnose root cause, fix the defect, and add regression tests",
                             "Help me diagnose and fix a bug in: ", "Diagnose and fix a bug", dark));
             String row2 = renderStarterRow(
-                    renderStarterCard(UiComponents.VARIANT_AMBER, Codicons.EDIT, "REFACTOR",
+                    renderStarterCard(UiComponents.VARIANT_BLUE, Codicons.EDIT, "REFACTOR",
                             "Refactor &amp; Clean Up Code", "Eliminate dead, duplicated, or overly complex code",
                             "Identify and clean up dead, duplicated, or overly complex code in: ",
                             "Identify cleanup opportunities", dark),
-                    renderStarterCard(UiComponents.VARIANT_EMERALD, Codicons.BEAKER, "TESTING",
-                            "Add Unit Test Coverage", "Add pragmatic unit tests for business logic and edge cases",
+                    renderStarterCard(UiComponents.VARIANT_BLUE, Codicons.BEAKER, "TESTING", "Add Unit Test Coverage",
+                            "Add pragmatic unit tests for business logic and edge cases",
                             "Add pragmatic unit tests for the business logic and edge cases in: ",
                             "Add pragmatic unit tests", dark));
             return """
@@ -455,7 +446,7 @@ public final class ChatHtmlTemplates {
                             <td width="100%%" style="padding: 12px 14px;">
                                 <table width="100%%" cellpadding="0" cellspacing="0" border="0">
                                     <tr>
-                                        <td valign="top" style="padding-right: 12px;">%s</td>
+                                        <td width="44" valign="top" style="padding-right: 12px;">%s</td>
                                         <td width="100%%" valign="middle">
                                             <div><span class="welcome-roxy-badge">&nbsp;ROXY %s&nbsp;</span>&nbsp;&nbsp;<span class="welcome-title">Autonomous Feature Development</span></div>
                                             <div class="welcome-hint" style="margin-top: 3px;">
@@ -483,17 +474,17 @@ public final class ChatHtmlTemplates {
         }
         String headerIcon = UiComponents.renderCodiconTileImgTag(Codicons.SEARCH, UiComponents.VARIANT_EMERALD, dark);
         String row1 = renderStarterRow(
-                renderStarterCard(UiComponents.VARIANT_BLUE, Codicons.SYMBOL_STRUCTURE, "ARCHITECTURE",
+                renderStarterCard(UiComponents.VARIANT_EMERALD, Codicons.SYMBOL_STRUCTURE, "ARCHITECTURE",
                         "Architecture &amp; Data Flow", "Map out core services, entry points, and request lifecycles",
                         "Explain the high-level architecture and key services in this repository.",
                         "Explain architecture &amp; key services", dark),
-                renderStarterCard(UiComponents.VARIANT_PURPLE, Codicons.GIT_COMMIT, "GIT HISTORY",
+                renderStarterCard(UiComponents.VARIANT_EMERALD, Codicons.GIT_COMMIT, "GIT HISTORY",
                         "Recent Git Activity &amp; Diffs",
                         "Inspect recent commits and uncommitted working-tree changes",
                         "Summarize the recent commits and any uncommitted working-tree changes.",
                         "Summarize recent commits &amp; diffs", dark));
         String row2 = renderStarterRow(
-                renderStarterCard(UiComponents.VARIANT_AMBER, Codicons.TOOLS, "BUILD &amp; TOOLS",
+                renderStarterCard(UiComponents.VARIANT_EMERALD, Codicons.TOOLS, "BUILD &amp; TOOLS",
                         "Configure build.toml &amp; Sandbox",
                         "Auto-detect project toolchains, test runners, and sandbox paths",
                         "Inspect my project files and toolchain and recommend a build.toml configuration.",
@@ -509,7 +500,7 @@ public final class ChatHtmlTemplates {
                         <td width="100%%" style="padding: 12px 14px;">
                             <table width="100%%" cellpadding="0" cellspacing="0" border="0">
                                 <tr>
-                                    <td valign="top" style="padding-right: 12px;">%s</td>
+                                    <td width="44" valign="top" style="padding-right: 12px;">%s</td>
                                     <td width="100%%" valign="middle">
                                         <div><span class="welcome-roxy-badge">&nbsp;ROXY %s&nbsp;</span>&nbsp;&nbsp;<span class="welcome-title">Technical Mentor (Read-Only Explore Mode)</span></div>
                                         <div class="welcome-hint" style="margin-top: 3px;">

@@ -63,13 +63,24 @@ class MarkdownPaneTest {
         String exploreHtml = org.apache.commons.lang3.StringUtils.normalizeSpace(pane.getText());
         assertContainsAll(exploreHtml, "welcome-card", "welcome-roxy-badge",
                 "Technical Mentor (Read-Only Explore Mode)", "kbd-pill", "@ Mention", "/ Commands", "Shift+Enter",
-                "codicon-search-", "codicon-symbol-structure-", "prompt:", "starter-accent-blue", "starter-badge-blue",
-                "starter-cta-pill-blue", "starter-title-link");
+                "codicon-search-emerald-", "codicon-symbol-structure-emerald-", "prompt:", "starter-badge",
+                "starter-cta-pill-emerald", "starter-link-emerald", "starter-title-link", "width=\"44\"",
+                "width=\"42\"");
+        assertFalse(exploreHtml.contains("starter-accent-"));
+        assertFalse(exploreHtml.contains("codicon-mention-"));
+        assertFalse(exploreHtml.contains("codicon-terminal-"));
+        assertFalse(exploreHtml.contains("codicon-clippy-"));
+        assertFalse(exploreHtml.contains("codicon-chevron-right-"));
         String taskHtml = org.apache.commons.lang3.StringUtils.normalizeSpace(new MarkdownPane(true).getText());
         assertContainsAll(taskHtml, "welcome-roxy-badge", "Autonomous Feature Development", "kbd-pill", "@ Mention",
-                "/ Commands", "codicon-rocket-", "codicon-lightbulb-autofix-", "codicon-list-ordered-", "prompt:",
-                "starter-accent-blue", "starter-badge-blue", "starter-cta-pill-blue", "starter-title-link");
-
+                "/ Commands", "codicon-rocket-blue-", "codicon-lightbulb-autofix-blue-", "codicon-list-ordered-",
+                "prompt:", "starter-badge", "starter-cta-pill-blue", "starter-link-blue", "starter-title-link",
+                "width=\"44\"", "width=\"42\"");
+        assertFalse(taskHtml.contains("starter-accent-"));
+        assertFalse(taskHtml.contains("codicon-mention-"));
+        assertFalse(taskHtml.contains("codicon-terminal-"));
+        assertFalse(taskHtml.contains("codicon-clippy-"));
+        assertFalse(taskHtml.contains("codicon-chevron-right-"));
         assertEquals("", UiComponents.renderCodiconTileImgTag(null, UiComponents.VARIANT_BLUE, false));
         assertEquals("", UiComponents.renderCodiconInlineImgTag(null, UiComponents.VARIANT_PURPLE, true));
         assertContainsAll(
