@@ -37,6 +37,8 @@ class PlanPanelTest {
         assertEquals("Implementation Plan", panel.planTitleLabel.getText());
         assertEquals("No plan submitted yet", panel.planStepsLabel.getText());
         assertFalse(panel.copyMarkdownButton.isEnabled());
+        assertFalse(panel.exportHtmlButton.isEnabled());
+        assertFalse(panel.canExportPlan());
 
         when(planService.getCurrentPlan()).thenReturn(plan);
         panel.onPlanUpdated(new PlanUpdatedEvent(plan));
@@ -45,6 +47,8 @@ class PlanPanelTest {
         assertEquals("Test Plan", panel.planTitleLabel.getText());
         assertEquals("1 / 2 steps completed", panel.planStepsLabel.getText());
         assertTrue(panel.copyMarkdownButton.isEnabled());
+        assertTrue(panel.exportHtmlButton.isEnabled());
+        assertTrue(panel.canExportPlan());
         assertContainsAll(panel.displayArea.getText(), "MODIFIED src/Main.java");
         String renderedDocText = assertDoesNotThrow(
                 () -> panel.displayArea.getDocument().getText(0, panel.displayArea.getDocument().getLength()));

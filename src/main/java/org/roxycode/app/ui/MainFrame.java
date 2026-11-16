@@ -95,16 +95,22 @@ public final class MainFrame extends JPanel {
 
     private final JFrame hostFrame;
     private final HeaderPanel header;
-    private final QaWorkspacePanel qaWorkspacePanel;
-    private final TaskWorkspacePanel taskWorkspacePanel;
+    final QaWorkspacePanel qaWorkspacePanel;
+    final TaskWorkspacePanel taskWorkspacePanel;
     private final CodebaseCachePanel codebaseCachePanel;
     private final BuildConfigPanel buildConfigPanel;
     private final AgentMemoryPanel agentMemoryPanel;
     private final transient PlanService planService;
     private final transient UiComponents.UiGuard hubTabGuard = new UiComponents.UiGuard();
     private final Map<String, List<JMenuItem>> cardMenuItems = new LinkedHashMap<>();
+    enum ExportKind {
+        NONE, QA_CHAT, QA_PAST_TOPICS, TASK_CHAT, TASK_PLAN, TASK_PAST_PLANS
+    }
+
     JMenuBar menuBar;
     JMenu recentProjectsMenu;
+    JMenuItem printExportHtmlItem;
+    JMenuItem saveAsHtmlItem;
     JTabbedPane contextHubTabs;
     JTabbedPane settingsHubTabs;
     JLabel aiConnectionReadinessBadge;
@@ -182,6 +188,32 @@ public final class MainFrame extends JPanel {
                 }
             });
         }
+        if (qaWorkspacePanel != null) {
+            if (qaWorkspacePanel.qaTabs != null) {
+                qaWorkspacePanel.qaTabs.addChangeListener(e -> updateExportMenuItemsState());
+            }
+            if (qaWorkspacePanel.qaChatPanel != null) {
+                qaWorkspacePanel.qaChatPanel.addExportStateListener(this::updateExportMenuItemsState);
+            }
+            if (qaWorkspacePanel.pastTopicsPanel != null) {
+                qaWorkspacePanel.pastTopicsPanel.addExportStateListener(this::updateExportMenuItemsState);
+            }
+        }
+        if (taskWorkspacePanel != null) {
+            if (taskWorkspacePanel.taskTabs != null) {
+                taskWorkspacePanel.taskTabs.addChangeListener(e -> updateExportMenuItemsState());
+            }
+            if (taskWorkspacePanel.taskChatPanel != null) {
+                taskWorkspacePanel.taskChatPanel.addExportStateListener(this::updateExportMenuItemsState);
+            }
+            if (taskWorkspacePanel.planPanel != null) {
+                taskWorkspacePanel.planPanel.addExportStateListener(this::updateExportMenuItemsState);
+            }
+            if (taskWorkspacePanel.pastPlansPanel != null) {
+                taskWorkspacePanel.pastPlansPanel.addExportStateListener(this::updateExportMenuItemsState);
+            }
+        }
+        updateExportMenuItemsState();
         handleStartupSettingsCheck();
         checkRequiredSystemToolsOnStartup(systemToolsPanel);
     }
@@ -207,7 +239,10 @@ public final class MainFrame extends JPanel {
 
     @EventListener
     public void onPlanUpdated(PlanUpdatedEvent event) {
-        Edt.run(this::updateWorkspaceState);
+        Edt.run(() -> {
+            updateWorkspaceState();
+            updateExportMenuItemsState();
+        });
     }
 
     @Nullable
@@ -713,6 +748,32 @@ public final class MainFrame extends JPanel {
         recentProjectsMenu = new JMenu("Recent Projects");
         refreshRecentProjectsMenu();
         fileMenu.add(recentProjectsMenu);
+        fileMenu.addSeparator();
+
+        printExportHtmlItem = new JMenuItem("Print / Export HTML...");
+        printExportHtmlItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_P, shortcutMask));
+        printExportHtmlItem.addActionListener(e -> exportCurrentView(false));
+        fileMenu.add(printExportHtmlItem);
+
+        saveAsHtmlItem = new JMenuItem("Save as HTML...");
+        saveAsHtmlItem.addActionListener(e -> exportCurrentView(true));
+        fileMenu.add(saveAsHtmlItem);
+        fileMenu.addSeparator();
+
+        fileMenu.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override
+            public void menuSelected(javax.swing.event.MenuEvent e) {
+                updateExportMenuItemsState();
+            }
+
+            @Override
+            public void menuDeselected(javax.swing.event.MenuEvent e) {
+            }
+
+            @Override
+            public void menuCanceled(javax.swing.event.MenuEvent e) {
+            }
+        });
 
         JMenuItem settingsItem = new JMenuItem("Settings...");
         settingsItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_COMMA, shortcutMask));
@@ -1140,6 +1201,7 @@ public final class MainFrame extends JPanel {
         } else if (MEMORY_VIEW.equals(cardName) && agentMemoryPanel != null) {
             agentMemoryPanel.refresh();
         }
+        updateExportMenuItemsState();
     }
 
     private static String resolveHubLayoutCard(String cardName) {
@@ -1329,5 +1391,108 @@ public final class MainFrame extends JPanel {
         }
 
         setTitle(projectName + " — RoxyCode");
+    }
+
+    ExportKind resolveActiveExportKind() {
+        if (QA_VIEW.equals(currentCard) && qaWorkspacePanel != null && qaWorkspacePanel.qaTabs != null) {
+            java.awt.Component selected = qaWorkspacePanel.qaTabs.getSelectedComponent();
+            if (qaWorkspacePanel.pastTopicsPanel != null && qaWorkspacePanel.pastTopicsPanel.equals(selected)) {
+                if (qaWorkspacePanel.pastTopicsPanel.canExportSelectedEntry()) {
+                    return ExportKind.QA_PAST_TOPICS;
+                }
+                return ExportKind.NONE;
+            }
+            if (qaWorkspacePanel.qaChatPanel != null && qaWorkspacePanel.qaChatPanel.hasExportableContent()) {
+                return ExportKind.QA_CHAT;
+            }
+            return ExportKind.NONE;
+        }
+        if (TASK_VIEW.equals(currentCard) && taskWorkspacePanel != null && taskWorkspacePanel.taskTabs != null) {
+            java.awt.Component selected = taskWorkspacePanel.taskTabs.getSelectedComponent();
+            if (taskWorkspacePanel.planPanel != null && taskWorkspacePanel.planPanel.equals(selected)) {
+                if (taskWorkspacePanel.planPanel.canExportPlan()) {
+                    return ExportKind.TASK_PLAN;
+                }
+                return ExportKind.NONE;
+            }
+            if (taskWorkspacePanel.pastPlansPanel != null && taskWorkspacePanel.pastPlansPanel.equals(selected)) {
+                if (taskWorkspacePanel.pastPlansPanel.canExportSelectedEntry()) {
+                    return ExportKind.TASK_PAST_PLANS;
+                }
+                return ExportKind.NONE;
+            }
+            if (taskWorkspacePanel.taskChatPanel != null && taskWorkspacePanel.taskChatPanel.hasExportableContent()) {
+                return ExportKind.TASK_CHAT;
+            }
+            return ExportKind.NONE;
+        }
+        return ExportKind.NONE;
+    }
+
+    void updateExportMenuItemsState() {
+        boolean canExport = resolveActiveExportKind() != ExportKind.NONE;
+        if (printExportHtmlItem != null) {
+            printExportHtmlItem.setEnabled(canExport);
+        }
+        if (saveAsHtmlItem != null) {
+            saveAsHtmlItem.setEnabled(canExport);
+        }
+    }
+
+    boolean exportCurrentView(boolean saveToFile) {
+        ExportKind kind = resolveActiveExportKind();
+        if (kind == ExportKind.NONE) {
+            return false;
+        }
+        String projectName = getActiveProjectName();
+        switch (kind) {
+            case QA_CHAT -> {
+                String html = HtmlExportService.buildChatExportHtml(projectName, "Ask Roxy — Chat Session",
+                        qaWorkspacePanel.qaChatPanel.exportMessages());
+                if (saveToFile) {
+                    HtmlExportService.saveHtmlWithChooser(this, "ask-roxy-chat", html);
+                } else {
+                    HtmlExportService.openHtmlInBrowserAsync("roxycode-chat-", html);
+                }
+                return true;
+            }
+            case TASK_CHAT -> {
+                String html = HtmlExportService.buildChatExportHtml(projectName, "Build Feature — Chat Session",
+                        taskWorkspacePanel.taskChatPanel.exportMessages());
+                if (saveToFile) {
+                    HtmlExportService.saveHtmlWithChooser(this, "build-feature-chat", html);
+                } else {
+                    HtmlExportService.openHtmlInBrowserAsync("roxycode-chat-", html);
+                }
+                return true;
+            }
+            case TASK_PLAN -> {
+                if (saveToFile) {
+                    taskWorkspacePanel.planPanel.saveCurrentPlanAsHtml(this, projectName);
+                } else {
+                    taskWorkspacePanel.planPanel.exportCurrentPlanToBrowser(projectName);
+                }
+                return true;
+            }
+            case QA_PAST_TOPICS -> {
+                if (saveToFile) {
+                    qaWorkspacePanel.pastTopicsPanel.saveCurrentEntryAsHtml(this, projectName);
+                } else {
+                    qaWorkspacePanel.pastTopicsPanel.exportCurrentEntryToBrowser(projectName);
+                }
+                return true;
+            }
+            case TASK_PAST_PLANS -> {
+                if (saveToFile) {
+                    taskWorkspacePanel.pastPlansPanel.saveCurrentEntryAsHtml(this, projectName);
+                } else {
+                    taskWorkspacePanel.pastPlansPanel.exportCurrentEntryToBrowser(projectName);
+                }
+                return true;
+            }
+            default -> {
+                return false;
+            }
+        }
     }
 }

@@ -5,6 +5,7 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.FlowLayout;
+import java.nio.file.Path;
 import java.awt.event.KeyEvent;
 import java.util.List;
 import java.util.Objects;
@@ -26,6 +27,7 @@ import javax.swing.ListSelectionModel;
 import javax.swing.Timer;
 import net.miginfocom.swing.MigLayout;
 import org.apache.commons.lang3.StringUtils;
+import org.jspecify.annotations.Nullable;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.EditorResult;
@@ -62,7 +64,7 @@ final class ArchiveBrowserPanel extends JPanel {
         private final String singularNoun;
         private final String pluralNoun;
         private final Codicons icon;
-        private final String dateLabel;
+        final String dateLabel;
         private final String emptyTitle;
         private final String emptyHint;
 
@@ -98,6 +100,7 @@ final class ArchiveBrowserPanel extends JPanel {
     final JButton renameButton;
     final JButton deleteButton;
     final JButton copyMarkdownButton;
+    final JButton exportHtmlButton;
     final JPanel renamePanel;
     final JTextField renameField;
     final JButton saveRenameButton;
@@ -107,6 +110,7 @@ final class ArchiveBrowserPanel extends JPanel {
     private final Timer searchDebounceTimer;
 
     private Timer copyFeedbackTimer;
+    private final transient List<Runnable> exportStateListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
     private String currentRawMarkdown = "";
     String lastCopiedMarkdown;
     private transient ArchiveEntrySummary currentSelectedEntry;
@@ -168,6 +172,11 @@ final class ArchiveBrowserPanel extends JPanel {
         actionRight.add(deleteButton);
         copyMarkdownButton = UiComponents.createCopyButton(COPY_BUTTON_TEXT, false, this::copyCurrentMarkdown);
         actionRight.add(copyMarkdownButton);
+        exportHtmlButton = UiComponents.createActionButton("Print / Export", Codicons.LINK_EXTERNAL, null, false, null,
+                e -> exportCurrentEntryToBrowser(null));
+        exportHtmlButton.setToolTipText("Open self-contained HTML5 archive in browser for printing or Save as PDF");
+        exportHtmlButton.setEnabled(false);
+        actionRight.add(exportHtmlButton);
         detailToolbar.add(actionRight, BorderLayout.EAST);
 
         renamePanel = new JPanel(new MigLayout("insets 6 12 6 12, fillx, gap 8", "[][grow, fill][][]", "center"));
@@ -280,10 +289,12 @@ final class ArchiveBrowserPanel extends JPanel {
             renameButton.setEnabled(false);
             deleteButton.setEnabled(false);
             copyMarkdownButton.setEnabled(false);
+            exportHtmlButton.setEnabled(false);
             cancelRename();
             deleteConfirmBar.cancel();
             renderEmptyState(query != null && !query.isBlank());
             lastSelectionFuture = CompletableFuture.completedFuture("");
+            notifyExportStateListeners();
         }
     }
 
@@ -297,9 +308,11 @@ final class ArchiveBrowserPanel extends JPanel {
             renameButton.setEnabled(false);
             deleteButton.setEnabled(false);
             copyMarkdownButton.setEnabled(false);
+            exportHtmlButton.setEnabled(false);
             renderEmptyState(searchField != null && !searchField.getText().isBlank());
             CompletableFuture<String> done = CompletableFuture.completedFuture("");
             lastSelectionFuture = done;
+            notifyExportStateListeners();
             return done;
         }
 
@@ -327,9 +340,48 @@ final class ArchiveBrowserPanel extends JPanel {
 
     private void applyDetailContent(ArchiveEntrySummary entry, String rawMarkdown) {
         this.currentRawMarkdown = StringUtils.defaultString(rawMarkdown);
-        copyMarkdownButton.setEnabled(!this.currentRawMarkdown.isBlank());
+        boolean hasMarkdown = !this.currentRawMarkdown.isBlank();
+        copyMarkdownButton.setEnabled(hasMarkdown);
+        exportHtmlButton.setEnabled(hasMarkdown && entry != null);
         displayArea.setText(buildDetailHtml(entry, this.currentRawMarkdown, mode));
         displayArea.setCaretPosition(0);
+        notifyExportStateListeners();
+    }
+
+    void addExportStateListener(Runnable listener) {
+        if (listener != null) {
+            exportStateListeners.add(listener);
+        }
+    }
+
+    private void notifyExportStateListeners() {
+        for (Runnable listener : exportStateListeners) {
+            listener.run();
+        }
+    }
+
+    boolean canExportSelectedEntry() {
+        return currentSelectedEntry != null && StringUtils.isNotBlank(currentRawMarkdown);
+    }
+
+    CompletableFuture<Path> exportCurrentEntryToBrowser(@Nullable String projectName) {
+        if (!canExportSelectedEntry()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        String html = HtmlExportService.buildArchiveExportHtml(projectName, currentSelectedEntry, currentRawMarkdown,
+                mode);
+        return HtmlExportService.openHtmlInBrowserAsync("roxycode-archive-", html);
+    }
+
+    Path saveCurrentEntryAsHtml(Component parent, @Nullable String projectName) {
+        if (!canExportSelectedEntry()) {
+            return null;
+        }
+        String html = HtmlExportService.buildArchiveExportHtml(projectName, currentSelectedEntry, currentRawMarkdown,
+                mode);
+        String suggestedName = StringUtils.defaultIfBlank(currentSelectedEntry.title(),
+                currentSelectedEntry.filename());
+        return HtmlExportService.saveHtmlWithChooser(parent, suggestedName, html);
     }
 
     static String buildDetailHtml(ArchiveEntrySummary entry, String rawMarkdown, ArchiveMode archiveMode) {

@@ -36,6 +36,7 @@ final class MarkdownPane extends JTextPane {
     private boolean pruned = false;
 
     private final List<Message> messages = new ArrayList<>();
+    private final List<Runnable> contentChangeListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
     private final boolean taskMode;
     private java.util.function.Consumer<String> onMoveToFeatureListener;
     private java.util.function.Consumer<String> onApplyBuildTomlListener;
@@ -120,6 +121,8 @@ final class MarkdownPane extends JTextPane {
                 String prompt = URLDecoder.decode(encoded, StandardCharsets.UTF_8);
                 onStarterPromptListener.accept(prompt);
             }
+        } else {
+            HtmlExportService.handleDiagramHyperlink(desc);
         }
     }
 
@@ -151,6 +154,22 @@ final class MarkdownPane extends JTextPane {
 
     public void setOnStarterPromptListener(java.util.function.Consumer<String> listener) {
         this.onStarterPromptListener = listener;
+    }
+
+    void addContentChangeListener(Runnable listener) {
+        if (listener != null) {
+            contentChangeListeners.add(listener);
+        }
+    }
+
+    private void notifyContentChangeListeners() {
+        for (Runnable listener : contentChangeListeners) {
+            listener.run();
+        }
+    }
+
+    boolean hasExportableContent() {
+        return !shouldShowWelcomeCard();
     }
 
     boolean shouldShowWelcomeCard() {
@@ -233,6 +252,7 @@ final class MarkdownPane extends JTextPane {
         } else {
             appendRenderedEntry(formatMessageEntryHtml(msg, messages.size() - 1));
         }
+        notifyContentChangeListeners();
     }
 
     private boolean pruneMessagesIfNeeded() {
@@ -532,11 +552,13 @@ final class MarkdownPane extends JTextPane {
         }
         pruneMessagesIfNeeded();
         renderAll(true);
+        notifyContentChangeListeners();
     }
 
     public void clear() {
         resetMessageState();
         renderAll(true);
+        notifyContentChangeListeners();
     }
 
     private void resetMessageState() {

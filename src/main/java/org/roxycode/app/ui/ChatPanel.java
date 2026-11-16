@@ -1280,6 +1280,14 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         return outputArea.getConversationMessages();
     }
 
+    public boolean hasExportableContent() {
+        return outputArea.hasExportableContent();
+    }
+
+    public void addExportStateListener(Runnable listener) {
+        outputArea.addContentChangeListener(listener);
+    }
+
     public List<MarkdownPane.PersistedChatEntry> exportMessages() {
         return outputArea.exportMessages();
     }

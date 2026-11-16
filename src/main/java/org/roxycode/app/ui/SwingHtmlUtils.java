@@ -194,6 +194,17 @@ public final class SwingHtmlUtils {
         pane.putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
         configureReadOnlyCaret(pane);
         installTextContextMenu(pane);
+        pane.addHyperlinkListener(e -> {
+            if (e.getEventType() == javax.swing.event.HyperlinkEvent.EventType.ACTIVATED) {
+                String desc = e.getDescription();
+                if (HtmlExportService.handleDiagramHyperlink(desc)) {
+                    return;
+                }
+                if (desc != null && (desc.startsWith("http://") || desc.startsWith("https://"))) {
+                    UiComponents.openUrlOrCopyToClipboard(desc);
+                }
+            }
+        });
         return pane;
     }
 

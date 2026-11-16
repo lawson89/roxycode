@@ -36,6 +36,8 @@ class ArchiveBrowserPanelTest {
         assertEquals(2, panel.listModel.getSize());
         assertEquals("2 topics", panel.countLabel.getText());
         assertEquals("First Topic Title", panel.detailSummaryLabel.getText());
+        assertTrue(panel.exportHtmlButton.isEnabled());
+        assertTrue(panel.canExportSelectedEntry());
         assertContainsAll(panel.displayArea.getText(), "First Topic Title", "Hello world");
         assertNotNull(SwingTestUtils.renderListCell(panel.entryList, 0, true));
 
@@ -50,6 +52,8 @@ class ArchiveBrowserPanelTest {
         panel.searchField.setText("NoMatch");
         SwingTestUtils.awaitFuture(panel.executeSearchAsync());
         assertEquals(0, panel.listModel.getSize());
+        assertFalse(panel.exportHtmlButton.isEnabled());
+        assertFalse(panel.canExportSelectedEntry());
         assertTrue(panel.displayArea.getText().contains("No matching topics found."));
 
         ArchiveEntrySummary plan1 = new ArchiveEntrySummary("20250514-120000-plan.md", "plan", "Feature Plan Alpha",

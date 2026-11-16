@@ -24,6 +24,7 @@ import com.vladsch.flexmark.util.ast.Node;
 import java.io.StringReader;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -60,6 +61,8 @@ public final class PlantUmlRenderer {
     private static final Logger log = LoggerFactory.getLogger(PlantUmlRenderer.class);
 
     static final int MAX_CACHE_ENTRIES = 200;
+    /** Hyperlink prefix used on diagram footers to open a standalone diagram export in the OS browser. */
+    public static final String DIAGRAM_OPEN_PREFIX = "diagram-open:";
     private static final String TEMP_DIR_PREFIX = "roxycode-diagrams-";
     private static final String LANG_PLANTUML = "plantuml";
     private static final String LANG_PUML = "puml";
@@ -254,7 +257,13 @@ public final class PlantUmlRenderer {
             </style>
             """;
 
-    public record DiagramCacheKey(String normalizedCode, boolean dark, String language) {
+    public record DiagramCacheKey(String normalizedCode, boolean dark, String language, String diagramId) {
+        public DiagramCacheKey(String normalizedCode, boolean dark, String language) {
+            this(normalizedCode, dark, language, computeDiagramId(normalizedCode, language));
+        }
+    }
+
+    record DiagramExportSource(String rawCode, String language) {
     }
 
     /**
@@ -276,6 +285,8 @@ public final class PlantUmlRenderer {
     }
 
     private static final Cache<DiagramCacheKey, Optional<String>> DIAGRAM_CACHE = Caffeine.newBuilder()
+            .maximumSize(MAX_CACHE_ENTRIES).build();
+    private static final Cache<String, DiagramExportSource> DIAGRAM_SOURCE_CACHE = Caffeine.newBuilder()
             .maximumSize(MAX_CACHE_ENTRIES).build();
 
     private static final AtomicInteger RENDER_COUNT = new AtomicInteger(0);
@@ -638,8 +649,100 @@ public final class PlantUmlRenderer {
         if (normalizedSource.isBlank()) {
             return Optional.empty();
         }
-        DiagramCacheKey cacheKey = new DiagramCacheKey(normalizedSource, darkTheme, effectiveLanguage);
+        String diagramId = computeDiagramId(code.trim(), effectiveLanguage);
+        DIAGRAM_SOURCE_CACHE.put(diagramId, new DiagramExportSource(code, effectiveLanguage));
+        DiagramCacheKey cacheKey = new DiagramCacheKey(normalizedSource, darkTheme, effectiveLanguage, diagramId);
         return DIAGRAM_CACHE.get(cacheKey, PlantUmlRenderer::generateDiagramHtml);
+    }
+
+    /**
+     * Renders a standalone HTML5 diagram snippet (inline vector {@code <svg>} or Base64 PNG fallback) in light theme
+     * for browser/HTML5 export.
+     *
+     * @param code
+     *            raw diagram source code
+     * @param language
+     *            fenced code block language hint (may be blank)
+     * @return rendered {@code <div class="diagram-export">...</div>} HTML snippet, or empty if invalid
+     */
+    public static Optional<String> renderDiagramExportHtml(String code, String language) {
+        if (code == null || code.isBlank() || !isDiagramBlock(language, code)) {
+            return Optional.empty();
+        }
+        String effectiveLanguage = resolveEffectiveLanguage(language, code);
+        if (LANG_SVG.equals(effectiveLanguage)) {
+            String sanitizedSvg = sanitizeSvgForRendering(code.trim());
+            if (sanitizedSvg.isBlank()) {
+                return Optional.empty();
+            }
+            return Optional.of("<div class='diagram-export'>" + sanitizedSvg + "</div>");
+        }
+        String lightSource = buildPlantUmlSource(code, effectiveLanguage, false);
+        if (lightSource.isBlank()) {
+            return Optional.empty();
+        }
+        DiagramCacheKey lightKey = new DiagramCacheKey(lightSource, false, effectiveLanguage);
+        try {
+            if (!isDitaaSource(lightKey)) {
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                SourceStringReader reader = new SourceStringReader(lightSource);
+                DiagramDescription description = reader.outputImage(baos, new FileFormatOption(FileFormat.SVG));
+                byte[] svgBytes = baos.toByteArray();
+                if (isValidPlantUmlOutput(description, svgBytes)) {
+                    String rawSvg = new String(svgBytes, StandardCharsets.UTF_8);
+                    String cleanedSvg = rawSvg.trim();
+                    if (cleanedSvg.startsWith("<?xml")) {
+                        int declEnd = cleanedSvg.indexOf("?>");
+                        if (declEnd >= 0) {
+                            cleanedSvg = cleanedSvg.substring(declEnd + 2).trim();
+                        }
+                    }
+                    if (cleanedSvg.toLowerCase(Locale.ROOT).contains(START_SVG_TAG)) {
+                        return Optional.of("<div class='diagram-export'>" + cleanedSvg + "</div>");
+                    }
+                }
+            }
+            byte[] pngBytes = renderDiagramPngBytes(lightKey);
+            if (pngBytes == null || pngBytes.length == 0) {
+                return Optional.empty();
+            }
+            String base64 = Base64.getEncoder().encodeToString(pngBytes);
+            return Optional.of(
+                    "<div class='diagram-export'><img src='data:image/png;base64," + base64 + "' alt='Diagram'></div>");
+        } catch (Exception e) {
+            log.debug("Failed to export diagram ({}): {}", effectiveLanguage, e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Renders a previously cached diagram by its 16-hex {@code diagramId} for standalone browser export.
+     *
+     * @param diagramId
+     *            canonical 16-hex diagram identifier from a {@code diagram-open:} link
+     * @return rendered {@code <div class="diagram-export">...</div>} HTML snippet, or empty if unknown/expired
+     */
+    public static Optional<String> renderDiagramExportHtmlById(String diagramId) {
+        if (diagramId == null || diagramId.isBlank()) {
+            return Optional.empty();
+        }
+        DiagramExportSource source = DIAGRAM_SOURCE_CACHE.getIfPresent(diagramId.trim());
+        if (source == null) {
+            return Optional.empty();
+        }
+        return renderDiagramExportHtml(source.rawCode(), source.language());
+    }
+
+    static String computeDiagramId(String rawCode, String effectiveLanguage) {
+        String safeCode = "";
+        if (rawCode != null) {
+            safeCode = rawCode;
+        }
+        String safeLang = "";
+        if (effectiveLanguage != null) {
+            safeLang = effectiveLanguage;
+        }
+        return PathUtils.computeSha256Hex(safeLang + "\n" + safeCode, 8);
     }
 
     static String sanitizeMultilineQuotedStrings(String umlBody) {
@@ -775,9 +878,16 @@ public final class PlantUmlRenderer {
             if (preview == null) {
                 return Optional.empty();
             }
+            String diagramId = key.diagramId();
+            if (diagramId == null || diagramId.isBlank()) {
+                diagramId = computeDiagramId(key.normalizedCode(), key.language());
+            }
             String html = "<table class=\"diagram-container\" width=\"100%\" border=\"0\" cellpadding=\"8\" cellspacing=\"0\"><tr><td align=\"center\"><img src=\""
                     + SwingHtmlUtils.escapeHtml(preview.url()) + "\" width=\"" + preview.width() + "\" height=\""
-                    + preview.height() + "\"></td></tr></table>";
+                    + preview.height()
+                    + "\"></td></tr><tr><td align=\"center\" style=\"padding-top: 2px;\"><a class=\"action-cta-link\" href=\""
+                    + DIAGRAM_OPEN_PREFIX + SwingHtmlUtils.escapeHtml(diagramId)
+                    + "\">Open / Print Diagram</a></td></tr></table>";
             return Optional.of(html);
         } catch (Exception e) {
             log.debug("Failed to render PlantUML diagram ({}): {}", key.language(), e.getMessage());
@@ -1333,6 +1443,7 @@ public final class PlantUmlRenderer {
 
     static void clearCacheForTesting() {
         DIAGRAM_CACHE.invalidateAll();
+        DIAGRAM_SOURCE_CACHE.invalidateAll();
         RENDER_COUNT.set(0);
     }
 

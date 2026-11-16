@@ -40,10 +40,12 @@ class MainFrameTest {
     private ProjectService projectService;
     private GitService gitService;
     private PlanService planService;
+    private MemoryService memoryService;
     private RepoMapPackerService repoMapPackerService;
     private JexlServiceRegistry jexlServiceRegistry;
     private JexlApiPanel jexlApiPanel;
     private SystemToolsPanel systemToolsPanel;
+    private QaWorkspacePanel qaWorkspacePanel;
     private TaskWorkspacePanel taskWorkspacePanel;
     private SettingsPanel settingsPanel;
     private BuildConfigPanel buildConfigPanel;
@@ -67,13 +69,14 @@ class MainFrameTest {
         AiService aiService = mock(AiService.class);
         ChatMemory chatMemory = mock(ChatMemory.class);
 
+        memoryService = mock(MemoryService.class);
         HeaderPanel headerPanel = new HeaderPanel(projectService, gitService, settingsService);
         StatusPanel statusPanel = new StatusPanel(new EnvironmentService());
-        QaWorkspacePanel qaWorkspacePanel = new QaWorkspacePanel(ChatPanel.createExplorePanel(aiService, planService,
-                pub, chatMemory, settingsService, null, null, null), null);
+        qaWorkspacePanel = new QaWorkspacePanel(ChatPanel.createExplorePanel(aiService, planService, pub, chatMemory,
+                settingsService, null, null, null), memoryService);
         taskWorkspacePanel = new TaskWorkspacePanel(
                 ChatPanel.createFeaturePanel(aiService, planService, pub, chatMemory, settingsService, null),
-                planService, new PlanPanel(planService), null);
+                planService, new PlanPanel(planService), memoryService);
         repoMapPackerService = mock(RepoMapPackerService.class);
         CodebaseCachePanel codebaseCachePanel = new CodebaseCachePanel(repoMapPackerService, mock(PromptService.class),
                 null);
@@ -538,6 +541,109 @@ class MainFrameTest {
             assertTrue(askRoxyItem.isEnabled());
             assertTrue(buildFeatureItem.isEnabled());
             assertEquals("AI Studio Connected", frame.aiConnectionReadinessBadge.getText());
+
+            // Verify File -> Print / Export HTML... and Save as HTML... menu items and view routing
+            assertNotNull(frame.printExportHtmlItem);
+            assertNotNull(frame.saveAsHtmlItem);
+            assertEquals("Print / Export HTML...", frame.printExportHtmlItem.getText());
+            assertEquals("Save as HTML...", frame.saveAsHtmlItem.getText());
+            assertEquals(java.awt.event.KeyEvent.VK_P, frame.printExportHtmlItem.getAccelerator().getKeyCode());
+
+            // Settings view has no exportable content
+            SwingTestUtils.runOnEdt(() -> frame.showCard(MainFrame.SETTINGS_VIEW));
+            assertEquals(MainFrame.ExportKind.NONE, frame.resolveActiveExportKind());
+            assertFalse(frame.printExportHtmlItem.isEnabled());
+            assertFalse(frame.saveAsHtmlItem.isEnabled());
+            assertFalse(frame.exportCurrentView(false));
+
+            // Ask Roxy chat: empty -> disabled; appending a message enables Ctrl/Cmd+P live without opening File menu
+            List<Path> exportedFiles = new java.util.concurrent.CopyOnWriteArrayList<>();
+            HtmlExportService.setBrowserLauncherForTesting(exportedFiles::add);
+            try {
+                SwingTestUtils.runOnEdt(() -> {
+                    frame.showCard(MainFrame.QA_VIEW);
+                    frame.qaWorkspacePanel.qaTabs.setSelectedComponent(frame.qaChatPanel());
+                });
+                assertEquals(MainFrame.ExportKind.NONE, frame.resolveActiveExportKind());
+                assertFalse(frame.printExportHtmlItem.isEnabled());
+
+                SwingTestUtils.runOnEdt(
+                        () -> frame.qaChatPanel().outputArea.appendMessage(ChatHtmlTemplates.ROLE_USER, "Hello Roxy"));
+                assertEquals(MainFrame.ExportKind.QA_CHAT, frame.resolveActiveExportKind());
+                assertTrue(frame.printExportHtmlItem.isEnabled());
+                assertTrue(frame.saveAsHtmlItem.isEnabled());
+
+                SwingTestUtils.runOnEdt(() -> frame.qaChatPanel().clearOutput());
+                assertEquals(MainFrame.ExportKind.NONE, frame.resolveActiveExportKind());
+                assertFalse(frame.printExportHtmlItem.isEnabled());
+
+                // Build Feature Plan tab: empty -> disabled; in-place plan update enables TASK_PLAN live and exports
+                SwingTestUtils.runOnEdt(() -> {
+                    frame.showCard(MainFrame.TASK_VIEW);
+                    frame.taskWorkspacePanel.taskTabs.setSelectedComponent(frame.taskWorkspacePanel.planPanel);
+                });
+                assertEquals(MainFrame.ExportKind.NONE, frame.resolveActiveExportKind());
+                assertFalse(frame.printExportHtmlItem.isEnabled());
+
+                ImplementationPlan samplePlan = new ImplementationPlan("Export Plan", "Verify live export",
+                        List.of("Req 1"), List.of(new ImplementationPlan.TechStep("Step 0", true)), false, null, null,
+                        null, null, List.of());
+                when(planService.getCurrentPlan()).thenReturn(samplePlan);
+                taskWorkspacePanel.planPanel.updateDisplay(samplePlan);
+                SwingTestUtils.flushEdt();
+                assertEquals(MainFrame.ExportKind.TASK_PLAN, frame.resolveActiveExportKind());
+                assertTrue(frame.printExportHtmlItem.isEnabled());
+                assertTrue(frame.exportCurrentView(false));
+
+                // Build Feature Chat tab: in-place message append enables TASK_CHAT live and exports
+                SwingTestUtils.runOnEdt(() -> {
+                    frame.taskWorkspacePanel.taskTabs.setSelectedComponent(frame.taskChatPanel());
+                    assertFalse(frame.printExportHtmlItem.isEnabled());
+                    frame.taskChatPanel().outputArea.appendMessage(ChatHtmlTemplates.ROLE_USER, "Build step 1");
+                });
+                assertEquals(MainFrame.ExportKind.TASK_CHAT, frame.resolveActiveExportKind());
+                assertTrue(frame.printExportHtmlItem.isEnabled());
+                assertTrue(frame.exportCurrentView(false));
+
+                // Past Topics & Past Plans archive routing
+                MemoryService.ArchiveEntrySummary topicSummary = new MemoryService.ArchiveEntrySummary(
+                        "20250514-topic.md", "topic", "Archived Topic", "Alice", "2025-05-14T10:00:00Z", 2, "", 0L, 0L,
+                        0, 0.0);
+                when(memoryService.listArchivedTopicSummaries()).thenReturn(List.of(topicSummary));
+                when(memoryService.readArchivedTopic("20250514-topic.md")).thenReturn("# Topic\n\nDetails");
+                SwingTestUtils.runOnEdt(() -> {
+                    frame.showCard(MainFrame.QA_VIEW);
+                    frame.qaWorkspacePanel.qaTabs.setSelectedComponent(frame.qaWorkspacePanel.pastTopicsPanel);
+                });
+                SwingTestUtils.awaitFuture(frame.qaWorkspacePanel.pastTopicsPanel.refresh());
+                SwingTestUtils.awaitFuture(frame.qaWorkspacePanel.pastTopicsPanel.lastSelectionFuture);
+                assertEquals(MainFrame.ExportKind.QA_PAST_TOPICS, frame.resolveActiveExportKind());
+                assertTrue(frame.printExportHtmlItem.isEnabled());
+                assertTrue(frame.exportCurrentView(false));
+
+                MemoryService.ArchiveEntrySummary planSummary = new MemoryService.ArchiveEntrySummary(
+                        "20250514-plan.md", "plan", "Archived Plan", "Bob", "2025-05-14T11:00:00Z", 0, "", 0L, 0L, 0,
+                        0.0);
+                when(memoryService.listArchivedPlanSummaries()).thenReturn(List.of(planSummary));
+                when(memoryService.readArchivedPlan("20250514-plan.md")).thenReturn("# Plan\n\n- [x] Done");
+                SwingTestUtils.runOnEdt(() -> {
+                    frame.showCard(MainFrame.TASK_VIEW);
+                    frame.taskWorkspacePanel.taskTabs.setSelectedComponent(frame.taskWorkspacePanel.pastPlansPanel);
+                });
+                SwingTestUtils.awaitFuture(frame.taskWorkspacePanel.pastPlansPanel.refresh());
+                SwingTestUtils.awaitFuture(frame.taskWorkspacePanel.pastPlansPanel.lastSelectionFuture);
+                assertEquals(MainFrame.ExportKind.TASK_PAST_PLANS, frame.resolveActiveExportKind());
+                assertTrue(frame.printExportHtmlItem.isEnabled());
+                assertTrue(frame.exportCurrentView(false));
+
+                long deadline = System.currentTimeMillis() + 3000;
+                while (exportedFiles.size() < 4 && System.currentTimeMillis() < deadline) {
+                    Thread.sleep(25);
+                }
+                assertEquals(4, exportedFiles.size());
+            } finally {
+                HtmlExportService.setBrowserLauncherForTesting(null);
+            }
             frame.onSystemToolsUpdated(
                     new SystemToolsUpdatedEvent(List.of(SystemTool.ofKnownTool("Ripgrep", "14.1.0", "Detected"),
                             SystemTool.ofKnownTool("Universal Ctags", "Not found", "Missing")), false));

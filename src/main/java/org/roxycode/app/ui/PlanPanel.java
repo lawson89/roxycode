@@ -3,8 +3,10 @@ package org.roxycode.app.ui;
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.BorderLayout;
 import java.awt.event.HierarchyEvent;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import javax.swing.JButton;
 import javax.swing.JEditorPane;
 import javax.swing.JLabel;
@@ -12,6 +14,8 @@ import javax.swing.JPanel;
 import javax.swing.Timer;
 import net.miginfocom.swing.MigLayout;
 import org.apache.commons.lang3.StringUtils;
+import org.jspecify.annotations.Nullable;
+import org.kordamp.ikonli.codicons.Codicons;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
@@ -37,10 +41,12 @@ final class PlanPanel extends JPanel {
     final JEditorPane displayArea;
     final JButton copyCommitMessageButton;
     final JButton copyMarkdownButton;
+    final JButton exportHtmlButton;
     private Timer copyCommitFeedbackTimer;
     private Timer copyFeedbackTimer;
     String lastCopiedCommitMessage;
     String lastCopiedMarkdown;
+    private final transient List<Runnable> exportStateListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
     private transient ImplementationPlan lastRenderedPlan;
     private boolean displayInitialized;
     private boolean htmlDirty = true;
@@ -66,6 +72,11 @@ final class PlanPanel extends JPanel {
         actionButtons.add(copyCommitMessageButton);
         copyMarkdownButton = UiComponents.createCopyButton(COPY_BUTTON_TEXT, false, this::copyPlanAsMarkdown);
         actionButtons.add(copyMarkdownButton);
+        exportHtmlButton = UiComponents.createActionButton("Print / Export", Codicons.LINK_EXTERNAL, null, false, null,
+                e -> exportCurrentPlanToBrowser(null));
+        exportHtmlButton.setToolTipText("Open self-contained HTML5 plan in browser for printing or Save as PDF");
+        exportHtmlButton.setEnabled(false);
+        actionButtons.add(exportHtmlButton);
 
         toolbar.add(headerInfo, "growx, wmin 0");
         toolbar.add(actionButtons, "alignx right");
@@ -125,6 +136,41 @@ final class PlanPanel extends JPanel {
                 COPY_BUTTON_TEXT, COPY_FEEDBACK_DELAY_MS);
     }
 
+    void addExportStateListener(Runnable listener) {
+        if (listener != null) {
+            exportStateListeners.add(listener);
+        }
+    }
+
+    private void notifyExportStateListeners() {
+        for (Runnable listener : exportStateListeners) {
+            listener.run();
+        }
+    }
+
+    boolean canExportPlan() {
+        return planManagerService != null && planManagerService.getCurrentPlan() != null;
+    }
+
+    CompletableFuture<Path> exportCurrentPlanToBrowser(@Nullable String projectName) {
+        if (!canExportPlan()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        ImplementationPlan plan = planManagerService.getCurrentPlan();
+        String html = HtmlExportService.buildPlanExportHtml(projectName, plan);
+        return HtmlExportService.openHtmlInBrowserAsync("roxycode-plan-", html);
+    }
+
+    Path saveCurrentPlanAsHtml(java.awt.Component parent, @Nullable String projectName) {
+        if (!canExportPlan()) {
+            return null;
+        }
+        ImplementationPlan plan = planManagerService.getCurrentPlan();
+        String html = HtmlExportService.buildPlanExportHtml(projectName, plan);
+        String suggestedName = StringUtils.defaultIfBlank(plan.title(), "implementation-plan");
+        return HtmlExportService.saveHtmlWithChooser(parent, suggestedName, html);
+    }
+
     @Override
     public void updateUI() {
         super.updateUI();
@@ -153,11 +199,15 @@ final class PlanPanel extends JPanel {
         if (copyMarkdownButton != null) {
             copyMarkdownButton.setEnabled(plan != null);
         }
+        if (exportHtmlButton != null) {
+            exportHtmlButton.setEnabled(plan != null);
+        }
         if (copyCommitMessageButton != null) {
             boolean hasCommitMsg = plan != null && StringUtils.isNotBlank(plan.commitMessage());
             copyCommitMessageButton.setEnabled(hasCommitMsg);
             copyCommitMessageButton.setVisible(hasCommitMsg);
         }
+        notifyExportStateListeners();
         if (plan == null) {
             planTitleLabel.setText("Implementation Plan");
             planStepsLabel.setText("No plan submitted yet");
