@@ -15,6 +15,7 @@ This document describes the Apache Commons JEXL 3 syntax and safety rules for th
 ### Core Rules
 - **Variables**: Define with `var` (e.g., `var x = 1;`).
 - **Strings**: Use single or double quotes for single-line strings (e.g., `'hello'` or `"world"`). **MULTI-LINE STRINGS MUST USE BACKTICKS (`). If you use double or single quotes for a string that spans multiple lines, JEXL will crash with a tokenization error.**
+- **Escaping Inside Backtick Strings**: Inside `` `...` `` strings, escape literal backticks as `` \` `` and literal `${...}` interpolation markers as `\${...}`. **Never** break out of a backtick string to concatenate `` + "`foo`" + ``.
 - **Control Flow**: Standard `if/else`, `for`, `while` loops.
 - **Implicit Return**: The value of the last expression in the script is returned to the system.
 
@@ -23,9 +24,19 @@ This document describes the Apache Commons JEXL 3 syntax and safety rules for th
 var bad = "line 1
 line 2";
 
-// GOOD: Uses backticks for multi-line text
+// BAD: Unescaped backticks or breaking out of backticks to concatenate
+var badBacktick = `markdown:
+```java
+` + "`code`" + `
+`;
+
+// GOOD: Uses backticks for multi-line text and escapes literal backticks / ${...}
 var good = `line 1
-line 2`;
+line 2
+\`\`\`java
+\`code\`
+\${literalVar}
+\`\`\``;
 
 fileEditorService.replaceLines('src/App.java', 1, 2, good);
 

@@ -73,6 +73,36 @@ class JexlErrorAnalyzerTest {
     }
 
     @Test
+    void testUnescapedBacktickInTemplateDetection() {
+        String unescapedTripleBacktickScript = "var s = `line 1\n" + "String bt = \"```\";\n" + "line 3`;";
+        JexlErrorAnalyzer.ErrorAnalysis tripleBacktickAnalysis = analyzeScript(unescapedTripleBacktickScript);
+        assertEquals("UNESCAPED_BACKTICK", tripleBacktickAnalysis.errorCategory());
+        assertTrue(tripleBacktickAnalysis.hint().contains("\\`"));
+
+        String brokenConcatScript = "var s = `prefix\n" + "`someVar` + \"`unicode`\" + `\n" + "suffix`;";
+        JexlErrorAnalyzer.ErrorAnalysis brokenConcatAnalysis = analyzeScript(brokenConcatScript);
+        assertEquals("UNESCAPED_BACKTICK", brokenConcatAnalysis.errorCategory());
+        assertTrue(brokenConcatAnalysis.hint().contains("\\`"));
+
+        String escapedBacktickScript = "var s = `line 1\n" + "String bt = \"\\`\\`\\`\";\n" + "line 3`;";
+        JexlScript compiled = ENGINE.createScript(escapedBacktickScript);
+        assertNotNull(compiled);
+
+        String multilineStr = "var x = " + '"' + "line1" + "\n" + "line2" + '"' + ";";
+        JexlErrorAnalyzer.ErrorAnalysis multilineAnalysis = analyzeScript(multilineStr);
+        assertEquals("MULTILINE_QUOTED_STRING", multilineAnalysis.errorCategory());
+
+        String constWithBalancedBacktick = "const s = `a\nb`;";
+        JexlErrorAnalyzer.ErrorAnalysis constWithBacktickAnalysis = JexlErrorAnalyzer.analyze(
+                new JexlException.Parsing(new JexlInfo("script", 1, 1), "const"), constWithBalancedBacktick, true);
+        assertEquals("JS_CONST_LET", constWithBacktickAnalysis.errorCategory());
+
+        String multilineWithBalancedBacktick = "var ok = `a`; var x = " + '"' + "line1" + "\n" + "line2" + '"' + ";";
+        JexlErrorAnalyzer.ErrorAnalysis multilineWithBacktickAnalysis = analyzeScript(multilineWithBalancedBacktick);
+        assertEquals("MULTILINE_QUOTED_STRING", multilineWithBacktickAnalysis.errorCategory());
+    }
+
+    @Test
     void testRuntimeErrorClassifications() {
         JexlErrorAnalyzer.ErrorAnalysis arrayAdd = analyzeScript("var list = ['a', 'b']; list.add('c');");
         assertEquals("ARRAY_ADD_MUTATION", arrayAdd.errorCategory());

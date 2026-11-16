@@ -23,6 +23,7 @@ public final class JexlErrorAnalyzer {
     private static final int MAX_CAUSE_CHAIN_DEPTH = 8;
     private static final int MAX_CAUSE_MESSAGE_LENGTH = 500;
     private static final int MAX_APP_STACK_FRAMES = 10;
+    private static final char BACKTICK = '`';
 
     private static final Pattern JS_CONST_LET_PATTERN = Pattern.compile("\\b(const|let)\\s+[A-Za-z_$]");
     private static final Pattern BRACKET_MAP_LITERAL_PATTERN = Pattern
@@ -32,12 +33,17 @@ public final class JexlErrorAnalyzer {
     private static final Pattern OBJECT_SHORTHAND_PATTERN = Pattern
             .compile("\\{\\s*[A-Za-z_]\\w*\\s*(,|\\})|,\\s*[A-Za-z_]\\w*\\s*\\}");
     private static final Pattern ARRAY_TYPE_PATTERN = Pattern.compile("(\\[\\]|Object\\[|\\bArray\\b)");
+    private static final Pattern BROKEN_BACKTICK_CONCAT_PATTERN = Pattern
+            .compile("`\\s*\\+\\s*['\"]`|`['\"]\\s*\\+\\s*`");
+    private static final String UNESCAPED_BACKTICK_HINT = "Literal backticks inside JEXL 3 backtick strings (`...`) must be escaped as \\` (and literal ${...} as \\${...}). Do not break out of backticks with + \"`...`\" +.";
+
     /**
      * Structured classification of common JEXL syntax and runtime errors.
      */
     public enum ErrorCategory {
-        MULTILINE_QUOTED_STRING, JS_CONST_LET, BRACKET_MAP_LITERAL, JS_FOR_OF_OR_IN, STRICT_EQUALITY, OBJECT_SHORTHAND,
-        ARRAY_ADD_MUTATION, UNSOLVABLE_METHOD, UNSOLVABLE_PROPERTY, SYNTAX_ERROR, RUNTIME_ERROR
+        MULTILINE_QUOTED_STRING, UNESCAPED_BACKTICK, JS_CONST_LET, BRACKET_MAP_LITERAL, JS_FOR_OF_OR_IN,
+        STRICT_EQUALITY, OBJECT_SHORTHAND, ARRAY_ADD_MUTATION, UNSOLVABLE_METHOD, UNSOLVABLE_PROPERTY, SYNTAX_ERROR,
+        RUNTIME_ERROR
     }
 
     /**
@@ -149,6 +155,11 @@ public final class JexlErrorAnalyzer {
         List<String> appStackFrames = extractAppStackFrames(throwable, rootCause);
 
         if (jexlException instanceof JexlException.Tokenization) {
+            if (isUnescapedBacktickInTemplate(inspectionTarget, script, line)) {
+                return new ErrorAnalysis(ErrorCategory.UNESCAPED_BACKTICK.name(), line, column, offendingLine,
+                        errorMessage, UNESCAPED_BACKTICK_HINT, syntaxStage, exceptionType, rootCauseType, causeChain,
+                        appStackFrames);
+            }
             if (isMultilineQuotedString(inspectionTarget, errorMessage)) {
                 return new ErrorAnalysis(ErrorCategory.MULTILINE_QUOTED_STRING.name(), line, column, offendingLine,
                         errorMessage,
@@ -159,6 +170,11 @@ public final class JexlErrorAnalyzer {
 
         if (syntaxStage || jexlException instanceof JexlException.Parsing
                 || jexlException instanceof JexlException.Tokenization) {
+            if (isUnescapedBacktickInTemplate(inspectionTarget, script, line)) {
+                return new ErrorAnalysis(ErrorCategory.UNESCAPED_BACKTICK.name(), line, column, offendingLine,
+                        errorMessage, UNESCAPED_BACKTICK_HINT, syntaxStage, exceptionType, rootCauseType, causeChain,
+                        appStackFrames);
+            }
             ErrorCategory syntaxCategory = classifySyntaxPattern(inspectionTarget);
             if (syntaxCategory != null) {
                 return new ErrorAnalysis(syntaxCategory.name(), line, column, offendingLine, errorMessage,
@@ -287,7 +303,51 @@ public final class JexlErrorAnalyzer {
         return StringUtils.defaultString(script);
     }
 
+    static boolean isUnescapedBacktickInTemplate(String inspectionTarget, @Nullable String script,
+            @Nullable Integer line) {
+        if (StringUtils.isNotBlank(inspectionTarget)
+                && BROKEN_BACKTICK_CONCAT_PATTERN.matcher(inspectionTarget).find()) {
+            return true;
+        }
+        if (StringUtils.isBlank(script)) {
+            return StringUtils.isNotBlank(inspectionTarget) && countUnescapedBackticks(inspectionTarget) % 2 != 0;
+        }
+        if (line != null && line > 1) {
+            String[] lines = script.split("\r?\n", -1);
+            int precedingLineCount = Math.min(line - 1, lines.length);
+            int precedingBackticks = 0;
+            for (int i = 0; i < precedingLineCount; i++) {
+                precedingBackticks += countUnescapedBackticks(lines[i]);
+            }
+            if (precedingBackticks % 2 != 0) {
+                return true;
+            }
+        }
+        return countUnescapedBackticks(script) % 2 != 0;
+    }
+
+    private static int countUnescapedBackticks(String text) {
+        int count = 0;
+        for (int i = 0; i < text.length(); i++) {
+            if (text.charAt(i) == BACKTICK) {
+                int backslashes = 0;
+                int j = i - 1;
+                while (j >= 0 && text.charAt(j) == '\\') {
+                    backslashes++;
+                    j--;
+                }
+                if (backslashes % 2 == 0) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
     private static boolean isMultilineQuotedString(String target, String errorMessage) {
+        if (countUnescapedBackticks(target) % 2 != 0) {
+            return false;
+        }
         if (target.indexOf('"') >= 0 || target.indexOf('\'') >= 0) {
             return true;
         }
@@ -320,6 +380,7 @@ public final class JexlErrorAnalyzer {
 
     private static String hintForSyntaxCategory(ErrorCategory category) {
         return switch (category) {
+            case UNESCAPED_BACKTICK -> UNESCAPED_BACKTICK_HINT;
             case JS_CONST_LET ->
                 "JEXL 3 does not support 'const' or 'let'. Use 'var' to declare variables (e.g., var x = 1;).";
             case BRACKET_MAP_LITERAL ->
