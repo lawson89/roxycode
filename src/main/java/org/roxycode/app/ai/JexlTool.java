@@ -3,9 +3,10 @@ package org.roxycode.app.ai;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.jexl3.JexlArithmetic;
 import org.apache.commons.jexl3.JexlBuilder;
 import org.apache.commons.jexl3.JexlContext;
 import org.apache.commons.jexl3.JexlEngine;
@@ -13,6 +14,7 @@ import org.apache.commons.jexl3.JexlFeatures;
 import org.apache.commons.jexl3.JexlScript;
 import org.apache.commons.jexl3.MapContext;
 import org.apache.commons.jexl3.introspection.JexlUberspect;
+import org.apache.commons.lang3.StringUtils;
 import org.jspecify.annotations.Nullable;
 import org.roxycode.app.events.AgentActivityEvent;
 import org.roxycode.app.events.AgentTurnEvent;
@@ -39,6 +41,7 @@ public class JexlTool {
     private static final Logger log = LoggerFactory.getLogger(JexlTool.class);
     private static final String AGENT_NAME = "Roxy";
     private static final String RESULT_KEY = "result";
+    private static final long NANOS_PER_MILLI = 1_000_000L;
     public static final String MAX_TURNS_EXCEEDED_PREFIX = "Autonomous execution stopped: Maximum tool turns (";
 
     private final JexlFeatures jexlFeatures;
@@ -53,7 +56,8 @@ public class JexlTool {
             @Nullable ObjectMapper objectMapper, @Nullable SettingsService settingsService) {
         this.jexlFeatures = new JexlFeatures().newInstance(false).fatArrow(true);
         this.baseUberspect = new JexlBuilder().features(this.jexlFeatures).permissions(AgentJexlPermissions.INSTANCE)
-                .strict(true).silent(false).safe(false).create().getUberspect();
+                .arithmetic(new MutableMapJexlArithmetic(true)).strict(true).silent(false).safe(false).create()
+                .getUberspect();
         this.registry = registry;
         this.eventPublisher = eventPublisher;
         this.mapper = Objects.requireNonNullElse(objectMapper, AiConfig.SHARED_OBJECT_MAPPER);
@@ -112,6 +116,7 @@ public class JexlTool {
         JexlContext context = new MapContext(bindings);
         JexlEngine jexl = createEngine(context);
 
+        long startNanos = System.nanoTime();
         boolean cancelled = false;
         try {
             JexlScript jexlScript;
@@ -120,28 +125,29 @@ public class JexlTool {
             } catch (Exception e) {
                 JexlErrorAnalyzer.ErrorAnalysis analysis = JexlErrorAnalyzer.analyze(e, script, true);
                 log.warn("JEXL Syntax Error [{}] intercepted: {}", analysis.errorCategory(), analysis.error());
-                publishToolEvent(conversationId, phase, script, null, false, analysis);
+                publishToolEvent(ctx, currentTurn, elapsedMillis(startNanos), script, null, false, analysis);
                 return toJsonError(analysis);
             }
 
             Object result = jexlScript.execute(context);
             ExceptionUtils.checkInterrupted("JEXL execution cancelled");
-            publishToolEvent(conversationId, phase, script, result, true, null);
+            publishToolEvent(ctx, currentTurn, elapsedMillis(startNanos), script, result, true, null);
             return serializeResult(result);
         } catch (Exception e) {
             if (ExceptionUtils.isCancellation(e)) {
                 cancelled = true;
                 try {
-                    publishToolEvent(conversationId, phase, script, null, false,
+                    publishToolEvent(ctx, currentTurn, elapsedMillis(startNanos), script, null, false,
                             new JexlErrorAnalyzer.ErrorAnalysis(JexlErrorAnalyzer.ErrorCategory.RUNTIME_ERROR.name(),
-                                    null, null, null, "Execution cancelled", null));
+                                    null, null, null, "Execution cancelled", null, false, e.getClass().getName(), null,
+                                    List.of(), List.of()));
                 } catch (Exception ignored) {
                 }
                 throw ExceptionUtils.asCancellationException(e, "JEXL execution cancelled");
             }
             JexlErrorAnalyzer.ErrorAnalysis analysis = JexlErrorAnalyzer.analyze(e, script, false);
             log.warn("Error executing JEXL script [{}]: {}", analysis.errorCategory(), analysis.error());
-            publishToolEvent(conversationId, phase, script, null, false, analysis);
+            publishToolEvent(ctx, currentTurn, elapsedMillis(startNanos), script, null, false, analysis);
             return toJsonError(analysis);
         } finally {
             if (!cancelled && !Thread.currentThread().isInterrupted() && eventPublisher != null) {
@@ -150,8 +156,13 @@ public class JexlTool {
         }
     }
 
+    private static long elapsedMillis(long startNanos) {
+        return Math.max(0L, (System.nanoTime() - startNanos) / NANOS_PER_MILLI);
+    }
+
     private JexlEngine createEngine(JexlContext context) {
         return new JexlBuilder().features(jexlFeatures).permissions(AgentJexlPermissions.INSTANCE)
+                .arithmetic(new MutableMapJexlArithmetic(true))
                 .uberspect(new JsPolyfillUberspect(baseUberspect, context)).strict(true).silent(false).safe(false)
                 .create();
     }
@@ -189,20 +200,23 @@ public class JexlTool {
         return mapper.writeValueAsString(Map.of(RESULT_KEY, StringUtils.defaultIfBlank(rawOutput, "<empty result>")));
     }
 
-    private void publishToolEvent(String conversationId, WorkflowPhase phase, String script, @Nullable Object result,
-            boolean success, JexlErrorAnalyzer.@Nullable ErrorAnalysis analysis) {
+    private void publishToolEvent(TurnToolContext ctx, int turnNumber, long durationMs, String script,
+            @Nullable Object result, boolean success, JexlErrorAnalyzer.@Nullable ErrorAnalysis analysis) {
         if (eventPublisher == null) {
             return;
         }
-        String phaseName = phase.name();
+        String convId = ctx.conversationId();
+        String phaseName = ctx.phase().name();
+        String modelName = ctx.modelName();
         if (analysis == null) {
-            eventPublisher.publishEvent(new ToolExecutionEvent(conversationId, phaseName, script, result, success, null,
-                    null, null, null, null, null));
+            eventPublisher.publishEvent(new ToolExecutionEvent(convId, phaseName, script, result, success, null, null,
+                    null, null, null, null, modelName, turnNumber, durationMs, false, null, null, null, null));
             return;
         }
-        eventPublisher.publishEvent(new ToolExecutionEvent(conversationId, phaseName, script, result, success,
+        eventPublisher.publishEvent(new ToolExecutionEvent(convId, phaseName, script, result, success,
                 analysis.errorCategory(), analysis.line(), analysis.column(), analysis.offendingLine(),
-                analysis.error(), analysis.hint()));
+                analysis.error(), analysis.hint(), modelName, turnNumber, durationMs, analysis.syntaxStage(),
+                analysis.exceptionType(), analysis.rootCauseType(), analysis.causeChain(), analysis.appStackFrames()));
     }
 
     private String toJsonError(JexlErrorAnalyzer.ErrorAnalysis analysis) {
@@ -228,6 +242,77 @@ public class JexlTool {
         } catch (Exception e) {
             return """
                     {"error":"Internal Error during error serialization"}""";
+        }
+    }
+
+    /**
+     * Custom {@link JexlArithmetic} that ensures empty map literals {@code {}} construct a mutable
+     * {@link LinkedHashMap} rather than an immutable empty map, enabling {@code map[key] = value} assignments.
+     */
+    private static final class MutableMapJexlArithmetic extends JexlArithmetic {
+
+        private MutableMapJexlArithmetic(boolean astrict) {
+            super(astrict);
+        }
+
+        @Override
+        public MapBuilder mapBuilder(int size, boolean extended) {
+            return new MutableMapBuilder(size);
+        }
+
+        @Override
+        public MapBuilder mapBuilder(int size) {
+            return new MutableMapBuilder(size);
+        }
+
+        @Override
+        public SetBuilder setBuilder(int size, boolean extended) {
+            if (size == 0) {
+                return new EmptyBracesAsMutableMapBuilder();
+            }
+            return super.setBuilder(size, extended);
+        }
+
+        @Override
+        public SetBuilder setBuilder(int size) {
+            if (size == 0) {
+                return new EmptyBracesAsMutableMapBuilder();
+            }
+            return super.setBuilder(size);
+        }
+    }
+
+    private static final class EmptyBracesAsMutableMapBuilder implements JexlArithmetic.SetBuilder {
+
+        private final Map<Object, Object> map = new LinkedHashMap<>();
+
+        @Override
+        public void add(Object value) {
+            // Only used for empty '{}' literals where no elements are added
+        }
+
+        @Override
+        public Object create() {
+            return map;
+        }
+    }
+
+    private static final class MutableMapBuilder implements JexlArithmetic.MapBuilder {
+
+        private final Map<Object, Object> map;
+
+        private MutableMapBuilder(int size) {
+            this.map = new LinkedHashMap<>(Math.max(size, 0));
+        }
+
+        @Override
+        public void put(Object key, Object value) {
+            map.put(key, value);
+        }
+
+        @Override
+        public Object create() {
+            return map;
         }
     }
 }

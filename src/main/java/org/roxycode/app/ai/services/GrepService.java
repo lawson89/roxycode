@@ -112,7 +112,7 @@ public class GrepService {
         return findMatchingFiles(pattern, CURRENT_DIR, null);
     }
 
-    @AgentDoc(value = "Finds all files in the specified path and file glob containing matches for the given regex pattern using RipGrep (-l), returning a deduplicated list of relative file paths (prefixed with '@<alias>/' when searching a reference folder).", examples = {
+    @AgentDoc(value = "Finds all files in the specified path and file glob containing matches for the given regex pattern using RipGrep (-l), returning a deduplicated list of paths already relative to the project root (do not prepend relativePath again; prefixed with '@<alias>/' when searching a reference folder).", examples = {
             "grepService.findMatchingFiles('@AgentService', 'src', '*.java')",
             "grepService.findMatchingFiles('class Invoice', '@billing-service', '*.java')"})
     public List<String> findMatchingFiles(@AgentDoc(DOC_REGEX_PATTERN) String pattern,
@@ -267,12 +267,12 @@ public class GrepService {
                 + " more lines omitted; narrow your search with a more specific pattern, relativePath, or filePattern)";
     }
 
-    @AgentDoc(value = "Lists files in the project root using RipGrep, respecting .gitignore.", examples = "grepService.listFiles()")
+    @AgentDoc(value = "Lists files in the project root using RipGrep, respecting .gitignore. Returned paths are relative to the project root and can be passed directly to fileReadService or symbolService.", examples = "grepService.listFiles()")
     public List<String> listFiles() {
         return listFiles(CURRENT_DIR);
     }
 
-    @AgentDoc(value = "Lists files in a specific directory or mounted @<alias> reference folder using RipGrep, respecting .gitignore.", examples = {
+    @AgentDoc(value = "Lists files in a specific directory or mounted @<alias> reference folder using RipGrep, respecting .gitignore. Returned paths are already relative to the project root (e.g., listFiles('src/main') returns 'src/main/App.java')—pass them directly to fileReadService/symbolService without prepending relativePath again.", examples = {
             "grepService.listFiles('src/main')", "grepService.listFiles('@billing-service')"})
     public List<String> listFiles(
             @AgentDoc("The directory path relative to the project root (or '@<alias>' / '@<alias>/subpath')") String relativePath) {

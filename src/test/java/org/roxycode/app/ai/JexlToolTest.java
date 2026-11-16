@@ -479,4 +479,45 @@ public class JexlToolTest {
         assertEquals(10, node.get("parsedX").asInt());
         assertTrue(node.get("prettyJson").asBoolean());
     }
+
+    @Test
+    public void testEmptyMapBracketAssignmentInStrictModeAndFailureDiagnostics() throws Exception {
+        AtomicReference<ToolExecutionEvent> capturedEvent = new AtomicReference<>();
+        JexlTool tool = createTool(capturedEvent, new TestService());
+
+        String raw = tool.executeJexl("""
+                var counts = {};
+                for (var f : ['a/b.txt', 'c/d.txt']) {
+                    counts[f] = f.length;
+                }
+                counts;
+                """);
+        JsonNode node = AiConfig.SHARED_OBJECT_MAPPER.readTree(raw);
+        assertTrue(node.has("a/b.txt"), "Expected map key in response, got: " + raw);
+        assertEquals(7, node.get("a/b.txt").asInt());
+        assertEquals(7, node.get("c/d.txt").asInt());
+
+        TurnToolContext turnCtx = new TurnToolContext("conv-diag", WorkflowPhase.CODE, new AtomicInteger(2),
+                "gemini-4-hydrogen");
+        String failRaw = tool.executeJexl("testService.throwIllegalArgument();", new ToolContext(turnCtx.toMap()));
+        JsonNode failNode = AiConfig.SHARED_OBJECT_MAPPER.readTree(failRaw);
+        assertTrue(failNode.get("error").asText().contains("missing.txt"));
+
+        ToolExecutionEvent event = capturedEvent.get();
+        assertNotNull(event);
+        assertFalse(event.success());
+        assertEquals("conv-diag", event.conversationId());
+        assertEquals("CODE", event.phase());
+        assertEquals("gemini-4-hydrogen", event.modelName());
+        assertEquals(3, event.turnNumber());
+        assertNotNull(event.durationMs());
+        assertTrue(event.durationMs() >= 0L);
+        assertFalse(event.syntaxStage());
+        assertNotNull(event.exceptionType());
+        assertEquals(IllegalArgumentException.class.getName(), event.rootCauseType());
+        assertNotNull(event.causeChain());
+        assertFalse(event.causeChain().isEmpty());
+        assertNotNull(event.appStackFrames());
+        assertFalse(event.appStackFrames().isEmpty());
+    }
 }

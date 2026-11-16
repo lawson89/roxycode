@@ -96,4 +96,25 @@ class JexlErrorAnalyzerTest {
         assertEquals("Bad argument", runtime.error());
         assertNotNull(runtime.hint());
     }
+
+    @Test
+    void testDiagnosticMetadataPopulation() {
+        JexlErrorAnalyzer.ErrorAnalysis syntax = analyzeScript("if (");
+        assertTrue(syntax.syntaxStage());
+        assertNotNull(syntax.exceptionType());
+        assertNotNull(syntax.rootCauseType());
+        assertFalse(syntax.causeChain().isEmpty());
+
+        IllegalStateException wrapped = new IllegalStateException("outer failure",
+                new IllegalArgumentException("inner failure"));
+        JexlErrorAnalyzer.ErrorAnalysis runtime = JexlErrorAnalyzer.analyze(wrapped, "svc.op()", false);
+        assertFalse(runtime.syntaxStage());
+        assertEquals(IllegalStateException.class.getName(), runtime.exceptionType());
+        assertEquals(IllegalArgumentException.class.getName(), runtime.rootCauseType());
+        assertEquals(2, runtime.causeChain().size());
+        assertTrue(runtime.causeChain().get(0).contains("IllegalStateException: outer failure"));
+        assertTrue(runtime.causeChain().get(1).contains("IllegalArgumentException: inner failure"));
+        assertFalse(runtime.appStackFrames().isEmpty());
+        assertTrue(runtime.appStackFrames().get(0).startsWith("JexlErrorAnalyzerTest."));
+    }
 }

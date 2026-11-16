@@ -40,8 +40,27 @@
         </encoder>
     </appender>
 
+    <appender name="JEXL_ERRORS_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/jexl-errors.jsonl</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.FixedWindowRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/jexl-errors.%i.jsonl</fileNamePattern>
+            <minIndex>1</minIndex>
+            <maxIndex>3</maxIndex>
+        </rollingPolicy>
+        <triggeringPolicy class="ch.qos.logback.core.rolling.SizeBasedTriggeringPolicy">
+            <maxFileSize>25MB</maxFileSize>
+        </triggeringPolicy>
+        <encoder>
+            <pattern>%msg%n</pattern>
+        </encoder>
+    </appender>
+
     <logger name="org.roxycode.toolcalls" level="INFO" additivity="false">
         <appender-ref ref="TOOLCALLS_FILE" />
+    </logger>
+
+    <logger name="org.roxycode.jexl.errors" level="INFO" additivity="false">
+        <appender-ref ref="JEXL_ERRORS_FILE" />
     </logger>
 
     <root level="INFO">

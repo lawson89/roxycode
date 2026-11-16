@@ -71,10 +71,10 @@ To reduce syntax friction, RoxyCode's JEXL sandbox includes built-in JS-style pr
 ### Iterating over Collections
 JEXL handles Java Lists and Arrays seamlessly in iteration.
 ```javascript
-var files = grepService.listFiles('src');
+var files = grepService.listFiles('src'); // Returned paths are already project-root-relative (e.g., 'src/App.java')
 
 for (var file : files) {
-    // process file path
+    // Pass 'file' directly to fileReadService/symbolService; do NOT prepend 'src/' again
 }
 
 if (files.size() > 0) {

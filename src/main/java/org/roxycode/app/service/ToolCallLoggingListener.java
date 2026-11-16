@@ -17,13 +17,17 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 /**
- * Listens for tool execution events and logs every invocation as a single-line JSONL record.
+ * Listens for tool execution events, logs every invocation to {@code toolcalls.jsonl}, and logs failed invocations with
+ * full diagnostic context to {@code jexl-errors.jsonl}.
  */
 @Component
+@SuppressWarnings("PMD.MoreThanOneLogger")
 public class ToolCallLoggingListener {
     public static final String TOOL_CALLS_LOGGER_NAME = "org.roxycode.toolcalls";
+    public static final String JEXL_ERRORS_LOGGER_NAME = "org.roxycode.jexl.errors";
     private final ObjectMapper mapper;
     private final Logger toolCallLogger;
+    private final Logger jexlErrorsLogger;
 
     /**
      * Creates a listener using the Spring-managed {@link ObjectMapper}.
@@ -33,16 +37,23 @@ public class ToolCallLoggingListener {
      */
     @Autowired
     public ToolCallLoggingListener(@Nullable ObjectMapper objectMapper) {
-        this(objectMapper, LoggerFactory.getLogger(TOOL_CALLS_LOGGER_NAME));
+        this(objectMapper, LoggerFactory.getLogger(TOOL_CALLS_LOGGER_NAME),
+                LoggerFactory.getLogger(JEXL_ERRORS_LOGGER_NAME));
     }
 
     ToolCallLoggingListener(@Nullable ObjectMapper objectMapper, Logger toolCallLogger) {
+        this(objectMapper, toolCallLogger, LoggerFactory.getLogger(JEXL_ERRORS_LOGGER_NAME));
+    }
+
+    ToolCallLoggingListener(@Nullable ObjectMapper objectMapper, Logger toolCallLogger, Logger jexlErrorsLogger) {
         this.mapper = Objects.requireNonNullElse(objectMapper, AiConfig.SHARED_OBJECT_MAPPER);
         this.toolCallLogger = Objects.requireNonNull(toolCallLogger, "toolCallLogger must not be null");
+        this.jexlErrorsLogger = Objects.requireNonNull(jexlErrorsLogger, "jexlErrorsLogger must not be null");
     }
 
     /**
-     * Serializes the {@link ToolExecutionEvent} into a single-line JSON object and writes it to the tool calls logger.
+     * Serializes the {@link ToolExecutionEvent} into a single-line JSON object and writes it to the tool calls logger,
+     * and writes failed executions with rich diagnostics to the JEXL errors logger.
      *
      * @param event
      *            the completed tool execution event
@@ -57,6 +68,7 @@ public class ToolCallLoggingListener {
             toolCallLogger.info(jsonLine);
         } else {
             toolCallLogger.warn(jsonLine);
+            jexlErrorsLogger.warn(serializeErrorEvent(event));
         }
     }
 
@@ -85,6 +97,34 @@ public class ToolCallLoggingListener {
                 return "{\"timestamp\":\"" + Instant.now()
                         + "\",\"success\":false,\"error\":\"Failed to serialize tool call log\"}";
             }
+        }
+    }
+
+    String serializeErrorEvent(ToolExecutionEvent event) {
+        Map<String, Object> record = new LinkedHashMap<>();
+        record.put("timestamp", Instant.now().toString());
+        record.put("conversationId", Objects.requireNonNullElse(event.conversationId(), "unknown"));
+        record.put("phase", event.phase());
+        record.put("modelName", event.modelName());
+        record.put("turnNumber", event.turnNumber());
+        record.put("durationMs", event.durationMs());
+        record.put("syntaxStage", event.syntaxStage());
+        record.put("errorCategory", event.errorCategory());
+        record.put("exceptionType", event.exceptionType());
+        record.put("rootCauseType", event.rootCauseType());
+        record.put("causeChain", event.causeChain());
+        record.put("appStackFrames", event.appStackFrames());
+        record.put("line", event.line());
+        record.put("column", event.column());
+        record.put("offendingLine", event.offendingLine());
+        record.put("error", event.error());
+        record.put("hint", event.hint());
+        record.put("script", StringUtils.defaultString(event.script()));
+
+        try {
+            return mapper.writeValueAsString(record);
+        } catch (JsonProcessingException e) {
+            return "{\"timestamp\":\"" + Instant.now() + "\",\"error\":\"Failed to serialize jexl error log\"}";
         }
     }
 }

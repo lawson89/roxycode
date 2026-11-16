@@ -373,7 +373,8 @@ public class AiService implements AutoCloseable {
             List<byte[]> pdfs) {
         ExceptionUtils.checkInterrupted("Chat turn interrupted before start");
         WorkflowPhase resolvedPhase = Objects.requireNonNullElseGet(phase, planService::getCurrentPhase);
-        TurnToolContext turnContext = new TurnToolContext(conversationId, resolvedPhase, new AtomicInteger(0));
+        TurnToolContext turnContext = new TurnToolContext(conversationId, resolvedPhase, new AtomicInteger(0),
+                resolveEffectiveGeminiModel(resolvedPhase));
         String convId = turnContext.conversationId();
         try {
             ChatClient.ChatClientRequestSpec promptSpec = buildPrompt(turnContext, message, images, pdfs);
@@ -403,7 +404,8 @@ public class AiService implements AutoCloseable {
                     recordAutoContinueInterruption(convId, completedToolTurns);
                     WorkflowPhase currentPhase = Objects.requireNonNullElseGet(planService.getCurrentPhase(),
                             () -> resolvedPhase);
-                    turnContext = new TurnToolContext(convId, currentPhase, turnContext.turnCounter());
+                    turnContext = new TurnToolContext(convId, currentPhase, turnContext.turnCounter(),
+                            resolveEffectiveGeminiModel(currentPhase));
                     promptSpec = buildPrompt(turnContext, buildAutoContinuePrompt(completedToolTurns), null, null);
                 }
             }
@@ -890,8 +892,13 @@ public class AiService implements AutoCloseable {
     private ChatClient.ChatClientRequestSpec buildPrompt(TurnToolContext turnContext, String message,
             List<byte[]> images, List<byte[]> pdfs) {
         WorkflowPhase currentPhase = turnContext.phase();
-        GoogleGenAiChatOptions.Builder optionsBuilder = GoogleGenAiChatOptions.builder()
-                .model(resolveEffectiveGeminiModel(currentPhase));
+        String resolvedModel = resolveEffectiveGeminiModel(currentPhase);
+        TurnToolContext effectiveTurnContext = turnContext;
+        if (StringUtils.isBlank(turnContext.modelName())) {
+            effectiveTurnContext = new TurnToolContext(turnContext.conversationId(), currentPhase,
+                    turnContext.turnCounter(), resolvedModel);
+        }
+        GoogleGenAiChatOptions.Builder optionsBuilder = GoogleGenAiChatOptions.builder().model(resolvedModel);
         resolveEffectiveThinkingLevel().applyTo(optionsBuilder);
         ChatClient.ChatClientRequestSpec promptSpec = chatClient.prompt()
                 .system(promptService.buildSystemPrompt(currentPhase)).user(u -> {
@@ -913,8 +920,8 @@ public class AiService implements AutoCloseable {
         promptSpec.tools(jexlTool);
         promptSpec.advisors(MessageChatMemoryAdvisor.builder(chatMemory).build(),
                 ToolCallingAdvisor.builder().toolCallingManager(toolCallingManager).build(),
-                new AutoNudgeAdvisor(turnContext, chatMemory, eventPublisher));
-        return promptSpec.toolContext(turnContext.toMap());
+                new AutoNudgeAdvisor(effectiveTurnContext, chatMemory, eventPublisher));
+        return promptSpec.toolContext(effectiveTurnContext.toMap());
     }
 
     private void publishTurnComplete(String conversationId, int totalTurns, String result) {

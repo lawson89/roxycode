@@ -110,12 +110,29 @@ public final class JsPolyfillUberspect implements JexlUberspect {
 
     @Override
     public JexlPropertySet getPropertySet(Object obj, Object identifier, Object arg) {
-        return delegate.getPropertySet(obj, identifier, arg);
+        return resolvePropertySet(obj, identifier, arg, null);
     }
 
     @Override
     public JexlPropertySet getPropertySet(List<PropertyResolver> resolvers, Object obj, Object identifier, Object arg) {
-        return delegate.getPropertySet(resolvers, obj, identifier, arg);
+        return resolvePropertySet(obj, identifier, arg, resolvers);
+    }
+
+    private JexlPropertySet resolvePropertySet(Object obj, Object identifier, Object arg,
+            List<PropertyResolver> resolvers) {
+        JexlPropertySet standard;
+        if (resolvers == null) {
+            standard = delegate.getPropertySet(obj, identifier, arg);
+        } else {
+            standard = delegate.getPropertySet(resolvers, obj, identifier, arg);
+        }
+        if (standard != null) {
+            return standard;
+        }
+        if (obj instanceof Map<?, ?>) {
+            return new MapPropertySet(identifier);
+        }
+        return null;
     }
 
     @Override
@@ -520,6 +537,44 @@ public final class JsPolyfillUberspect implements JexlUberspect {
                 return length;
             }
             return JexlEngine.TRY_FAILED;
+        }
+
+        @Override
+        public boolean tryFailed(Object rval) {
+            return rval == JexlEngine.TRY_FAILED;
+        }
+
+        @Override
+        public boolean isCacheable() {
+            return true;
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static final class MapPropertySet implements JexlPropertySet {
+
+        private final Object key;
+
+        private MapPropertySet(Object key) {
+            this.key = key;
+        }
+
+        @Override
+        public Object invoke(Object obj, Object arg) {
+            if (!(obj instanceof Map<?, ?>)) {
+                throw new IllegalArgumentException("Unsupported map property set target: " + obj);
+            }
+            ((Map<Object, Object>) obj).put(key, arg);
+            return arg;
+        }
+
+        @Override
+        public Object tryInvoke(Object obj, Object targetKey, Object arg) {
+            if (!(obj instanceof Map<?, ?>)) {
+                return JexlEngine.TRY_FAILED;
+            }
+            ((Map<Object, Object>) obj).put(targetKey, arg);
+            return arg;
         }
 
         @Override

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -77,5 +78,51 @@ class ToolCallLoggingListenerTest {
         verify(mockLogger).info(infoCaptor.capture());
         JsonNode node = AiConfig.SHARED_OBJECT_MAPPER.readTree(infoCaptor.getValue());
         assertTrue(node.get("result").asText().contains("unserializable-marker"));
+    }
+
+    @Test
+    void testLogsFailureDiagnosticsToJexlErrorsLoggerWithoutResult() throws Exception {
+        Logger mockToolCallLogger = mock(Logger.class);
+        Logger mockErrorsLogger = mock(Logger.class);
+        ToolCallLoggingListener listener = new ToolCallLoggingListener(AiConfig.SHARED_OBJECT_MAPPER,
+                mockToolCallLogger, mockErrorsLogger);
+
+        ToolExecutionEvent successEvent = new ToolExecutionEvent("qa:1", "EXPLORE", "1 + 1", 2, true, null, null, null,
+                null, null, null, "gemini-4-carbon", 1, 5L, false, null, null, null, null);
+        listener.onToolExecution(successEvent);
+        verify(mockToolCallLogger, times(1)).info(anyString());
+        verifyNoInteractions(mockErrorsLogger);
+
+        ToolExecutionEvent failureEvent = new ToolExecutionEvent("task:9", "CODE", "counts[f] = 1;", null, false,
+                "UNSOLVABLE_PROPERTY", 1, 7, "counts[f] = 1;", "undefined property 'a/b'", "Check map",
+                "gemini-4-hydrogen", 3, 42L, false, "org.apache.commons.jexl3.JexlException$Property",
+                "java.lang.IllegalArgumentException",
+                List.of("Property: undefined property", "IllegalArgumentException: bad"),
+                List.of("JexlTool.executeJexl(JexlTool.java:132)"));
+        listener.onToolExecution(failureEvent);
+
+        verify(mockToolCallLogger, times(1)).warn(anyString());
+        ArgumentCaptor<String> errCaptor = ArgumentCaptor.forClass(String.class);
+        verify(mockErrorsLogger, times(1)).warn(errCaptor.capture());
+
+        String errJson = errCaptor.getValue();
+        assertFalse(errJson.contains("\n"));
+        JsonNode errNode = AiConfig.SHARED_OBJECT_MAPPER.readTree(errJson);
+        assertFalse(errNode.has("result"));
+        assertEquals("task:9", errNode.get("conversationId").asText());
+        assertEquals("CODE", errNode.get("phase").asText());
+        assertEquals("gemini-4-hydrogen", errNode.get("modelName").asText());
+        assertEquals(3, errNode.get("turnNumber").asInt());
+        assertEquals(42L, errNode.get("durationMs").asLong());
+        assertFalse(errNode.get("syntaxStage").asBoolean());
+        assertEquals("UNSOLVABLE_PROPERTY", errNode.get("errorCategory").asText());
+        assertEquals("org.apache.commons.jexl3.JexlException$Property", errNode.get("exceptionType").asText());
+        assertEquals("java.lang.IllegalArgumentException", errNode.get("rootCauseType").asText());
+        assertEquals(2, errNode.get("causeChain").size());
+        assertEquals(1, errNode.get("appStackFrames").size());
+        assertEquals("counts[f] = 1;", errNode.get("offendingLine").asText());
+        assertEquals("undefined property 'a/b'", errNode.get("error").asText());
+        assertEquals("Check map", errNode.get("hint").asText());
+        assertEquals("counts[f] = 1;", errNode.get("script").asText());
     }
 }
