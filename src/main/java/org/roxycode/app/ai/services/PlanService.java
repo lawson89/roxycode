@@ -29,6 +29,7 @@ import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.events.WorkflowTransitionEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
+import org.roxycode.app.ui.PlantUmlRenderer;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.PathUtils;
@@ -221,6 +222,13 @@ public class PlanService {
             throw new IllegalArgumentException("Error: Plan cannot be null.");
         }
         ImplementationPlan normalized = plan.withNormalizedStepsFrom(currentPlan);
+        validateMarkdownDiagrams("goal", normalized.goal());
+        for (String requirement : normalized.requirements()) {
+            validateMarkdownDiagrams("requirement", requirement);
+        }
+        for (ImplementationPlan.TechStep step : normalized.technicalSteps()) {
+            validateMarkdownDiagrams("technicalStep", step.description());
+        }
         if (unassignedTaskUsage.hasUsage()) {
             normalized = normalized.withUsageSummary(normalized.usageSummary().merge(unassignedTaskUsage));
             unassignedTaskUsage = ImplementationPlan.UsageSummary.EMPTY;
@@ -253,6 +261,25 @@ public class PlanService {
         return description.trim();
     }
 
+    private static void validateMarkdownDiagrams(String fieldLabel, String markdown) {
+        if (StringUtils.isBlank(markdown)) {
+            return;
+        }
+        List<PlantUmlRenderer.DiagramValidationError> errors = PlantUmlRenderer.validateMarkdownDiagrams(markdown);
+        if (errors.isEmpty()) {
+            return;
+        }
+        PlantUmlRenderer.DiagramValidationError first = errors.get(0);
+        StringBuilder sb = new StringBuilder();
+        sb.append("Error: Invalid diagram syntax in ").append(fieldLabel).append(" (block #").append(first.blockIndex())
+                .append(", ").append(first.language()).append(", line ").append(first.lineNumber());
+        if (StringUtils.isNotBlank(first.offendingLine())) {
+            sb.append(" [").append(first.offendingLine()).append("]");
+        }
+        sb.append("): ").append(first.errorMessage());
+        throw new IllegalArgumentException(sb.toString());
+    }
+
     @AgentDoc(value = "Adds a new technical implementation step to the current plan (inserted before trailing verification gates) without losing progress on completed steps.", phases = {
             "PLAN", "CODE", "REVIEW"}, examples = {"planService.addTechnicalStep('Add unit tests for edge cases')"})
     public synchronized String addTechnicalStep(
@@ -260,6 +287,7 @@ public class PlanService {
         requirePhase("addTechnicalStep");
         ensureActivePlan();
         String trimmed = requireNonBlankDescription(description);
+        validateMarkdownDiagrams("technicalStep", trimmed);
         List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
         int insertIndex = steps.size();
         while (insertIndex > 0
@@ -279,6 +307,7 @@ public class PlanService {
         requirePhase("updateTechnicalStep");
         ensureActivePlan();
         String trimmed = requireNonBlankDescription(description);
+        validateMarkdownDiagrams("technicalStep", trimmed);
         List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
         validateStepIndex(index, steps.size());
         steps.set(index, new ImplementationPlan.TechStep(trimmed, steps.get(index).completed()));

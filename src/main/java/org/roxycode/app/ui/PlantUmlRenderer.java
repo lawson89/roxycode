@@ -17,8 +17,16 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import com.vladsch.flexmark.ast.FencedCodeBlock;
+import com.vladsch.flexmark.ast.IndentedCodeBlock;
+import com.vladsch.flexmark.util.ast.Block;
+import com.vladsch.flexmark.util.ast.Node;
+import java.io.StringReader;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -27,15 +35,27 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
+import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import net.sourceforge.plantuml.BlockUml;
+import net.sourceforge.plantuml.ErrorUml;
 import net.sourceforge.plantuml.FileFormat;
 import net.sourceforge.plantuml.FileFormatOption;
 import net.sourceforge.plantuml.SourceStringReader;
 import net.sourceforge.plantuml.core.DiagramDescription;
+import net.sourceforge.plantuml.error.PSystemError;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.xml.sax.ErrorHandler;
+import org.xml.sax.InputSource;
+import org.xml.sax.SAXParseException;
 
-final class PlantUmlRenderer {
+/**
+ * Renders and validates PlantUML, ditaa, and SVG diagram blocks embedded in Markdown content.
+ */
+public final class PlantUmlRenderer {
 
     private static final Logger log = LoggerFactory.getLogger(PlantUmlRenderer.class);
 
@@ -90,6 +110,7 @@ final class PlantUmlRenderer {
     private static final char DOUBLE_QUOTE_CHAR = '"';
     private static final char BACKSLASH_CHAR = '\\';
     private static final char NEWLINE_CHAR = '\n';
+    private static final String CRLF = "\r\n";
 
     private static final int DITAA_FONT_SIZE = 13;
     private static final int DITAA_PADDING_X = 16;
@@ -236,6 +257,24 @@ final class PlantUmlRenderer {
     public record DiagramCacheKey(String normalizedCode, boolean dark, String language) {
     }
 
+    /**
+     * Structured diagnostic describing a syntax or rendering error in a Markdown diagram block.
+     *
+     * @param blockIndex
+     *            1-based index of the diagram block in the Markdown document
+     * @param language
+     *            resolved diagram language (e.g., {@code plantuml}, {@code svg}, {@code ditaa})
+     * @param lineNumber
+     *            1-based line number within the diagram block where the error occurred
+     * @param offendingLine
+     *            source line at or near the reported error
+     * @param errorMessage
+     *            human-readable parser or renderer diagnostic message
+     */
+    public record DiagramValidationError(int blockIndex, String language, int lineNumber, String offendingLine,
+            String errorMessage) {
+    }
+
     private static final Cache<DiagramCacheKey, Optional<String>> DIAGRAM_CACHE = Caffeine.newBuilder()
             .maximumSize(MAX_CACHE_ENTRIES).build();
 
@@ -303,6 +342,286 @@ final class PlantUmlRenderer {
             return trimmed.substring(0, spaceIdx);
         }
         return trimmed;
+    }
+
+    /**
+     * Parses Markdown content and validates every embedded PlantUML, ditaa, and SVG diagram block.
+     *
+     * @param markdown
+     *            the Markdown text to inspect
+     * @return a list of structured validation errors, or an empty list if all diagrams are valid or none exist
+     */
+    public static List<DiagramValidationError> validateMarkdownDiagrams(String markdown) {
+        if (markdown == null || markdown.isBlank()) {
+            return List.of();
+        }
+        String lower = markdown.toLowerCase(Locale.ROOT);
+        if (!markdown.contains("```") && !markdown.contains("~~~") && !lower.contains(START_PREFIX)
+                && !lower.contains(START_SVG_TAG)) {
+            return List.of();
+        }
+        Node document = SwingHtmlUtils.getMarkdownParser().parse(markdown);
+        List<DiagramValidationError> errors = new ArrayList<>();
+        int[] blockCounter = new int[]{0};
+        collectAndValidateDiagramNodes(document, blockCounter, errors);
+        return errors;
+    }
+
+    private static void collectAndValidateDiagramNodes(Node node, int[] blockCounter,
+            List<DiagramValidationError> errors) {
+        if (node == null) {
+            return;
+        }
+        if (node instanceof FencedCodeBlock || node instanceof IndentedCodeBlock) {
+            String code = ((Block) node).getContentChars().toString();
+            String language = "";
+            if (node instanceof FencedCodeBlock fenced) {
+                language = fenced.getInfo().toString();
+            }
+            if (isDiagramBlock(language, code)) {
+                blockCounter[0] = blockCounter[0] + 1;
+                validateSingleDiagramBlock(blockCounter[0], language, code, errors);
+            }
+            return;
+        }
+        Node child = node.getFirstChild();
+        while (child != null) {
+            collectAndValidateDiagramNodes(child, blockCounter, errors);
+            child = child.getNext();
+        }
+    }
+
+    private static void validateSingleDiagramBlock(int blockIndex, String language, String code,
+            List<DiagramValidationError> errors) {
+        String effectiveLanguage = resolveEffectiveLanguage(language, code);
+        if (LANG_DITAA.equals(effectiveLanguage)) {
+            String ditaaSource = buildPlantUmlSource(code, LANG_DITAA, false);
+            if (extractDiagramBody(ditaaSource).isBlank()) {
+                errors.add(new DiagramValidationError(blockIndex, effectiveLanguage, 1, "",
+                        "ditaa diagram block is empty."));
+            }
+            return;
+        }
+        if (LANG_SVG.equals(effectiveLanguage)) {
+            validateSvgBlock(blockIndex, code, errors);
+            return;
+        }
+        validatePlantUmlBlock(blockIndex, effectiveLanguage, code, errors);
+    }
+
+    private static void validatePlantUmlBlock(int blockIndex, String effectiveLanguage, String code,
+            List<DiagramValidationError> errors) {
+        String source = buildPlantUmlSource(code, effectiveLanguage, false);
+        if (source.isBlank()) {
+            errors.add(new DiagramValidationError(blockIndex, effectiveLanguage, 1, "",
+                    "PlantUML diagram block is empty."));
+            return;
+        }
+        try {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            SourceStringReader reader = new SourceStringReader(source);
+            DiagramDescription description = reader.outputImage(baos, new FileFormatOption(FileFormat.PNG));
+            byte[] pngBytes = baos.toByteArray();
+            if (isValidPlantUmlOutput(description, pngBytes)) {
+                return;
+            }
+            DiagramValidationError parsedError = extractPlantUmlError(blockIndex, effectiveLanguage, code, source,
+                    reader, description);
+            errors.add(parsedError);
+        } catch (IOException e) {
+            errors.add(new DiagramValidationError(blockIndex, effectiveLanguage, 1, firstNonBlankLine(code),
+                    "Failed to validate PlantUML diagram: " + e.getMessage()));
+        }
+    }
+
+    private static DiagramValidationError extractPlantUmlError(int blockIndex, String effectiveLanguage, String rawCode,
+            String builtSource, SourceStringReader reader, DiagramDescription description) {
+        String normalizedRaw = rawCode.replace(CRLF, "\n").replace('\r', '\n').trim();
+        String[] rawLines = normalizedRaw.split("\n", -1);
+        String[] builtLines = builtSource.split("\n", -1);
+        int injectedHeaderLines = countInjectedPlantUmlHeaderLines(builtLines, normalizedRaw);
+
+        for (BlockUml block : reader.getBlocks()) {
+            if (block.getDiagram() instanceof PSystemError pSystemError) {
+                int builtZeroBasedLine = 0;
+                if (pSystemError.getLineLocation() != null) {
+                    builtZeroBasedLine = pSystemError.getLineLocation().getPosition();
+                }
+                int mappedLineNumber = mapBuiltLineToOriginal(builtZeroBasedLine, injectedHeaderLines,
+                        normalizedRaw.toLowerCase(Locale.ROOT).startsWith(START_PREFIX), rawLines.length);
+                String offendingLine = resolveOffendingLine(rawLines, builtLines, mappedLineNumber, builtZeroBasedLine);
+                String errorMsg = extractPSystemErrorMessage(pSystemError, description);
+                return new DiagramValidationError(blockIndex, effectiveLanguage, mappedLineNumber, offendingLine,
+                        errorMsg);
+            }
+        }
+        String descText = "Unknown PlantUML syntax error";
+        if (description != null && description.getDescription() != null && !description.getDescription().isBlank()) {
+            descText = description.getDescription();
+        }
+        return new DiagramValidationError(blockIndex, effectiveLanguage, 1, firstNonBlankLine(rawCode), descText);
+    }
+
+    private static int countInjectedPlantUmlHeaderLines(String[] builtLines, String normalizedRaw) {
+        boolean hadStartPrefix = normalizedRaw.toLowerCase(Locale.ROOT).startsWith(START_PREFIX);
+        if (!hadStartPrefix) {
+            // Wrapped with @startuml + injected directives before original line 1
+            int count = 0;
+            String firstOriginalLine = "";
+            String[] rawLines = normalizedRaw.split("\n", -1);
+            if (rawLines.length > 0) {
+                firstOriginalLine = rawLines[0].trim();
+            }
+            for (int i = 1; i < builtLines.length; i++) {
+                if (builtLines[i].trim().equals(firstOriginalLine)) {
+                    return count;
+                }
+                count++;
+            }
+            return 0;
+        }
+        String[] rawLines = normalizedRaw.split("\n", -1);
+        int minLinesWithBody = 2;
+        if (rawLines.length < minLinesWithBody) {
+            return 0;
+        }
+        String secondOriginalLine = rawLines[1].trim();
+        int count = 0;
+        for (int i = 1; i < builtLines.length; i++) {
+            if (builtLines[i].trim().equals(secondOriginalLine)) {
+                return count;
+            }
+            count++;
+        }
+        return 0;
+    }
+
+    private static int mapBuiltLineToOriginal(int builtZeroBasedLine, int injectedHeaderLines, boolean hadStartPrefix,
+            int rawLineCount) {
+        int originalLine;
+        if (hadStartPrefix) {
+            if (builtZeroBasedLine <= injectedHeaderLines) {
+                originalLine = 1;
+            } else {
+                originalLine = builtZeroBasedLine - injectedHeaderLines + 1;
+            }
+        } else {
+            if (builtZeroBasedLine <= injectedHeaderLines) {
+                originalLine = 1;
+            } else {
+                originalLine = builtZeroBasedLine - injectedHeaderLines;
+            }
+        }
+        int clampedLine = Math.max(1, originalLine);
+        if (rawLineCount > 0 && clampedLine > rawLineCount) {
+            return rawLineCount;
+        }
+        return clampedLine;
+    }
+
+    private static String resolveOffendingLine(String[] rawLines, String[] builtLines, int mappedLineNumber,
+            int builtZeroBasedLine) {
+        int rawIdx = mappedLineNumber - 1;
+        if (rawIdx >= 0 && rawIdx < rawLines.length && !rawLines[rawIdx].isBlank()) {
+            return rawLines[rawIdx].trim();
+        }
+        if (builtZeroBasedLine >= 0 && builtZeroBasedLine < builtLines.length) {
+            return builtLines[builtZeroBasedLine].trim();
+        }
+        return "";
+    }
+
+    private static String extractPSystemErrorMessage(PSystemError pSystemError, DiagramDescription description) {
+        Collection<ErrorUml> errorsUml = pSystemError.getErrorsUml();
+        if (errorsUml != null && !errorsUml.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            for (ErrorUml err : errorsUml) {
+                if (err != null && err.getError() != null && !err.getError().isBlank()) {
+                    if (sb.length() > 0) {
+                        sb.append("; ");
+                    }
+                    sb.append(err.getError().trim());
+                }
+            }
+            if (sb.length() > 0) {
+                return sb.toString();
+            }
+        }
+        if (description != null && description.getDescription() != null && !description.getDescription().isBlank()) {
+            return description.getDescription();
+        }
+        return "PlantUML syntax error";
+    }
+
+    private static void validateSvgBlock(int blockIndex, String code, List<DiagramValidationError> errors) {
+        if (code == null || code.isBlank()) {
+            errors.add(new DiagramValidationError(blockIndex, LANG_SVG, 1, "", "SVG diagram block is empty."));
+            return;
+        }
+        String normalizedSvg = normalizeRootSvgAttributes(code.trim());
+        String[] svgLines = normalizedSvg.replace(CRLF, "\n").replace('\r', '\n').split("\n", -1);
+        try {
+            DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
+            factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
+            factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
+            factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
+            factory.setXIncludeAware(false);
+            factory.setExpandEntityReferences(false);
+            DocumentBuilder builder = factory.newDocumentBuilder();
+            builder.setErrorHandler(new ErrorHandler() {
+                @Override
+                public void warning(SAXParseException exception) {
+                    // Ignore warnings
+                }
+
+                @Override
+                public void error(SAXParseException exception) throws SAXParseException {
+                    throw exception;
+                }
+
+                @Override
+                public void fatalError(SAXParseException exception) throws SAXParseException {
+                    throw exception;
+                }
+            });
+            builder.parse(new InputSource(new StringReader(normalizedSvg)));
+        } catch (SAXParseException e) {
+            int lineNum = Math.max(1, e.getLineNumber());
+            String offending = "";
+            if (lineNum - 1 >= 0 && lineNum - 1 < svgLines.length) {
+                offending = svgLines[lineNum - 1].trim();
+            }
+            String message = e.getMessage();
+            if (message == null || message.isBlank()) {
+                message = "Malformed SVG XML";
+            }
+            errors.add(new DiagramValidationError(blockIndex, LANG_SVG, lineNum, offending, message));
+            return;
+        } catch (Exception e) {
+            errors.add(new DiagramValidationError(blockIndex, LANG_SVG, 1, firstNonBlankLine(normalizedSvg),
+                    "Invalid SVG XML: " + e.getMessage()));
+            return;
+        }
+        SVGLoader loader = new SVGLoader();
+        SVGDocument svgDocument = loader.load(new ByteArrayInputStream(normalizedSvg.getBytes(StandardCharsets.UTF_8)));
+        if (svgDocument == null) {
+            errors.add(new DiagramValidationError(blockIndex, LANG_SVG, 1, firstNonBlankLine(normalizedSvg),
+                    "SVGLoader failed to parse SVG document."));
+        }
+    }
+
+    private static String firstNonBlankLine(String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        String[] lines = text.replace(CRLF, "\n").replace('\r', '\n').split("\n", -1);
+        for (String line : lines) {
+            if (!line.isBlank()) {
+                return line.trim();
+            }
+        }
+        return "";
     }
 
     public static Optional<String> renderDiagramHtml(String code, String language, boolean darkTheme) {
@@ -477,6 +796,11 @@ final class PlantUmlRenderer {
         if (isValidPlantUmlOutput(description, pngBytes)) {
             return pngBytes;
         }
+        String descText = null;
+        if (description != null) {
+            descText = description.getDescription();
+        }
+        log.debug("PlantUML syntax error: {}", descText);
         if (isDitaaSource(key)) {
             String ditaaBody = extractDiagramBody(key.normalizedCode());
             if (!ditaaBody.isBlank()) {

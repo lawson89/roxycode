@@ -8,6 +8,7 @@ import com.github.weisj.jsvg.geometry.size.FloatSize;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -331,6 +332,119 @@ class PlantUmlRendererTest {
         Optional<String> renderedHtml = PlantUmlRenderer.renderDiagramHtml(svgWithPlaceholders, "svg", true);
         assertTrue(renderedHtml.isPresent());
         assertContainsAll(renderedHtml.get(), "width=" + '"' + "640" + '"', "height=" + '"' + "320" + '"');
+    }
+
+    @Test
+    void testValidateMarkdownDiagramsDetectsMixedSyntaxAndMalformedSvgAndPassesValidBlocks() {
+        assertTrue(PlantUmlRenderer.validateMarkdownDiagrams(null).isEmpty());
+        assertTrue(PlantUmlRenderer.validateMarkdownDiagrams("Plain text without diagrams").isEmpty());
+        assertTrue(PlantUmlRenderer.validateMarkdownDiagrams("""
+                ```java
+                class Demo {}
+                ```
+                """).isEmpty());
+
+        String validMarkdown = """
+                ```plantuml
+                @startuml
+                Alice -> Bob : Hi
+                @enduml
+                ```
+
+                ```ditaa
+                +---+
+                | A |
+                +---+
+                ```
+
+                ```svg
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" width="100" height="50">
+                  <rect x="0" y="0" width="100" height="50" fill="#1E293B"/>
+                </svg>
+                ```
+                """;
+        assertTrue(PlantUmlRenderer.validateMarkdownDiagrams(validMarkdown).isEmpty());
+
+        String brokenMixedPlantUml = """
+                Here is the diagram:
+                ```plantuml
+                @startuml
+                skinparam shadowing false
+
+                package "CleanBasic Source" {
+                  card "dim box = mailbox[str]()\ndim j = start job work(1, box)\nj.wait()" as src
+                }
+
+                package "Transpiled Go (codegen.go)" {
+                  class "cbMailbox[T any]" {
+                    - mu : sync.Mutex
+                    + ensure() chan T
+                  }
+
+                  class "cbJob[T any]" {
+                    - done : chan struct{}
+                    + wait() (T, error)
+                  }
+                }
+
+                src -down-> "cbMailbox[T any]"
+                src -down-> "cbJob[T any]"
+                @enduml
+                ```
+                """;
+        List<PlantUmlRenderer.DiagramValidationError> mixedErrors = PlantUmlRenderer
+                .validateMarkdownDiagrams(brokenMixedPlantUml);
+        assertEquals(1, mixedErrors.size());
+        PlantUmlRenderer.DiagramValidationError mixedErr = mixedErrors.get(0);
+        assertEquals(1, mixedErr.blockIndex());
+        assertEquals("plantuml", mixedErr.language());
+        assertTrue(mixedErr.lineNumber() >= 1);
+        assertFalse(mixedErr.errorMessage().isBlank());
+
+        String fixedMixedPlantUml = """
+                ```plantuml
+                @startuml
+                allowmixing
+                skinparam shadowing false
+
+                package "CleanBasic Source" {
+                  card "dim box = mailbox[str]()\ndim j = start job work(1, box)\nj.wait()" as src
+                }
+
+                package "Transpiled Go (codegen.go)" {
+                  class "cbMailbox[T any]" as cbMailbox {
+                    - mu : sync.Mutex
+                    + ensure() chan T
+                  }
+
+                  class "cbJob[T any]" as cbJob {
+                    - done : chan struct{}
+                    + wait() (T, error)
+                  }
+                }
+
+                src -down-> cbMailbox
+                src -down-> cbJob
+                @enduml
+                ```
+                """;
+        assertTrue(PlantUmlRenderer.validateMarkdownDiagrams(fixedMixedPlantUml).isEmpty());
+
+        String malformedSvg = """
+                ```svg
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 50" width="100" height="50">
+                  <rect x="0" y="0" width="100" height="50" fill="#1E293B">
+                </svg>
+                ```
+                """;
+        List<PlantUmlRenderer.DiagramValidationError> svgErrors = PlantUmlRenderer
+                .validateMarkdownDiagrams(malformedSvg);
+        assertEquals(1, svgErrors.size());
+        PlantUmlRenderer.DiagramValidationError svgErr = svgErrors.get(0);
+        assertEquals(1, svgErr.blockIndex());
+        assertEquals("svg", svgErr.language());
+        assertTrue(svgErr.lineNumber() >= 2);
+        assertFalse(svgErr.errorMessage().isBlank());
     }
 
     private static Path extractImagePath(String html) throws Exception {
