@@ -121,6 +121,8 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     private transient ProjectService projectService;
     private transient Runnable onViewPlanAction;
     private String defaultPlaceholderText = DEFAULT_PLACEHOLDER_TEXT;
+    private String lastAppliedPlaceholderText;
+    private Boolean lastActivityWarningAccent;
     private boolean loading = false;
     private final List<Consumer<Boolean>> loadingListeners = new ArrayList<>();
 
@@ -450,6 +452,10 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         panel.add(activityStepLabel, HIDEMODE_3);
         panel.add(activityElapsedLabel, "alignx right");
 
+        int stripHeight = Math.max(26, activityStatusLabel.getPreferredSize().height + 12);
+        panel.setMinimumSize(new Dimension(0, stripHeight));
+        panel.setPreferredSize(new Dimension(0, stripHeight));
+
         activityAnimationTimer = new Timer(ACTIVITY_ANIMATION_DELAY_MS, e -> advanceActivityIconFrame());
         activityElapsedTimer = new Timer(ACTIVITY_ELAPSED_DELAY_MS, e -> updateElapsedTimeLabel());
         applyActivityStripStyling(panel);
@@ -479,6 +485,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         if (activityIcon != null) {
             activityIcon.setIconColor(accent);
         }
+        lastActivityWarningAccent = isRateLimitOrRetryStatus(currentText);
     }
 
     void advanceActivityIconFrame() {
@@ -561,6 +568,8 @@ final class ChatPanel extends JPanel implements AutoCloseable {
 
     void updateActivityStatus(String statusText) {
         String text = Objects.requireNonNullElse(statusText, "").trim();
+        boolean stripWasVisible = activityStripPanel.isVisible();
+        boolean stepWasVisible = activityStepLabel.isVisible();
         activityStatusLabel.setText(text);
         if (text.isEmpty()) {
             activityStatusLabel.setToolTipText(null);
@@ -568,11 +577,16 @@ final class ChatPanel extends JPanel implements AutoCloseable {
             activityStatusLabel.setToolTipText(text);
         }
         updateActivityStepLabel();
-        applyActivityStripStyling(activityStripPanel);
+        boolean warningAccent = isRateLimitOrRetryStatus(text);
+        if (lastActivityWarningAccent == null || lastActivityWarningAccent.booleanValue() != warningAccent) {
+            applyActivityStripStyling(activityStripPanel);
+        }
         if (loading && !text.isEmpty() && !activityStripPanel.isVisible()) {
             activityStripPanel.setVisible(true);
         }
-        activityStripPanel.revalidate();
+        if (stripWasVisible != activityStripPanel.isVisible() || stepWasVisible != activityStepLabel.isVisible()) {
+            activityStripPanel.revalidate();
+        }
         activityStripPanel.repaint();
     }
 
@@ -695,7 +709,10 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         } else {
             placeholder = defaultPlaceholderText;
         }
-        inputArea.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, placeholder);
+        if (!Objects.equals(lastAppliedPlaceholderText, placeholder)) {
+            lastAppliedPlaceholderText = placeholder;
+            inputArea.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, placeholder);
+        }
     }
 
     public void setOnViewPlanAction(Runnable action) {
@@ -870,6 +887,12 @@ final class ChatPanel extends JPanel implements AutoCloseable {
 
     void appendPreRenderedMessage(String role, String content, String renderedHtml, String extractedToml) {
         outputArea.appendPreRenderedMessage(role, content, renderedHtml, extractedToml, List.of());
+    }
+
+    void appendPreRenderedMessage(String role, String content, String renderedHtml, String extractedToml,
+            List<String> thumbnailBase64List, List<String> attachedFileNames) {
+        outputArea.appendPreRenderedMessage(role, content, renderedHtml, extractedToml, thumbnailBase64List,
+                attachedFileNames);
     }
 
     void appendToolLog(String output, boolean success, String error) {

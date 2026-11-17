@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import javax.swing.*;
 import javax.swing.text.BadLocationException;
@@ -46,6 +47,7 @@ final class BuildConfigPanel extends JPanel {
 
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(BuildConfigPanel.class);
+    static final int SUMMARY_DEBOUNCE_MS = 200;
     static final int TAB_INDEX_BUILD_CONFIG = 0;
     static final int TAB_INDEX_AI_MODEL = 1;
     static final String TAB_BUILD_CONFIG_TITLE = "Build Configuration";
@@ -134,6 +136,7 @@ final class BuildConfigPanel extends JPanel {
     final JLabel statusLabel;
     final Timer statusTimer;
     final Timer saveFeedbackTimer;
+    final Timer summaryDebounceTimer;
     private Timer copyTomlTimer;
 
     private final transient UiComponents.UiGuard textUpdateGuard = new UiComponents.UiGuard();
@@ -145,7 +148,9 @@ final class BuildConfigPanel extends JPanel {
     String detectedTemplateId = DEFAULT_TEMPLATE_ID;
     private transient Runnable onConfirmSavedCallback;
     private transient Consumer<String> onConfigureWithRoxyCallback;
+    private final transient AtomicLong summaryParseGeneration = new AtomicLong();
     transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
+    transient CompletableFuture<?> summaryParseFuture = CompletableFuture.completedFuture(null);
 
     @Autowired
     public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
@@ -172,6 +177,8 @@ final class BuildConfigPanel extends JPanel {
         saveButton.setIconTextGap(6);
 
         saveFeedbackTimer = createFeedbackTimer(this::updateSaveButtonState);
+        summaryDebounceTimer = new Timer(SUMMARY_DEBOUNCE_MS, e -> updateSummaryCards());
+        summaryDebounceTimer.setRepeats(false);
 
         buildTabPanel.add(UiComponents.createPageHeader(titleLabel, subtitleLabel, saveButton), "growx, wmin 0, wrap");
 
@@ -398,6 +405,7 @@ final class BuildConfigPanel extends JPanel {
     }
 
     private void setEditorContentProgrammatically(String content, boolean updateSavedBaseline) {
+        UiComponents.stopTimer(summaryDebounceTimer);
         String normalizedContent = StringUtils.defaultString(content);
         textUpdateGuard.run(() -> {
             textArea.setText(normalizedContent);
@@ -566,9 +574,14 @@ final class BuildConfigPanel extends JPanel {
                     SAVE_BUTTON_BASE_STYLE + UiComponents.GREEN_BUTTON_STYLE);
             return;
         }
+        if (hasUnsavedChanges()) {
+            applyButtonPresentation(saveButton, SAVE_BUTTON_TEXT, Codicons.SAVE,
+                    SAVE_BUTTON_BASE_STYLE + UiComponents.ACCENT_BUTTON_STYLE);
+            return;
+        }
         boolean confirmed = projectService != null && projectService.hasActiveProject()
                 && projectService.isBuildConfirmed();
-        if (confirmed && !hasUnsavedChanges()) {
+        if (confirmed) {
             applyButtonPresentation(saveButton, CONFIRMED_BUTTON_TEXT, Codicons.CHECK,
                     SAVE_BUTTON_BASE_STYLE + UiComponents.SUBTLE_GREEN_BUTTON_STYLE);
         } else {
@@ -600,21 +613,45 @@ final class BuildConfigPanel extends JPanel {
         return GenericBuildToolService.parseConfigStatic(rawToml);
     }
 
+    private record SummaryParseResult(@Nullable GenericBuildToolService.BuildConfig config,
+            @Nullable String errorMessage) {
+    }
+
     void updateSummaryCards() {
         if (pipelineSummaryCard == null) {
             return;
         }
-        String rawToml = "";
+        final String rawToml;
         if (textArea != null) {
             rawToml = StringUtils.defaultString(textArea.getText());
+        } else {
+            rawToml = "";
+        }
+        long generation = summaryParseGeneration.incrementAndGet();
+        summaryParseFuture = Edt.supplyAsync(() -> {
+            try {
+                return new SummaryParseResult(parseEditorToml(rawToml), null);
+            } catch (IOException ex) {
+                return new SummaryParseResult(null, StringUtils.defaultIfBlank(ex.getMessage(), "Invalid TOML syntax"));
+            }
+        }, result -> {
+            if (generation == summaryParseGeneration.get()) {
+                applySummaryParseResult(result);
+            }
+        });
+    }
+
+    private void applySummaryParseResult(SummaryParseResult result) {
+        if (pipelineSummaryCard == null) {
+            return;
         }
         Color accentColor = SwingHtmlUtils.getAccentColor();
         Color mutedColor = SwingHtmlUtils.getMutedForegroundColor();
         Color greenColor = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
         Color redColor = SwingHtmlUtils.getUiColor(new Color(0xdc, 0x35, 0x45), "Actions.Red");
 
-        try {
-            GenericBuildToolService.BuildConfig config = parseEditorToml(rawToml);
+        GenericBuildToolService.BuildConfig config = result.config();
+        if (config != null) {
             updatePipelineCard(config.commands(), accentColor, mutedColor);
             updateSandboxCard(config.sandbox(), accentColor, greenColor, mutedColor);
             updateParserCard(config.parse(), accentColor, mutedColor);
@@ -625,8 +662,8 @@ final class BuildConfigPanel extends JPanel {
             }
             String envSummary = config.env().size() + " env var(s)";
             syntaxSummaryCard.updateContent(timeout + "s • Valid TOML", envSummary, greenColor, Codicons.CHECK);
-        } catch (IOException ex) {
-            String errorMsg = StringUtils.defaultIfBlank(ex.getMessage(), "Invalid TOML syntax");
+        } else {
+            String errorMsg = StringUtils.defaultIfBlank(result.errorMessage(), "Invalid TOML syntax");
             pipelineSummaryCard.updateContent("— / 8 configured", "Fix TOML syntax to inspect", mutedColor,
                     Codicons.TERMINAL);
             sandboxSummaryCard.updateContent("Unavailable", "Fix TOML syntax to inspect", mutedColor, Codicons.SHIELD);
@@ -783,6 +820,7 @@ final class BuildConfigPanel extends JPanel {
         Edt.run(() -> {
             UiComponents.stopTimer(saveFeedbackTimer);
             UiComponents.stopTimer(modelSaveFeedbackTimer);
+            UiComponents.stopTimer(summaryDebounceTimer);
             clearBuildStatus();
             clearModelStatus();
             loadProfileOptions();
@@ -795,11 +833,16 @@ final class BuildConfigPanel extends JPanel {
     private void onTomlTextEdited() {
         if (!textUpdateGuard.isActive()) {
             String currentText = StringUtils.defaultString(textArea.getText());
+            boolean wasEdited = textEditedByUser;
             textEditedByUser = !Objects.equals(currentText, savedTomlContent);
             UiComponents.stopTimer(saveFeedbackTimer);
             clearBuildStatus();
-            updateSummaryCards();
-            updateBannerState();
+            if (textEditedByUser) {
+                updateSaveButtonState();
+            } else if (wasEdited) {
+                updateBannerState();
+            }
+            summaryDebounceTimer.restart();
         }
     }
 
@@ -841,6 +884,7 @@ final class BuildConfigPanel extends JPanel {
 
     CompletableFuture<Void> saveConfig() {
         UiComponents.stopTimer(saveFeedbackTimer);
+        UiComponents.stopTimer(summaryDebounceTimer);
         if (buildToolService == null && projectService == null) {
             CompletableFuture<Void> done = CompletableFuture.completedFuture(null);
             lastAsyncFuture = done;
@@ -866,6 +910,7 @@ final class BuildConfigPanel extends JPanel {
             textEditedByUser = false;
             saveFeedbackTimer.restart();
             updateBannerState();
+            updateSummaryCards();
             showBuildStatus("Configuration saved successfully!", true);
             if (!wasBuildConfirmed && onConfirmSavedCallback != null) {
                 onConfirmSavedCallback.run();

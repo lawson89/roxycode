@@ -18,6 +18,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.atomic.AtomicLong;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.JLabel;
@@ -30,6 +31,7 @@ import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Document;
 import javax.swing.text.Segment;
@@ -51,6 +53,7 @@ public final class FileMentionPopup {
 
     static final int MAX_RESULTS = 15;
     static final int MAX_VISIBLE_ROWS = 8;
+    static final int EVALUATION_DEBOUNCE_MS = 60;
     static final int POPUP_VERTICAL_GAP = 4;
     static final int MIN_POPUP_WIDTH = 320;
     static final int MAX_POPUP_WIDTH = 520;
@@ -194,11 +197,20 @@ public final class FileMentionPopup {
     private volatile List<FileCandidate> cachedCandidates = List.of();
 
     private boolean popupActive = false;
-    private boolean evaluationScheduled = false;
     private String lastEvaluatedText;
     private int lastEvaluatedCaret = -1;
     private final UiComponents.UiGuard inputTextUpdateGuard = new UiComponents.UiGuard();
     private MentionToken activeToken;
+    final Timer evaluationDebounceTimer;
+    private final AtomicLong evaluationGeneration = new AtomicLong();
+    CompletableFuture<Void> lastEvaluationFuture = CompletableFuture.completedFuture(null);
+    private int lastPopupWidth = -1;
+    private int lastPopupHeight = -1;
+    private int lastPopupRowCount = -1;
+    private int lastPopupX = Integer.MIN_VALUE;
+    private int lastPopupY = Integer.MIN_VALUE;
+    private Component lastAnchorComponent;
+    int packCountForTesting = 0;
 
     public FileMentionPopup(JTextArea inputArea, JScrollPane inputScrollPane) {
         this.inputArea = inputArea;
@@ -232,6 +244,9 @@ public final class FileMentionPopup {
         this.popupMenu.setBorder(SwingHtmlUtils.createThemeMatteBorder(1, 1, 1, 1));
         this.popupMenu.add(popupScrollPane);
 
+        this.evaluationDebounceTimer = new Timer(EVALUATION_DEBOUNCE_MS, e -> evaluateCurrentInput());
+        this.evaluationDebounceTimer.setRepeats(false);
+
         installInputListeners();
     }
 
@@ -247,13 +262,19 @@ public final class FileMentionPopup {
     }
 
     private void onInputChanged() {
-        if (!inputTextUpdateGuard.isActive() && !evaluationScheduled) {
-            evaluationScheduled = true;
-            SwingUtilities.invokeLater(() -> {
-                evaluationScheduled = false;
-                evaluateCurrentInput();
-            });
+        if (inputTextUpdateGuard.isActive() || !inputArea.isEnabled() || !inputArea.isEditable()) {
+            evaluationDebounceTimer.stop();
+            hidePopup();
+            return;
         }
+        int caretOffset = inputArea.getCaretPosition();
+        MentionToken token = extractMentionTokenFromDocument(inputArea.getDocument(), caretOffset);
+        if (token == null) {
+            evaluationDebounceTimer.stop();
+            hidePopup();
+            return;
+        }
+        evaluationDebounceTimer.restart();
     }
 
     static MentionToken extractMentionTokenFromDocument(Document doc, int caretOffset) {
@@ -519,7 +540,7 @@ public final class FileMentionPopup {
     }
 
     void evaluateCurrentInput() {
-        evaluationScheduled = false;
+        evaluationDebounceTimer.stop();
         if (inputTextUpdateGuard.isActive() || !inputArea.isEnabled() || !inputArea.isEditable()) {
             hidePopup();
             return;
@@ -551,11 +572,30 @@ public final class FileMentionPopup {
             }
         }
 
-        List<MentionItem> matches = rankCandidates(cachedCandidates, token, memoryService);
+        List<FileCandidate> candidatesSnapshot = cachedCandidates;
+        MemoryService memoryServiceSnapshot = memoryService;
+        long generation = evaluationGeneration.incrementAndGet();
+        lastEvaluationFuture = CompletableFuture
+                .supplyAsync(() -> rankCandidates(candidatesSnapshot, token, memoryServiceSnapshot), backgroundExecutor)
+                .thenAcceptAsync(matches -> applyRankedMatches(matches, token, caretOffset, generation), Edt.EXECUTOR);
+    }
+
+    private void applyRankedMatches(List<MentionItem> matches, MentionToken expectedToken, int expectedCaret,
+            long generation) {
+        if (generation != evaluationGeneration.get() || inputTextUpdateGuard.isActive() || !inputArea.isEnabled()
+                || !inputArea.isEditable()) {
+            return;
+        }
+        int currentCaret = inputArea.getCaretPosition();
+        MentionToken currentToken = extractMentionTokenFromDocument(inputArea.getDocument(), currentCaret);
+        if (currentCaret != expectedCaret || !Objects.equals(expectedToken, currentToken)) {
+            return;
+        }
         if (matches.isEmpty()) {
             popupActive = false;
             listModel.clear();
             popupMenu.setVisible(false);
+            resetPopupLayoutCache();
             return;
         }
 
@@ -563,7 +603,7 @@ public final class FileMentionPopup {
         updateCandidateListModel(matches);
         popupActive = true;
 
-        updatePopupPosition(token.startOffset());
+        updatePopupPosition(expectedToken.startOffset());
         if (!wasVisible) {
             SwingUtilities.invokeLater(() -> {
                 if (popupActive && activeToken != null) {
@@ -590,7 +630,8 @@ public final class FileMentionPopup {
         if (!popupActive || listModel.isEmpty()) {
             return;
         }
-        candidateList.setVisibleRowCount(Math.min(MAX_VISIBLE_ROWS, Math.max(1, listModel.size())));
+        int rowCount = Math.min(MAX_VISIBLE_ROWS, Math.max(1, listModel.size()));
+        candidateList.setVisibleRowCount(rowCount);
         popupScrollPane.setPreferredSize(null);
         Dimension listPref = popupScrollPane.getPreferredSize();
         int availableWidth = resolveAvailableBounds().width;
@@ -599,16 +640,48 @@ public final class FileMentionPopup {
             targetWidth = Math.min(targetWidth, availableWidth);
         }
         popupScrollPane.setPreferredSize(new Dimension(targetWidth, listPref.height));
-        popupMenu.pack();
+        if (rowCount != lastPopupRowCount || targetWidth != lastPopupWidth || listPref.height != lastPopupHeight) {
+            popupMenu.pack();
+            packCountForTesting++;
+            lastPopupRowCount = rowCount;
+            lastPopupWidth = targetWidth;
+            lastPopupHeight = listPref.height;
+        }
 
         Dimension popupSize = popupMenu.getPreferredSize();
-        Point location = computePopupLocation(atTokenStartOffset, popupSize.width, popupSize.height);
-
+        Component anchor = null;
+        int showX = 0;
+        int showY = 0;
         if (inputArea.isShowing()) {
-            popupMenu.show(inputArea, location.x, location.y);
+            Point location = computePopupLocation(atTokenStartOffset, popupSize.width, popupSize.height);
+            anchor = inputArea;
+            showX = location.x;
+            showY = location.y;
         } else if (inputScrollPane != null && inputScrollPane.isShowing()) {
-            popupMenu.show(inputScrollPane, 0, -popupSize.height - POPUP_VERTICAL_GAP);
+            anchor = inputScrollPane;
+            showX = 0;
+            showY = -popupSize.height - POPUP_VERTICAL_GAP;
         }
+        if (anchor != null) {
+            boolean samePlacement = popupMenu.isVisible() && Objects.equals(anchor, lastAnchorComponent)
+                    && showX == lastPopupX && showY == lastPopupY;
+            if (!samePlacement) {
+                popupMenu.show(anchor, showX, showY);
+                lastAnchorComponent = anchor;
+                lastPopupX = showX;
+                lastPopupY = showY;
+            }
+        }
+    }
+
+    @SuppressWarnings("PMD.NullAssignment")
+    private void resetPopupLayoutCache() {
+        lastPopupWidth = -1;
+        lastPopupHeight = -1;
+        lastPopupRowCount = -1;
+        lastPopupX = Integer.MIN_VALUE;
+        lastPopupY = Integer.MIN_VALUE;
+        lastAnchorComponent = null;
     }
 
     private Rectangle resolveAvailableBounds() {
@@ -653,9 +726,12 @@ public final class FileMentionPopup {
 
     @SuppressWarnings("PMD.NullAssignment")
     public void hidePopup() {
+        evaluationDebounceTimer.stop();
+        evaluationGeneration.incrementAndGet();
         popupActive = false;
         activeToken = null;
         clearEvaluationCache();
+        resetPopupLayoutCache();
         if (popupMenu.isVisible()) {
             popupMenu.setVisible(false);
         }

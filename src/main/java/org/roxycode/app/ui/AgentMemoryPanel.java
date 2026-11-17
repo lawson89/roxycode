@@ -189,6 +189,8 @@ final class AgentMemoryPanel extends JPanel {
         private static final long serialVersionUID = 1L;
         private static final String CARD_CONTENT = "CONTENT";
         private static final String CARD_EMPTY = "EMPTY";
+        static final int SEARCH_DEBOUNCE_MS = 150;
+        static final int EDITOR_STATS_DEBOUNCE_MS = 150;
 
         private final boolean globalScope;
         private final String scopeName;
@@ -217,6 +219,8 @@ final class AgentMemoryPanel extends JPanel {
         final UiComponents.InlineConfirmBar deleteConfirmBar = new UiComponents.InlineConfirmBar();
 
         private final Timer statusTimer;
+        final Timer searchDebounceTimer;
+        final Timer editorStatsDebounceTimer;
         transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
         private final transient UiComponents.UiGuard editorSyncGuard = new UiComponents.UiGuard();
 
@@ -245,6 +249,10 @@ final class AgentMemoryPanel extends JPanel {
             this.deleteButton = UiComponents.createActionButton("Delete", Codicons.TRASH, null, false,
                     UiComponents.SUBTLE_RED_BUTTON_STYLE, null);
             this.statusTimer = UiComponents.createStatusTimer(statusLabel, 4000);
+            this.searchDebounceTimer = new Timer(SEARCH_DEBOUNCE_MS, e -> applyFilter());
+            this.searchDebounceTimer.setRepeats(false);
+            this.editorStatsDebounceTimer = new Timer(EDITOR_STATS_DEBOUNCE_MS, e -> updateEditorButtonsAndStats());
+            this.editorStatsDebounceTimer.setRepeats(false);
 
             this.summaryArea.setLineWrap(true);
             this.summaryArea.setWrapStyleWord(true);
@@ -355,7 +363,7 @@ final class AgentMemoryPanel extends JPanel {
         }
 
         private void setupListeners() {
-            SwingHtmlUtils.addChangeListener(searchField, this::applyFilter);
+            SwingHtmlUtils.addChangeListener(searchField, () -> searchDebounceTimer.restart());
             newButton.addActionListener(e -> startNewEntry());
             saveButton.addActionListener(e -> saveCurrentMemory());
             revertButton.addActionListener(e -> revertCurrentMemory());
@@ -368,9 +376,9 @@ final class AgentMemoryPanel extends JPanel {
             });
 
             SwingHtmlUtils.addChangeListener(idField, this::onIdFieldEdited);
-            SwingHtmlUtils.addChangeListener(tagsField, this::updateEditorButtonsAndStats);
+            SwingHtmlUtils.addChangeListener(tagsField, () -> editorStatsDebounceTimer.restart());
             SwingHtmlUtils.addChangeListener(summaryArea, this::onSummaryEdited);
-            SwingHtmlUtils.addChangeListener(detailsEditor, this::updateEditorButtonsAndStats);
+            SwingHtmlUtils.addChangeListener(detailsEditor, () -> editorStatsDebounceTimer.restart());
         }
 
         boolean isScopeAvailable() {
@@ -405,7 +413,7 @@ final class AgentMemoryPanel extends JPanel {
             if (creatingNewEntry) {
                 idManuallyEdited = !idField.getText().trim().isEmpty();
             }
-            updateEditorButtonsAndStats();
+            editorStatsDebounceTimer.restart();
         }
 
         private void onSummaryEdited() {
@@ -422,7 +430,7 @@ final class AgentMemoryPanel extends JPanel {
                     }
                 });
             }
-            updateEditorButtonsAndStats();
+            editorStatsDebounceTimer.restart();
         }
 
         void updateEditorButtonsAndStats() {
@@ -446,6 +454,7 @@ final class AgentMemoryPanel extends JPanel {
         }
 
         CompletableFuture<List<MemoryEntry>> refresh() {
+            UiComponents.stopTimer(searchDebounceTimer);
             if (!isScopeAvailable()) {
                 cardLayout.show(cardContainer, CARD_EMPTY);
                 allEntries = List.of();
@@ -522,6 +531,7 @@ final class AgentMemoryPanel extends JPanel {
 
         @SuppressWarnings("PMD.NullAssignment")
         void startNewEntry() {
+            UiComponents.stopTimer(editorStatsDebounceTimer);
             selectedEntry = null;
             creatingNewEntry = true;
             idManuallyEdited = false;
@@ -544,6 +554,7 @@ final class AgentMemoryPanel extends JPanel {
             if (editorSyncGuard.isActive()) {
                 return;
             }
+            UiComponents.stopTimer(editorStatsDebounceTimer);
             if (entry == null) {
                 if (!creatingNewEntry) {
                     startNewEntry();
@@ -554,6 +565,7 @@ final class AgentMemoryPanel extends JPanel {
         }
 
         private void populateEditor(MemoryEntry entry) {
+            UiComponents.stopTimer(editorStatsDebounceTimer);
             selectedEntry = entry;
             creatingNewEntry = false;
             idManuallyEdited = true;
@@ -584,6 +596,8 @@ final class AgentMemoryPanel extends JPanel {
         }
 
         CompletableFuture<EditorResult> saveCurrentMemory() {
+            UiComponents.stopTimer(editorStatsDebounceTimer);
+            updateEditorButtonsAndStats();
             if (!isScopeAvailable()) {
                 return CompletableFuture.completedFuture(new EditorResult(false, "", NO_PROJECT_MESSAGE));
             }

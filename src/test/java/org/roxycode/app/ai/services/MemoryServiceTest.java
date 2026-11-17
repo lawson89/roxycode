@@ -102,6 +102,22 @@ class MemoryServiceTest {
         assertThrows(IllegalArgumentException.class, () -> memoryService.list("invalid"));
         assertThrows(IllegalArgumentException.class, () -> memoryService.readArchivedPlan("../secret.md"));
 
+        // Verify in-memory cache hit and invalidation on ProjectChangedEvent
+        assertTrue(memoryService.put("global", "cached-rule", "Initial Summary").success());
+        assertEquals("Initial Summary", memoryService.read("global", "cached-rule").summary());
+        try {
+            Files.writeString(roxyHomeDir.resolve("memory/memories.json"),
+                    """
+                            {"memories":[{"id":"cached-rule","summary":"External Edit","tags":[],"details":"","updatedAt":"2026-01-01T00:00:00Z"}]}
+                            """,
+                    StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        assertEquals("Initial Summary", memoryService.read("global", "cached-rule").summary());
+        memoryService.onProjectChanged(new org.roxycode.app.events.ProjectChangedEvent(tempDir));
+        assertEquals("External Edit", memoryService.read("global", "cached-rule").summary());
+
         when(projectService.hasActiveProject()).thenReturn(false);
         assertFalse(memoryService.put("project", "rule-1", "Summary").success());
         assertTrue(memoryService.list("project").isEmpty());

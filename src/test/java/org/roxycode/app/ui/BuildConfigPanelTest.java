@@ -48,7 +48,18 @@ class BuildConfigPanelTest {
         BuildConfigPanel panel = SwingTestUtils
                 .callOnEdt(() -> new BuildConfigPanel(buildToolService, settingsService, projectService));
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
+        SwingTestUtils.awaitFuture(panel.summaryParseFuture);
         return panel;
+    }
+
+    private static void flushSummaryDebounce(BuildConfigPanel panel) {
+        SwingTestUtils.runOnEdt(() -> {
+            panel.summaryDebounceTimer.stop();
+            for (java.awt.event.ActionListener listener : panel.summaryDebounceTimer.getActionListeners()) {
+                listener.actionPerformed(null);
+            }
+        });
+        SwingTestUtils.awaitFuture(panel.summaryParseFuture);
     }
 
     @Test
@@ -363,6 +374,7 @@ class BuildConfigPanelTest {
                 writable_paths = ["~/.m2"]
                 """;
         SwingTestUtils.runOnEdt(() -> panel.textArea.setText(fullToml));
+        flushSummaryDebounce(panel);
         assertEquals("8 / 8 configured", panel.pipelineSummaryCard.valueLabel.getText());
         assertEquals("native (OS sandbox)", panel.sandboxSummaryCard.valueLabel.getText());
         assertEquals("1 read, 1 write paths", panel.sandboxSummaryCard.subtitleLabel.getText());
@@ -387,13 +399,25 @@ class BuildConfigPanelTest {
             // mockito stubbing
         }
         SwingTestUtils.runOnEdt(() -> panel.textArea.setText(dockerToml));
+        flushSummaryDebounce(panel);
         assertEquals("docker (eclipse-temurin:21-jdk)", panel.sandboxSummaryCard.valueLabel.getText());
         assertEquals("workdir: /app", panel.sandboxSummaryCard.subtitleLabel.getText());
         assertEquals("600s • Valid TOML", panel.syntaxSummaryCard.valueLabel.getText());
 
         SwingTestUtils.runOnEdt(() -> panel.textArea.setText("[[broken"));
+        flushSummaryDebounce(panel);
         assertEquals("Invalid TOML Syntax", panel.syntaxSummaryCard.valueLabel.getText());
         assertEquals("— / 8 configured", panel.pipelineSummaryCard.valueLabel.getText());
+
+        // Saving before the 200ms debounce timer fires must still refresh the live summary cards
+        SwingTestUtils.runOnEdt(() -> panel.textArea.setText(fullToml));
+        assertTrue(panel.summaryDebounceTimer.isRunning());
+        SwingTestUtils.clickOnEdt(panel.saveButton);
+        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
+        SwingTestUtils.awaitFuture(panel.summaryParseFuture);
+        assertFalse(panel.summaryDebounceTimer.isRunning());
+        assertEquals("8 / 8 configured", panel.pipelineSummaryCard.valueLabel.getText());
+        assertEquals("native (OS sandbox)", panel.sandboxSummaryCard.valueLabel.getText());
     }
 
     @Test

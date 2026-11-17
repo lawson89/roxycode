@@ -22,6 +22,19 @@ import org.roxycode.app.service.SettingsService;
 
 class AgentMemoryPanelTest {
 
+    private static void flushDebounceTimers(AgentMemoryPanel.MemoryScopeView view) {
+        SwingTestUtils.runOnEdt(() -> {
+            view.searchDebounceTimer.stop();
+            for (java.awt.event.ActionListener listener : view.searchDebounceTimer.getActionListeners()) {
+                listener.actionPerformed(null);
+            }
+            view.editorStatsDebounceTimer.stop();
+            for (java.awt.event.ActionListener listener : view.editorStatsDebounceTimer.getActionListeners()) {
+                listener.actionPerformed(null);
+            }
+        });
+    }
+
     @TempDir
     Path tempDir;
 
@@ -86,6 +99,7 @@ class AgentMemoryPanelTest {
             panel.projectScopeView.tagsField.setText("ui, swing");
             panel.projectScopeView.detailsEditor.setText("Always use HTML tables for layout.");
         });
+        flushDebounceTimers(panel.projectScopeView);
         assertEquals("swing-html-3-2-rules", panel.projectScopeView.idField.getText());
         assertTrue(panel.projectScopeView.saveButton.isEnabled());
         assertTrue(panel.projectScopeView.revertButton.isEnabled());
@@ -110,17 +124,18 @@ class AgentMemoryPanelTest {
 
         // Search filter
         SwingTestUtils.runOnEdt(() -> panel.projectScopeView.searchField.setText("caffeine"));
+        flushDebounceTimers(panel.projectScopeView);
         assertEquals(1, panel.projectScopeView.listModel.size());
         assertEquals("caffeine-cache", panel.projectScopeView.listModel.get(0).id());
 
-        SwingTestUtils.runOnEdt(() -> {
-            panel.projectScopeView.searchField.setText("");
-            panel.projectScopeView.entryList.setSelectedIndex(0);
-        });
+        SwingTestUtils.runOnEdt(() -> panel.projectScopeView.searchField.setText(""));
+        flushDebounceTimers(panel.projectScopeView);
+        SwingTestUtils.runOnEdt(() -> panel.projectScopeView.entryList.setSelectedIndex(0));
         assertEquals(2, panel.projectScopeView.listModel.size());
 
         // Revert dirty edits
         SwingTestUtils.runOnEdt(() -> panel.projectScopeView.summaryArea.setText("Unsaved summary edit"));
+        flushDebounceTimers(panel.projectScopeView);
         assertTrue(panel.projectScopeView.isEditorDirty());
         SwingTestUtils.clickOnEdt(panel.projectScopeView.revertButton);
         assertFalse(panel.projectScopeView.isEditorDirty());

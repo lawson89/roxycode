@@ -38,6 +38,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.core.annotation.AnnotationUtils;
+import org.springframework.lang.Nullable;
 
 @AgentService(value = "planService", phases = {"PLAN", "CODE", "REVIEW"})
 @AgentDoc("Manages implementation plans, technical step progress, handoff logs, and workflow phase transitions.")
@@ -156,6 +157,12 @@ public class PlanService {
     private final EnvironmentService environmentService;
     private final ApplicationEventPublisher eventPublisher;
     private final ProjectService projectService;
+    private record PersistSnapshot(Path path, @Nullable ActiveWorkflowState state, boolean deleteOnly) {
+    }
+
+    private final Object stateLock = new Object();
+    private final Object persistLock = new Object();
+    private CompletableFuture<Void> lastPersistFuture = CompletableFuture.completedFuture(null);
     private volatile ImplementationPlan currentPlan;
     private ImplementationPlan.UsageSummary unassignedTaskUsage = ImplementationPlan.UsageSummary.EMPTY;
     private volatile WorkflowPhase currentPhase = WorkflowPhase.PLAN;
@@ -172,40 +179,59 @@ public class PlanService {
     }
 
     @EventListener
-    public synchronized void onProjectChanged(ProjectChangedEvent event) {
+    public void onProjectChanged(ProjectChangedEvent event) {
         restoreWorkflowForCurrentProject(true);
     }
 
     @EventListener
-    public synchronized void onFileChanged(FileChangedEvent event) {
-        if (event == null || currentPlan == null) {
+    public void onFileChanged(FileChangedEvent event) {
+        if (event == null) {
             return;
         }
-        ImplementationPlan updated = currentPlan;
-        if (StringUtils.isNotBlank(event.path())) {
-            updated = updated.withRecordedFileChange(event.path(), event.changeType());
+        ImplementationPlan updated;
+        PersistSnapshot snapshot;
+        synchronized (stateLock) {
+            if (currentPlan == null) {
+                return;
+            }
+            updated = currentPlan;
+            if (StringUtils.isNotBlank(event.path())) {
+                updated = updated.withRecordedFileChange(event.path(), event.changeType());
+            }
+            if (currentPhase == WorkflowPhase.CODE) {
+                updated = updated.withVerificationStepCompleted(ImplementationPlan.STEP_COMPILE, false)
+                        .withVerificationStepCompleted(ImplementationPlan.STEP_UNIT_TESTS, false);
+            }
+            this.currentPlan = updated;
+            snapshot = capturePersistSnapshotLocked();
         }
-        if (currentPhase == WorkflowPhase.CODE) {
-            updated = updated.withVerificationStepCompleted(ImplementationPlan.STEP_COMPILE, false)
-                    .withVerificationStepCompleted(ImplementationPlan.STEP_UNIT_TESTS, false);
-        }
-        setCurrentPlan(updated);
+        enqueueWorkflowDiskOperation(snapshot);
+        publishPlanUpdated(updated);
     }
 
     @EventListener
-    public synchronized void onTokenUsage(TokenUsageEvent event) {
+    public void onTokenUsage(TokenUsageEvent event) {
         if (event == null || !TASK_CONVERSATION_ID.equals(event.conversationId())) {
             return;
         }
-        WorkflowPhase effectivePhase = event.phase();
-        if (effectivePhase == null) {
-            effectivePhase = currentPhase;
+        ImplementationPlan updatedPlan = null;
+        PersistSnapshot snapshot;
+        synchronized (stateLock) {
+            WorkflowPhase effectivePhase = event.phase();
+            if (effectivePhase == null) {
+                effectivePhase = currentPhase;
+            }
+            if (currentPlan != null) {
+                updatedPlan = currentPlan.withRecordedTokenUsage(event, effectivePhase);
+                this.currentPlan = updatedPlan;
+            } else {
+                unassignedTaskUsage = unassignedTaskUsage.addEvent(event, effectivePhase);
+            }
+            snapshot = capturePersistSnapshotLocked();
         }
-        if (currentPlan != null) {
-            setCurrentPlan(currentPlan.withRecordedTokenUsage(event, effectivePhase));
-        } else {
-            unassignedTaskUsage = unassignedTaskUsage.addEvent(event, effectivePhase);
-            persistActiveWorkflowState();
+        enqueueWorkflowDiskOperation(snapshot);
+        if (updatedPlan != null) {
+            publishPlanUpdated(updatedPlan);
         }
     }
 
@@ -216,12 +242,12 @@ public class PlanService {
      *            the implementation plan to submit
      * @return a status message
      */
-    public synchronized String submitPlan(ImplementationPlan plan) {
+    public String submitPlan(ImplementationPlan plan) {
         requirePhase("submitPlan");
         if (plan == null) {
             throw new IllegalArgumentException("Error: Plan cannot be null.");
         }
-        ImplementationPlan normalized = plan.withNormalizedStepsFrom(currentPlan);
+        ImplementationPlan normalized = plan.withNormalizedStepsFrom(getCurrentPlan());
         validateMarkdownDiagrams("goal", normalized.goal());
         for (String requirement : normalized.requirements()) {
             validateMarkdownDiagrams("requirement", requirement);
@@ -229,18 +255,26 @@ public class PlanService {
         for (ImplementationPlan.TechStep step : normalized.technicalSteps()) {
             validateMarkdownDiagrams("technicalStep", step.description());
         }
-        if (unassignedTaskUsage.hasUsage()) {
-            normalized = normalized.withUsageSummary(normalized.usageSummary().merge(unassignedTaskUsage));
-            unassignedTaskUsage = ImplementationPlan.UsageSummary.EMPTY;
+        PersistSnapshot snapshot;
+        synchronized (stateLock) {
+            requirePhase("submitPlan");
+            normalized = plan.withNormalizedStepsFrom(currentPlan);
+            if (unassignedTaskUsage.hasUsage()) {
+                normalized = normalized.withUsageSummary(normalized.usageSummary().merge(unassignedTaskUsage));
+                unassignedTaskUsage = ImplementationPlan.UsageSummary.EMPTY;
+            }
+            this.currentPlan = normalized;
+            snapshot = capturePersistSnapshotLocked();
         }
-        setCurrentPlan(normalized);
+        enqueueWorkflowDiskOperation(snapshot);
+        publishPlanUpdated(normalized);
         return "Implementation plan submitted successfully with mandatory verification checklist items.";
     }
 
     @SuppressWarnings("PMD.UseVarargs")
     @AgentDoc(value = "Submits a project plan covering both functional requirements and technical implementation steps.", phases = {
             "PLAN"}, examples = {"planService.submitPlan('Add Feature', 'Goal description', ['Req 1'], ['Step 1'])"})
-    public synchronized String submitPlan(
+    public String submitPlan(
             @AgentDoc("The concise title of the project or feature plan (max 50 characters)") String title,
             @AgentDoc("The high-level goal of the plan") String goal,
             @AgentDoc("Array of functional requirements") String[] requirements,
@@ -282,53 +316,80 @@ public class PlanService {
 
     @AgentDoc(value = "Adds a new technical implementation step to the current plan (inserted before trailing verification gates) without losing progress on completed steps.", phases = {
             "PLAN", "CODE", "REVIEW"}, examples = {"planService.addTechnicalStep('Add unit tests for edge cases')"})
-    public synchronized String addTechnicalStep(
+    public String addTechnicalStep(
             @AgentDoc("Description of the new technical implementation step") String description) {
         requirePhase("addTechnicalStep");
-        ensureActivePlan();
         String trimmed = requireNonBlankDescription(description);
         validateMarkdownDiagrams("technicalStep", trimmed);
-        List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
-        int insertIndex = steps.size();
-        while (insertIndex > 0
-                && ImplementationPlan.isMandatoryVerificationStep(steps.get(insertIndex - 1).description())) {
-            insertIndex--;
+        int insertIndex;
+        ImplementationPlan updated;
+        PersistSnapshot snapshot;
+        synchronized (stateLock) {
+            requirePhase("addTechnicalStep");
+            ensureActivePlanLocked();
+            List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
+            insertIndex = steps.size();
+            while (insertIndex > 0
+                    && ImplementationPlan.isMandatoryVerificationStep(steps.get(insertIndex - 1).description())) {
+                insertIndex--;
+            }
+            steps.add(insertIndex, new ImplementationPlan.TechStep(trimmed, false));
+            updated = currentPlan.withTechnicalSteps(steps);
+            this.currentPlan = updated;
+            snapshot = capturePersistSnapshotLocked();
         }
-        steps.add(insertIndex, new ImplementationPlan.TechStep(trimmed, false));
-        setCurrentPlan(currentPlan.withTechnicalSteps(steps));
+        enqueueWorkflowDiskOperation(snapshot);
+        publishPlanUpdated(updated);
         return String.format("Added technical step at index %d: '%s'. %s", insertIndex, trimmed,
-                currentPlan.formatRemainingIncompleteSteps());
+                updated.formatRemainingIncompleteSteps());
     }
 
     @AgentDoc(value = "Updates the description of an existing technical step at the given 0-based index while preserving its completion status.", phases = {
             "PLAN", "CODE", "REVIEW"}, examples = {"planService.updateTechnicalStep(0, 'Updated step description')"})
-    public synchronized String updateTechnicalStep(@AgentDoc("The 0-based index of the step to update") int index,
+    public String updateTechnicalStep(@AgentDoc("The 0-based index of the step to update") int index,
             @AgentDoc("The updated description for the technical step") String description) {
         requirePhase("updateTechnicalStep");
-        ensureActivePlan();
         String trimmed = requireNonBlankDescription(description);
         validateMarkdownDiagrams("technicalStep", trimmed);
-        List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
-        validateStepIndex(index, steps.size());
-        steps.set(index, new ImplementationPlan.TechStep(trimmed, steps.get(index).completed()));
-        setCurrentPlan(currentPlan.withTechnicalSteps(steps));
+        ImplementationPlan updated;
+        PersistSnapshot snapshot;
+        synchronized (stateLock) {
+            requirePhase("updateTechnicalStep");
+            ensureActivePlanLocked();
+            List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
+            validateStepIndex(index, steps.size());
+            steps.set(index, new ImplementationPlan.TechStep(trimmed, steps.get(index).completed()));
+            updated = currentPlan.withTechnicalSteps(steps);
+            this.currentPlan = updated;
+            snapshot = capturePersistSnapshotLocked();
+        }
+        enqueueWorkflowDiskOperation(snapshot);
+        publishPlanUpdated(updated);
         return String.format("Updated technical step %d to '%s'. %s", index, trimmed,
-                currentPlan.formatRemainingIncompleteSteps());
+                updated.formatRemainingIncompleteSteps());
     }
 
-    synchronized void updateVerificationStep(String stepDescription, boolean completed) {
-        if (currentPlan == null) {
-            return;
+    void updateVerificationStep(String stepDescription, boolean completed) {
+        ImplementationPlan updated;
+        PersistSnapshot snapshot;
+        synchronized (stateLock) {
+            if (currentPlan == null) {
+                return;
+            }
+            updated = currentPlan.withVerificationStepCompleted(stepDescription, completed);
+            if (updated.equals(currentPlan)) {
+                return;
+            }
+            this.currentPlan = updated;
+            snapshot = capturePersistSnapshotLocked();
         }
-        ImplementationPlan updated = currentPlan.withVerificationStepCompleted(stepDescription, completed);
-        if (!updated.equals(currentPlan)) {
-            setCurrentPlan(updated);
-        }
+        enqueueWorkflowDiskOperation(snapshot);
+        publishPlanUpdated(updated);
     }
 
     @AgentDoc(value = "Marks a specific technical implementation step (0..N) as completed using its 0-based index. Call this in the same executeJexl turn immediately after applying the file edits for that step (build and test verification steps are marked automatically by buildToolService).", phases = {
             "CODE", "REVIEW"}, examples = {"planService.markStepCompleted(0)"})
-    public synchronized String markStepCompleted(
+    public String markStepCompleted(
             @AgentDoc("The index of the step (0-based). Must be valid for the current plan") int index) {
         requirePhase("markStepCompleted");
         return updateStepsStatus(new int[]{index}, true);
@@ -336,52 +397,58 @@ public class PlanService {
 
     @AgentDoc(value = "Marks multiple technical implementation steps (0..N) as completed in a single batch call (0-based indices). Call this in the same executeJexl turn immediately after applying the file edits for those steps (build and test verification steps are marked automatically by buildToolService).", phases = {
             "CODE", "REVIEW"}, examples = {"planService.markStepsCompleted([0, 1])"})
-    public synchronized String markStepsCompleted(
-            @AgentDoc("Array of 0-based step indices to mark as completed") int... indices) {
+    public String markStepsCompleted(@AgentDoc("Array of 0-based step indices to mark as completed") int... indices) {
         requirePhase("markStepsCompleted");
         return updateStepsStatus(indices, true);
     }
 
     @AgentDoc(value = "Marks a technical implementation step as incomplete using its 0-based index.", phases = {"CODE",
             "REVIEW"}, examples = {"planService.markStepIncomplete(0)"})
-    public synchronized String markStepIncomplete(@AgentDoc("The index of the step (0-based)") int index) {
+    public String markStepIncomplete(@AgentDoc("The index of the step (0-based)") int index) {
         requirePhase("markStepIncomplete");
         return updateStepsStatus(new int[]{index}, false);
     }
 
     @AgentDoc(value = "Marks multiple technical implementation steps as incomplete in a single batch call (0-based indices).", phases = {
             "CODE", "REVIEW"}, examples = {"planService.markStepsIncomplete([0, 1])"})
-    public synchronized String markStepsIncomplete(
-            @AgentDoc("Array of 0-based step indices to mark as incomplete") int... indices) {
+    public String markStepsIncomplete(@AgentDoc("Array of 0-based step indices to mark as incomplete") int... indices) {
         requirePhase("markStepsIncomplete");
         return updateStepsStatus(indices, false);
     }
 
-    private synchronized String updateStepsStatus(int[] indices, boolean completed) {
-        ensureActivePlan();
+    private String updateStepsStatus(int[] indices, boolean completed) {
         if (indices == null || indices.length == 0) {
             throw new IllegalArgumentException("Error: Step indices cannot be null or empty.");
         }
-        List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
-        for (int index : indices) {
-            validateStepIndex(index, steps.size());
-            if (completed && currentPhase == WorkflowPhase.CODE) {
-                validateManualCompletionInCodePhase(index, steps.get(index).description());
+        ImplementationPlan updated;
+        PersistSnapshot snapshot;
+        synchronized (stateLock) {
+            ensureActivePlanLocked();
+            List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
+            for (int index : indices) {
+                validateStepIndex(index, steps.size());
+                if (completed && currentPhase == WorkflowPhase.CODE) {
+                    validateManualCompletionInCodePhase(index, steps.get(index).description());
+                }
             }
+            for (int index : indices) {
+                steps.set(index, new ImplementationPlan.TechStep(steps.get(index).description(), completed));
+            }
+            updated = currentPlan.withTechnicalSteps(steps);
+            this.currentPlan = updated;
+            snapshot = capturePersistSnapshotLocked();
         }
-        for (int index : indices) {
-            steps.set(index, new ImplementationPlan.TechStep(steps.get(index).description(), completed));
-        }
-        setCurrentPlan(currentPlan.withTechnicalSteps(steps));
+        enqueueWorkflowDiskOperation(snapshot);
+        publishPlanUpdated(updated);
         String statusWord = "incomplete";
         if (completed) {
             statusWord = "completed";
         }
         return String.format("Marked steps %s %s. %s", Arrays.toString(indices), statusWord,
-                currentPlan.formatRemainingIncompleteSteps());
+                updated.formatRemainingIncompleteSteps());
     }
 
-    private void ensureActivePlan() {
+    private void ensureActivePlanLocked() {
         if (currentPlan == null) {
             throw new IllegalStateException("Error: No active implementation plan.");
         }
@@ -412,20 +479,9 @@ public class PlanService {
         return currentPlan;
     }
 
-    private synchronized void setCurrentPlan(ImplementationPlan plan) {
-        this.currentPlan = plan;
-        persistActiveWorkflowState();
-        publishPlanUpdated();
-    }
-
-    private synchronized void clearPlan() {
-        this.unassignedTaskUsage = ImplementationPlan.UsageSummary.EMPTY;
-        setCurrentPlan(null);
-    }
-
     @AgentDoc(value = "Requests transition to the development (CODE) phase.", phases = {"PLAN"}, examples = {
             "planService.requestDevelopment('Plan is complete and ready for implementation')"})
-    public synchronized String requestDevelopment(
+    public String requestDevelopment(
             @AgentDoc("The reason for requesting transition to the CODE phase") String reason) {
         requirePhase("requestDevelopment");
         return routeToPhase(WorkflowPhase.CODE, reason);
@@ -433,16 +489,14 @@ public class PlanService {
 
     @AgentDoc(value = "Requests transition to the review phase.", phases = {"CODE"}, examples = {
             "planService.requestReview('All implementation steps and unit tests are complete')"})
-    public synchronized String requestReview(
-            @AgentDoc("The reason for requesting transition to the REVIEW phase") String reason) {
+    public String requestReview(@AgentDoc("The reason for requesting transition to the REVIEW phase") String reason) {
         requirePhase("requestReview");
         return routeToPhase(WorkflowPhase.REVIEW, reason);
     }
 
     @AgentDoc(value = "Requests transition back to development to address fixes.", phases = {"REVIEW"}, examples = {
             "planService.requestFixes('Found failing edge case in unit test')"})
-    public synchronized String requestFixes(
-            @AgentDoc("The reason for requesting transition back to the CODE phase") String reason) {
+    public String requestFixes(@AgentDoc("The reason for requesting transition back to the CODE phase") String reason) {
         requirePhase("requestFixes");
         return routeToPhase(WorkflowPhase.CODE, reason);
     }
@@ -450,7 +504,7 @@ public class PlanService {
     @AgentDoc(value = "Signals completion of the current cycle and returns to planning.", phases = {
             "REVIEW"}, examples = {
                     "planService.requestCompletion('All requirements and quality gates verified', 'feat: summary')"})
-    public synchronized String requestCompletion(
+    public String requestCompletion(
             @AgentDoc("The structured Final Review Notes (Markdown audit summary covering Requirements, Code Quality/Guidelines, and Test Coverage)") String reason) {
         return requestCompletion(reason, null);
     }
@@ -458,7 +512,7 @@ public class PlanService {
     @AgentDoc(value = "Signals completion of the current cycle with a proposed Conventional Commit message and returns to planning.", phases = {
             "REVIEW"}, examples = {
                     "planService.requestCompletion('All requirements and quality gates verified', 'feat: add branch comparison tools')"})
-    public synchronized String requestCompletion(
+    public String requestCompletion(
             @AgentDoc("The structured Final Review Notes (Markdown audit summary covering Requirements, Code Quality/Guidelines, and Test Coverage)") String reason,
             @AgentDoc("The proposed Conventional Commit message") String commitMessage) {
         requirePhase("requestCompletion");
@@ -467,84 +521,127 @@ public class PlanService {
 
     @AgentDoc(value = "Requests transition back to the planning phase (PLAN) due to technical blockers or needed revisions.", phases = {
             "CODE"}, examples = {"planService.requestPlanRevision('Need architectural adjustment before proceeding')"})
-    public synchronized String requestPlanRevision(
-            @AgentDoc("The reason for requesting a plan revision") String reason) {
+    public String requestPlanRevision(@AgentDoc("The reason for requesting a plan revision") String reason) {
         requirePhase("requestPlanRevision");
         return routeToPhase(WorkflowPhase.PLAN, reason);
     }
 
-    synchronized String routeToPhase(WorkflowPhase nextPhase, String reason) {
+    String routeToPhase(WorkflowPhase nextPhase, String reason) {
         return routeToPhase(nextPhase, reason, null);
     }
 
-    private synchronized String routeToPhase(WorkflowPhase nextPhase, String reason, String commitMessage) {
+    private String routeToPhase(WorkflowPhase nextPhase, String reason, String commitMessage) {
         if (nextPhase == null) {
             throw new IllegalArgumentException(
                     "Error: Invalid phase name: null. Valid phases are: PLAN, CODE, REVIEW.");
-        }
-        if (nextPhase == currentPhase) {
-            throw new IllegalStateException("Already in phase: " + nextPhase);
         }
         if (reason == null || reason.isBlank()) {
             throw new IllegalArgumentException(
                     "Error: You must provide a descriptive 'reason' for requesting a phase transition.");
         }
 
-        TransitionRule rule = TRANSITION_RULES.get(new TransitionKey(currentPhase, nextPhase));
-        if (rule == null) {
-            throw new IllegalStateException("Error: Cannot jump from " + currentPhase + " to " + nextPhase
-                    + ". Only single-step transitions to adjacent phases are allowed.");
-        }
-        if (currentPhase == WorkflowPhase.PLAN && nextPhase == WorkflowPhase.CODE && currentPlan == null) {
-            throw new IllegalStateException(
-                    "Error: Cannot advance to CODE. Implementation Plan is missing. Call submitPlan first.");
-        }
-        if (rule.requiresApprovedPlan() && (currentPlan == null || !currentPlan.userApproved())) {
-            throw new IllegalStateException("Error: Cannot transition from " + currentPhase + " to " + nextPhase
-                    + ". An approved Implementation Plan is required.");
-        }
+        WorkflowPhase oldPhase;
+        boolean autonomous;
+        ImplementationPlan updatedPlan = null;
+        boolean planChanged = false;
+        ImplementationPlan planForSummary;
+        PersistSnapshot snapshot;
 
-        verifyStepCompletionGates(currentPhase, nextPhase);
-        if (currentPhase == WorkflowPhase.REVIEW && nextPhase == WorkflowPhase.CODE) {
-            prepareFixesOnCurrentPlan(reason);
-        }
-        if (currentPhase == WorkflowPhase.REVIEW && nextPhase == WorkflowPhase.PLAN && currentPlan != null) {
-            ImplementationPlan updated = currentPlan.withFinalReviewNotes(reason);
-            if (StringUtils.isNotBlank(commitMessage)) {
-                updated = updated.withCommitMessage(commitMessage);
+        synchronized (stateLock) {
+            if (nextPhase == currentPhase) {
+                throw new IllegalStateException("Already in phase: " + nextPhase);
             }
-            setCurrentPlan(updated);
+            oldPhase = currentPhase;
+            TransitionRule rule = TRANSITION_RULES.get(new TransitionKey(currentPhase, nextPhase));
+            if (rule == null) {
+                throw new IllegalStateException("Error: Cannot jump from " + currentPhase + " to " + nextPhase
+                        + ". Only single-step transitions to adjacent phases are allowed.");
+            }
+            if (currentPhase == WorkflowPhase.PLAN && nextPhase == WorkflowPhase.CODE && currentPlan == null) {
+                throw new IllegalStateException(
+                        "Error: Cannot advance to CODE. Implementation Plan is missing. Call submitPlan first.");
+            }
+            if (rule.requiresApprovedPlan() && (currentPlan == null || !currentPlan.userApproved())) {
+                throw new IllegalStateException("Error: Cannot transition from " + currentPhase + " to " + nextPhase
+                        + ". An approved Implementation Plan is required.");
+            }
+
+            verifyStepCompletionGates(currentPhase, nextPhase);
+            if (currentPhase == WorkflowPhase.REVIEW && nextPhase == WorkflowPhase.CODE) {
+                if (prepareFixesOnCurrentPlanLocked(reason)) {
+                    planChanged = true;
+                    updatedPlan = currentPlan;
+                }
+            }
+            if (currentPhase == WorkflowPhase.REVIEW && nextPhase == WorkflowPhase.PLAN && currentPlan != null) {
+                ImplementationPlan updated = currentPlan.withFinalReviewNotes(reason);
+                if (StringUtils.isNotBlank(commitMessage)) {
+                    updated = updated.withCommitMessage(commitMessage);
+                }
+                this.currentPlan = updated;
+                updatedPlan = updated;
+                planChanged = true;
+            }
+
+            autonomous = rule.autonomous();
+            if (autonomous) {
+                addHandoffLogEntryLocked(OffsetDateTime.now().toString(), "System",
+                        String.format("%s -> %s: %s", oldPhase, nextPhase, reason));
+                applyPhaseStateTransitionLocked(nextPhase, false);
+                planChanged = true;
+                updatedPlan = currentPlan;
+            } else {
+                this.pendingPhase = nextPhase;
+                this.pendingReason = reason;
+            }
+            planForSummary = currentPlan;
+            snapshot = capturePersistSnapshotLocked();
         }
 
-        if (rule.autonomous()) {
-            return executeAutonomousTransition(nextPhase, reason);
+        enqueueWorkflowDiskOperation(snapshot);
+        if (planChanged) {
+            publishPlanUpdated(updatedPlan);
+        }
+        if (autonomous) {
+            publishPhaseChanged(nextPhase);
+            if (eventPublisher != null) {
+                eventPublisher.publishEvent(new WorkflowTransitionEvent(oldPhase, nextPhase, reason, true));
+            }
+            return String.format(
+                    "Autonomous transition from %s to %s registered. Reason: %s. Provide a brief concluding summary to the user without calling any additional tools.",
+                    oldPhase, nextPhase, reason);
         }
 
-        this.pendingPhase = nextPhase;
-        this.pendingReason = reason;
-        persistActiveWorkflowState();
-        publishTransitionRequested();
+        publishTransitionRequested(oldPhase, nextPhase, reason);
 
-        String summary = formatPlanSummary(currentPlan);
+        String summary = formatPlanSummary(planForSummary);
         String message = String.format(
                 "**Transition Request: %s**%n%n**Reason:** %s%n%nTransition request queued for user approval. Provide a brief concluding summary to the user without calling any additional tools.",
-                formatApprovalLabel(currentPhase, nextPhase), reason);
+                formatApprovalLabel(oldPhase, nextPhase), reason);
         if (StringUtils.isNotBlank(summary)) {
             return String.format("%s%n%n%s", summary, message);
         }
         return message;
     }
 
-    private void prepareFixesOnCurrentPlan(String reason) {
+    private boolean prepareFixesOnCurrentPlanLocked(String reason) {
         if (currentPlan == null) {
-            return;
+            return false;
         }
         ImplementationPlan updated = currentPlan
                 .withVerificationStepCompleted(ImplementationPlan.STEP_CODE_REVIEW, false).withFinalReviewNotes(null);
-        setCurrentPlan(updated);
-        if (currentPlan.collectIncompleteSteps(true).isEmpty()) {
-            addTechnicalStep("Address review findings: " + reason.trim());
+        if (updated.collectIncompleteSteps(true).isEmpty()) {
+            List<ImplementationPlan.TechStep> steps = new ArrayList<>(updated.technicalSteps());
+            int insertIndex = steps.size();
+            while (insertIndex > 0
+                    && ImplementationPlan.isMandatoryVerificationStep(steps.get(insertIndex - 1).description())) {
+                insertIndex--;
+            }
+            steps.add(insertIndex, new ImplementationPlan.TechStep("Address review findings: " + reason.trim(), false));
+            updated = updated.withTechnicalSteps(steps);
         }
+        this.currentPlan = updated;
+        return true;
     }
 
     private void verifyStepCompletionGates(WorkflowPhase from, WorkflowPhase to) {
@@ -605,78 +702,86 @@ public class PlanService {
     public void approveTransition() {
         ImplementationPlan planToArchive = null;
         String archiveTimestamp = null;
-        synchronized (this) {
+        ImplementationPlan updatedPlan;
+        WorkflowPhase newPhase;
+        PersistSnapshot snapshot;
+        synchronized (stateLock) {
             if (pendingPhase == null) {
                 return;
             }
             String timestamp = OffsetDateTime.now().toString();
             String user = EnvironmentService.resolveCurrentUser(environmentService);
-            addHandoffLogEntry(timestamp, user,
+            addHandoffLogEntryLocked(timestamp, user,
                     String.format("%s -> %s (User Approved): %s", currentPhase, pendingPhase, pendingReason));
 
             if (currentPhase == WorkflowPhase.PLAN && pendingPhase == WorkflowPhase.CODE && currentPlan != null) {
-                setCurrentPlan(currentPlan.withApproval(user, timestamp));
+                this.currentPlan = currentPlan.withApproval(user, timestamp);
             }
             if (currentPhase == WorkflowPhase.REVIEW && pendingPhase == WorkflowPhase.PLAN && currentPlan != null) {
-                setCurrentPlan(currentPlan.withCompletion(user, timestamp));
-                planToArchive = currentPlan;
+                planToArchive = currentPlan.withCompletion(user, timestamp);
                 archiveTimestamp = timestamp;
-                clearPlan();
+                this.unassignedTaskUsage = ImplementationPlan.UsageSummary.EMPTY;
+                this.currentPlan = null;
             }
 
-            applyPhaseStateTransition(pendingPhase, planToArchive != null);
+            newPhase = pendingPhase;
+            applyPhaseStateTransitionLocked(pendingPhase, planToArchive != null);
+            updatedPlan = currentPlan;
+            snapshot = capturePersistSnapshotLocked(planToArchive != null);
         }
+        enqueueWorkflowDiskOperation(snapshot);
+        publishPlanUpdated(updatedPlan);
         if (planToArchive != null) {
             ImplementationPlan capturedPlan = planToArchive;
             String capturedTimestamp = archiveTimestamp;
             if (SwingUtilities.isEventDispatchThread()) {
                 CompletableFuture.runAsync(() -> {
                     archiveCurrentPlan(capturedPlan, capturedTimestamp);
-                    publishPhaseChanged();
+                    publishPhaseChanged(newPhase);
                 }, Edt.VIRTUAL_EXECUTOR);
                 return;
             }
             archiveCurrentPlan(capturedPlan, capturedTimestamp);
         }
-        publishPhaseChanged();
+        publishPhaseChanged(newPhase);
     }
 
-    public synchronized void rejectTransition() {
-        this.pendingPhase = null;
-        this.pendingReason = null;
-        persistActiveWorkflowState();
-        publishTransitionRequested();
-    }
-
-    public synchronized void rejectCompletionAndReturnToCode(String reason) {
-        String effectiveReason = StringUtils.defaultIfBlank(reason, "User requested additional changes.");
-        this.pendingPhase = null;
-        this.pendingReason = null;
-        prepareFixesOnCurrentPlan(effectiveReason);
-        String timestamp = OffsetDateTime.now().toString();
-        String user = EnvironmentService.resolveCurrentUser(environmentService);
-        addHandoffLogEntry(timestamp, user,
-                String.format("REVIEW -> CODE (Completion Rejected): %s", effectiveReason.trim()));
-        applyPhaseStateTransition(WorkflowPhase.CODE, false);
-        publishPhaseChanged();
-        publishTransitionRequested();
-    }
-
-    private String executeAutonomousTransition(WorkflowPhase nextPhase, String reason) {
-        WorkflowPhase oldPhase = currentPhase;
-        addHandoffLogEntry(OffsetDateTime.now().toString(), "System",
-                String.format("%s -> %s: %s", oldPhase, nextPhase, reason));
-        applyPhaseStateTransition(nextPhase, false);
-        publishPhaseChanged();
-        if (eventPublisher != null) {
-            eventPublisher.publishEvent(new WorkflowTransitionEvent(oldPhase, nextPhase, reason, true));
+    public void rejectTransition() {
+        WorkflowPhase phase;
+        PersistSnapshot snapshot;
+        synchronized (stateLock) {
+            this.pendingPhase = null;
+            this.pendingReason = null;
+            phase = currentPhase;
+            snapshot = capturePersistSnapshotLocked();
         }
-        return String.format(
-                "Autonomous transition from %s to %s registered. Reason: %s. Provide a brief concluding summary to the user without calling any additional tools.",
-                oldPhase, nextPhase, reason);
+        enqueueWorkflowDiskOperation(snapshot);
+        publishTransitionRequested(phase, null, null);
     }
 
-    private void applyPhaseStateTransition(WorkflowPhase targetPhase, boolean resetToPlan) {
+    public void rejectCompletionAndReturnToCode(String reason) {
+        String effectiveReason = StringUtils.defaultIfBlank(reason, "User requested additional changes.");
+        ImplementationPlan updatedPlan;
+        PersistSnapshot snapshot;
+        synchronized (stateLock) {
+            this.pendingPhase = null;
+            this.pendingReason = null;
+            prepareFixesOnCurrentPlanLocked(effectiveReason);
+            String timestamp = OffsetDateTime.now().toString();
+            String user = EnvironmentService.resolveCurrentUser(environmentService);
+            addHandoffLogEntryLocked(timestamp, user,
+                    String.format("REVIEW -> CODE (Completion Rejected): %s", effectiveReason.trim()));
+            applyPhaseStateTransitionLocked(WorkflowPhase.CODE, false);
+            updatedPlan = currentPlan;
+            snapshot = capturePersistSnapshotLocked();
+        }
+        enqueueWorkflowDiskOperation(snapshot);
+        publishPlanUpdated(updatedPlan);
+        publishPhaseChanged(WorkflowPhase.CODE);
+        publishTransitionRequested(WorkflowPhase.CODE, null, null);
+    }
+
+    private void applyPhaseStateTransitionLocked(WorkflowPhase targetPhase, boolean resetToPlan) {
         this.currentPhase = targetPhase;
         if (resetToPlan) {
             this.visitedPhases.clear();
@@ -686,22 +791,37 @@ public class PlanService {
         }
         this.pendingPhase = null;
         this.pendingReason = null;
-        if (resetToPlan) {
-            PathUtils.deleteIfExistsQuietly(resolveActiveWorkflowPath());
-        } else {
-            persistActiveWorkflowState();
+    }
+
+    public Set<WorkflowPhase> getVisitedPhases() {
+        synchronized (stateLock) {
+            return Collections.unmodifiableSet(EnumSet.copyOf(visitedPhases));
         }
     }
 
-    public synchronized Set<WorkflowPhase> getVisitedPhases() {
-        return Collections.unmodifiableSet(EnumSet.copyOf(visitedPhases));
-    }
-
-    public synchronized void resetWorkflow() {
+    public void resetWorkflow() {
         resetWorkflowInternal(true, true);
     }
 
-    private synchronized void resetWorkflowInternal(boolean deletePersistedFile, boolean publishEvents) {
+    private void resetWorkflowInternal(boolean deletePersistedFile, boolean publishEvents) {
+        PersistSnapshot snapshot = null;
+        synchronized (stateLock) {
+            resetWorkflowStateLocked();
+            if (deletePersistedFile) {
+                snapshot = capturePersistSnapshotLocked(true);
+            }
+        }
+        if (snapshot != null) {
+            enqueueWorkflowDiskOperation(snapshot);
+        }
+        if (publishEvents) {
+            publishPlanUpdated(null);
+            publishPhaseChanged(WorkflowPhase.PLAN);
+            publishTransitionRequested(WorkflowPhase.PLAN, null, null);
+        }
+    }
+
+    private void resetWorkflowStateLocked() {
         this.pendingPhase = null;
         this.pendingReason = null;
         this.currentPhase = WorkflowPhase.PLAN;
@@ -709,50 +829,53 @@ public class PlanService {
         this.visitedPhases.add(WorkflowPhase.PLAN);
         this.unassignedTaskUsage = ImplementationPlan.UsageSummary.EMPTY;
         this.currentPlan = null;
-        if (deletePersistedFile) {
-            PathUtils.deleteIfExistsQuietly(resolveActiveWorkflowPath());
-        }
-        if (publishEvents) {
-            publishPlanUpdated();
-            publishPhaseChanged();
-            publishTransitionRequested();
-        }
     }
 
-    private synchronized void restoreWorkflowForCurrentProject(boolean publishEvents) {
+    private void restoreWorkflowForCurrentProject(boolean publishEvents) {
+        awaitPendingPersistence();
         Path path = resolveActiveWorkflowPath();
         ActiveWorkflowState saved = PathUtils.readJsonOrDefault(path, ActiveWorkflowState.class, null);
         if (saved == null) {
             resetWorkflowInternal(false, publishEvents);
             return;
         }
-        this.currentPlan = saved.currentPlan();
-        if (saved.currentPhase() != null && saved.currentPhase() != WorkflowPhase.EXPLORE) {
-            this.currentPhase = saved.currentPhase();
-        } else {
-            this.currentPhase = WorkflowPhase.PLAN;
-        }
-        this.pendingPhase = saved.pendingPhase();
-        this.pendingReason = saved.pendingReason();
-        this.visitedPhases.clear();
-        this.visitedPhases.add(WorkflowPhase.PLAN);
-        if (saved.visitedPhases() != null) {
-            for (WorkflowPhase phase : saved.visitedPhases()) {
-                if (phase != null && phase != WorkflowPhase.EXPLORE) {
-                    this.visitedPhases.add(phase);
+        ImplementationPlan restoredPlan;
+        WorkflowPhase restoredPhase;
+        WorkflowPhase restoredPendingPhase;
+        String restoredPendingReason;
+        synchronized (stateLock) {
+            this.currentPlan = saved.currentPlan();
+            if (saved.currentPhase() != null && saved.currentPhase() != WorkflowPhase.EXPLORE) {
+                this.currentPhase = saved.currentPhase();
+            } else {
+                this.currentPhase = WorkflowPhase.PLAN;
+            }
+            this.pendingPhase = saved.pendingPhase();
+            this.pendingReason = saved.pendingReason();
+            this.visitedPhases.clear();
+            this.visitedPhases.add(WorkflowPhase.PLAN);
+            if (saved.visitedPhases() != null) {
+                for (WorkflowPhase phase : saved.visitedPhases()) {
+                    if (phase != null && phase != WorkflowPhase.EXPLORE) {
+                        this.visitedPhases.add(phase);
+                    }
                 }
             }
-        }
-        this.visitedPhases.add(this.currentPhase);
-        if (saved.unassignedTaskUsage() != null) {
-            this.unassignedTaskUsage = saved.unassignedTaskUsage();
-        } else {
-            this.unassignedTaskUsage = ImplementationPlan.UsageSummary.EMPTY;
+            this.visitedPhases.add(this.currentPhase);
+            if (saved.unassignedTaskUsage() != null) {
+                this.unassignedTaskUsage = saved.unassignedTaskUsage();
+            } else {
+                this.unassignedTaskUsage = ImplementationPlan.UsageSummary.EMPTY;
+            }
+            restoredPlan = this.currentPlan;
+            restoredPhase = this.currentPhase;
+            restoredPendingPhase = this.pendingPhase;
+            restoredPendingReason = this.pendingReason;
         }
         if (publishEvents) {
-            publishPlanUpdated();
-            publishPhaseChanged();
-            publishTransitionRequested();
+            publishPlanUpdated(restoredPlan);
+            publishPhaseChanged(restoredPhase);
+            publishTransitionRequested(restoredPhase, restoredPendingPhase, restoredPendingReason);
         }
     }
 
@@ -760,7 +883,7 @@ public class PlanService {
         return ProjectService.resolveProjectDataPathSafely(projectService, ACTIVE_WORKFLOW_FILENAME);
     }
 
-    private boolean hasActiveWorkflowStateToPersist() {
+    private boolean hasActiveWorkflowStateToPersistLocked() {
         if (currentPlan != null || currentPhase != WorkflowPhase.PLAN || pendingPhase != null) {
             return true;
         }
@@ -770,39 +893,71 @@ public class PlanService {
         return visitedPhases.size() > 1;
     }
 
-    private void persistActiveWorkflowState() {
+    private @Nullable PersistSnapshot capturePersistSnapshotLocked() {
+        return capturePersistSnapshotLocked(false);
+    }
+
+    private @Nullable PersistSnapshot capturePersistSnapshotLocked(boolean forceDelete) {
         Path path = resolveActiveWorkflowPath();
         if (path == null) {
-            return;
+            return null;
         }
-        if (!hasActiveWorkflowStateToPersist()) {
-            PathUtils.deleteIfExistsQuietly(path);
-            return;
+        if (forceDelete || !hasActiveWorkflowStateToPersistLocked()) {
+            return new PersistSnapshot(path, null, true);
         }
+        ActiveWorkflowState state = new ActiveWorkflowState(currentPlan, currentPhase, pendingPhase, pendingReason,
+                List.copyOf(visitedPhases), unassignedTaskUsage);
+        return new PersistSnapshot(path, state, false);
+    }
+
+    private CompletableFuture<Void> enqueueWorkflowDiskOperation(@Nullable PersistSnapshot snapshot) {
+        if (snapshot == null || snapshot.path() == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+        synchronized (persistLock) {
+            CompletableFuture<Void> next = lastPersistFuture.thenRunAsync(() -> writeWorkflowStateToDisk(snapshot),
+                    Edt.VIRTUAL_EXECUTOR);
+            lastPersistFuture = next;
+            return next;
+        }
+    }
+
+    private static void writeWorkflowStateToDisk(PersistSnapshot snapshot) {
         try {
-            ActiveWorkflowState state = new ActiveWorkflowState(currentPlan, currentPhase, pendingPhase, pendingReason,
-                    List.copyOf(visitedPhases), unassignedTaskUsage);
-            PathUtils.writeJson(path, state);
+            if (snapshot.deleteOnly()) {
+                PathUtils.deleteIfExistsQuietly(snapshot.path());
+                return;
+            }
+            PathUtils.writeJson(snapshot.path(), snapshot.state());
         } catch (Exception e) {
             log.warn("Failed to persist active workflow state", e);
         }
     }
 
-    private void publishPhaseChanged() {
+    final void awaitPendingPersistence() {
+        CompletableFuture<Void> pending;
+        synchronized (persistLock) {
+            pending = lastPersistFuture;
+        }
+        pending.join();
+    }
+
+    private void publishPhaseChanged(WorkflowPhase phase) {
         if (eventPublisher != null) {
-            eventPublisher.publishEvent(new PhaseChangedEvent(currentPhase));
+            eventPublisher.publishEvent(new PhaseChangedEvent(phase));
         }
     }
 
-    private void publishTransitionRequested() {
+    private void publishTransitionRequested(WorkflowPhase fromPhase, @Nullable WorkflowPhase targetPendingPhase,
+            @Nullable String reason) {
         if (eventPublisher != null) {
-            eventPublisher.publishEvent(new WorkflowTransitionEvent(currentPhase, pendingPhase, pendingReason, false));
+            eventPublisher.publishEvent(new WorkflowTransitionEvent(fromPhase, targetPendingPhase, reason, false));
         }
     }
 
-    private void publishPlanUpdated() {
+    private void publishPlanUpdated(@Nullable ImplementationPlan plan) {
         if (eventPublisher != null) {
-            eventPublisher.publishEvent(new PlanUpdatedEvent(currentPlan));
+            eventPublisher.publishEvent(new PlanUpdatedEvent(plan));
         }
     }
 
@@ -826,22 +981,30 @@ public class PlanService {
                 + ". Current phase: " + current);
     }
 
-    private synchronized void addHandoffLogEntry(String timestamp, String user, String message) {
+    private void addHandoffLogEntryLocked(String timestamp, String user, String message) {
         if (currentPlan != null) {
-            setCurrentPlan(currentPlan.withAddedHandoffLogEntry(timestamp, user, message));
+            this.currentPlan = currentPlan.withAddedHandoffLogEntry(timestamp, user, message);
         }
     }
 
     @AgentDoc(value = "Adds a high-level summary entry to the handoff log.", phases = {"PLAN", "CODE",
             "REVIEW"}, examples = {"planService.addHandoffLogEntry('Completed refactoring of service layer')"})
-    public synchronized String addHandoffLogEntry(
-            @AgentDoc("The summary entry to add to the handoff log") String entry) {
+    public String addHandoffLogEntry(@AgentDoc("The summary entry to add to the handoff log") String entry) {
         requirePhase("addHandoffLogEntry");
-        ensureActivePlan();
         if (StringUtils.isBlank(entry)) {
             throw new IllegalArgumentException("Error: Handoff log entry cannot be null or blank.");
         }
-        addHandoffLogEntry(OffsetDateTime.now().toString(), "System", entry.trim());
+        ImplementationPlan updated;
+        PersistSnapshot snapshot;
+        synchronized (stateLock) {
+            requirePhase("addHandoffLogEntry");
+            ensureActivePlanLocked();
+            addHandoffLogEntryLocked(OffsetDateTime.now().toString(), "System", entry.trim());
+            updated = currentPlan;
+            snapshot = capturePersistSnapshotLocked();
+        }
+        enqueueWorkflowDiskOperation(snapshot);
+        publishPlanUpdated(updated);
         return "Handoff log entry added.";
     }
 }

@@ -449,6 +449,14 @@ class ChatControllerTest extends ChatTestFixture {
         assertEquals(ChatPanel.BUSY_PLACEHOLDER_TEXT, workingPlaceholder);
         assertEquals(4, chatPanel.inputArea.getRows());
 
+        // Verify placeholder property deduplication when updateTurnLabel() is called repeatedly while busy
+        java.util.concurrent.atomic.AtomicInteger placeholderChanges = new java.util.concurrent.atomic.AtomicInteger();
+        chatPanel.inputArea.addPropertyChangeListener(FlatClientProperties.PLACEHOLDER_TEXT,
+                evt -> placeholderChanges.incrementAndGet());
+        chatPanel.updateTurnLabel();
+        chatPanel.updateTurnLabel();
+        assertEquals(0, placeholderChanges.get());
+
         assertTrue(chatPanel.activityStripPanel.isVisible());
         assertTrue(chatPanel.activityAnimationTimer.isRunning());
         assertTrue(chatPanel.activityElapsedTimer.isRunning());
@@ -1155,5 +1163,61 @@ class ChatControllerTest extends ChatTestFixture {
         assertArrayEquals(pdfBytes, pdfsCaptor.getValue().get(0));
         assertFalse(panel.model.hasPendingAttachments());
         assertContainsAll(panel.outputArea.getText(), "[FILE] app.log", "[PDF] spec.pdf");
+    }
+
+    @Test
+    void testAsyncSendMessageOrdersUserBeforeAiAndGuardsCancelledTurn() throws Exception {
+        java.util.concurrent.ExecutorService asyncExecutor = java.util.concurrent.Executors.newSingleThreadExecutor();
+        try {
+            ChatPanel panel = createExploreChatPanel(asyncExecutor);
+            java.util.concurrent.CountDownLatch chatStarted = new java.util.concurrent.CountDownLatch(1);
+            java.util.concurrent.CountDownLatch allowChatReturn = new java.util.concurrent.CountDownLatch(1);
+
+            when(aiService.chat(eq("qa:default"), eq(WorkflowPhase.EXPLORE), anyString(), anyList(), anyList()))
+                    .thenAnswer(inv -> {
+                        chatStarted.countDown();
+                        if (!allowChatReturn.await(5, TimeUnit.SECONDS)) {
+                            throw new IllegalStateException("Timed out waiting to return AI response");
+                        }
+                        return "Fast AI reply";
+                    });
+
+            sendOnEdt(panel, "First user prompt");
+            assertTrue(chatStarted.await(5, TimeUnit.SECONDS));
+            allowChatReturn.countDown();
+
+            SwingTestUtils.awaitCondition(
+                    () -> SwingTestUtils.callOnEdt(() -> panel.exportMessages().size() >= 2 && !panel.isLoading()));
+            List<MarkdownPane.PersistedChatEntry> entries = panel.exportMessages();
+            assertEquals(2, entries.size());
+            assertEquals(ChatHtmlTemplates.ROLE_USER, entries.get(0).role());
+            assertEquals("First user prompt", entries.get(0).content());
+            assertEquals(ChatHtmlTemplates.ROLE_AI, entries.get(1).role());
+            assertEquals("Fast AI reply", entries.get(1).content());
+
+            // Verify cancellation before EDT append prevents stale user message from appearing after reset
+            java.util.concurrent.CountDownLatch secondStarted = new java.util.concurrent.CountDownLatch(1);
+            java.util.concurrent.CountDownLatch secondCancelled = new java.util.concurrent.CountDownLatch(1);
+            when(aiService.chat(eq("qa:default"), eq(WorkflowPhase.EXPLORE), anyString(), anyList(), anyList()))
+                    .thenAnswer(inv -> {
+                        secondStarted.countDown();
+                        try {
+                            secondCancelled.await(5, TimeUnit.SECONDS);
+                        } catch (InterruptedException ex) {
+                            Thread.currentThread().interrupt();
+                        }
+                        return "Should not appear";
+                    });
+
+            sendOnEdt(panel, "Cancelled prompt");
+            assertTrue(secondStarted.await(5, TimeUnit.SECONDS));
+            SwingTestUtils.runOnEdt(() -> panel.controller.performResetSession());
+            secondCancelled.countDown();
+            flushEdt();
+
+            assertTrue(panel.exportMessages().isEmpty());
+        } finally {
+            asyncExecutor.shutdownNow();
+        }
     }
 }

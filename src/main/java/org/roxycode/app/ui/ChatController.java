@@ -241,11 +241,9 @@ final class ChatController implements AutoCloseable {
                 UiComponents.CHAT_THUMBNAIL_MAX_DIM);
         List<String> attachedFileNames = ChatModel.extractAttachedFileNames(pendingAttachments);
         view.hideUserInputPrompt();
-        view.appendMessage(ROLE_USER, text, thumbnailBase64List, attachedFileNames);
-        persistActiveChatSession();
         view.clearInputText();
-
-        triggerTurn(text, pendingAttachments);
+        triggerTurn(() -> text, pendingAttachments,
+                new UserMessageRenderData(text, thumbnailBase64List, attachedFileNames));
     }
 
     private void handleSlashCommand(String text) {
@@ -646,14 +644,23 @@ final class ChatController implements AutoCloseable {
         triggerTurn(text, pendingAttachments);
     }
 
+    private record UserMessageRenderData(String text, List<String> thumbnailBase64List,
+            List<String> attachedFileNames) {
+    }
+
     private void triggerTurn(String text, List<PendingAttachment> pendingAttachments) {
         if (text == null || text.trim().isEmpty()) {
             return;
         }
-        triggerTurn(() -> text, pendingAttachments);
+        triggerTurn(() -> text, pendingAttachments, null);
     }
 
     private void triggerTurn(Supplier<String> promptSupplier, List<PendingAttachment> pendingAttachments) {
+        triggerTurn(promptSupplier, pendingAttachments, null);
+    }
+
+    private void triggerTurn(Supplier<String> promptSupplier, List<PendingAttachment> pendingAttachments,
+            @Nullable UserMessageRenderData userMessage) {
         if (promptSupplier == null) {
             return;
         }
@@ -669,6 +676,15 @@ final class ChatController implements AutoCloseable {
 
         FutureTask<Void> task = new FutureTask<>(() -> {
             try {
+                if (userMessage != null) {
+                    String userRenderedHtml = MarkdownPane.renderMarkdownBodySafely(userMessage.text());
+                    if (Thread.currentThread().isInterrupted() || model.isTurnCancelled()) {
+                        Edt.run(() -> finishTurnCancelled(turnId));
+                        return;
+                    }
+                    Edt.run(() -> appendPreRenderedUserMessage(turnId, userMessage.text(), userRenderedHtml,
+                            userMessage.thumbnailBase64List(), userMessage.attachedFileNames()));
+                }
                 String rawPromptText = promptSupplier.get();
                 if (rawPromptText == null || rawPromptText.trim().isEmpty()) {
                     Edt.run(() -> finishTurnCancelled(turnId));
@@ -700,6 +716,15 @@ final class ChatController implements AutoCloseable {
         }, null);
         activeTurnFuture = task;
         turnExecutor.execute(task);
+    }
+
+    private void appendPreRenderedUserMessage(long turnId, String text, String renderedHtml,
+            List<String> thumbnailBase64List, List<String> attachedFileNames) {
+        if (activeTurnId != turnId || model.isTurnCancelled()) {
+            return;
+        }
+        view.appendPreRenderedMessage(ROLE_USER, text, renderedHtml, null, thumbnailBase64List, attachedFileNames);
+        persistActiveChatSession();
     }
 
     private void finishTurn(long turnId, String role, String message, String renderedHtml, String extractedToml) {

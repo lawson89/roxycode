@@ -222,7 +222,7 @@ public final class SwingHtmlUtils {
 
             @Override
             public void changedUpdate(DocumentEvent e) {
-                onChange.run();
+                // Ignore attribute/style-only updates such as syntax highlighting
             }
         });
     }

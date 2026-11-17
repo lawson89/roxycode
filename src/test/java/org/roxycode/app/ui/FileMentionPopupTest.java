@@ -22,6 +22,15 @@ import org.roxycode.app.ui.FileMentionPopup.MentionToken;
 
 class FileMentionPopupTest {
 
+    private static void flushEvaluation(FileMentionPopup popup) {
+        SwingTestUtils.runOnEdt(() -> {
+            popup.evaluationDebounceTimer.stop();
+            popup.evaluateCurrentInput();
+        });
+        SwingTestUtils.awaitFuture(popup.lastEvaluationFuture);
+        SwingTestUtils.flushEdt();
+    }
+
     @Test
     void testExtractMentionTokenAndRejectInvalidCases() {
         assertEquals(new MentionToken(0, 1, "", '@'), FileMentionPopup.extractMentionToken("@", 1));
@@ -120,23 +129,29 @@ class FileMentionPopupTest {
 
         inputArea.setText("Check @Chat");
         inputArea.setCaretPosition(inputArea.getText().length());
-        SwingTestUtils.flushEdt();
+        flushEvaluation(popup);
 
         assertTrue(popup.isPopupVisible());
         assertEquals(1, popup.listModel.size());
+        int packsAfterFirstShow = popup.packCountForTesting;
+        assertTrue(packsAfterFirstShow >= 1);
         verify(grepService, times(1)).listFiles();
+
+        // Re-evaluating with same row count and width skips redundant pack()
+        SwingTestUtils.runOnEdt(() -> popup.updatePopupPosition(6));
+        assertEquals(packsAfterFirstShow, popup.packCountForTesting);
 
         popup.invalidateCache();
         verify(grepService, times(1)).listFiles();
 
         inputArea.setText("/help");
         inputArea.setCaretPosition(inputArea.getText().length());
-        SwingTestUtils.flushEdt();
+        flushEvaluation(popup);
         verify(grepService, times(1)).listFiles();
 
         inputArea.setText("Check @Chat");
         inputArea.setCaretPosition(inputArea.getText().length());
-        SwingTestUtils.flushEdt();
+        flushEvaluation(popup);
         assertTrue(popup.isPopupVisible());
         assertEquals(1, popup.listModel.size());
         verify(grepService, times(2)).listFiles();
@@ -208,14 +223,14 @@ class FileMentionPopupTest {
 
         inputArea.setText("/mem-g-v");
         inputArea.setCaretPosition(inputArea.getText().length());
-        SwingTestUtils.flushEdt();
+        flushEvaluation(popup);
 
         assertTrue(popup.isPopupVisible());
         assertEquals("/mem-g-view ", popup.candidateList.getSelectedValue().replacement());
 
         assertTrue(popup.acceptSelected());
         assertEquals("/mem-g-view ", inputArea.getText());
-        SwingTestUtils.flushEdt();
+        flushEvaluation(popup);
 
         assertTrue(popup.isPopupVisible());
         assertEquals(4, popup.listModel.size());

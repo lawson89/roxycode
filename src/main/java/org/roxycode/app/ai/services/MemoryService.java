@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Stream;
@@ -23,6 +24,7 @@ import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.events.ArchiveUpdatedEvent;
 import org.roxycode.app.events.MemoryChangedEvent;
+import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.ChatTranscriptEntry;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
@@ -32,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.EventListener;
 import org.springframework.lang.Nullable;
 
 @AgentService(value = "memoryService", phases = {"*"})
@@ -168,6 +171,7 @@ public class MemoryService {
     private final ProjectService projectService;
     private final ApplicationEventPublisher eventPublisher;
     private final Object storeLock = new Object();
+    private final Map<Path, List<MemoryEntry>> entriesCache = new ConcurrentHashMap<>();
 
     @Autowired
     public MemoryService(SettingsService settingsService, ProjectService projectService,
@@ -279,9 +283,10 @@ public class MemoryService {
             if (!replaced) {
                 existing.add(updatedEntry);
             }
-            EditorResult writeResult = writeStore(dir, existing,
-                    "Saved " + normalizedScope + " memory: " + sanitizedId);
+            List<MemoryEntry> sorted = sortEntries(existing);
+            EditorResult writeResult = writeStore(dir, sorted, "Saved " + normalizedScope + " memory: " + sanitizedId);
             if (writeResult.success()) {
+                entriesCache.put(dir.toAbsolutePath().normalize(), sorted);
                 publishMemoryChanged(SCOPE_GLOBAL.equals(normalizedScope));
             }
             return writeResult;
@@ -303,9 +308,11 @@ public class MemoryService {
             if (!removed) {
                 return new EditorResult(false, "", "Memory not found in " + normalizedScope + " scope: " + sanitizedId);
             }
-            EditorResult writeResult = writeStore(dir, existing,
+            List<MemoryEntry> sorted = sortEntries(existing);
+            EditorResult writeResult = writeStore(dir, sorted,
                     "Deleted " + normalizedScope + " memory: " + sanitizedId);
             if (writeResult.success()) {
+                entriesCache.put(dir.toAbsolutePath().normalize(), sorted);
                 publishMemoryChanged(SCOPE_GLOBAL.equals(normalizedScope));
             }
             return writeResult;
@@ -390,12 +397,32 @@ public class MemoryService {
         return resolveProjectSubdir(MEMORY_DIR);
     }
 
+    @EventListener
+    public void onProjectChanged(ProjectChangedEvent event) {
+        clearCache();
+    }
+
+    void clearCache() {
+        entriesCache.clear();
+    }
+
     private List<MemoryEntry> loadEntriesForDir(Path dir) {
+        Path normalizedDir = dir.toAbsolutePath().normalize();
+        List<MemoryEntry> cached = entriesCache.get(normalizedDir);
+        if (cached != null) {
+            return cached;
+        }
         synchronized (storeLock) {
-            Path storePath = dir.resolve(MEMORIES_FILE);
+            cached = entriesCache.get(normalizedDir);
+            if (cached != null) {
+                return cached;
+            }
+            Path storePath = normalizedDir.resolve(MEMORIES_FILE);
             MemoryStoreFile store = PathUtils.readJsonOrDefault(storePath, MemoryStoreFile.class,
                     new MemoryStoreFile(List.of()));
-            return sortEntries(store.memories());
+            List<MemoryEntry> sorted = sortEntries(store.memories());
+            entriesCache.put(normalizedDir, sorted);
+            return sorted;
         }
     }
 

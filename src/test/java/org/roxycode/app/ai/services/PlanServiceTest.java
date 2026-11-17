@@ -221,9 +221,11 @@ class PlanServiceTest {
         verify(eventPublisher).publishEvent(
                 new WorkflowTransitionEvent(WorkflowPhase.REVIEW, WorkflowPhase.PLAN, "All checks passed", false));
 
+        archivingService.awaitPendingPersistence();
         assertTrue(Files.exists(projectAWorkflowFile));
         when(envService.getCurrentUser()).thenReturn("bob");
         archivingService.approveTransition();
+        archivingService.awaitPendingPersistence();
         assertEquals(WorkflowPhase.PLAN, archivingService.getCurrentPhase());
         assertNull(archivingService.getCurrentPlan());
         assertFalse(Files.exists(projectAWorkflowFile),
@@ -249,6 +251,7 @@ class PlanServiceTest {
         assertNotNull(archivingService.getCurrentPlan());
         assertEquals(WorkflowPhase.CODE, archivingService.getPendingPhase());
         assertEquals("Go", archivingService.getPendingReason());
+        archivingService.awaitPendingPersistence();
         assertTrue(Files.exists(projectAWorkflowFile));
 
         // Switch to Project B (no saved workflow): resets in-memory state without deleting Project A's file
@@ -281,6 +284,7 @@ class PlanServiceTest {
         assertEquals(WorkflowPhase.CODE, restartedService.getPendingPhase());
 
         restartedService.resetWorkflow();
+        restartedService.awaitPendingPersistence();
         assertNull(restartedService.getCurrentPlan());
         assertNull(restartedService.getPendingPhase());
         assertFalse(Files.exists(projectAWorkflowFile));
@@ -317,6 +321,41 @@ class PlanServiceTest {
         assertNull(archivingService.getCurrentPlan().finalReviewNotes());
         assertTrue(archivingService.getCurrentPlan().technicalSteps().stream()
                 .anyMatch(s -> !s.completed() && s.description().contains("Handle null input in parser")));
+        archivingService.awaitPendingPersistence();
+    }
+
+    @Test
+    void testStateLockDoesNotBlockOnSlowEventListener() throws Exception {
+        java.util.concurrent.CountDownLatch listenerEntered = new java.util.concurrent.CountDownLatch(1);
+        java.util.concurrent.CountDownLatch releaseListener = new java.util.concurrent.CountDownLatch(1);
+        ApplicationEventPublisher blockingPublisher = event -> {
+            if (event instanceof org.roxycode.app.events.PlanUpdatedEvent) {
+                listenerEntered.countDown();
+                try {
+                    releaseListener.await(5, java.util.concurrent.TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        };
+        EnvironmentService envService = mock(EnvironmentService.class);
+        ProjectService projService = mock(ProjectService.class);
+        when(projService.hasActiveProject()).thenReturn(false);
+
+        PlanService concurrentService = new PlanService(envService, blockingPublisher, projService);
+        Thread submitThread = new Thread(
+                () -> concurrentService.submitPlan("Concurrent", "Goal", new String[]{"Req"}, new String[]{"Step"}));
+        submitThread.start();
+        assertTrue(listenerEntered.await(5, java.util.concurrent.TimeUnit.SECONDS));
+
+        // While event listener is blocked, reading current phase and plan must not deadlock or block
+        assertEquals(WorkflowPhase.PLAN, concurrentService.getCurrentPhase());
+        assertNotNull(concurrentService.getCurrentPlan());
+
+        releaseListener.countDown();
+        submitThread.join(5000);
+        assertFalse(submitThread.isAlive());
+        concurrentService.awaitPendingPersistence();
     }
 
     @Test
