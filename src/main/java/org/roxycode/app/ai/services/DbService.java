@@ -32,6 +32,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.jspecify.annotations.Nullable;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
@@ -44,6 +46,7 @@ import org.roxycode.app.service.CredentialStoreService;
 import org.roxycode.app.service.DatabaseConfigService;
 import org.roxycode.app.service.DatabaseConfigService.ResolvedDatabaseConnection;
 import org.roxycode.app.util.ExceptionUtils;
+import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
@@ -58,7 +61,7 @@ public class DbService implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(DbService.class);
     private static final String DOC_CONNECTION_ID = "The granted connection id";
-    private static final String USER_HOME_TOKEN = "~";
+
     private static final int MAX_CELL_CHARS = 4000;
     private static final int IDLE_EVICTION_SECONDS = 90;
     private static final int VALIDATION_TIMEOUT_SECONDS = 3;
@@ -173,17 +176,17 @@ public class DbService implements AutoCloseable {
     public List<DbTableSummary> listTables(@AgentDoc(DOC_CONNECTION_ID) String connectionId,
             @AgentDoc("Schema pattern (e.g. 'public', or empty/null for all schemas)") @Nullable String schemaPattern) {
         ResolvedDatabaseConnection resolved = requireActiveConnection(connectionId);
-        String normalizedSchema = normalizeNullablePattern(schemaPattern);
+        String normalizedSchema = StringUtils.trimToNull(schemaPattern);
         return executeWithConnection(resolved, conn -> {
             DatabaseMetaData meta = conn.getMetaData();
             List<DbTableSummary> tables = new ArrayList<>();
             String[] types = new String[]{"TABLE", "VIEW", "MATERIALIZED VIEW"};
             try (ResultSet rs = meta.getTables(null, normalizedSchema, "%", types)) {
                 while (rs.next()) {
-                    String schema = safeString(rs.getString("TABLE_SCHEM"));
-                    String name = safeString(rs.getString("TABLE_NAME"));
-                    String tableType = safeString(rs.getString("TABLE_TYPE"));
-                    String remarks = safeString(rs.getString("REMARKS"));
+                    String schema = StringUtils.defaultString(rs.getString("TABLE_SCHEM"));
+                    String name = StringUtils.defaultString(rs.getString("TABLE_NAME"));
+                    String tableType = StringUtils.defaultString(rs.getString("TABLE_TYPE"));
+                    String remarks = StringUtils.defaultString(rs.getString("REMARKS"));
                     tables.add(new DbTableSummary(schema, name, tableType, remarks));
                 }
             }
@@ -206,7 +209,7 @@ public class DbService implements AutoCloseable {
             throw new IllegalArgumentException("Table name must not be blank.");
         }
         ResolvedDatabaseConnection resolved = requireActiveConnection(connectionId);
-        String effectiveSchema = normalizeNullablePattern(schema);
+        String effectiveSchema = StringUtils.trimToNull(schema);
         String targetTable = tableName.trim();
 
         return executeWithConnection(resolved, conn -> {
@@ -215,11 +218,11 @@ public class DbService implements AutoCloseable {
             String resolvedTableType = "TABLE";
             try (ResultSet tableRs = meta.getTables(null, effectiveSchema, targetTable, null)) {
                 if (tableRs.next()) {
-                    String foundSchema = safeString(tableRs.getString("TABLE_SCHEM"));
+                    String foundSchema = StringUtils.defaultString(tableRs.getString("TABLE_SCHEM"));
                     if (!foundSchema.isBlank()) {
                         resolvedSchema = foundSchema;
                     }
-                    String foundType = safeString(tableRs.getString("TABLE_TYPE"));
+                    String foundType = StringUtils.defaultString(tableRs.getString("TABLE_TYPE"));
                     if (!foundType.isBlank()) {
                         resolvedTableType = foundType;
                     }
@@ -239,13 +242,13 @@ public class DbService implements AutoCloseable {
             List<DbColumnInfo> columns = new ArrayList<>();
             try (ResultSet colRs = meta.getColumns(null, resolvedSchema, targetTable, "%")) {
                 while (colRs.next()) {
-                    String colName = safeString(colRs.getString("COLUMN_NAME"));
-                    String typeName = safeString(colRs.getString("TYPE_NAME"));
+                    String colName = StringUtils.defaultString(colRs.getString("COLUMN_NAME"));
+                    String typeName = StringUtils.defaultString(colRs.getString("TYPE_NAME"));
                     int columnSize = colRs.getInt("COLUMN_SIZE");
                     int nullableFlag = colRs.getInt("NULLABLE");
                     boolean nullable = nullableFlag != DatabaseMetaData.columnNoNulls;
-                    String defaultValue = safeString(colRs.getString("COLUMN_DEF"));
-                    String remarks = safeString(colRs.getString("REMARKS"));
+                    String defaultValue = StringUtils.defaultString(colRs.getString("COLUMN_DEF"));
+                    String remarks = StringUtils.defaultString(colRs.getString("REMARKS"));
                     columns.add(new DbColumnInfo(colName, typeName, columnSize, nullable, defaultValue,
                             pkColumns.contains(colName), remarks));
                 }
@@ -278,17 +281,17 @@ public class DbService implements AutoCloseable {
             List<DbForeignKeyInfo> foreignKeys = new ArrayList<>();
             try (ResultSet fkRs = meta.getImportedKeys(null, resolvedSchema, targetTable)) {
                 while (fkRs.next()) {
-                    String fkName = safeString(fkRs.getString("FK_NAME"));
-                    String fkCol = safeString(fkRs.getString("FKCOLUMN_NAME"));
-                    String pkTable = safeString(fkRs.getString("PKTABLE_NAME"));
-                    String pkCol = safeString(fkRs.getString("PKCOLUMN_NAME"));
+                    String fkName = StringUtils.defaultString(fkRs.getString("FK_NAME"));
+                    String fkCol = StringUtils.defaultString(fkRs.getString("FKCOLUMN_NAME"));
+                    String pkTable = StringUtils.defaultString(fkRs.getString("PKTABLE_NAME"));
+                    String pkCol = StringUtils.defaultString(fkRs.getString("PKCOLUMN_NAME"));
                     foreignKeys.add(new DbForeignKeyInfo(fkName, fkCol, pkTable, pkCol));
                 }
             } catch (SQLException e) {
                 log.debug("Foreign key metadata unavailable for {}: {}", targetTable, e.getMessage());
             }
 
-            return new DbTableDescription(safeString(resolvedSchema), targetTable, resolvedTableType,
+            return new DbTableDescription(StringUtils.defaultString(resolvedSchema), targetTable, resolvedTableType,
                     List.copyOf(columns), List.copyOf(indexes), List.copyOf(foreignKeys));
         });
     }
@@ -340,8 +343,8 @@ public class DbService implements AutoCloseable {
         try (Connection conn = openReadOnlyConnection(config, password)) {
             try {
                 DatabaseMetaData meta = conn.getMetaData();
-                String product = safeString(meta.getDatabaseProductName());
-                String version = safeString(meta.getDatabaseProductVersion());
+                String product = StringUtils.defaultString(meta.getDatabaseProductName());
+                String version = StringUtils.defaultString(meta.getDatabaseProductVersion());
                 String summary = (product + " " + version).trim();
                 boolean writeWarning = detectWritePrivileges(conn, config);
                 long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
@@ -584,7 +587,7 @@ public class DbService implements AutoCloseable {
             if (raw == null || raw.isBlank()) {
                 continue;
             }
-            Path path = expandUserHome(raw.trim()).toAbsolutePath().normalize();
+            Path path = PathUtils.expandUserHome(raw).toAbsolutePath().normalize();
             if (!Files.exists(path)) {
                 throw new IOException("Configured driver path does not exist: " + path);
             }
@@ -607,17 +610,6 @@ public class DbService implements AutoCloseable {
             }
         }
         return List.copyOf(resolvedJars);
-    }
-
-    private static Path expandUserHome(String rawPath) {
-        String userHome = System.getProperty("user.home", "");
-        if (USER_HOME_TOKEN.equals(rawPath)) {
-            return Path.of(userHome);
-        }
-        if (rawPath.startsWith("~/") || rawPath.startsWith("~")) {
-            return Path.of(userHome, rawPath.substring(2));
-        }
-        return Path.of(rawPath);
     }
 
     static String normalizeUrlForReadOnly(String rawUrl, DatabaseType dbType, List<String> driverPaths) {
@@ -723,7 +715,7 @@ public class DbService implements AutoCloseable {
                 try (Statement stmt = conn.createStatement();
                         ResultSet rs = stmt.executeQuery("SHOW GRANTS FOR CURRENT_USER()")) {
                     while (rs.next()) {
-                        String grant = safeString(rs.getString(1)).toUpperCase(Locale.ROOT);
+                        String grant = StringUtils.defaultString(rs.getString(1)).toUpperCase(Locale.ROOT);
                         if (grant.contains("ALL PRIVILEGES") || grant.contains("INSERT") || grant.contains("UPDATE")
                                 || grant.contains("DELETE")) {
                             return true;
@@ -792,23 +784,13 @@ public class DbService implements AutoCloseable {
     }
 
     private static String readClobTruncated(Clob clob) {
-        StringBuilder sb = new StringBuilder();
         try (Reader reader = clob.getCharacterStream()) {
-            char[] buffer = new char[1024];
-            int remaining = MAX_CELL_CHARS + 1;
-            int read = reader.read(buffer, 0, Math.min(buffer.length, remaining));
-            while (remaining > 0 && read != -1) {
-                sb.append(buffer, 0, read);
-                remaining -= read;
-                if (remaining > 0) {
-                    read = reader.read(buffer, 0, Math.min(buffer.length, remaining));
-                }
+            char[] buffer = new char[MAX_CELL_CHARS + 1];
+            int read = IOUtils.read(reader, buffer);
+            if (read > MAX_CELL_CHARS) {
+                return new String(buffer, 0, MAX_CELL_CHARS) + "... [truncated]";
             }
-            if (sb.length() > MAX_CELL_CHARS) {
-                sb.setLength(MAX_CELL_CHARS);
-                sb.append("... [truncated]");
-            }
-            return sb.toString();
+            return new String(buffer, 0, Math.max(0, read));
         } catch (Exception e) {
             return "[CLOB]";
         }
@@ -878,20 +860,6 @@ public class DbService implements AutoCloseable {
         } catch (IOException e) {
             log.debug("Driver ClassLoader close error ignored: {}", e.getMessage());
         }
-    }
-
-    private static @Nullable String normalizeNullablePattern(@Nullable String raw) {
-        if (raw == null || raw.isBlank()) {
-            return null;
-        }
-        return raw.trim();
-    }
-
-    private static String safeString(@Nullable String value) {
-        if (value == null) {
-            return "";
-        }
-        return value;
     }
 
     private static final class IndexAccumulator {

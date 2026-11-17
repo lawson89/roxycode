@@ -242,15 +242,7 @@ public class PromptService {
     }
 
     static String formatMemoryCatalogLine(MemoryMetadata entry) {
-        StringBuilder line = new StringBuilder("- `").append(entry.id()).append("`");
-        if (entry.tags() != null && !entry.tags().isEmpty()) {
-            line.append(" [").append(String.join(", ", entry.tags())).append("]");
-        }
-        if (entry.hasDetails()) {
-            line.append(" (+details)");
-        }
-        line.append(": ").append(entry.summary());
-        return line.toString();
+        return MemoryService.formatCatalogLine(entry);
     }
 
     private static boolean appendCatalog(StringBuilder sb, String title, List<String> items, int limit,

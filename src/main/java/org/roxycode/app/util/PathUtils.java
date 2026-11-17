@@ -26,6 +26,7 @@ import org.springframework.core.io.ClassPathResource;
 
 public final class PathUtils {
     private static final String CURRENT_DIR = ".";
+    private static final String USER_HOME_TOKEN = "~";
 
     private static final String MD_EXTENSION = ".md";
     private static final DateTimeFormatter ARCHIVE_TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss",
@@ -180,6 +181,28 @@ public final class PathUtils {
         } catch (UnsupportedOperationException ignored) {
             // Ignore on non-POSIX filesystems
         }
+    }
+
+    /**
+     * Expands a leading {@code ~}, {@code ~/...}, or {@code ~\...} path prefix against the {@code user.home} system
+     * property. Paths like {@code ~username/...} are returned as-is without stripping characters.
+     *
+     * @param rawPath
+     *            the raw path string
+     * @return the expanded {@link Path}
+     */
+    public static Path expandUserHome(String rawPath) {
+        String trimmed = StringUtils.trimToEmpty(rawPath);
+        String userHome = System.getProperty("user.home");
+        if (StringUtils.isNotBlank(userHome)) {
+            if (USER_HOME_TOKEN.equals(trimmed)) {
+                return Path.of(userHome);
+            }
+            if (trimmed.startsWith("~/") || trimmed.startsWith("~\\")) {
+                return Path.of(userHome).resolve(trimmed.substring(2));
+            }
+        }
+        return Path.of(trimmed);
     }
 
     /**

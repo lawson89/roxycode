@@ -12,9 +12,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import org.apache.commons.lang3.StringUtils;
@@ -22,6 +21,7 @@ import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.ExceptionUtils;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.lang.Nullable;
@@ -222,12 +222,17 @@ public class PdfService {
         Semaphore semaphore = new Semaphore(BATCH_CONCURRENCY_LIMIT);
         Map<String, Future<EditorResult>> futures = new LinkedHashMap<>();
         Map<String, String> results = new LinkedHashMap<>();
-        try (ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
-            for (String path : targetPaths) {
-                futures.put(path, executor.submit(() -> analyzeWithPermit(semaphore, path, prompt)));
-            }
+        for (String path : targetPaths) {
+            futures.put(path, CompletableFuture.supplyAsync(() -> analyzeWithPermit(semaphore, path, prompt),
+                    Edt.VIRTUAL_EXECUTOR));
+        }
+        try {
             for (Map.Entry<String, Future<EditorResult>> entry : futures.entrySet()) {
                 results.put(entry.getKey(), resolveFutureResult(entry.getValue()));
+            }
+        } finally {
+            for (Future<EditorResult> future : futures.values()) {
+                future.cancel(true);
             }
         }
         if (totalCount > MAX_BATCH_PDFS) {
@@ -281,11 +286,6 @@ public class PdfService {
         if (bytes == null || bytes.length < PDF_MAGIC_HEADER.length) {
             return false;
         }
-        for (int i = 0; i < PDF_MAGIC_HEADER.length; i++) {
-            if (bytes[i] != PDF_MAGIC_HEADER[i]) {
-                return false;
-            }
-        }
-        return true;
+        return Arrays.equals(bytes, 0, PDF_MAGIC_HEADER.length, PDF_MAGIC_HEADER, 0, PDF_MAGIC_HEADER.length);
     }
 }

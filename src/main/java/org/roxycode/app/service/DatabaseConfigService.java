@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
 import org.roxycode.app.events.DatabaseConfigChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
@@ -121,23 +122,14 @@ public class DatabaseConfigService {
      * Looks up a global database connection by id.
      */
     public Optional<DatabaseConnectionConfig> findGlobalConnection(String connectionId) {
-        if (connectionId == null || connectionId.isBlank()) {
-            return Optional.empty();
-        }
-        String target = connectionId.trim();
-        for (DatabaseConnectionConfig config : listGlobalConnections()) {
-            if (config.id().equals(target)) {
-                return Optional.of(config);
-            }
-        }
-        return Optional.empty();
+        return findById(listGlobalConnections(), connectionId, DatabaseConnectionConfig::id);
     }
 
     /**
      * Saves (inserts or updates) a global database connection and optionally updates its stored password.
      */
-    public DatabaseConnectionConfig saveGlobalConnection(DatabaseConnectionConfig config, @Nullable String newPassword,
-            boolean clearPassword) throws IOException {
+    public DatabaseConnectionConfig saveGlobalConnection(DatabaseConnectionConfig config, @Nullable String newPassword)
+            throws IOException {
         if (config == null) {
             throw new IllegalArgumentException("Database connection config must not be null.");
         }
@@ -163,9 +155,7 @@ public class DatabaseConfigService {
             cachedGlobalPath = globalPath;
             cachedGlobalConnections = List.copyOf(updated);
 
-            if (clearPassword) {
-                credentialStoreService.deletePassword(config.id());
-            } else if (newPassword != null && !newPassword.isEmpty()
+            if (newPassword != null && !newPassword.isEmpty()
                     && config.resolveCredentialSource() == CredentialSource.KEYRING) {
                 credentialStoreService.savePassword(config.id(), newPassword);
             }
@@ -285,13 +275,17 @@ public class DatabaseConfigService {
      * Finds an active granted connection for the current project by connection id.
      */
     public Optional<ResolvedDatabaseConnection> findActiveProjectConnection(String connectionId) {
+        return findById(listActiveProjectConnections(), connectionId, resolved -> resolved.config().id());
+    }
+
+    private static <T> Optional<T> findById(List<T> items, String connectionId, Function<T, String> idExtractor) {
         if (connectionId == null || connectionId.isBlank()) {
             return Optional.empty();
         }
         String target = connectionId.trim();
-        for (ResolvedDatabaseConnection resolved : listActiveProjectConnections()) {
-            if (resolved.config().id().equals(target)) {
-                return Optional.of(resolved);
+        for (T item : items) {
+            if (target.equals(idExtractor.apply(item))) {
+                return Optional.of(item);
             }
         }
         return Optional.empty();

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.ArrayList;
 import java.util.List;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.util.PathUtils;
 
 /**
@@ -25,16 +26,16 @@ public record DatabaseConnectionConfig(@JsonProperty("id") String id, @JsonPrope
 
     public DatabaseConnectionConfig {
         id = normalizeId(id, displayName);
-        displayName = normalizeText(displayName, id);
-        description = normalizeText(description, "");
+        displayName = StringUtils.defaultIfBlank(StringUtils.trimToEmpty(displayName), id);
+        description = StringUtils.trimToEmpty(description);
         type = DatabaseType.fromString(type).getId();
-        url = normalizeText(url, "");
-        username = normalizeText(username, "");
+        url = StringUtils.trimToEmpty(url);
+        username = StringUtils.trimToEmpty(username);
         credentialSource = CredentialSource.fromString(credentialSource).getId();
-        passwordEnv = normalizeText(passwordEnv, "");
+        passwordEnv = StringUtils.trimToEmpty(passwordEnv);
         driverPaths = normalizeDriverPaths(driverPaths);
-        driverClass = normalizeText(driverClass, "");
-        defaultSchema = normalizeText(defaultSchema, "");
+        driverClass = StringUtils.trimToEmpty(driverClass);
+        defaultSchema = StringUtils.trimToEmpty(defaultSchema);
         queryTimeoutSeconds = clampInt(queryTimeoutSeconds, DEFAULT_TIMEOUT_SECONDS, 1, MAX_TIMEOUT_SECONDS);
         maxRows = clampInt(maxRows, DEFAULT_MAX_ROWS, 1, MAX_ROWS_LIMIT);
     }
@@ -73,13 +74,6 @@ public record DatabaseConnectionConfig(@JsonProperty("id") String id, @JsonPrope
         return "database";
     }
 
-    private static String normalizeText(String value, String fallback) {
-        if (value == null || value.isBlank()) {
-            return fallback;
-        }
-        return value.trim();
-    }
-
     private static List<String> normalizeDriverPaths(List<String> rawPaths) {
         if (rawPaths == null || rawPaths.isEmpty()) {
             return List.of();
@@ -100,13 +94,7 @@ public record DatabaseConnectionConfig(@JsonProperty("id") String id, @JsonPrope
         if (value <= 0) {
             return defaultValue;
         }
-        if (value < min) {
-            return min;
-        }
-        if (value > max) {
-            return max;
-        }
-        return value;
+        return Math.clamp(value, min, max);
     }
 
     @Override

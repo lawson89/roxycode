@@ -931,6 +931,43 @@ public class MemoryService {
         return String.join(", ", tags);
     }
 
+    /**
+     * Formats a concise single-line catalog entry ({@code - `id` [tags] (+details): summary}) for prompts and chat
+     * listings.
+     *
+     * @param entry
+     *            the memory metadata entry
+     * @return the formatted Markdown catalog line
+     */
+    public static String formatCatalogLine(MemoryMetadata entry) {
+        return formatCatalogLine(entry.id(), entry.tags(), entry.hasDetails(), entry.summary());
+    }
+
+    /**
+     * Formats a concise single-line catalog entry ({@code - `id` [tags] (+details): summary}) for token estimation and
+     * summaries.
+     *
+     * @param entry
+     *            the full memory entry
+     * @return the formatted Markdown catalog line
+     */
+    public static String formatCatalogLine(MemoryEntry entry) {
+        return formatCatalogLine(entry.id(), entry.tags(), StringUtils.isNotBlank(entry.details()), entry.summary());
+    }
+
+    private static String formatCatalogLine(String id, @Nullable List<String> tags, boolean hasDetails,
+            String summary) {
+        StringBuilder line = new StringBuilder("- `").append(id).append('`');
+        if (tags != null && !tags.isEmpty()) {
+            line.append(" [").append(formatTagsDisplay(tags)).append(']');
+        }
+        if (hasDetails) {
+            line.append(" (+details)");
+        }
+        line.append(": ").append(StringUtils.defaultString(summary));
+        return line.toString();
+    }
+
     static String sanitizeArchiveFilename(String filename) {
         if (StringUtils.isBlank(filename)) {
             throw new IllegalArgumentException("Archived filename must not be blank");

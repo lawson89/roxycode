@@ -76,7 +76,6 @@ public class AiService implements AutoCloseable {
     public static final String DIAGRAM_FIX_ACTIVITY_MESSAGE = "Fixing diagram syntax error...";
     static final String GROUNDED_SEARCH_SYSTEM_PROMPT = "You are a technical research assistant. Use Google Search to provide accurate, up-to-date facts, synthesis, and source URLs or citations when available.";
     static final String FLASH_UTILITY_MODEL = "gemini-3.8-flash";
-    static final String TOPIC_TITLE_MODEL = FLASH_UTILITY_MODEL;
     static final int PDF_ANALYSIS_MAX_OUTPUT_TOKENS = 65_536;
     static final String PDF_ANALYSIS_SYSTEM_PROMPT = "You are a precise technical document analyst. Extract, transcribe, and summarize PDF content accurately in clean Markdown, preserving headings, tables, code/formulas, diagram descriptions, and [Page N] citations without fabricating details.";
     static final String DEFAULT_PDF_ANALYSIS_PROMPT = "Extract and summarize the contents of this PDF in structured Markdown with section headings, tables, diagram/figure descriptions, key terms, and [Page N] citations.";

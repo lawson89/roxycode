@@ -45,7 +45,7 @@ class ImplementationPlanTest {
         ImplementationPlan withCommit = plan
                 .withFinalReviewNotes("  ### Audit Summary" + LF + "- All requirements verified  ")
                 .withCommitMessage("feat: add branch diff" + LF + LF + "- Add getBranchDiff()");
-        assertEquals("### Audit Summary" + LF + "- All requirements verified", withCommit.getFinalReviewNotes());
+        assertEquals("### Audit Summary" + LF + "- All requirements verified", withCommit.finalReviewNotes());
         assertEquals("feat: add branch diff" + LF + LF + "- Add getBranchDiff()", withCommit.commitMessage());
         String withCommitMd = withCommit.toMarkdown(false);
         SwingTestUtils.assertContainsAll(withCommitMd, "## Final Review Notes", "### Audit Summary",

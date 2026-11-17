@@ -332,7 +332,7 @@ final class ChatController implements AutoCloseable {
             StringBuilder sb = new StringBuilder("### ").append(StringUtils.capitalize(scope)).append(" Memories (")
                     .append(entries.size()).append(")\n");
             for (MemoryMetadata entry : entries) {
-                sb.append(formatMemoryListLine(entry)).append("\n");
+                sb.append(MemoryService.formatCatalogLine(entry)).append("\n");
             }
             view.appendMessage(ROLE_SYSTEM, sb.toString().stripTrailing());
             return;
@@ -411,7 +411,7 @@ final class ChatController implements AutoCloseable {
         StringBuilder sb = new StringBuilder("### Matching ").append(StringUtils.capitalize(scope))
                 .append(" Memories (").append(matches.size()).append(")\n");
         for (MemoryMetadata entry : matches) {
-            sb.append(formatMemoryListLine(entry)).append("\n");
+            sb.append(MemoryService.formatCatalogLine(entry)).append("\n");
         }
         view.appendMessage(ROLE_SYSTEM, sb.toString().stripTrailing());
     }
@@ -436,18 +436,6 @@ final class ChatController implements AutoCloseable {
         } catch (IllegalArgumentException e) {
             view.appendMessage(ROLE_SYSTEM, "Invalid memory id: " + e.getMessage());
         }
-    }
-
-    private static String formatMemoryListLine(MemoryMetadata entry) {
-        StringBuilder line = new StringBuilder("- ").append(BT).append(entry.id()).append(BT);
-        if (!entry.tags().isEmpty()) {
-            line.append(" [").append(MemoryService.formatTagsDisplay(entry.tags())).append("]");
-        }
-        if (entry.hasDetails()) {
-            line.append(" (+details)");
-        }
-        line.append(": ").append(entry.summary());
-        return line.toString();
     }
 
     private boolean cancelActiveTurnState(boolean markCancelled) {

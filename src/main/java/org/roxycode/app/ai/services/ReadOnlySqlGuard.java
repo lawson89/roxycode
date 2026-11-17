@@ -59,17 +59,9 @@ public final class ReadOnlySqlGuard {
         if (SAFE_SQLITE_PRAGMA.matcher(normalized).matches() || SAFE_SHOW_FALLBACK.matcher(normalized).matches()) {
             return normalized;
         }
-        List<Statement> statements;
-        try {
-            statements = CCJSqlParserUtil.parseStatements(normalized).getStatements();
-        } catch (JSQLParserException e) {
-            throw new IllegalArgumentException(
-                    "SQL could not be parsed as a valid read-only statement: " + e.getMessage(), e);
-        }
-        if (statements == null || statements.size() != 1) {
-            throw new IllegalArgumentException("Only a single read-only SQL statement is allowed.");
-        }
-        validateStatement(statements.get(0));
+        Statement stmt = parseSingleStatement(normalized, "SQL could not be parsed as a valid read-only statement: ",
+                "Only a single read-only SQL statement is allowed.");
+        validateStatement(stmt);
         return normalized;
     }
 
@@ -82,22 +74,27 @@ public final class ReadOnlySqlGuard {
      */
     public static String validateSelectOnly(String rawSql) {
         String normalized = prepareAndCheckSingleStatement(rawSql);
-        List<Statement> statements;
-        try {
-            statements = CCJSqlParserUtil.parseStatements(normalized).getStatements();
-        } catch (JSQLParserException e) {
-            throw new IllegalArgumentException("SQL could not be parsed as a valid SELECT statement: " + e.getMessage(),
-                    e);
-        }
-        if (statements == null || statements.size() != 1) {
-            throw new IllegalArgumentException("EXPLAIN requires a single SELECT statement.");
-        }
-        Statement stmt = statements.get(0);
+        Statement stmt = parseSingleStatement(normalized, "SQL could not be parsed as a valid SELECT statement: ",
+                "EXPLAIN requires a single SELECT statement.");
         if (!(stmt instanceof Select select)) {
             throw new IllegalArgumentException("EXPLAIN only supports read-only SELECT statements.");
         }
         validateSelect(select);
         return normalized;
+    }
+
+    private static Statement parseSingleStatement(String normalizedSql, String parseErrorPrefix,
+            String multiStatementMessage) {
+        List<Statement> statements;
+        try {
+            statements = CCJSqlParserUtil.parseStatements(normalizedSql).getStatements();
+        } catch (JSQLParserException e) {
+            throw new IllegalArgumentException(parseErrorPrefix + e.getMessage(), e);
+        }
+        if (statements == null || statements.size() != 1) {
+            throw new IllegalArgumentException(multiStatementMessage);
+        }
+        return statements.get(0);
     }
 
     private static String prepareAndCheckSingleStatement(String rawSql) {

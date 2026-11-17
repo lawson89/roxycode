@@ -394,14 +394,7 @@ final class AgentMemoryPanel extends JPanel {
             }
             StringBuilder sb = new StringBuilder();
             for (MemoryEntry entry : allEntries) {
-                sb.append("- ").append(entry.id()).append(' ');
-                if (!entry.tags().isEmpty()) {
-                    sb.append(String.join(", ", entry.tags())).append(' ');
-                }
-                if (StringUtils.isNotBlank(entry.details())) {
-                    sb.append("(+details) ");
-                }
-                sb.append(entry.summary()).append('\n');
+                sb.append(MemoryService.formatCatalogLine(entry)).append('\n');
             }
             return TokenUtils.estimateTokens(sb.toString());
         }
@@ -475,7 +468,9 @@ final class AgentMemoryPanel extends JPanel {
             updateTabTitle(globalScope, allEntries.size());
             applyFilter();
             if (selectedEntry != null) {
-                MemoryEntry refreshed = findEntryById(allEntries, selectedEntry.id());
+                String selectedId = selectedEntry.id();
+                MemoryEntry refreshed = allEntries.stream().filter(e -> e.id().equals(selectedId)).findFirst()
+                        .orElse(null);
                 if (refreshed != null) {
                     if (!isEditorDirty()) {
                         populateEditor(refreshed);
@@ -484,15 +479,6 @@ final class AgentMemoryPanel extends JPanel {
                     startNewEntry();
                 }
             }
-        }
-
-        private static @Nullable MemoryEntry findEntryById(List<MemoryEntry> entries, String id) {
-            for (MemoryEntry candidate : entries) {
-                if (candidate.id().equals(id)) {
-                    return candidate;
-                }
-            }
-            return null;
         }
 
         private void applyFilter() {

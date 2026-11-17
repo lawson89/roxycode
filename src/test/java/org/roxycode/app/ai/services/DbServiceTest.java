@@ -44,7 +44,7 @@ class DbServiceTest {
         try (harness.credStore; DbService dbService = harness.dbService) {
             DatabaseConnectionConfig h2Cfg = new DatabaseConnectionConfig("h2-qa", "H2 QA",
                     "QA orders and customers database", "h2", h2Url, "sa", "none", "", List.of(), "", "PUBLIC", 15, 2);
-            harness.configService.saveGlobalConnection(h2Cfg, null, false);
+            harness.configService.saveGlobalConnection(h2Cfg, null);
             harness.configService.saveProjectGrants(List.of(new ProjectDatabaseGrant("h2-qa", "PUBLIC", "QA orders")));
 
             List<DbConnectionSummary> conns = dbService.listConnections();
@@ -97,7 +97,7 @@ class DbServiceTest {
         try (harness.credStore; DbService dbService = harness.dbService) {
             DatabaseConnectionConfig sqliteCfg = new DatabaseConnectionConfig("local-sqlite", "Local SQLite", "sqlite",
                     sqliteUrl, "", "none", "", List.of(), "", "", 15, 50);
-            harness.configService.saveGlobalConnection(sqliteCfg, null, false);
+            harness.configService.saveGlobalConnection(sqliteCfg, null);
             harness.configService.saveProjectGrants(List.of(new ProjectDatabaseGrant("local-sqlite", "", "")));
 
             DbQueryResult qr = dbService.query("local-sqlite", "SELECT id, label FROM items");

@@ -9,7 +9,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.imageio.ImageIO;
@@ -157,10 +156,12 @@ final class ChatModel {
         }
     }
 
-    public BufferedImage addPendingImage(Image img) {
+    public PendingAttachment addPendingImage(Image img) {
         BufferedImage bimage = toBufferedImage(img);
-        addPendingAttachment(new PendingAttachment(AttachmentType.IMAGE, "pasted-image.png", "", bimage, null, null));
-        return bimage;
+        PendingAttachment attachment = new PendingAttachment(AttachmentType.IMAGE, "pasted-image.png", "", bimage, null,
+                null);
+        addPendingAttachment(attachment);
+        return attachment;
     }
 
     private static BufferedImage toBufferedImage(Image img) {
@@ -172,22 +173,6 @@ final class ChatModel {
         bGr.drawImage(img, 0, 0, null);
         bGr.dispose();
         return bimage;
-    }
-
-    public boolean removePendingImage(BufferedImage image) {
-        if (image == null) {
-            return false;
-        }
-        synchronized (pendingAttachments) {
-            for (int i = 0; i < pendingAttachments.size(); i++) {
-                PendingAttachment att = pendingAttachments.get(i);
-                if (att.type() == AttachmentType.IMAGE && Objects.equals(att.image(), image)) {
-                    pendingAttachments.remove(i);
-                    return true;
-                }
-            }
-            return false;
-        }
     }
 
     public boolean hasPendingImages() {

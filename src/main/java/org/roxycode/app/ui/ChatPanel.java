@@ -26,7 +26,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
-import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.text.DefaultEditorKit;
 import javax.swing.undo.UndoManager;
@@ -1017,24 +1016,6 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         }
     }
 
-    CompletableFuture<BufferedImage> loadImageAttachmentAsync(File file) {
-        if (file == null) {
-            return CompletableFuture.completedFuture(null);
-        }
-        return Edt.supplyAsync(() -> {
-            try {
-                return ImageIO.read(file);
-            } catch (Exception ex) {
-                log.error("Failed to load attached image", ex);
-                return null;
-            }
-        }, img -> {
-            if (img != null) {
-                addPendingImage(img);
-            }
-        });
-    }
-
     CompletableFuture<PendingAttachment> loadAttachmentAsync(File file) {
         if (file == null) {
             return CompletableFuture.completedFuture(null);
@@ -1070,11 +1051,11 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     void addPendingImage(Image img) {
-        BufferedImage bimage = model.addPendingImage(img);
-        attachmentPanel.add(createImageAttachmentChip(null, bimage));
-        attachmentPanel.setVisible(true);
-        attachmentPanel.revalidate();
-        attachmentPanel.repaint();
+        if (img == null) {
+            return;
+        }
+        PendingAttachment attachment = model.addPendingImage(img);
+        appendAttachmentChip(attachment);
     }
 
     void addPendingAttachment(PendingAttachment attachment) {
@@ -1082,6 +1063,10 @@ final class ChatPanel extends JPanel implements AutoCloseable {
             return;
         }
         model.addPendingAttachment(attachment);
+        appendAttachmentChip(attachment);
+    }
+
+    private void appendAttachmentChip(PendingAttachment attachment) {
         if (attachment.type() == AttachmentType.IMAGE && attachment.image() != null) {
             attachmentPanel.add(createImageAttachmentChip(attachment, attachment.image()));
         } else {
@@ -1105,11 +1090,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         removeBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
         removeBtn.setMargin(new Insets(0, 0, 0, 0));
         removeBtn.addActionListener(ae -> {
-            if (attachment != null) {
-                model.removePendingAttachment(attachment);
-            } else {
-                model.removePendingImage(bimage);
-            }
+            model.removePendingAttachment(attachment);
             attachmentPanel.remove(wrapper);
             attachmentPanel.setVisible(model.hasPendingAttachments());
             attachmentPanel.revalidate();

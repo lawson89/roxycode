@@ -29,6 +29,7 @@ import javax.swing.JOptionPane;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.model.ImplementationPlan;
+import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.FrontmatterUtils;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
@@ -555,7 +556,7 @@ final class HtmlExportService {
                 }
                 return null;
             }
-        });
+        }, Edt.VIRTUAL_EXECUTOR);
     }
 
     private static void showBrowserErrorNotice(String errorMessage) {

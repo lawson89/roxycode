@@ -295,13 +295,6 @@ public record ImplementationPlan(String title, String goal, List<String> require
 
     public ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
             boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
-            List<LogEntry> handoffLog, List<FileChange> fileChanges, UsageSummary usageSummary, String commitMessage) {
-        this(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp, approvedBy, completedBy,
-                completedOn, handoffLog, fileChanges, usageSummary, commitMessage, null);
-    }
-
-    public ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
-            boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
             List<LogEntry> handoffLog) {
         this(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp, approvedBy, completedBy,
                 completedOn, handoffLog, List.of(), UsageSummary.EMPTY, null, null);
@@ -492,10 +485,6 @@ public record ImplementationPlan(String title, String goal, List<String> require
         return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
                 approvedBy, completedBy, completedOn, handoffLog, fileChanges, usageSummary, commitMessage,
                 newFinalReviewNotes);
-    }
-
-    public String getFinalReviewNotes() {
-        return finalReviewNotes;
     }
 
     public ImplementationPlan withRecordedTokenUsage(TokenUsageEvent event, WorkflowPhase fallbackPhase) {

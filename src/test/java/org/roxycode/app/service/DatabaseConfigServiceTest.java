@@ -47,7 +47,7 @@ class DatabaseConfigServiceTest {
             DatabaseConnectionConfig pg = new DatabaseConnectionConfig("qa-pg", "QA Postgres",
                     "Core QA Postgres database", "postgresql", "jdbc:postgresql://localhost:5432/qa", "ro_user",
                     "keyring", "", List.of(), "", "public", 20, 150);
-            service.saveGlobalConnection(pg, "super-secret-pw", false);
+            service.saveGlobalConnection(pg, "super-secret-pw");
 
             Path globalToml = tempDir.resolve("roxy-home").resolve("databases.toml");
             assertTrue(Files.exists(globalToml));

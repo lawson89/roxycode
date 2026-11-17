@@ -84,44 +84,6 @@ public enum DatabaseType {
         return CUSTOM;
     }
 
-    /**
-     * Infers the most likely {@link DatabaseType} from a JDBC URL prefix.
-     */
-    public static DatabaseType detectFromUrl(String url) {
-        if (url == null || url.isBlank()) {
-            return CUSTOM;
-        }
-        String lower = url.trim().toLowerCase(Locale.ROOT);
-        if (lower.startsWith("jdbc:postgresql:")) {
-            return POSTGRESQL;
-        }
-        if (lower.startsWith("jdbc:mariadb:")) {
-            return MARIADB;
-        }
-        if (lower.startsWith("jdbc:mysql:")) {
-            return MYSQL;
-        }
-        if (lower.startsWith("jdbc:sqlserver:")) {
-            return SQLSERVER;
-        }
-        if (lower.startsWith("jdbc:sqlite:")) {
-            return SQLITE;
-        }
-        if (lower.startsWith("jdbc:h2:")) {
-            return H2;
-        }
-        if (lower.startsWith("jdbc:hsqldb:")) {
-            return HSQLDB;
-        }
-        if (lower.startsWith("jdbc:oracle:")) {
-            return ORACLE;
-        }
-        if (lower.startsWith("jdbc:db2:")) {
-            return DB2;
-        }
-        return CUSTOM;
-    }
-
     @Override
     public String toString() {
         return displayName;

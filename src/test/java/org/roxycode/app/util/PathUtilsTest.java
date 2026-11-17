@@ -139,4 +139,14 @@ class PathUtilsTest {
             assertEquals(PosixFilePermissions.fromString("rw-------"), Files.getPosixFilePermissions(file));
         }
     }
+
+    @Test
+    void testExpandUserHome() {
+        Path userHome = Path.of(System.getProperty("user.home"));
+        assertEquals(userHome, PathUtils.expandUserHome("~"));
+        assertEquals(userHome, PathUtils.expandUserHome("  ~  "));
+        assertEquals(userHome.resolve("drivers/ojdbc.jar"), PathUtils.expandUserHome("~/drivers/ojdbc.jar"));
+        assertEquals(userHome.resolve("drivers\\ojdbc.jar"), PathUtils.expandUserHome("~\\drivers\\ojdbc.jar"));
+        assertEquals(Path.of("~otheruser/file"), PathUtils.expandUserHome("~otheruser/file"));
+    }
 }

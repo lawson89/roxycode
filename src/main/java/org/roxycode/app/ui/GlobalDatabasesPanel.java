@@ -377,7 +377,9 @@ final class GlobalDatabasesPanel extends JPanel {
             allConnections = loaded;
             applyFilter();
             if (selectedConnection != null) {
-                DatabaseConnectionConfig refreshed = findById(loaded, selectedConnection.id());
+                String selectedId = selectedConnection.id();
+                DatabaseConnectionConfig refreshed = loaded.stream().filter(c -> c.id().equals(selectedId)).findFirst()
+                        .orElse(null);
                 if (refreshed != null) {
                     populateForm(refreshed, false);
                 } else {
@@ -667,7 +669,7 @@ final class GlobalDatabasesPanel extends JPanel {
         saveButton.setEnabled(false);
 
         CompletableFuture<DatabaseConnectionConfig> future = Edt.supplyAsync(() -> {
-            return databaseConfigService.saveGlobalConnection(cfg, finalTypedPassword, false);
+            return databaseConfigService.saveGlobalConnection(cfg, finalTypedPassword);
         }, saved -> {
             saveButton.setEnabled(true);
             selectedConnection = saved;
@@ -716,15 +718,6 @@ final class GlobalDatabasesPanel extends JPanel {
                         "Delete failed: " + error.getMessage(), false));
         lastAsyncFuture = future;
         return future;
-    }
-
-    private static @Nullable DatabaseConnectionConfig findById(List<DatabaseConnectionConfig> list, String id) {
-        for (DatabaseConnectionConfig item : list) {
-            if (item.id().equals(id)) {
-                return item;
-            }
-        }
-        return null;
     }
 
     private static final class ConnectionCellRenderer extends JPanel

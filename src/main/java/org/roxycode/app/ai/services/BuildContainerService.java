@@ -16,6 +16,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.SystemUtils;
 import org.jspecify.annotations.Nullable;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.util.PathUtils;
 import org.roxycode.app.service.SystemToolService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,9 +48,6 @@ public class BuildContainerService {
     private static final String NL = "\n";
     private static final String BS = "\\";
     private static final String DQ = "\"";
-    private static final String TILDE = "~";
-    private static final String TILDE_SLASH = "~/";
-    private static final String TILDE_BACKSLASH = "~" + BS;
 
     public enum SandboxMode {
         NONE, NATIVE, DOCKER;
@@ -221,16 +219,11 @@ public class BuildContainerService {
             }
             String trimmed = raw.trim();
             Path resolved;
-            if (TILDE.equals(trimmed)) {
+            if ("~".equals(trimmed) || trimmed.startsWith("~/") || trimmed.startsWith("~\\")) {
                 if (homeDir == null) {
                     continue;
                 }
-                resolved = homeDir;
-            } else if (trimmed.startsWith(TILDE_SLASH) || trimmed.startsWith(TILDE_BACKSLASH)) {
-                if (homeDir == null) {
-                    continue;
-                }
-                resolved = homeDir.resolve(trimmed.substring(2)).toAbsolutePath().normalize();
+                resolved = PathUtils.expandUserHome(trimmed).toAbsolutePath().normalize();
             } else {
                 Path candidate = Path.of(trimmed);
                 if (candidate.isAbsolute()) {
