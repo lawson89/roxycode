@@ -12,6 +12,9 @@ import java.awt.Font;
 import java.awt.Insets;
 import java.awt.event.ActionListener;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.awt.Graphics;
@@ -46,7 +49,6 @@ import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
-import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JEditorPane;
 import javax.swing.JLabel;
@@ -66,8 +68,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.model.AgentProfile;
-import org.roxycode.app.model.AgentProfileOption;
-import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -81,6 +81,7 @@ final class UiComponents {
     private static final Logger log = LoggerFactory.getLogger(UiComponents.class);
     private static final String GROWX_WMIN_0 = "growx, wmin 0";
     private static final String ROW_CENTER = "[center]";
+    private static final String UI_LABEL_FOREGROUND = "Label.foreground";
     static final String ROXY_LOGO_RESOURCE = "/static/images/roxy.png";
     static final int INFO_TOOLTIP_DISMISS_DELAY_MS = 20_000;
     static final String ACCENT_BUTTON_STYLE = "background: $Component.accentColor; focusedBackground: $Component.accentColor; hoverBackground: darken($Component.accentColor, 8%); pressedBackground: darken($Component.accentColor, 14%); foreground: #ffffff";
@@ -418,7 +419,7 @@ final class UiComponents {
     }
 
     static Color resolveForegroundColor() {
-        return SwingHtmlUtils.getUiColor(new Color(0x33, 0x33, 0x33), "Label.foreground");
+        return SwingHtmlUtils.getUiColor(new Color(0x33, 0x33, 0x33), UI_LABEL_FOREGROUND);
     }
 
     static JButton createIconButton(Codicons icon, String tooltip, java.awt.event.ActionListener listener) {
@@ -604,14 +605,6 @@ final class UiComponents {
         iconLabel.setOpaque(false);
     }
 
-    static JPanel createModelControlBox(JLabel badgeLabel, JComboBox<?> comboBox, String comboConstraints) {
-        JPanel box = new JPanel(new MigLayout("insets 0, gapx 8", "[][]", ROW_CENTER));
-        box.setOpaque(false);
-        box.add(badgeLabel, "hidemode 3");
-        box.add(comboBox, comboConstraints);
-        return box;
-    }
-
     static void styleCardPanel(JPanel card) {
         String borderHex = getCardBorderHex();
         String cardBgDirective;
@@ -697,82 +690,162 @@ final class UiComponents {
                 "font: $monospaced.font -1; arc: 8; border: 2,8,2,8," + borderHex + ",1,8; background: " + pillBg);
     }
 
-    /**
-     * Selects a GeminiModelConfig item in a JComboBox matching a target apiName.
-     */
-    static void selectModelByApiName(JComboBox<GeminiModelConfig> combo, String apiName) {
-        String target = StringUtils.defaultString(apiName).trim();
-        for (int i = 0; i < combo.getItemCount(); i++) {
-            GeminiModelConfig item = combo.getItemAt(i);
-            if (item != null && target.equals(item.apiName())) {
-                combo.setSelectedIndex(i);
-                return;
+    static void applySelectableCardTheme(JPanel card, JLabel radioIconLabel, JLabel titleLabel,
+            @Nullable JComponent descriptionComponent, boolean selected) {
+        Color accentColor = SwingHtmlUtils.getAccentColor();
+        Color mutedColor = SwingHtmlUtils.getMutedForegroundColor();
+        Color fgColor = SwingHtmlUtils.getUiColor(new Color(0x21, 0x25, 0x29), UI_LABEL_FOREGROUND);
+        String accentHex = SwingHtmlUtils.toHex(accentColor);
+        String borderHex = getCardBorderHex();
+        String pillBg = getPillBackgroundDirective();
+
+        if (selected) {
+            radioIconLabel.setIcon(FontIcon.of(Codicons.CIRCLE_FILLED, 15, accentColor));
+            card.putClientProperty(FlatClientProperties.STYLE,
+                    "arc: 10; border: 2,2,2,2," + accentHex + ",1,10; background: fade(" + accentHex + ", 8%)");
+            titleLabel.setForeground(fgColor);
+            if (descriptionComponent != null) {
+                descriptionComponent.setForeground(fgColor);
             }
-        }
-        if (combo.getItemCount() > 0) {
-            combo.setSelectedIndex(0);
+        } else {
+            radioIconLabel.setIcon(FontIcon.of(Codicons.CIRCLE_OUTLINE, 15, mutedColor));
+            card.putClientProperty(FlatClientProperties.STYLE,
+                    "arc: 10; border: 1,1,1,1," + borderHex + ",1,10; background: " + pillBg);
+            titleLabel.setForeground(fgColor);
+            if (descriptionComponent != null) {
+                descriptionComponent.setForeground(mutedColor);
+            }
         }
     }
 
-    static void selectAgentProfileById(JComboBox<AgentProfile> combo, String id) {
-        AgentProfile target = AgentProfile.fromString(id);
-        for (int i = 0; i < combo.getItemCount(); i++) {
-            AgentProfile item = combo.getItemAt(i);
-            if (item == target) {
-                combo.setSelectedIndex(i);
+    static final class AgentProfileCard extends JPanel {
+        private static final long serialVersionUID = 1L;
+
+        final transient AgentProfile profile;
+        final JLabel radioIconLabel;
+        final JLabel cardTitleLabel;
+        final JLabel selectedBadge;
+        final JLabel planModelPill;
+        final JLabel codeModelPill;
+        final JTextArea descriptionArea;
+        private boolean selected;
+
+        AgentProfileCard(AgentProfile profile, Consumer<AgentProfile> onSelect) {
+            this.profile = profile;
+            setLayout(new MigLayout("fillx, wrap 1, insets 12 14 12 14, gapy 6, hidemode 3", "[grow, fill]", ""));
+            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            setOpaque(true);
+
+            JPanel headerRow = new JPanel(
+                    new MigLayout("fillx, insets 0, gapx 6", "[][grow, fill][right]", ROW_CENTER));
+            headerRow.setOpaque(false);
+
+            radioIconLabel = new JLabel();
+            headerRow.add(radioIconLabel);
+
+            cardTitleLabel = new JLabel(profile.getDisplayName());
+            cardTitleLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +1");
+            headerRow.add(cardTitleLabel, "wmin 0");
+
+            selectedBadge = new JLabel("SELECTED");
+            selectedBadge.setVisible(false);
+            headerRow.add(selectedBadge, "right, hidemode 3");
+            add(headerRow, GROWX_WMIN_0);
+
+            planModelPill = new JLabel("EXPLORE / PLAN: " + profile.getPlanModel());
+            codeModelPill = new JLabel("CODE / REVIEW: " + profile.getCodeModel());
+            add(planModelPill, GROWX_WMIN_0);
+            add(codeModelPill, GROWX_WMIN_0);
+
+            descriptionArea = createReadOnlyTextArea();
+            descriptionArea.setText(profile.getDescription());
+            descriptionArea.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            add(descriptionArea, GROWX_WMIN_0);
+
+            MouseAdapter clickListener = new MouseAdapter() {
+                @Override
+                public void mousePressed(MouseEvent e) {
+                    onSelect.accept(profile);
+                }
+            };
+            addMouseListener(clickListener);
+            descriptionArea.addMouseListener(clickListener);
+            headerRow.addMouseListener(clickListener);
+
+            applyCardTheme();
+        }
+
+        void setSelected(boolean selected) {
+            this.selected = selected;
+            selectedBadge.setVisible(selected);
+            applyCardTheme();
+        }
+
+        boolean isSelected() {
+            return selected;
+        }
+
+        void applyCardTheme() {
+            if (cardTitleLabel == null) {
                 return;
             }
+            applySelectableCardTheme(this, radioIconLabel, cardTitleLabel, descriptionArea, selected);
+
+            Color accentColor = SwingHtmlUtils.getAccentColor();
+            Color greenColor = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
+            String accentHex = SwingHtmlUtils.toHex(accentColor);
+            String borderHex = getCardBorderHex();
+            String pillBg = getPillBackgroundDirective();
+
+            selectedBadge.putClientProperty(FlatClientProperties.STYLE,
+                    "font: bold -2; arc: 6; border: 2,6,2,6; background: " + accentHex + "; foreground: #ffffff");
+
+            planModelPill.setForeground(accentColor);
+            planModelPill.putClientProperty(FlatClientProperties.STYLE,
+                    "font: $monospaced.font -1; arc: 6; border: 3,8,3,8," + borderHex + ",1,6; background: " + pillBg);
+
+            codeModelPill.setForeground(greenColor);
+            codeModelPill.putClientProperty(FlatClientProperties.STYLE,
+                    "font: $monospaced.font -1; arc: 6; border: 3,8,3,8," + borderHex + ",1,6; background: " + pillBg);
         }
-        if (combo.getItemCount() > 0) {
-            combo.setSelectedIndex(0);
+
+        @Override
+        public void updateUI() {
+            super.updateUI();
+            applyCardTheme();
         }
     }
 
-    static void selectAgentProfileOptionById(JComboBox<AgentProfileOption> combo, String id) {
-        String trimmed = StringUtils.defaultString(id).trim();
-        String targetId = "";
-        if (!trimmed.isEmpty()) {
-            targetId = AgentProfile.fromString(trimmed).getId();
-        }
-        for (int i = 0; i < combo.getItemCount(); i++) {
-            AgentProfileOption item = combo.getItemAt(i);
-            if (item != null && targetId.equalsIgnoreCase(item.id())) {
-                combo.setSelectedIndex(i);
-                return;
+    static final class HtmlExportSupport {
+        private final List<Runnable> exportStateListeners = new CopyOnWriteArrayList<>();
+
+        void addListener(@Nullable Runnable listener) {
+            if (listener != null) {
+                exportStateListeners.add(listener);
             }
         }
-        if (combo.getItemCount() > 0) {
-            combo.setSelectedIndex(0);
-        }
-    }
 
-    /**
-     * Updates profile badge and description area based on combo selection.
-     */
-    static void updateProfileSelectionDetails(JComboBox<?> combo, JLabel badge, JTextArea descArea) {
-        Object selected = combo.getSelectedItem();
-        if (selected instanceof AgentProfile profile) {
-            String summary = StringUtils.defaultString(profile.getBadgeSummary());
-            badge.setText(summary);
-            badge.setVisible(!summary.isBlank());
-            String description = StringUtils.defaultString(profile.getDescription());
-            descArea.setText(description);
-            descArea.setVisible(!description.isBlank());
-            return;
+        void notifyListeners() {
+            for (Runnable listener : exportStateListeners) {
+                listener.run();
+            }
         }
-        if (selected instanceof AgentProfileOption option) {
-            String summary = StringUtils.defaultString(option.badgeSummary());
-            badge.setText(summary);
-            badge.setVisible(!summary.isBlank());
-            String description = StringUtils.defaultString(option.description());
-            descArea.setText(description);
-            descArea.setVisible(!description.isBlank());
-            return;
+
+        CompletableFuture<Path> exportToBrowser(boolean ready, String tempPrefix, Supplier<String> htmlSupplier) {
+            if (!ready) {
+                return CompletableFuture.completedFuture(null);
+            }
+            return HtmlExportService.openHtmlInBrowserAsync(tempPrefix, htmlSupplier.get());
         }
-        badge.setText("");
-        badge.setVisible(false);
-        descArea.setText("");
-        descArea.setVisible(false);
+
+        @Nullable
+        Path saveAsHtml(boolean ready, Component parent, Supplier<String> suggestedNameSupplier,
+                Supplier<String> htmlSupplier) {
+            if (!ready) {
+                return null;
+            }
+            return HtmlExportService.saveHtmlWithChooser(parent, suggestedNameSupplier.get(), htmlSupplier.get());
+        }
     }
 
     static JTabbedPane createUnderlinedTabbedPane(JComponent trailingComponent) {
@@ -863,7 +936,7 @@ final class UiComponents {
         if (style != null && style.contains("$Actions.Green")) {
             return SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green");
         }
-        return SwingHtmlUtils.getUiColor(Color.DARK_GRAY, "Button.foreground", "Label.foreground");
+        return SwingHtmlUtils.getUiColor(Color.DARK_GRAY, "Button.foreground", UI_LABEL_FOREGROUND);
     }
 
     static JButton createActionButton(String text, @Nullable Codicons icon, @Nullable Insets margin, boolean borderless,
@@ -1151,7 +1224,7 @@ final class UiComponents {
             return new ListCellColors(bg, fg, fg, fg);
         }
         return new ListCellColors(SwingHtmlUtils.getUiColor(list.getBackground(), "List.background"),
-                SwingHtmlUtils.getUiColor(list.getForeground(), "Label.foreground"),
+                SwingHtmlUtils.getUiColor(list.getForeground(), UI_LABEL_FOREGROUND),
                 SwingHtmlUtils.getMutedForegroundColor(), SwingHtmlUtils.getAccentColor());
     }
 

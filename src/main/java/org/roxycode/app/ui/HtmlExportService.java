@@ -1,21 +1,12 @@
 package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.util.SystemFileChooser;
-import com.vladsch.flexmark.ast.FencedCodeBlock;
-import com.vladsch.flexmark.ast.IndentedCodeBlock;
 import com.vladsch.flexmark.ext.gfm.strikethrough.StrikethroughExtension;
 import com.vladsch.flexmark.ext.gfm.tasklist.TaskListExtension;
 import com.vladsch.flexmark.ext.tables.TablesExtension;
 import com.vladsch.flexmark.ext.yaml.front.matter.YamlFrontMatterExtension;
 import com.vladsch.flexmark.html.HtmlRenderer;
-import com.vladsch.flexmark.html.HtmlWriter;
-import com.vladsch.flexmark.html.renderer.NodeRenderer;
-import com.vladsch.flexmark.html.renderer.NodeRendererContext;
-import com.vladsch.flexmark.html.renderer.NodeRendererFactory;
-import com.vladsch.flexmark.html.renderer.NodeRenderingHandler;
 import com.vladsch.flexmark.parser.Parser;
-import com.vladsch.flexmark.util.ast.Block;
-import com.vladsch.flexmark.util.ast.Node;
 import com.vladsch.flexmark.util.data.DataHolder;
 import com.vladsch.flexmark.util.data.MutableDataHolder;
 import com.vladsch.flexmark.util.data.MutableDataSet;
@@ -33,7 +24,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.JOptionPane;
 import org.apache.commons.lang3.StringUtils;
@@ -367,7 +357,7 @@ final class HtmlExportService {
         StringBuilder body = new StringBuilder();
         if (StringUtils.isNotBlank(projectName)) {
             body.append("<div class='meta-card'><div class='meta-row'><span class='meta-label'>Project:</span> ")
-                    .append(escapeHtml(projectName)).append(DIV_CLOSE).append(DIV_CLOSE);
+                    .append(SwingHtmlUtils.escapeHtml(projectName)).append(DIV_CLOSE).append(DIV_CLOSE);
         }
         if (entries != null) {
             for (MarkdownPane.PersistedChatEntry entry : entries) {
@@ -407,10 +397,11 @@ final class HtmlExportService {
 
         body.append("<section class='chat-card ").append(cardClass).append("'>");
         body.append("<div class='chat-card-header'>");
-        body.append("<span class='role-badge ").append(roleClass).append("'>").append(escapeHtml(roleLabel))
-                .append(SPAN_CLOSE);
+        body.append("<span class='role-badge ").append(roleClass).append("'>")
+                .append(SwingHtmlUtils.escapeHtml(roleLabel)).append(SPAN_CLOSE);
         if (StringUtils.isNotBlank(entry.timestamp())) {
-            body.append("<span class='timestamp'>").append(escapeHtml(entry.timestamp())).append(SPAN_CLOSE);
+            body.append("<span class='timestamp'>").append(SwingHtmlUtils.escapeHtml(entry.timestamp()))
+                    .append(SPAN_CLOSE);
         }
         body.append(DIV_CLOSE);
 
@@ -418,7 +409,8 @@ final class HtmlExportService {
             body.append("<div class='attachment-files'>");
             for (String fileName : entry.attachedFileNames()) {
                 if (StringUtils.isNotBlank(fileName)) {
-                    body.append("<span class='file-badge'>").append(escapeHtml(fileName)).append(SPAN_CLOSE);
+                    body.append("<span class='file-badge'>").append(SwingHtmlUtils.escapeHtml(fileName))
+                            .append(SPAN_CLOSE);
                 }
             }
             body.append(DIV_CLOSE);
@@ -428,7 +420,7 @@ final class HtmlExportService {
             body.append("<div class='attachment-thumbs'>");
             for (String b64 : entry.thumbnailBase64List()) {
                 if (StringUtils.isNotBlank(b64)) {
-                    body.append("<img src='data:image/png;base64,").append(escapeHtml(b64))
+                    body.append("<img src='data:image/png;base64,").append(SwingHtmlUtils.escapeHtml(b64))
                             .append("' alt='Attachment'>");
                 }
             }
@@ -453,14 +445,16 @@ final class HtmlExportService {
         body.append("<details class='").append(detailsClass).append("'>");
         body.append("<summary>");
         body.append("<span><span class='tool-status ").append(statusClass).append("'>").append(statusLabel)
-                .append(SPAN_CLOSE).append("JEXL: ").append(escapeHtml(summaryText)).append(SPAN_CLOSE);
+                .append(SPAN_CLOSE).append("JEXL: ").append(SwingHtmlUtils.escapeHtml(summaryText)).append(SPAN_CLOSE);
         if (StringUtils.isNotBlank(entry.timestamp())) {
-            body.append("<span class='timestamp'>").append(escapeHtml(entry.timestamp())).append(SPAN_CLOSE);
+            body.append("<span class='timestamp'>").append(SwingHtmlUtils.escapeHtml(entry.timestamp()))
+                    .append(SPAN_CLOSE);
         }
         body.append("</summary>");
         body.append(JexlToHtmlConverter.highlight(StringUtils.defaultString(entry.content()), "javascript"));
         if (!entry.success() && StringUtils.isNotBlank(entry.error())) {
-            body.append("<div class='tool-error-box'>").append(escapeHtml(entry.error())).append(DIV_CLOSE);
+            body.append("<div class='tool-error-box'>").append(SwingHtmlUtils.escapeHtml(entry.error()))
+                    .append(DIV_CLOSE);
         }
         body.append("</details>");
     }
@@ -478,16 +472,16 @@ final class HtmlExportService {
         StringBuilder meta = new StringBuilder("<div class='meta-card'>");
         if (StringUtils.isNotBlank(projectName)) {
             meta.append("<div class='meta-row'><span class='meta-label'>Project:</span> ")
-                    .append(escapeHtml(projectName)).append(DIV_CLOSE);
+                    .append(SwingHtmlUtils.escapeHtml(projectName)).append(DIV_CLOSE);
         }
         meta.append("<div class='meta-row'><span class='meta-label'>Progress:</span> ")
                 .append(plan.completedStepCount()).append(" / ").append(totalSteps).append(" steps completed")
                 .append(DIV_CLOSE);
         if (plan.userApproved() && StringUtils.isNotBlank(plan.approvedBy())) {
             meta.append("<div class='meta-row'><span class='meta-label'>Approved by:</span> ")
-                    .append(escapeHtml(plan.approvedBy()));
+                    .append(SwingHtmlUtils.escapeHtml(plan.approvedBy()));
             if (StringUtils.isNotBlank(plan.approvalTimestamp())) {
-                meta.append(" (").append(escapeHtml(plan.approvalTimestamp())).append(")");
+                meta.append(" (").append(SwingHtmlUtils.escapeHtml(plan.approvalTimestamp())).append(")");
             }
             meta.append(DIV_CLOSE);
         }
@@ -513,21 +507,21 @@ final class HtmlExportService {
         StringBuilder meta = new StringBuilder("<div class='meta-card'>");
         if (StringUtils.isNotBlank(projectName)) {
             meta.append("<div class='meta-row'><span class='meta-label'>Project:</span> ")
-                    .append(escapeHtml(projectName)).append(DIV_CLOSE);
+                    .append(SwingHtmlUtils.escapeHtml(projectName)).append(DIV_CLOSE);
         }
         String dateLabel = "Date";
         if (mode != null && StringUtils.isNotBlank(mode.dateLabel)) {
             dateLabel = mode.dateLabel;
         }
-        meta.append("<div class='meta-row'><span class='meta-label'>").append(escapeHtml(dateLabel)).append(":</span> ")
-                .append(escapeHtml(dateDisplay)).append(" &bull; <span class='meta-label'>By:</span> ")
-                .append(escapeHtml(author));
+        meta.append("<div class='meta-row'><span class='meta-label'>").append(SwingHtmlUtils.escapeHtml(dateLabel))
+                .append(":</span> ").append(SwingHtmlUtils.escapeHtml(dateDisplay))
+                .append(" &bull; <span class='meta-label'>By:</span> ").append(SwingHtmlUtils.escapeHtml(author));
         if (mode == ArchiveBrowserPanel.ArchiveMode.TOPICS && entry.messageCount() > 0) {
             meta.append(" &bull; <span class='meta-label'>Messages:</span> ").append(entry.messageCount());
         }
         meta.append(DIV_CLOSE);
         meta.append("<div class='meta-row'><span class='meta-label'>File:</span> <code>")
-                .append(escapeHtml(entry.filename())).append("</code>").append(DIV_CLOSE);
+                .append(SwingHtmlUtils.escapeHtml(entry.filename())).append("</code>").append(DIV_CLOSE);
         meta.append(DIV_CLOSE);
 
         String stripped = FrontmatterUtils.stripFrontmatter(StringUtils.defaultString(rawMarkdown));
@@ -646,8 +640,8 @@ final class HtmlExportService {
                 </div>
                 </body>
                 </html>
-                """.formatted(escapeHtml(safeTitle), LIGHT_EXPORT_CSS, escapeHtml(safeTitle), escapeHtml(safeSubtitle),
-                safeBody);
+                """.formatted(SwingHtmlUtils.escapeHtml(safeTitle), LIGHT_EXPORT_CSS,
+                SwingHtmlUtils.escapeHtml(safeTitle), SwingHtmlUtils.escapeHtml(safeSubtitle), safeBody);
     }
 
     private static String buildExportSubtitle(String projectName, String detail) {
@@ -660,10 +654,6 @@ final class HtmlExportService {
         return projectName + " • " + detail;
     }
 
-    private static String escapeHtml(String text) {
-        return SwingHtmlUtils.escapeHtml(text);
-    }
-
     private static final class Html5SyntaxHighlightingExtension implements HtmlRenderer.HtmlRendererExtension {
         @Override
         public void rendererOptions(MutableDataHolder options) {
@@ -671,39 +661,7 @@ final class HtmlExportService {
 
         @Override
         public void extend(HtmlRenderer.Builder htmlRendererBuilder, String rendererType) {
-            htmlRendererBuilder.nodeRendererFactory(new Html5CodeNodeRenderer.Factory());
-        }
-    }
-
-    private static final class Html5CodeNodeRenderer implements NodeRenderer {
-        @Override
-        public Set<NodeRenderingHandler<?>> getNodeRenderingHandlers() {
-            return Set.of(new NodeRenderingHandler<>(FencedCodeBlock.class, this::renderCodeBlock),
-                    new NodeRenderingHandler<>(IndentedCodeBlock.class, this::renderCodeBlock));
-        }
-
-        @SuppressWarnings("PMD.UnusedFormalParameter")
-        private void renderCodeBlock(Node node, NodeRendererContext context, HtmlWriter html) {
-            String code = ((Block) node).getContentChars().toString();
-            String language = "";
-            if (node instanceof FencedCodeBlock fenced) {
-                language = fenced.getInfo().toString();
-            }
-            if (PlantUmlRenderer.isDiagramBlock(language, code)) {
-                Optional<String> diagramHtml = PlantUmlRenderer.renderDiagramExportHtml(code, language);
-                if (diagramHtml.isPresent()) {
-                    html.raw(diagramHtml.get());
-                    return;
-                }
-            }
-            html.raw(JexlToHtmlConverter.highlight(code, language));
-        }
-
-        static class Factory implements NodeRendererFactory {
-            @Override
-            public NodeRenderer apply(DataHolder options) {
-                return new Html5CodeNodeRenderer();
-            }
+            htmlRendererBuilder.nodeRendererFactory(new SwingHtmlUtils.CodeBlockNodeRenderer.Factory(true));
         }
     }
 }

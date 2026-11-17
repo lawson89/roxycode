@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javax.imageio.ImageIO;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.text.StringEscapeUtils;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.FileReadService;
 import org.roxycode.app.ai.services.PlanService;
@@ -200,27 +201,6 @@ final class ChatModel {
         }
     }
 
-    public void clearPendingImages() {
-        clearPendingAttachments();
-    }
-
-    public List<BufferedImage> drainPendingImages() {
-        synchronized (pendingAttachments) {
-            List<BufferedImage> images = new ArrayList<>();
-            List<PendingAttachment> remaining = new ArrayList<>();
-            for (PendingAttachment att : pendingAttachments) {
-                if (att.type() == AttachmentType.IMAGE && att.image() != null) {
-                    images.add(att.image());
-                } else {
-                    remaining.add(att);
-                }
-            }
-            pendingAttachments.clear();
-            pendingAttachments.addAll(remaining);
-            return List.copyOf(images);
-        }
-    }
-
     public static PendingAttachment loadFileAttachment(Path path) {
         if (path == null || !Files.isRegularFile(path)) {
             return null;
@@ -277,21 +257,15 @@ final class ChatModel {
         StringBuilder sb = new StringBuilder(basePrompt);
         for (PendingAttachment att : attachments) {
             if (att != null && att.type() == AttachmentType.TEXT) {
-                sb.append("\n\n<attached_file name=").append('"').append(escapeXmlAttribute(att.fileName())).append('"')
-                        .append(" path=").append('"').append(escapeXmlAttribute(att.filePath())).append('"')
+                sb.append("\n\n<attached_file name=").append('"')
+                        .append(StringEscapeUtils.escapeXml11(StringUtils.defaultString(att.fileName()))).append('"')
+                        .append(" path=").append('"')
+                        .append(StringEscapeUtils.escapeXml11(StringUtils.defaultString(att.filePath()))).append('"')
                         .append(">\n").append(StringUtils.defaultString(att.textContent()))
                         .append("\n</attached_file>");
             }
         }
         return sb.toString();
-    }
-
-    private static String escapeXmlAttribute(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.replace("&", "&amp;").replace(String.valueOf('"'), "&quot;").replace("<", "&lt;").replace(">",
-                "&gt;");
     }
 
     public static List<BufferedImage> extractAttachedImages(List<PendingAttachment> attachments) {

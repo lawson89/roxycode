@@ -759,13 +759,23 @@ public final class SwingHtmlUtils {
 
         @Override
         public void extend(HtmlRenderer.Builder htmlRendererBuilder, String rendererType) {
-            htmlRendererBuilder.nodeRendererFactory(new CodeBlockNodeRenderer.Factory());
+            htmlRendererBuilder.nodeRendererFactory(new CodeBlockNodeRenderer.Factory(false));
         }
     }
 
-    private static final class CodeBlockNodeRenderer implements NodeRenderer {
+    static final class CodeBlockNodeRenderer implements NodeRenderer {
+        private final boolean exportMode;
+
+        CodeBlockNodeRenderer(boolean exportMode) {
+            this.exportMode = exportMode;
+        }
+
         @Override
         public Set<NodeRenderingHandler<?>> getNodeRenderingHandlers() {
+            if (exportMode) {
+                return Set.of(new NodeRenderingHandler<>(FencedCodeBlock.class, this::render),
+                        new NodeRenderingHandler<>(IndentedCodeBlock.class, this::render));
+            }
             return Set.of(new NodeRenderingHandler<>(FencedCodeBlock.class, this::render),
                     new NodeRenderingHandler<>(IndentedCodeBlock.class, this::render),
                     new NodeRenderingHandler<>(Code.class, this::renderInlineCode),
@@ -793,7 +803,12 @@ public final class SwingHtmlUtils {
                 language = fenced.getInfo().toString();
             }
             if (PlantUmlRenderer.isDiagramBlock(language, code)) {
-                Optional<String> diagramHtml = PlantUmlRenderer.renderDiagramHtml(code, language, FlatLaf.isLafDark());
+                Optional<String> diagramHtml;
+                if (exportMode) {
+                    diagramHtml = PlantUmlRenderer.renderDiagramExportHtml(code, language);
+                } else {
+                    diagramHtml = PlantUmlRenderer.renderDiagramHtml(code, language, FlatLaf.isLafDark());
+                }
                 if (diagramHtml.isPresent()) {
                     html.raw(diagramHtml.get());
                     return;
@@ -803,9 +818,15 @@ public final class SwingHtmlUtils {
         }
 
         static class Factory implements NodeRendererFactory {
+            private final boolean exportMode;
+
+            Factory(boolean exportMode) {
+                this.exportMode = exportMode;
+            }
+
             @Override
             public NodeRenderer apply(DataHolder options) {
-                return new CodeBlockNodeRenderer();
+                return new CodeBlockNodeRenderer(exportMode);
             }
         }
     }

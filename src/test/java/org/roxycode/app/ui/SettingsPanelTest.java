@@ -41,29 +41,24 @@ class SettingsPanelTest {
 
     @Test
     void testModelThemeAndLiveSettingsPersistence() {
-        JComboBox<AgentProfile> profileCombo = settingsPanel.profileCombo;
-        assertEquals(3, profileCombo.getItemCount());
-        assertEquals(AgentProfile.NORMAL, profileCombo.getSelectedItem());
-        assertEquals(AgentProfile.NORMAL.getBadgeSummary(), settingsPanel.modelApiBadgeLabel.getText());
-        assertEquals(AgentProfile.NORMAL.getDescription(), settingsPanel.modelDescriptionArea.getText());
-
+        assertEquals(AgentProfile.values().length, settingsPanel.profileCards.size());
+        assertEquals(AgentProfile.NORMAL, settingsPanel.getSelectedProfile());
         assertTrue(settingsPanel.profileCards.get(AgentProfile.NORMAL).isSelected());
         assertFalse(settingsPanel.hasUnsavedChanges());
         assertEquals(SettingsPanel.SAVE_SETTINGS_TEXT, settingsPanel.saveButton.getText());
 
-        profileCombo.setSelectedItem(AgentProfile.MAX);
-        assertEquals(AgentProfile.MAX.getBadgeSummary(), settingsPanel.modelApiBadgeLabel.getText());
-        assertEquals(AgentProfile.MAX.getDescription(), settingsPanel.modelDescriptionArea.getText());
+        settingsPanel.selectProfileFromCard(AgentProfile.MAX);
+        assertEquals(AgentProfile.MAX, settingsPanel.getSelectedProfile());
         assertTrue(settingsPanel.profileCards.get(AgentProfile.MAX).isSelected());
         assertFalse(settingsPanel.profileCards.get(AgentProfile.NORMAL).isSelected());
         assertTrue(settingsPanel.hasUnsavedChanges());
         assertEquals(SettingsPanel.SAVE_CHANGES_DIRTY_TEXT, settingsPanel.saveButton.getText());
 
         settingsPanel.selectProfileFromCard(AgentProfile.SPEED);
-        assertEquals(AgentProfile.SPEED, profileCombo.getSelectedItem());
+        assertEquals(AgentProfile.SPEED, settingsPanel.getSelectedProfile());
         assertTrue(settingsPanel.profileCards.get(AgentProfile.SPEED).isSelected());
 
-        profileCombo.setSelectedItem(AgentProfile.MAX);
+        settingsPanel.selectProfileFromCard(AgentProfile.MAX);
 
         try {
             settingsPanel.themeCombo.setSelectedItem("FlatLaf Dark");
@@ -117,8 +112,8 @@ class SettingsPanelTest {
         settingsPanel.onSettingsChanged(new SettingsChangedEvent(settings));
         SwingTestUtils.flushEdt();
         assertEquals("synced-from-event-key", new String(settingsPanel.geminiApiKeyField.getPassword()));
-        assertEquals(AgentProfile.SPEED, profileCombo.getSelectedItem());
-        assertEquals(AgentProfile.SPEED.getBadgeSummary(), settingsPanel.modelApiBadgeLabel.getText());
+        assertEquals(AgentProfile.SPEED, settingsPanel.getSelectedProfile());
+        assertTrue(settingsPanel.profileCards.get(AgentProfile.SPEED).isSelected());
         assertEquals(100, settingsPanel.maxAgentToolTurnsSpinner.getValue());
         assertEquals(250, settingsPanel.maxMessagesSpinner.getValue());
 

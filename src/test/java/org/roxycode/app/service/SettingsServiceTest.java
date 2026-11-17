@@ -68,7 +68,6 @@ class SettingsServiceTest {
         assertEquals(AgentProfile.MAX, SettingsService.resolveGlobalAgentProfile(service));
         assertEquals("gemini-4-carbon", SettingsService.resolveGlobalGeminiModel(service, WorkflowPhase.PLAN));
         assertEquals("gemini-4-hydrogen", SettingsService.resolveGlobalGeminiModel(service, WorkflowPhase.CODE));
-        assertEquals(ThinkingLevel.ADAPTIVE, SettingsService.resolveGlobalThinkingLevel(service));
 
         SettingsService service2 = new SettingsService(null, null);
         service2.setSettingsPathOverride(settingsFile);
@@ -76,7 +75,7 @@ class SettingsServiceTest {
         assertEquals("test-api-key", service2.getSettings().getGeminiApiKey());
         assertEquals("MAX", service2.getSettings().getAgentProfile());
         assertEquals(AgentProfile.MAX, SettingsService.resolveGlobalAgentProfile(service2));
-        assertEquals(ThinkingLevel.ADAPTIVE, SettingsService.resolveGlobalThinkingLevel(service2));
+
         assertEquals(List.of("/tmp/global-a", "/tmp/global-b"), service2.getSettings().getGlobalContextFolders());
         assertTrue(Files.exists(settingsFile));
         if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
@@ -178,7 +177,6 @@ class SettingsServiceTest {
         assertEquals("NORMAL", fromCorrupt.getAgentProfile());
         assertEquals("ADAPTIVE", fromCorrupt.getThinkingLevel());
         assertEquals(AgentProfile.NORMAL, SettingsService.resolveGlobalAgentProfile(null));
-        assertEquals(ThinkingLevel.ADAPTIVE, SettingsService.resolveGlobalThinkingLevel(null));
 
         Path legacyToml = Files.writeString(tempDir.resolve("legacy.toml"), """
                 theme = "FlatLaf Dark"

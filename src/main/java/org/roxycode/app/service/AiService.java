@@ -322,10 +322,6 @@ public class AiService implements AutoCloseable {
         return ProjectService.resolveEffectiveGeminiModel(projectService, settingsService, phase);
     }
 
-    ThinkingLevel resolveEffectiveThinkingLevel() {
-        return ThinkingLevel.ADAPTIVE;
-    }
-
     void setRetryTemplate(RetryTemplate retryTemplate, int maxRetryAttempts) {
         this.retryTemplate = Objects.requireNonNull(retryTemplate, "retryTemplate must not be null");
         this.maxRetryAttempts = Math.max(1, maxRetryAttempts);
@@ -554,7 +550,7 @@ public class AiService implements AutoCloseable {
             WorkflowPhase currentPhase = resolveWorkflowPhase(chatClientRequest);
             String modelName = resolveRequestModelName(chatClientRequest, currentPhase);
             recordToolProgressIfPresent(chatClientRequest);
-            ThinkingLevel configuredLevel = resolveEffectiveThinkingLevel();
+            ThinkingLevel configuredLevel = ThinkingLevel.ADAPTIVE;
             ThinkingLevel activeSubTurnLevel = resolveActiveSubTurnThinkingLevel(configuredLevel, currentPhase,
                     modelName, chatClientRequest);
             ChatClientRequest resolvedRequest = chatClientRequest;
@@ -899,7 +895,7 @@ public class AiService implements AutoCloseable {
                     turnContext.turnCounter(), resolvedModel);
         }
         GoogleGenAiChatOptions.Builder optionsBuilder = GoogleGenAiChatOptions.builder().model(resolvedModel);
-        resolveEffectiveThinkingLevel().applyTo(optionsBuilder);
+        ThinkingLevel.ADAPTIVE.applyTo(optionsBuilder);
         ChatClient.ChatClientRequestSpec promptSpec = chatClient.prompt()
                 .system(promptService.buildSystemPrompt(currentPhase)).user(u -> {
                     u.text(message);

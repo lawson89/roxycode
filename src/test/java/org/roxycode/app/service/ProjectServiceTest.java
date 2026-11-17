@@ -11,7 +11,6 @@ import java.nio.file.Files;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.model.AgentProfile;
-import org.roxycode.app.model.ThinkingLevel;
 
 class ProjectServiceTest {
 
@@ -125,7 +124,7 @@ class ProjectServiceTest {
         assertEquals(AgentProfile.NORMAL, projectService.getEffectiveAgentProfile());
         assertEquals("gemini-4-argon", projectService.getEffectiveGeminiModel(WorkflowPhase.PLAN));
         assertEquals("gemini-4-hydrogen", projectService.getEffectiveGeminiModel(WorkflowPhase.CODE));
-        assertEquals(ThinkingLevel.ADAPTIVE, projectService.getEffectiveThinkingLevel());
+
         assertThrows(IllegalStateException.class, () -> projectService.setProjectAgentProfile("MAX"));
 
         Path projectA = tempDir.resolve("project-a");

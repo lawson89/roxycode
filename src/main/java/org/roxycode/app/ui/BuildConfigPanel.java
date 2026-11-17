@@ -28,7 +28,6 @@ import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AgentProfile;
-import org.roxycode.app.model.AgentProfileOption;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.util.Edt;
@@ -111,13 +110,10 @@ final class BuildConfigPanel extends JPanel {
     final JPanel buildCardPanel;
     final JLabel modelSectionHeaderLabel;
     final JLabel modelOverrideStatusPill;
-    final JComboBox<AgentProfileOption> profileCombo;
     final JLabel profileInfoIcon;
-    final JLabel modelApiBadgeLabel;
-    final JTextArea modelDescriptionArea;
     final GlobalDefaultCard globalDefaultProfileCard;
     final JLabel overrideSubheaderLabel;
-    final Map<AgentProfile, ProjectProfileCard> profileCards = new EnumMap<>(AgentProfile.class);
+    final Map<AgentProfile, UiComponents.AgentProfileCard> profileCards = new EnumMap<>(AgentProfile.class);
     final JButton modelSaveButton;
     final JLabel modelStatusLabel;
     final Timer modelStatusTimer;
@@ -145,7 +141,7 @@ final class BuildConfigPanel extends JPanel {
     private boolean lastStatusSuccess = true;
     private String savedTomlContent = "";
     private String savedProfileId = "";
-    private String selectedProfileId = "";
+    String selectedProfileId = "";
     String detectedTemplateId = DEFAULT_TEMPLATE_ID;
     private transient Runnable onConfirmSavedCallback;
     private transient Consumer<String> onConfigureWithRoxyCallback;
@@ -289,11 +285,6 @@ final class BuildConfigPanel extends JPanel {
         modelSectionRow.add(profileInfoIcon);
         modelCardPanel.add(modelSectionRow, "growx, wmin 0, gapbottom 2");
 
-        profileCombo = new JComboBox<>();
-        modelApiBadgeLabel = new JLabel();
-        UiComponents.styleCodePillBadge(modelApiBadgeLabel);
-        modelDescriptionArea = UiComponents.createReadOnlyTextArea();
-
         globalDefaultProfileCard = new GlobalDefaultCard();
         modelCardPanel.add(globalDefaultProfileCard, GROWX_WMIN_0);
 
@@ -306,7 +297,8 @@ final class BuildConfigPanel extends JPanel {
                 "[grow, fill, sg profile][grow, fill, sg profile][grow, fill, sg profile]", "[grow, fill]"));
         profileGrid.setOpaque(false);
         for (AgentProfile profile : AgentProfile.values()) {
-            ProjectProfileCard card = new ProjectProfileCard(profile);
+            UiComponents.AgentProfileCard card = new UiComponents.AgentProfileCard(profile,
+                    selected -> selectProfileOverride(selected.getId()));
             profileCards.put(profile, card);
             profileGrid.add(card);
         }
@@ -325,11 +317,6 @@ final class BuildConfigPanel extends JPanel {
         settingsTabs.addChangeListener(e -> updateTabIcons());
 
         loadProfileOptions();
-        profileCombo.addActionListener(e -> {
-            updateSelectedProfileDetails();
-            onComboSelectionChanged();
-        });
-        updateSelectedProfileDetails();
 
         add(settingsTabs, BorderLayout.CENTER);
 
@@ -473,20 +460,12 @@ final class BuildConfigPanel extends JPanel {
 
     void loadProfileOptions() {
         AgentProfile globalProfile = SettingsService.resolveGlobalAgentProfile(settingsService);
-        DefaultComboBoxModel<AgentProfileOption> comboModel = new DefaultComboBoxModel<>();
-        comboModel.addElement(AgentProfileOption.useGlobalDefault(globalProfile));
-        for (AgentProfile profile : AgentProfile.values()) {
-            comboModel.addElement(AgentProfileOption.fromProfile(profile));
-        }
-
         String projectProfile = "";
         if (projectService != null && projectService.hasActiveProject()) {
             projectProfile = StringUtils.defaultString(projectService.getProjectAgentProfile());
         }
         final String targetProfile = normalizeProfileId(projectProfile);
         textUpdateGuard.run(() -> {
-            profileCombo.setModel(comboModel);
-            UiComponents.selectAgentProfileOptionById(profileCombo, targetProfile);
             selectProfileOverride(targetProfile);
             savedProfileId = selectedProfileId;
         });
@@ -498,14 +477,10 @@ final class BuildConfigPanel extends JPanel {
         String normalized = normalizeProfileId(profileId);
         selectedProfileId = normalized;
         globalDefaultProfileCard.setSelected(normalized.isEmpty());
-        for (Map.Entry<AgentProfile, ProjectProfileCard> entry : profileCards.entrySet()) {
+        for (Map.Entry<AgentProfile, UiComponents.AgentProfileCard> entry : profileCards.entrySet()) {
             boolean matches = entry.getKey().getId().equalsIgnoreCase(normalized);
             entry.getValue().setSelected(matches);
         }
-        if (profileCombo != null && !Objects.equals(resolveComboProfileId(), normalized)) {
-            textUpdateGuard.run(() -> UiComponents.selectAgentProfileOptionById(profileCombo, normalized));
-        }
-        updateSelectedProfileDetails();
         updateModelOverrideIndicators();
         if (!textUpdateGuard.isActive()) {
             UiComponents.stopTimer(modelSaveFeedbackTimer);
@@ -560,28 +535,6 @@ final class BuildConfigPanel extends JPanel {
         }
     }
 
-    void updateSelectedProfileDetails() {
-        UiComponents.updateProfileSelectionDetails(profileCombo, modelApiBadgeLabel, modelDescriptionArea);
-    }
-
-    private String resolveComboProfileId() {
-        if (profileCombo == null) {
-            return "";
-        }
-        AgentProfileOption selectedOption = (AgentProfileOption) profileCombo.getSelectedItem();
-        if (selectedOption != null && selectedOption.id() != null) {
-            return normalizeProfileId(selectedOption.id());
-        }
-        return "";
-    }
-
-    private String resolveSelectedProfileId() {
-        if (selectedProfileId != null) {
-            return selectedProfileId;
-        }
-        return resolveComboProfileId();
-    }
-
     boolean hasUnsavedChanges() {
         String currentText = "";
         if (textArea != null) {
@@ -591,7 +544,7 @@ final class BuildConfigPanel extends JPanel {
     }
 
     boolean hasUnsavedModelChanges() {
-        return !Objects.equals(resolveSelectedProfileId(), savedProfileId);
+        return !Objects.equals(selectedProfileId, savedProfileId);
     }
 
     private static Timer createFeedbackTimer(Runnable onExpire) {
@@ -602,12 +555,6 @@ final class BuildConfigPanel extends JPanel {
             onExpire.run();
         });
         return timer;
-    }
-
-    private void onComboSelectionChanged() {
-        if (!textUpdateGuard.isActive()) {
-            selectProfileOverride(resolveComboProfileId());
-        }
     }
 
     void updateSaveButtonState() {
@@ -802,7 +749,6 @@ final class BuildConfigPanel extends JPanel {
 
         UiComponents.styleCardPanel(modelCardPanel);
         UiComponents.styleCardPanel(buildCardPanel);
-        UiComponents.styleCodePillBadge(modelApiBadgeLabel);
         UiComponents.styleCodePillBadge(buildTomlFileBadge);
         modelSectionHeaderLabel.setIcon(FontIcon.of(Codicons.HUBOT, 18, accentColor));
         UiComponents.updateInfoIconTheme(profileInfoIcon);
@@ -828,7 +774,6 @@ final class BuildConfigPanel extends JPanel {
             SwingHtmlUtils.applyRSyntaxTheme(textArea, settingsService);
             applySectionStyling();
             loadProfileOptions();
-            updateSelectedProfileDetails();
             updateBannerState();
         });
     }
@@ -841,7 +786,6 @@ final class BuildConfigPanel extends JPanel {
             clearBuildStatus();
             clearModelStatus();
             loadProfileOptions();
-            updateSelectedProfileDetails();
             refreshDetectedTemplate();
             loadConfig();
             updateBannerState();
@@ -944,7 +888,7 @@ final class BuildConfigPanel extends JPanel {
             lastAsyncFuture = done;
             return done;
         }
-        final String profileOverrideToSave = resolveSelectedProfileId();
+        final String profileOverrideToSave = selectedProfileId;
         modelSaveButton.setEnabled(false);
         CompletableFuture<Void> future = Edt.runAsync(() -> {
             if (projectService.hasActiveProject()) {
@@ -1103,140 +1047,13 @@ final class BuildConfigPanel extends JPanel {
             if (cardTitleLabel == null) {
                 return;
             }
-            Color accentColor = SwingHtmlUtils.getAccentColor();
+            UiComponents.applySelectableCardTheme(this, radioIconLabel, cardTitleLabel, descriptionLabel, selected);
+
             Color mutedColor = SwingHtmlUtils.getMutedForegroundColor();
-            Color fgColor = SwingHtmlUtils.getUiColor(new Color(0x21, 0x25, 0x29), "Label.foreground");
-            String accentHex = SwingHtmlUtils.toHex(accentColor);
             String borderHex = UiComponents.getCardBorderHex();
             String pillBg = UiComponents.getPillBackgroundDirective();
-
-            if (selected) {
-                radioIconLabel.setIcon(FontIcon.of(Codicons.CIRCLE_FILLED, 15, accentColor));
-                putClientProperty(FlatClientProperties.STYLE,
-                        "arc: 10; border: 2,2,2,2," + accentHex + BORDER_BG_STYLE + "fade(" + accentHex + ", 8%)");
-                cardTitleLabel.setForeground(fgColor);
-                descriptionLabel.setForeground(fgColor);
-            } else {
-                radioIconLabel.setIcon(FontIcon.of(Codicons.CIRCLE_OUTLINE, 15, mutedColor));
-                putClientProperty(FlatClientProperties.STYLE,
-                        "arc: 10; border: 1,1,1,1," + borderHex + BORDER_BG_STYLE + pillBg);
-                cardTitleLabel.setForeground(fgColor);
-                descriptionLabel.setForeground(mutedColor);
-            }
             currentGlobalBadge.setForeground(mutedColor);
             currentGlobalBadge.putClientProperty(FlatClientProperties.STYLE,
-                    "font: $monospaced.font -1; arc: 6; border: 3,8,3,8," + borderHex + ",1,6; background: " + pillBg);
-        }
-
-        @Override
-        public void updateUI() {
-            super.updateUI();
-            applyCardTheme();
-        }
-    }
-
-    final class ProjectProfileCard extends JPanel {
-        private static final long serialVersionUID = 1L;
-
-        final transient AgentProfile profile;
-        final JLabel radioIconLabel;
-        final JLabel cardTitleLabel;
-        final JLabel selectedBadge;
-        final JLabel planModelPill;
-        final JLabel codeModelPill;
-        final JTextArea descriptionArea;
-        private boolean selected;
-
-        ProjectProfileCard(AgentProfile profile) {
-            this.profile = profile;
-            setLayout(new MigLayout("fillx, wrap 1, insets 12 14 12 14, gapy 6, hidemode 3", GROW_FILL, ""));
-            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            setOpaque(true);
-
-            JPanel headerRow = new JPanel(
-                    new MigLayout("fillx, insets 0, gapx 6", "[][grow, fill][right]", ROW_CENTER));
-            headerRow.setOpaque(false);
-
-            radioIconLabel = new JLabel();
-            headerRow.add(radioIconLabel);
-
-            cardTitleLabel = new JLabel(profile.getDisplayName());
-            cardTitleLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +1");
-            headerRow.add(cardTitleLabel, WMIN_0);
-
-            selectedBadge = new JLabel("SELECTED");
-            selectedBadge.setVisible(false);
-            headerRow.add(selectedBadge, "right, hidemode 3");
-            add(headerRow, GROWX_WMIN_0);
-
-            planModelPill = new JLabel("EXPLORE / PLAN: " + profile.getPlanModel());
-            codeModelPill = new JLabel("CODE / REVIEW: " + profile.getCodeModel());
-            add(planModelPill, GROWX_WMIN_0);
-            add(codeModelPill, GROWX_WMIN_0);
-
-            descriptionArea = UiComponents.createReadOnlyTextArea();
-            descriptionArea.setText(profile.getDescription());
-            descriptionArea.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            add(descriptionArea, GROWX_WMIN_0);
-
-            MouseAdapter clickListener = new MouseAdapter() {
-                @Override
-                public void mousePressed(MouseEvent e) {
-                    selectProfileOverride(profile.getId());
-                }
-            };
-            addMouseListener(clickListener);
-            descriptionArea.addMouseListener(clickListener);
-            headerRow.addMouseListener(clickListener);
-
-            applyCardTheme();
-        }
-
-        void setSelected(boolean selected) {
-            this.selected = selected;
-            selectedBadge.setVisible(selected);
-            applyCardTheme();
-        }
-
-        boolean isSelected() {
-            return selected;
-        }
-
-        void applyCardTheme() {
-            if (cardTitleLabel == null) {
-                return;
-            }
-            Color accentColor = SwingHtmlUtils.getAccentColor();
-            Color mutedColor = SwingHtmlUtils.getMutedForegroundColor();
-            Color fgColor = SwingHtmlUtils.getUiColor(new Color(0x21, 0x25, 0x29), "Label.foreground");
-            Color greenColor = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
-            String accentHex = SwingHtmlUtils.toHex(accentColor);
-            String borderHex = UiComponents.getCardBorderHex();
-            String pillBg = UiComponents.getPillBackgroundDirective();
-
-            if (selected) {
-                radioIconLabel.setIcon(FontIcon.of(Codicons.CIRCLE_FILLED, 15, accentColor));
-                putClientProperty(FlatClientProperties.STYLE,
-                        "arc: 10; border: 2,2,2,2," + accentHex + BORDER_BG_STYLE + "fade(" + accentHex + ", 8%)");
-                cardTitleLabel.setForeground(fgColor);
-                descriptionArea.setForeground(fgColor);
-            } else {
-                radioIconLabel.setIcon(FontIcon.of(Codicons.CIRCLE_OUTLINE, 15, mutedColor));
-                putClientProperty(FlatClientProperties.STYLE,
-                        "arc: 10; border: 1,1,1,1," + borderHex + BORDER_BG_STYLE + pillBg);
-                cardTitleLabel.setForeground(fgColor);
-                descriptionArea.setForeground(mutedColor);
-            }
-
-            selectedBadge.putClientProperty(FlatClientProperties.STYLE,
-                    "font: bold -2; arc: 6; border: 2,6,2,6; background: " + accentHex + "; foreground: #ffffff");
-
-            planModelPill.setForeground(accentColor);
-            planModelPill.putClientProperty(FlatClientProperties.STYLE,
-                    "font: $monospaced.font -1; arc: 6; border: 3,8,3,8," + borderHex + ",1,6; background: " + pillBg);
-
-            codeModelPill.setForeground(greenColor);
-            codeModelPill.putClientProperty(FlatClientProperties.STYLE,
                     "font: $monospaced.font -1; arc: 6; border: 3,8,3,8," + borderHex + ",1,6; background: " + pillBg);
         }
 

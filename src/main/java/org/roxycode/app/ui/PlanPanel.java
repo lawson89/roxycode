@@ -46,7 +46,7 @@ final class PlanPanel extends JPanel {
     private Timer copyFeedbackTimer;
     String lastCopiedCommitMessage;
     String lastCopiedMarkdown;
-    private final transient List<Runnable> exportStateListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private final transient UiComponents.HtmlExportSupport exportSupport = new UiComponents.HtmlExportSupport();
     private transient ImplementationPlan lastRenderedPlan;
     private boolean displayInitialized;
     private boolean htmlDirty = true;
@@ -137,15 +137,7 @@ final class PlanPanel extends JPanel {
     }
 
     void addExportStateListener(Runnable listener) {
-        if (listener != null) {
-            exportStateListeners.add(listener);
-        }
-    }
-
-    private void notifyExportStateListeners() {
-        for (Runnable listener : exportStateListeners) {
-            listener.run();
-        }
+        exportSupport.addListener(listener);
     }
 
     boolean canExportPlan() {
@@ -153,22 +145,14 @@ final class PlanPanel extends JPanel {
     }
 
     CompletableFuture<Path> exportCurrentPlanToBrowser(@Nullable String projectName) {
-        if (!canExportPlan()) {
-            return CompletableFuture.completedFuture(null);
-        }
-        ImplementationPlan plan = planManagerService.getCurrentPlan();
-        String html = HtmlExportService.buildPlanExportHtml(projectName, plan);
-        return HtmlExportService.openHtmlInBrowserAsync("roxycode-plan-", html);
+        return exportSupport.exportToBrowser(canExportPlan(), "roxycode-plan-",
+                () -> HtmlExportService.buildPlanExportHtml(projectName, planManagerService.getCurrentPlan()));
     }
 
     Path saveCurrentPlanAsHtml(java.awt.Component parent, @Nullable String projectName) {
-        if (!canExportPlan()) {
-            return null;
-        }
-        ImplementationPlan plan = planManagerService.getCurrentPlan();
-        String html = HtmlExportService.buildPlanExportHtml(projectName, plan);
-        String suggestedName = StringUtils.defaultIfBlank(plan.title(), "implementation-plan");
-        return HtmlExportService.saveHtmlWithChooser(parent, suggestedName, html);
+        return exportSupport.saveAsHtml(canExportPlan(), parent,
+                () -> StringUtils.defaultIfBlank(planManagerService.getCurrentPlan().title(), "implementation-plan"),
+                () -> HtmlExportService.buildPlanExportHtml(projectName, planManagerService.getCurrentPlan()));
     }
 
     @Override
@@ -207,7 +191,7 @@ final class PlanPanel extends JPanel {
             copyCommitMessageButton.setEnabled(hasCommitMsg);
             copyCommitMessageButton.setVisible(hasCommitMsg);
         }
-        notifyExportStateListeners();
+        exportSupport.notifyListeners();
         if (plan == null) {
             planTitleLabel.setText("Implementation Plan");
             planStepsLabel.setText("No plan submitted yet");

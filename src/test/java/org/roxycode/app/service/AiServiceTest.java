@@ -315,7 +315,6 @@ class AiServiceTest {
         assertEquals(AgentProfile.MAX, aiServiceWithProject.resolveEffectiveAgentProfile());
         assertEquals("gemini-4-carbon", aiServiceWithProject.resolveEffectiveGeminiModel(WorkflowPhase.PLAN));
         assertEquals("gemini-4-hydrogen", aiServiceWithProject.resolveEffectiveGeminiModel(WorkflowPhase.CODE));
-        assertEquals(ThinkingLevel.ADAPTIVE, aiServiceWithProject.resolveEffectiveThinkingLevel());
 
         clearInvocations(requestSpec);
         assertEquals("AI Response",

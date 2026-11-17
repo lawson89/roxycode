@@ -355,61 +355,6 @@ public class ProjectService {
         publishSettingsChangedSnapshot();
     }
 
-    /**
-     * Returns the Gemini model configured for the current project.
-     * 
-     * @return the project-specific model name
-     */
-    public String getProjectGeminiModel() {
-        return readProjectConfig().geminiModel();
-    }
-
-    /**
-     * Sets the Gemini model for the current project.
-     * 
-     * @param geminiModel
-     *            the model name
-     */
-    public void setProjectGeminiModel(String geminiModel) {
-        if (!hasActiveProject()) {
-            throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
-        }
-        ProjectConfig existing = readProjectConfig();
-        String trimmedModel = StringUtils.trimToEmpty(geminiModel);
-        String resolvedProfile = "";
-        if (!trimmedModel.isEmpty()) {
-            resolvedProfile = AgentProfile.fromString(trimmedModel).getId();
-        }
-        writeProjectConfig(
-                new ProjectConfig(resolvedProfile, trimmedModel, existing.thinkingLevel(), existing.buildConfirmed()));
-        publishSettingsChangedSnapshot();
-    }
-
-    /**
-     * Returns the thinking level configured for the current project.
-     * 
-     * @return the project-specific thinking level
-     */
-    public String getProjectThinkingLevel() {
-        return readProjectConfig().thinkingLevel();
-    }
-
-    /**
-     * Sets the thinking level for the current project.
-     * 
-     * @param thinkingLevel
-     *            the thinking level
-     */
-    public void setProjectThinkingLevel(String thinkingLevel) {
-        if (!hasActiveProject()) {
-            throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
-        }
-        ProjectConfig existing = readProjectConfig();
-        writeProjectConfig(new ProjectConfig(existing.agentProfile(), existing.geminiModel(),
-                normalizeProjectThinkingLevel(thinkingLevel), existing.buildConfirmed()));
-        publishSettingsChangedSnapshot();
-    }
-
     private void publishSettingsChangedSnapshot() {
         AppSettings currentSettings = null;
         if (settingsService != null && settingsService.getSettings() != null) {
@@ -470,10 +415,6 @@ public class ProjectService {
         return getEffectiveAgentProfile().resolveModelForPhase(phase);
     }
 
-    public ThinkingLevel getEffectiveThinkingLevel() {
-        return ThinkingLevel.ADAPTIVE;
-    }
-
     /**
      * Resolves the effective {@link AgentProfile} from the given project and settings services.
      *
@@ -518,11 +459,6 @@ public class ProjectService {
             }
         }
         return resolveEffectiveAgentProfile(projectService, settingsService).resolveModelForPhase(phase);
-    }
-
-    public static ThinkingLevel resolveEffectiveThinkingLevel(ProjectService projectService,
-            SettingsService settingsService) {
-        return ThinkingLevel.ADAPTIVE;
     }
 
     public static String resolveNormalizedProjectPath(ProjectService projectService) {

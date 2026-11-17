@@ -19,7 +19,6 @@ import org.roxycode.app.model.AgentProfile;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
 import org.roxycode.app.model.GeminiModels;
-import org.roxycode.app.model.ThinkingLevel;
 import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
@@ -159,10 +158,6 @@ public class SettingsService {
 
     public static String resolveGlobalGeminiModel(SettingsService settingsService, WorkflowPhase phase) {
         return resolveGlobalAgentProfile(settingsService).resolveModelForPhase(phase);
-    }
-
-    public static ThinkingLevel resolveGlobalThinkingLevel(SettingsService settingsService) {
-        return ThinkingLevel.ADAPTIVE;
     }
 
     public synchronized boolean hasSettingsFile() {

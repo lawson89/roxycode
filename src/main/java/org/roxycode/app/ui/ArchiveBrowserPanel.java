@@ -110,7 +110,7 @@ final class ArchiveBrowserPanel extends JPanel {
     private final Timer searchDebounceTimer;
 
     private Timer copyFeedbackTimer;
-    private final transient List<Runnable> exportStateListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private final transient UiComponents.HtmlExportSupport exportSupport = new UiComponents.HtmlExportSupport();
     private String currentRawMarkdown = "";
     String lastCopiedMarkdown;
     private transient ArchiveEntrySummary currentSelectedEntry;
@@ -294,7 +294,7 @@ final class ArchiveBrowserPanel extends JPanel {
             deleteConfirmBar.cancel();
             renderEmptyState(query != null && !query.isBlank());
             lastSelectionFuture = CompletableFuture.completedFuture("");
-            notifyExportStateListeners();
+            exportSupport.notifyListeners();
         }
     }
 
@@ -312,7 +312,7 @@ final class ArchiveBrowserPanel extends JPanel {
             renderEmptyState(searchField != null && !searchField.getText().isBlank());
             CompletableFuture<String> done = CompletableFuture.completedFuture("");
             lastSelectionFuture = done;
-            notifyExportStateListeners();
+            exportSupport.notifyListeners();
             return done;
         }
 
@@ -345,19 +345,11 @@ final class ArchiveBrowserPanel extends JPanel {
         exportHtmlButton.setEnabled(hasMarkdown && entry != null);
         displayArea.setText(buildDetailHtml(entry, this.currentRawMarkdown, mode));
         displayArea.setCaretPosition(0);
-        notifyExportStateListeners();
+        exportSupport.notifyListeners();
     }
 
     void addExportStateListener(Runnable listener) {
-        if (listener != null) {
-            exportStateListeners.add(listener);
-        }
-    }
-
-    private void notifyExportStateListeners() {
-        for (Runnable listener : exportStateListeners) {
-            listener.run();
-        }
+        exportSupport.addListener(listener);
     }
 
     boolean canExportSelectedEntry() {
@@ -365,23 +357,15 @@ final class ArchiveBrowserPanel extends JPanel {
     }
 
     CompletableFuture<Path> exportCurrentEntryToBrowser(@Nullable String projectName) {
-        if (!canExportSelectedEntry()) {
-            return CompletableFuture.completedFuture(null);
-        }
-        String html = HtmlExportService.buildArchiveExportHtml(projectName, currentSelectedEntry, currentRawMarkdown,
-                mode);
-        return HtmlExportService.openHtmlInBrowserAsync("roxycode-archive-", html);
+        return exportSupport.exportToBrowser(canExportSelectedEntry(), "roxycode-archive-", () -> HtmlExportService
+                .buildArchiveExportHtml(projectName, currentSelectedEntry, currentRawMarkdown, mode));
     }
 
     Path saveCurrentEntryAsHtml(Component parent, @Nullable String projectName) {
-        if (!canExportSelectedEntry()) {
-            return null;
-        }
-        String html = HtmlExportService.buildArchiveExportHtml(projectName, currentSelectedEntry, currentRawMarkdown,
-                mode);
-        String suggestedName = StringUtils.defaultIfBlank(currentSelectedEntry.title(),
-                currentSelectedEntry.filename());
-        return HtmlExportService.saveHtmlWithChooser(parent, suggestedName, html);
+        return exportSupport.saveAsHtml(canExportSelectedEntry(), parent,
+                () -> StringUtils.defaultIfBlank(currentSelectedEntry.title(), currentSelectedEntry.filename()),
+                () -> HtmlExportService.buildArchiveExportHtml(projectName, currentSelectedEntry, currentRawMarkdown,
+                        mode));
     }
 
     static String buildDetailHtml(ArchiveEntrySummary entry, String rawMarkdown, ArchiveMode archiveMode) {

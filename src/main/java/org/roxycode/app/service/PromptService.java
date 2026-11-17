@@ -3,6 +3,7 @@ package org.roxycode.app.service;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -11,7 +12,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.stream.Stream;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.roxycode.app.ai.JexlServiceRegistry;
@@ -323,15 +323,26 @@ public class PromptService {
             if (dir == null || !Files.isDirectory(dir)) {
                 continue;
             }
-            try (Stream<Path> stream = Files.list(dir)) {
-                stream.filter(Files::isRegularFile).filter(Files::isReadable)
-                        .filter(p -> !p.getFileName().toString().startsWith(".")).filter(PromptService::isNonBinaryFile)
-                        .sorted(Comparator.comparing(p -> p.getFileName().toString(), String.CASE_INSENSITIVE_ORDER))
-                        .forEach(entry -> {
-                            Path norm = entry.toAbsolutePath().normalize();
-                            discovered.putIfAbsent(norm,
-                                    new ContextFileItem(folderStr, entry.getFileName().toString(), norm));
-                        });
+            try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
+                List<Path> folderFiles = new ArrayList<>();
+                for (Path entry : stream) {
+                    if (!Files.isRegularFile(entry) || !Files.isReadable(entry)
+                            || entry.getFileName().toString().startsWith(".")) {
+                        continue;
+                    }
+                    try {
+                        if (!FileReadService.isBinaryFile(entry)) {
+                            folderFiles.add(entry);
+                        }
+                    } catch (IOException e) {
+                        log.debug("Skipping unreadable context file {}: {}", entry, e.getMessage());
+                    }
+                }
+                folderFiles.sort(Comparator.comparing(p -> p.getFileName().toString(), String.CASE_INSENSITIVE_ORDER));
+                for (Path entry : folderFiles) {
+                    Path norm = entry.toAbsolutePath().normalize();
+                    discovered.putIfAbsent(norm, new ContextFileItem(folderStr, entry.getFileName().toString(), norm));
+                }
             } catch (IOException e) {
                 log.warn("Failed to list context files in folder {}: {}", dir, e.getMessage());
             }
@@ -389,14 +400,6 @@ public class PromptService {
             }
         }
         return sb.toString();
-    }
-
-    private static boolean isNonBinaryFile(Path path) {
-        try {
-            return !FileReadService.isBinaryFile(path);
-        } catch (IOException e) {
-            return false;
-        }
     }
 
     private String readClasspathResource(String path) {

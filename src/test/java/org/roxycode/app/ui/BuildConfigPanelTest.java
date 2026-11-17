@@ -7,14 +7,12 @@ import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.util.concurrent.atomic.AtomicBoolean;
-import javax.swing.JComboBox;
 import javax.swing.SwingUtilities;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.model.AgentProfile;
-import org.roxycode.app.model.AgentProfileOption;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
@@ -125,11 +123,9 @@ class BuildConfigPanelTest {
         assertTrue(panel.globalDefaultProfileCard.isSelected());
         assertTrue(panel.globalDefaultProfileCard.currentGlobalBadge.getText().contains("Normal"));
         assertEquals(AgentProfile.values().length, panel.profileCards.size());
-        for (BuildConfigPanel.ProjectProfileCard card : panel.profileCards.values()) {
+        for (UiComponents.AgentProfileCard card : panel.profileCards.values()) {
             assertFalse(card.isSelected());
         }
-        JComboBox<AgentProfileOption> profileCombo = panel.profileCombo;
-        assertEquals(1 + AgentProfile.values().length, profileCombo.getItemCount());
 
         java.util.concurrent.atomic.AtomicInteger confirmCallbackCount = new java.util.concurrent.atomic.AtomicInteger();
         panel.setOnConfirmSavedCallback(confirmCallbackCount::incrementAndGet);
@@ -147,8 +143,6 @@ class BuildConfigPanelTest {
             assertEquals("Override: Max", panel.modelOverrideStatusPill.getText());
             assertEquals(BuildConfigPanel.TAB_AI_MODEL_TITLE + " (Max)",
                     panel.settingsTabs.getTitleAt(BuildConfigPanel.TAB_INDEX_AI_MODEL));
-            assertEquals(AgentProfile.MAX.getBadgeSummary(), panel.modelApiBadgeLabel.getText());
-            assertEquals(AgentProfile.MAX.getDescription(), panel.modelDescriptionArea.getText());
             assertTrue(panel.hasUnsavedModelChanges());
             assertFalse(panel.hasUnsavedChanges(), "Profile card changes must not mark build.toml dirty");
 
@@ -203,7 +197,7 @@ class BuildConfigPanelTest {
         when(projectService.getProjectAgentProfile()).thenReturn("SPEED");
         SwingTestUtils.runOnEdt(() -> panel.onProjectChanged(new ProjectChangedEvent(null)));
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
-        assertEquals("SPEED", ((AgentProfileOption) profileCombo.getSelectedItem()).id());
+        assertEquals("SPEED", panel.selectedProfileId);
         assertTrue(panel.profileCards.get(AgentProfile.SPEED).isSelected());
         assertEquals("Override: Speed", panel.modelOverrideStatusPill.getText());
 
@@ -409,7 +403,7 @@ class BuildConfigPanelTest {
         assertFalse(panel.hasUnsavedModelChanges());
 
         SwingTestUtils.runOnEdt(() -> {
-            BuildConfigPanel.ProjectProfileCard maxCard = panel.profileCards.get(AgentProfile.MAX);
+            UiComponents.AgentProfileCard maxCard = panel.profileCards.get(AgentProfile.MAX);
             maxCard.dispatchEvent(
                     new MouseEvent(maxCard, MouseEvent.MOUSE_PRESSED, System.currentTimeMillis(), 0, 10, 10, 1, false));
         });
@@ -421,7 +415,7 @@ class BuildConfigPanelTest {
         assertTrue(panel.hasUnsavedModelChanges());
 
         SwingTestUtils.runOnEdt(() -> {
-            BuildConfigPanel.ProjectProfileCard speedCard = panel.profileCards.get(AgentProfile.SPEED);
+            UiComponents.AgentProfileCard speedCard = panel.profileCards.get(AgentProfile.SPEED);
             speedCard.dispatchEvent(new MouseEvent(speedCard, MouseEvent.MOUSE_PRESSED, System.currentTimeMillis(), 0,
                     10, 10, 1, false));
         });

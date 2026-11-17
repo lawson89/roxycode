@@ -10,8 +10,6 @@ import com.formdev.flatlaf.themes.FlatMacDarkLaf;
 import com.formdev.flatlaf.themes.FlatMacLightLaf;
 import com.formdev.flatlaf.util.SystemFileChooser;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -97,11 +95,9 @@ public final class SettingsPanel extends JPanel {
     private final JLabel titleLabel;
     private final JLabel subtitleLabel;
     final JComboBox<String> themeCombo;
-    final JComboBox<AgentProfile> profileCombo;
     final JLabel profileInfoIcon = UiComponents.createInfoIcon(UiComponents.AGENT_PROFILE_TOOLTIP_HTML);
-    final JLabel modelApiBadgeLabel;
-    final JTextArea modelDescriptionArea;
-    final Map<AgentProfile, ProfileCard> profileCards = new EnumMap<>(AgentProfile.class);
+    final Map<AgentProfile, UiComponents.AgentProfileCard> profileCards = new EnumMap<>(AgentProfile.class);
+    private transient AgentProfile selectedProfile = AgentProfile.DEFAULT;
     final JSpinner maxMessagesSpinner;
     final JComboBox<String> authProviderCombo;
     final JToggleButton apiKeyProviderToggleBtn;
@@ -176,16 +172,7 @@ public final class SettingsPanel extends JPanel {
             updateSaveButtonState();
         });
 
-        profileCombo = new JComboBox<>(AgentProfile.values());
-        modelApiBadgeLabel = new JLabel();
-        UiComponents.styleCodePillBadge(modelApiBadgeLabel);
-
-        modelDescriptionArea = UiComponents.createReadOnlyTextArea();
         loadProfiles();
-        profileCombo.addActionListener(e -> {
-            updateSelectedProfileDetails();
-            updateSaveButtonState();
-        });
 
         authProviderCombo = new JComboBox<>(new String[]{AUTH_PROVIDER_API_KEY, AUTH_PROVIDER_VERTEX_AI});
         if (settingsService.getSettings().isVertexAiEnabled()) {
@@ -312,7 +299,6 @@ public final class SettingsPanel extends JPanel {
         testConnectionStatusTimer = new Timer(5000, e -> clearTestConnectionStatus());
         testConnectionStatusTimer.setRepeats(false);
 
-        updateSelectedProfileDetails();
         updateAuthProviderVisibility();
         applyThemeStyling();
         updateOnboardingBannerState();
@@ -417,7 +403,9 @@ public final class SettingsPanel extends JPanel {
         grid.setOpaque(false);
         profileCards.clear();
         for (AgentProfile profile : AgentProfile.values()) {
-            ProfileCard profileCard = new ProfileCard(profile);
+            UiComponents.AgentProfileCard profileCard = new UiComponents.AgentProfileCard(profile,
+                    this::selectProfileFromCard);
+            profileCard.setSelected(profile == selectedProfile);
             profileCards.put(profile, profileCard);
             grid.add(profileCard, GROW_WMIN_0);
         }
@@ -488,20 +476,24 @@ public final class SettingsPanel extends JPanel {
     }
 
     private void loadProfiles() {
-        UiComponents.selectAgentProfileById(profileCombo, settingsService.getSettings().getAgentProfile());
+        applySelectedProfile(AgentProfile.fromString(settingsService.getSettings().getAgentProfile()));
     }
 
-    void updateSelectedProfileDetails() {
-        UiComponents.updateProfileSelectionDetails(profileCombo, modelApiBadgeLabel, modelDescriptionArea);
-        AgentProfile selectedProfile = (AgentProfile) profileCombo.getSelectedItem();
-        for (Map.Entry<AgentProfile, ProfileCard> entry : profileCards.entrySet()) {
+    private void applySelectedProfile(AgentProfile profile) {
+        selectedProfile = profile;
+        for (Map.Entry<AgentProfile, UiComponents.AgentProfileCard> entry : profileCards.entrySet()) {
             entry.getValue().setSelected(entry.getKey() == selectedProfile);
         }
     }
 
+    AgentProfile getSelectedProfile() {
+        return selectedProfile;
+    }
+
     void selectProfileFromCard(AgentProfile profile) {
-        if (profile != null && profileCombo.getSelectedItem() != profile) {
-            profileCombo.setSelectedItem(profile);
+        if (profile != null && selectedProfile != profile) {
+            applySelectedProfile(profile);
+            updateSaveButtonState();
         }
     }
 
@@ -523,7 +515,6 @@ public final class SettingsPanel extends JPanel {
         if (agentExecutionHeaderLabel != null) {
             agentExecutionHeaderLabel.setIcon(FontIcon.of(Codicons.PULSE, 18, accentColor));
         }
-        UiComponents.styleCodePillBadge(modelApiBadgeLabel);
         UiComponents.updateInfoIconTheme(profileInfoIcon);
 
         String accentHex = SwingHtmlUtils.toHex(accentColor);
@@ -562,7 +553,7 @@ public final class SettingsPanel extends JPanel {
         openToolLogButton.putClientProperty(FlatClientProperties.STYLE,
                 "font: -1; arc: 8; margin: 3,10,3,10; borderColor: " + borderHex + "; background: " + pillBg);
 
-        for (ProfileCard card : profileCards.values()) {
+        for (UiComponents.AgentProfileCard card : profileCards.values()) {
             card.applyCardTheme();
         }
         updateSaveButtonState();
@@ -689,13 +680,7 @@ public final class SettingsPanel extends JPanel {
         String projectId = vertexProjectIdField.getText().trim();
         String location = vertexLocationField.getText().trim();
         String credentialsPath = vertexCredentialsPathField.getText().trim();
-        AgentProfile selectedProfile = (AgentProfile) profileCombo.getSelectedItem();
-        String profileId;
-        if (selectedProfile != null) {
-            profileId = selectedProfile.getId();
-        } else {
-            profileId = AgentProfile.DEFAULT.getId();
-        }
+        String profileId = selectedProfile.getId();
         int toolTurns = (Integer) maxAgentToolTurnsSpinner.getValue();
         int maxMessages = (Integer) maxMessagesSpinner.getValue();
         boolean groundingEnabled = googleGroundingCheckBox.isSelected();
@@ -758,8 +743,8 @@ public final class SettingsPanel extends JPanel {
             vertexLocationField.setText(event.settings().getVertexLocation());
             vertexCredentialsPathField.setText(event.settings().getVertexCredentialsPath());
             AgentProfile targetProfile = AgentProfile.fromString(event.settings().getAgentProfile());
-            if (targetProfile != profileCombo.getSelectedItem()) {
-                profileCombo.setSelectedItem(targetProfile);
+            if (targetProfile != selectedProfile) {
+                applySelectedProfile(targetProfile);
             }
             int clampedToolTurns = Math.clamp(event.settings().getMaxAgentToolTurns(), MIN_AGENT_TOOL_TURNS,
                     MAX_AGENT_TOOL_TURNS);
@@ -821,13 +806,7 @@ public final class SettingsPanel extends JPanel {
             return CompletableFuture.completedFuture(null);
         }
 
-        AgentProfile selectedProfile = (AgentProfile) profileCombo.getSelectedItem();
-        String modelName;
-        if (selectedProfile != null) {
-            modelName = selectedProfile.getPlanModel();
-        } else {
-            modelName = SettingsService.resolveGlobalGeminiModel(settingsService);
-        }
+        String modelName = selectedProfile.getPlanModel();
 
         GenAiConnectionConfig connectionConfig;
         if (vertexSelected) {
@@ -898,10 +877,7 @@ public final class SettingsPanel extends JPanel {
         settings.setVertexProjectId(newProjectId);
         settings.setVertexLocation(newLocation);
         settings.setVertexCredentialsPath(newCredentialsPath);
-        AgentProfile selectedProfile = (AgentProfile) profileCombo.getSelectedItem();
-        if (selectedProfile != null) {
-            settings.setAgentProfile(selectedProfile.getId());
-        }
+        settings.setAgentProfile(selectedProfile.getId());
         settings.setMaxAgentToolTurns((Integer) maxAgentToolTurnsSpinner.getValue());
         settings.setMaxChatMemoryMessages(newMaxMessages);
         settings.setGoogleGroundingEnabled(googleGroundingCheckBox.isSelected());
@@ -955,115 +931,4 @@ public final class SettingsPanel extends JPanel {
         });
     }
 
-    final class ProfileCard extends JPanel {
-        private static final long serialVersionUID = 1L;
-
-        final transient AgentProfile profile;
-        final JLabel radioIconLabel;
-        final JLabel cardTitleLabel;
-        final JLabel selectedBadge;
-        final JLabel planModelPill;
-        final JLabel codeModelPill;
-        final JTextArea descriptionArea;
-        private boolean selected;
-
-        ProfileCard(AgentProfile profile) {
-            this.profile = profile;
-            setLayout(new MigLayout("fillx, wrap 1, insets 12 14 12 14, gapy 6, hidemode 3", GROW_FILL, ""));
-            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            setOpaque(true);
-
-            JPanel headerRow = new JPanel(
-                    new MigLayout("fillx, insets 0, gapx 6", "[][grow, fill][right]", ROW_CENTER));
-            headerRow.setOpaque(false);
-
-            radioIconLabel = new JLabel();
-            headerRow.add(radioIconLabel);
-
-            cardTitleLabel = new JLabel(profile.getDisplayName());
-            cardTitleLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +1");
-            headerRow.add(cardTitleLabel, WMIN_0);
-
-            selectedBadge = new JLabel("SELECTED");
-            selectedBadge.setVisible(false);
-            headerRow.add(selectedBadge, "right, hidemode 3");
-            add(headerRow, GROWX_WMIN_0);
-
-            planModelPill = new JLabel("EXPLORE / PLAN: " + profile.getPlanModel());
-            codeModelPill = new JLabel("CODE / REVIEW: " + profile.getCodeModel());
-            add(planModelPill, GROWX_WMIN_0);
-            add(codeModelPill, GROWX_WMIN_0);
-
-            descriptionArea = UiComponents.createReadOnlyTextArea();
-            descriptionArea.setText(profile.getDescription());
-            descriptionArea.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            add(descriptionArea, GROWX_WMIN_0);
-
-            MouseAdapter clickListener = new MouseAdapter() {
-                @Override
-                public void mousePressed(MouseEvent e) {
-                    selectProfileFromCard(profile);
-                }
-            };
-            addMouseListener(clickListener);
-            descriptionArea.addMouseListener(clickListener);
-            headerRow.addMouseListener(clickListener);
-
-            applyCardTheme();
-        }
-
-        void setSelected(boolean selected) {
-            this.selected = selected;
-            selectedBadge.setVisible(selected);
-            applyCardTheme();
-        }
-
-        boolean isSelected() {
-            return selected;
-        }
-
-        void applyCardTheme() {
-            if (cardTitleLabel == null) {
-                return;
-            }
-            Color accentColor = SwingHtmlUtils.getAccentColor();
-            Color mutedColor = SwingHtmlUtils.getMutedForegroundColor();
-            Color fgColor = SwingHtmlUtils.getUiColor(new Color(0x21, 0x25, 0x29), "Label.foreground");
-            Color greenColor = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
-            String accentHex = SwingHtmlUtils.toHex(accentColor);
-            String borderHex = UiComponents.getCardBorderHex();
-            String pillBg = UiComponents.getPillBackgroundDirective();
-
-            if (selected) {
-                radioIconLabel.setIcon(FontIcon.of(Codicons.CIRCLE_FILLED, 15, accentColor));
-                putClientProperty(FlatClientProperties.STYLE,
-                        "arc: 10; border: 2,2,2,2," + accentHex + ",1,10; background: fade(" + accentHex + ", 8%)");
-                cardTitleLabel.setForeground(fgColor);
-                descriptionArea.setForeground(fgColor);
-            } else {
-                radioIconLabel.setIcon(FontIcon.of(Codicons.CIRCLE_OUTLINE, 15, mutedColor));
-                putClientProperty(FlatClientProperties.STYLE,
-                        "arc: 10; border: 1,1,1,1," + borderHex + ",1,10; background: " + pillBg);
-                cardTitleLabel.setForeground(fgColor);
-                descriptionArea.setForeground(mutedColor);
-            }
-
-            selectedBadge.putClientProperty(FlatClientProperties.STYLE,
-                    "font: bold -2; arc: 6; border: 2,6,2,6; background: " + accentHex + "; foreground: #ffffff");
-
-            planModelPill.setForeground(accentColor);
-            planModelPill.putClientProperty(FlatClientProperties.STYLE,
-                    "font: $monospaced.font -1; arc: 6; border: 3,8,3,8," + borderHex + ",1,6; background: " + pillBg);
-
-            codeModelPill.setForeground(greenColor);
-            codeModelPill.putClientProperty(FlatClientProperties.STYLE,
-                    "font: $monospaced.font -1; arc: 6; border: 3,8,3,8," + borderHex + ",1,6; background: " + pillBg);
-        }
-
-        @Override
-        public void updateUI() {
-            super.updateUI();
-            applyCardTheme();
-        }
-    }
 }
