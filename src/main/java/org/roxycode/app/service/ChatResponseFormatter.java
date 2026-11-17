@@ -106,7 +106,7 @@ final class ChatResponseFormatter {
         }
     }
 
-    private static boolean isTokenLimitFinishReason(String finishReason) {
+    static boolean isTokenLimitFinishReason(String finishReason) {
         return "MAX_TOKENS".equalsIgnoreCase(finishReason) || "LENGTH".equalsIgnoreCase(finishReason);
     }
 

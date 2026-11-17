@@ -9,6 +9,7 @@ import org.roxycode.app.ai.services.FileEditorService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.MemoryService;
+import org.roxycode.app.ai.services.PdfService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.SymbolService;
 import org.roxycode.app.ai.services.UserInputService;
@@ -46,6 +47,7 @@ class JexlServiceRegistryTest {
         GenericBuildToolService buildTool = mock(GenericBuildToolService.class);
         MemoryService memoryService = mock(MemoryService.class);
         SymbolService symbolService = mock(SymbolService.class);
+        PdfService pdfService = mock(PdfService.class);
         PlanService planService = new PlanService(null, null, null);
         UserInputService userInputService = new UserInputService(null);
 
@@ -53,6 +55,7 @@ class JexlServiceRegistryTest {
         registry.register(buildTool);
         registry.register(memoryService);
         registry.register(symbolService);
+        registry.register(pdfService);
         registry.register(planService);
         registry.register(userInputService);
 
@@ -66,6 +69,7 @@ class JexlServiceRegistryTest {
             assertTrue(registry.getServices(phase).containsValue(buildTool));
             assertTrue(registry.getServices(phase).containsValue(memoryService));
             assertTrue(registry.getServices(phase).containsValue(symbolService));
+            assertTrue(registry.getServices(phase).containsValue(pdfService));
             UserInputService defaultScoped = assertInstanceOf(UserInputService.class,
                     registry.getServices(phase).get("userInputService"));
             assertEquals(TurnToolContext.DEFAULT_CONVERSATION_ID, defaultScoped.getConversationId());
@@ -77,6 +81,7 @@ class JexlServiceRegistryTest {
 
             assertTrue(registry.getDocumentation(phase).contains("memoryService"));
             assertTrue(registry.getDocumentation(phase).contains("symbolService"));
+            assertTrue(registry.getDocumentation(phase).contains("pdfService"));
             assertTrue(registry.getDocumentation(phase).contains("userInputService"));
             assertTrue(registry.getDocumentation(phase).contains("interface SymbolInfo {"));
         }

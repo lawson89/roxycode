@@ -278,4 +278,31 @@ class FileEditorServiceTest {
                     .publishEvent(new FileChangedEvent("Tracked.txt", FileChangedEvent.ChangeType.MODIFIED));
         }
     }
+
+    @Test
+    void testAppendFileCreatesAppendsNormalizesLineEndingsAndGuardsInvalidTargets() throws IOException {
+        clearInvocations(eventPublisher);
+        EditorResult created = fileEditorService.appendFile("notes/kb.md", "# Title");
+        assertTrue(created.success());
+        assertEquals("# Title", Files.readString(tempDir.resolve("notes/kb.md")));
+        verify(eventPublisher).publishEvent(new FileChangedEvent("notes/kb.md", FileChangedEvent.ChangeType.CREATED));
+
+        clearInvocations(eventPublisher);
+        EditorResult appendedNewLine = fileEditorService.appendFile("notes/kb.md", "## Section 1\nBody");
+        assertTrue(appendedNewLine.success());
+        assertEquals("# Title\n## Section 1\nBody", Files.readString(tempDir.resolve("notes/kb.md")));
+        verify(eventPublisher).publishEvent(new FileChangedEvent("notes/kb.md", FileChangedEvent.ChangeType.MODIFIED));
+
+        Path crlfFile = Files.writeString(tempDir.resolve("notes/crlf.md"), "Line 1\r\n");
+        assertTrue(fileEditorService.appendFile("notes/crlf.md", "Line 2\nLine 3\n").success());
+        assertEquals("Line 1\r\nLine 2\r\nLine 3\r\n", Files.readString(crlfFile));
+        Files.createDirectories(tempDir.resolve("notes/subdir"));
+        assertEditFails(fileEditorService.appendFile("notes/subdir", "text"), "Path is a directory: notes/subdir");
+
+        Files.write(tempDir.resolve("notes/binary.bin"), new byte[]{0, 1, 2, 3, 0, 5});
+        assertEditFails(fileEditorService.appendFile("notes/binary.bin", "text"),
+                "Binary file cannot be appended as text: notes/binary.bin");
+
+        assertThrows(SecurityException.class, () -> fileEditorService.appendFile("@billing-service/kb.md", "x"));
+    }
 }

@@ -1058,4 +1058,50 @@ class AiServiceTest {
         assertEquals(brokenDiagramReply, cappedResult);
         assertEquals(2, cappedCalls.get());
     }
+
+    @Test
+    void testAnalyzePdfUsesStatelessFlashLowThinkingMaxTokensAndRetryPreservation() {
+        ChatModel mockChatModel = mock(ChatModel.class);
+        lenient().when(mockChatModel.getOptions())
+                .thenReturn(GoogleGenAiChatOptions.builder().model("gemini-2.5-flash").build());
+        ChatMemory realMemory = MessageWindowChatMemory.builder()
+                .chatMemoryRepository(new InMemoryChatMemoryRepository()).maxMessages(20).build();
+        lenient().when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.PLAN);
+
+        AiService service = new AiService(ChatClient.builder(mockChatModel), settingsService, null, promptService,
+                jexlTool, planService, realMemory, toolCallingManager, eventPublisher);
+        service.setRetryTemplate(AiConfig.createRetryTemplate(2, Duration.ofMillis(1), 1.0), 2);
+
+        assertThrows(IllegalArgumentException.class, () -> service.analyzePdf(new byte[0], "doc.pdf", "Summarize"));
+
+        List<Prompt> capturedPrompts = new ArrayList<>();
+        AtomicInteger attempts = new AtomicInteger();
+        when(mockChatModel.call(any(Prompt.class))).thenAnswer(inv -> {
+            capturedPrompts.add(inv.getArgument(0));
+            if (attempts.incrementAndGet() == 1) {
+                throw new TransientAiException("503 Service Unavailable");
+            }
+            return buildChatResponse("Extracted page 1", "MAX_TOKENS", new DefaultUsage(120, 64, 184));
+        });
+
+        byte[] pdfBytes = "%PDF-1.7\nhello".getBytes(java.nio.charset.StandardCharsets.US_ASCII);
+        String result = service.analyzePdf(pdfBytes, "@docs/spec.pdf", null);
+        assertEquals("Extracted page 1" + AiService.PDF_MAX_TOKENS_WARNING, result);
+        assertEquals(2, capturedPrompts.size());
+
+        GoogleGenAiChatOptions retryOptions = assertInstanceOf(GoogleGenAiChatOptions.class,
+                capturedPrompts.get(1).getOptions());
+        assertEquals(AiService.FLASH_UTILITY_MODEL, retryOptions.getModel());
+        assertEquals(GoogleGenAiThinkingLevel.LOW, retryOptions.getThinkingLevel());
+        assertEquals(AiService.PDF_ANALYSIS_MAX_OUTPUT_TOKENS, retryOptions.getMaxOutputTokens());
+
+        UserMessage userMsg = capturedPrompts.get(0).getInstructions().stream().filter(UserMessage.class::isInstance)
+                .map(UserMessage.class::cast).findFirst().orElseThrow();
+        assertTrue(userMsg.getText().contains("@docs/spec.pdf"));
+        assertEquals(1, userMsg.getMedia().size());
+        assertEquals("application/pdf", userMsg.getMedia().get(0).getMimeType().toString());
+        assertTrue(realMemory.get("default").isEmpty());
+        verify(planService, never()).getCurrentPhase();
+        verify(eventPublisher, atLeastOnce()).publishEvent(any(TokenUsageEvent.class));
+    }
 }

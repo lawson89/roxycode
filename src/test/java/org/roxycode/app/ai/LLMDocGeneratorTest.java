@@ -24,6 +24,7 @@ import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.ai.services.MemoryService;
+import org.roxycode.app.ai.services.PdfService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.SymbolService;
 import org.roxycode.app.service.ProjectService;
@@ -48,6 +49,7 @@ class LLMDocGeneratorTest {
                 Arguments.of(MemoryService.class, new MemoryService(null, ps, null)),
                 Arguments.of(SymbolService.class,
                         new SymbolService(ps, new GrepService(ps, frs), AiConfig.SHARED_OBJECT_MAPPER)),
+                Arguments.of(PdfService.class, new PdfService(ps, new GrepService(ps, frs), null)),
                 Arguments.of(PlanService.class, new PlanService(null, null, null)));
     }
 

@@ -95,6 +95,54 @@ public class FileEditorService {
     }
 
     /**
+     * Appends text content to a file, creating the file and parent directories if it does not exist. For existing
+     * non-binary text files, normalizes line endings to match the file and inserts a line separator before the appended
+     * text when the existing non-empty file does not end with a line separator.
+     *
+     * @param relativePath
+     *            the file path relative to the project root
+     * @param content
+     *            the text content to append
+     * @return the editor result
+     */
+    @AgentDoc(value = "Appends text content to a file (creating it and parent directories if missing). For existing non-binary text files, normalizes line endings to match the file and starts on a new line if the existing content does not end with a line separator.", examples = "fileEditorService.appendFile('docs/pdf-notes.md', '## Section 2\nDetails...')")
+    public EditorResult appendFile(@AgentDoc("The file path relative to the project root") String relativePath,
+            @AgentDoc("The text content to append to the file") String content) throws IOException {
+        Path path = projectService.resolvePath(relativePath);
+        String safeContent = Objects.requireNonNullElse(content, "");
+        if (!Files.exists(path)) {
+            PathUtils.createParentDirectories(path);
+            Files.writeString(path, safeContent);
+            return completeFileMutation(path, relativePath, "File created and written successfully: " + relativePath,
+                    FileChangedEvent.ChangeType.CREATED);
+        }
+        if (Files.isDirectory(path)) {
+            return new EditorResult(false, "", "Path is a directory: " + relativePath);
+        }
+        if (!Files.isRegularFile(path)) {
+            return new EditorResult(false, "", "Path is not a regular file: " + relativePath);
+        }
+        if (FileReadService.isBinaryFile(path)) {
+            return new EditorResult(false, "", "Binary file cannot be appended as text: " + relativePath);
+        }
+        String existing = Files.readString(path);
+        String lineSeparator = detectLineSeparator(existing, safeContent);
+        String normalizedAppend = normalizeLineEndings(safeContent, lineSeparator);
+        String updatedContent;
+        if (existing.isEmpty()) {
+            updatedContent = normalizedAppend;
+        } else if (hasTrailingLineSeparator(existing) || normalizedAppend.isEmpty()
+                || normalizedAppend.startsWith(lineSeparator)) {
+            updatedContent = existing + normalizedAppend;
+        } else {
+            updatedContent = existing + lineSeparator + normalizedAppend;
+        }
+        Files.writeString(path, updatedContent);
+        return completeFileMutation(path, relativePath, "Content appended successfully: " + relativePath,
+                FileChangedEvent.ChangeType.MODIFIED);
+    }
+
+    /**
      * Replaces a unique block of text in a file.
      *
      * @param relativePath

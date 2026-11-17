@@ -75,7 +75,12 @@ public class AiService implements AutoCloseable {
     public static final String AUTO_CONTINUE_ACTIVITY_MESSAGE = "API connection reset — resuming turn automatically";
     public static final String DIAGRAM_FIX_ACTIVITY_MESSAGE = "Fixing diagram syntax error...";
     static final String GROUNDED_SEARCH_SYSTEM_PROMPT = "You are a technical research assistant. Use Google Search to provide accurate, up-to-date facts, synthesis, and source URLs or citations when available.";
-    static final String TOPIC_TITLE_MODEL = "gemini-3.8-flash";
+    static final String FLASH_UTILITY_MODEL = "gemini-3.8-flash";
+    static final String TOPIC_TITLE_MODEL = FLASH_UTILITY_MODEL;
+    static final int PDF_ANALYSIS_MAX_OUTPUT_TOKENS = 65_536;
+    static final String PDF_ANALYSIS_SYSTEM_PROMPT = "You are a precise technical document analyst. Extract, transcribe, and summarize PDF content accurately in clean Markdown, preserving headings, tables, code/formulas, diagram descriptions, and [Page N] citations without fabricating details.";
+    static final String DEFAULT_PDF_ANALYSIS_PROMPT = "Extract and summarize the contents of this PDF in structured Markdown with section headings, tables, diagram/figure descriptions, key terms, and [Page N] citations.";
+    static final String PDF_MAX_TOKENS_WARNING = "\n\n[WARNING: Output hit MAX_TOKENS (65,536). Request specific page ranges (e.g., pages 1-50, then 51-100) to extract the remainder without truncation.]";
     static final int MAX_TOPIC_EXCERPT_CHARS = 2000;
     static final String TOPIC_TITLE_SYSTEM_PROMPT = "Generate a concise, descriptive 3 to 7 word title summarizing the following technical Q&A conversation. Return plain text only with no quotes, markdown formatting, or trailing punctuation.";
     private static final List<String> TOOL_FAILURE_MARKERS = List.of("""
@@ -466,7 +471,7 @@ public class AiService implements AutoCloseable {
         if (excerpt.isEmpty()) {
             return MemoryService.deriveDefaultTopicTitle(transcript);
         }
-        GoogleGenAiChatOptions.Builder optionsBuilder = GoogleGenAiChatOptions.builder().model(TOPIC_TITLE_MODEL);
+        GoogleGenAiChatOptions.Builder optionsBuilder = GoogleGenAiChatOptions.builder().model(FLASH_UTILITY_MODEL);
         ThinkingLevel.LOW.applyTo(optionsBuilder);
         try {
             ChatResponse chatResponse = chatClient.prompt().system(TOPIC_TITLE_SYSTEM_PROMPT).user(excerpt)
@@ -477,9 +482,56 @@ public class AiService implements AutoCloseable {
                 return cleaned;
             }
         } catch (Exception e) {
-            log.warn("Failed to generate topic title with {}: {}", TOPIC_TITLE_MODEL, e.getMessage());
+            log.warn("Failed to generate topic title with {}: {}", FLASH_UTILITY_MODEL, e.getMessage());
         }
         return MemoryService.deriveDefaultTopicTitle(transcript);
+    }
+
+    /**
+     * Performs a stateless multimodal PDF analysis using {@code gemini-3.8-flash} with {@link ThinkingLevel#LOW} and
+     * {@code maxOutputTokens = 65536}, without adding messages or media bytes to main {@link ChatMemory}.
+     *
+     * @param pdfBytes
+     *            the raw PDF file bytes
+     * @param displayPath
+     *            the display path or filename of the PDF for prompt context
+     * @param prompt
+     *            the extraction or analysis instructions (defaults to structured Markdown extraction if blank)
+     * @return the extracted Markdown response, with a {@code MAX_TOKENS} continuation warning if truncated
+     */
+    @SuppressWarnings("PMD.PreserveStackTrace")
+    public String analyzePdf(byte[] pdfBytes, String displayPath, String prompt) {
+        if (pdfBytes == null || pdfBytes.length == 0) {
+            throw new IllegalArgumentException("PDF content must not be empty.");
+        }
+        ExceptionUtils.checkInterrupted("PDF analysis interrupted before start");
+        String effectiveDisplayPath = StringUtils.defaultIfBlank(StringUtils.trimToNull(displayPath), "document.pdf");
+        String effectivePrompt = StringUtils.defaultIfBlank(StringUtils.trimToNull(prompt),
+                DEFAULT_PDF_ANALYSIS_PROMPT);
+        String userText = "Document: " + effectiveDisplayPath + "\n\n" + effectivePrompt;
+        MimeType pdfMimeType = MimeTypeUtils.parseMimeType("application/pdf");
+        ByteArrayResource pdfResource = new ByteArrayResource(pdfBytes);
+        GoogleGenAiChatOptions.Builder optionsBuilder = GoogleGenAiChatOptions.builder().model(FLASH_UTILITY_MODEL)
+                .maxOutputTokens(PDF_ANALYSIS_MAX_OUTPUT_TOKENS);
+        ThinkingLevel.LOW.applyTo(optionsBuilder);
+        try {
+            ChatResponse chatResponse = chatClient.prompt().system(PDF_ANALYSIS_SYSTEM_PROMPT)
+                    .user(u -> u.text(userText).media(pdfMimeType, pdfResource)).options(optionsBuilder).call()
+                    .chatResponse();
+            ExceptionUtils.checkInterrupted("PDF analysis interrupted after model call");
+            String text = StringUtils.trimToEmpty(ChatResponseFormatter.extractResponseText(chatResponse));
+            String finishReason = ChatResponseFormatter.extractFinishReason(chatResponse);
+            if (ChatResponseFormatter.isTokenLimitFinishReason(finishReason)) {
+                return text + PDF_MAX_TOKENS_WARNING;
+            }
+            return text;
+        } catch (Exception e) {
+            ExceptionUtils.rethrowIfCancelled(e, "PDF analysis cancelled");
+            if (e instanceof RuntimeException re) {
+                throw re;
+            }
+            throw new RuntimeException("Unexpected error during PDF analysis", e);
+        }
     }
 
     static String buildTopicTranscriptExcerpt(List<ChatTranscriptEntry> transcript) {
@@ -547,14 +599,19 @@ public class AiService implements AutoCloseable {
         @Override
         public ChatClientResponse adviseCall(ChatClientRequest chatClientRequest, CallAdvisorChain callAdvisorChain) {
             String conversationId = resolveConversationId(chatClientRequest);
-            WorkflowPhase currentPhase = resolveWorkflowPhase(chatClientRequest);
+            WorkflowPhase explicitPhase = resolveExplicitWorkflowPhase(chatClientRequest);
+            boolean explicitThinking = hasExplicitThinkingLevel(chatClientRequest);
+            WorkflowPhase currentPhase = explicitPhase;
+            if (currentPhase == null && !explicitThinking && planService != null) {
+                currentPhase = planService.getCurrentPhase();
+            }
             String modelName = resolveRequestModelName(chatClientRequest, currentPhase);
             recordToolProgressIfPresent(chatClientRequest);
             ThinkingLevel configuredLevel = ThinkingLevel.ADAPTIVE;
             ThinkingLevel activeSubTurnLevel = resolveActiveSubTurnThinkingLevel(configuredLevel, currentPhase,
                     modelName, chatClientRequest);
             ChatClientRequest resolvedRequest = chatClientRequest;
-            if (currentPhase != null || !hasExplicitThinkingLevel(chatClientRequest)) {
+            if (!explicitThinking || explicitPhase != null) {
                 resolvedRequest = applySubTurnThinkingLevel(chatClientRequest, configuredLevel, activeSubTurnLevel);
             }
             ChatClientRequest effectiveRequest = resolvedRequest;
@@ -758,6 +815,9 @@ public class AiService implements AutoCloseable {
             if (genAiOptions.getGoogleSearchRetrieval() != null) {
                 builder.googleSearchRetrieval(genAiOptions.getGoogleSearchRetrieval());
             }
+            if (genAiOptions.getMaxOutputTokens() != null) {
+                builder.maxOutputTokens(genAiOptions.getMaxOutputTokens());
+            }
             Prompt updatedPrompt = request.prompt().mutate().chatOptions(builder.build()).build();
             return request.mutate().prompt(updatedPrompt).build();
         }
@@ -796,15 +856,9 @@ public class AiService implements AutoCloseable {
     }
 
     @Nullable
-    private WorkflowPhase resolveWorkflowPhase(ChatClientRequest request) {
+    private static WorkflowPhase resolveExplicitWorkflowPhase(@Nullable ChatClientRequest request) {
         if (request != null && request.context() != null) {
-            WorkflowPhase resolved = WorkflowPhase.fromObject(request.context().get(TurnToolContext.PHASE_KEY), null);
-            if (resolved != null) {
-                return resolved;
-            }
-        }
-        if (planService != null) {
-            return planService.getCurrentPhase();
+            return WorkflowPhase.fromObject(request.context().get(TurnToolContext.PHASE_KEY), null);
         }
         return null;
     }

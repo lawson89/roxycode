@@ -6,7 +6,7 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
 
 ### Ask Roxy (EXPLORE Phase — Technical Mentor)
 - **Purpose**: Read-only codebase exploration, architecture Q&A, debugging guidance, interactive `build.toml` configuration, and answering questions about RoxyCode itself.
-- **Capabilities**: Uses fileReadService, grepService, symbolService, gitService, buildToolService (read/test commands), memoryService, userInputService, and webSearchService via executeJexl. File mutation (fileEditorService) is disabled.
+- **Capabilities**: Uses fileReadService, grepService, symbolService, pdfService, gitService, buildToolService (read/test commands), memoryService, userInputService, and webSearchService via executeJexl. File mutation (fileEditorService) is disabled.
 - **Composer & Action Features**:
   - Type '@' or click **@ Mention** to fuzzy-search and attach project file paths.
   - Type '/' or click **/ Commands** to run slash commands: `/reset` (reset session), `/clear` (clear chat view), `/help` (list commands), and symmetrical memory commands `/mem-p-view`, `/mem-p-put`, `/mem-p-find`, `/mem-p-del` (Project) and `/mem-g-view`, `/mem-g-put`, `/mem-g-find`, `/mem-g-del` (Global).
@@ -21,7 +21,7 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
   - Roxy explores the codebase (read-only) and submits a structured implementation plan (planService.submitPlan) with a title, goal, requirements, and detailed blueprint technical steps containing exact file paths, 1-based line ranges, and method/logic specifications (plus automatic quality gates: "Code compiles successfully", "Unit tests pass", and "Automated code review passes").
   - Roxy calls planService.requestDevelopment(reason), displaying an **Approval Banner** (Approve / Reject), or transitions automatically if **Auto-approve Plan** is enabled in the composer toolbar. No files are modified until the plan is approved.
 - **2. Code (CODE — Senior Developer)**:
-  - Unlocks fileEditorService (writeFile, replaceBlock, replaceBlocks, replaceLines, replaceSymbol, insertAtLine, revertFile, deleteFile, moveFile, copyFile, mkdirs).
+  - Unlocks fileEditorService (writeFile, appendFile, replaceBlock, replaceBlocks, replaceLines, replaceSymbol, insertAtLine, revertFile, deleteFile, moveFile, copyFile, mkdirs).
   - Roxy implements steps, marks technical steps completed in real time (planService.markStepCompleted / markStepsCompleted), and verifies changes with buildToolService.compile(), runTests(), runSingleTest(), format(), lint(), or buildAndTest().
   - Compilation and unit test verification steps are marked automatically by buildToolService (and reset if any file is edited afterward).
   - Once all steps and verification gates pass, Roxy autonomously transitions to REVIEW via planService.requestReview(reason) (or requests plan revision via requestPlanRevision).
@@ -39,7 +39,7 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
   - **Project Context Folders**: Specific to the active repository (<projectDataDir>/context.toml), supporting project-relative or absolute paths.
 - **Reference Folders (Read-Only `@alias` Source Code)**: Mounts external source repositories or directories as read-only `@<alias>` prefixes (e.g., `@billing-service`) without bloating the system prompt with full file contents:
   - Listed concisely under `## READ-ONLY REFERENCE FOLDERS` in the stable system prompt.
-  - Addressable on demand via `@<alias>` or `@<alias>/subpath` in `fileReadService`, `grepService`, and `symbolService`, while strictly blocked from any writes or deletions in `fileEditorService`.
+  - Addressable on demand via `@<alias>` or `@<alias>/subpath` in `fileReadService`, `grepService`, `symbolService`, and `pdfService`, while strictly blocked from any writes or deletions in `fileEditorService`.
 
 ### Repo Map & Prompt (Context & Prompts -> Repo Map & Prompt Tab)
 - Displays the Universal Ctags structural skeleton (RepoMapPackerService) of source files with class/method line numbers, plus live token estimates for the Repo Map, Stable Prompt & Memory, and Session Context to maximize Gemini prefix cache hits.
