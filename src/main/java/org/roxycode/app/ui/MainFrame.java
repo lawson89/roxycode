@@ -77,9 +77,11 @@ public final class MainFrame extends JPanel {
     static final String CACHE_VIEW = "CACHE";
     static final String API_VIEW = "API";
     static final String TOOLS_VIEW = "TOOLS";
+    static final String DATABASES_VIEW = "DATABASES";
     static final String SETTINGS_VIEW = "SETTINGS";
     static final String BUILD_CONFIG_VIEW = "BUILD_CONFIG";
     static final String PROJECT_MODEL_VIEW = "PROJECT_MODEL";
+    static final String PROJECT_DATABASES_VIEW = "PROJECT_DATABASES";
     static final String CONTEXT_MGR_VIEW = "CONTEXT_MGR";
     static final String MEMORY_VIEW = "MEMORY";
     static final int MIN_WINDOW_WIDTH = 800;
@@ -100,6 +102,7 @@ public final class MainFrame extends JPanel {
     private final CodebaseCachePanel codebaseCachePanel;
     private final BuildConfigPanel buildConfigPanel;
     private final AgentMemoryPanel agentMemoryPanel;
+    private final @Nullable GlobalDatabasesPanel globalDatabasesPanel;
     private final transient PlanService planService;
     private final transient UiComponents.UiGuard hubTabGuard = new UiComponents.UiGuard();
     private final Map<String, List<JMenuItem>> cardMenuItems = new LinkedHashMap<>();
@@ -128,12 +131,22 @@ public final class MainFrame extends JPanel {
     Rectangle lastNormalBounds;
     int simulatedExtendedState = Frame.NORMAL;
 
-    @Autowired
     public MainFrame(SettingsService settingsService, ProjectService projectService, HeaderPanel header,
             StatusPanel statusBar, QaWorkspacePanel qaWorkspacePanel, TaskWorkspacePanel taskWorkspacePanel,
             CodebaseCachePanel codebaseCachePanel, JexlApiPanel jexlApiPanel, SystemToolsPanel systemToolsPanel,
             SettingsPanel settingsPanel, BuildConfigPanel buildConfigPanel, ContextManagerPanel contextManagerPanel,
             @Nullable AgentMemoryPanel agentMemoryPanel) {
+        this(settingsService, projectService, header, statusBar, qaWorkspacePanel, taskWorkspacePanel,
+                codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel,
+                contextManagerPanel, agentMemoryPanel, null);
+    }
+
+    @Autowired
+    public MainFrame(SettingsService settingsService, ProjectService projectService, HeaderPanel header,
+            StatusPanel statusBar, QaWorkspacePanel qaWorkspacePanel, TaskWorkspacePanel taskWorkspacePanel,
+            CodebaseCachePanel codebaseCachePanel, JexlApiPanel jexlApiPanel, SystemToolsPanel systemToolsPanel,
+            SettingsPanel settingsPanel, BuildConfigPanel buildConfigPanel, ContextManagerPanel contextManagerPanel,
+            @Nullable AgentMemoryPanel agentMemoryPanel, @Nullable GlobalDatabasesPanel globalDatabasesPanel) {
         this.settingsService = settingsService;
         this.projectService = projectService;
         this.header = header;
@@ -142,6 +155,7 @@ public final class MainFrame extends JPanel {
         this.codebaseCachePanel = codebaseCachePanel;
         this.buildConfigPanel = buildConfigPanel;
         this.agentMemoryPanel = agentMemoryPanel;
+        this.globalDatabasesPanel = globalDatabasesPanel;
         if (taskWorkspacePanel != null) {
             this.planService = taskWorkspacePanel.planService;
         } else {
@@ -156,7 +170,7 @@ public final class MainFrame extends JPanel {
         setupLaf();
         setupWindow();
         initComponents(statusBar, codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel,
-                contextManagerPanel, agentMemoryPanel);
+                contextManagerPanel, agentMemoryPanel, globalDatabasesPanel);
         setupMenuBar();
         registerDesktopHandlers();
         if (settingsPanel != null) {
@@ -177,6 +191,7 @@ public final class MainFrame extends JPanel {
                 updateOnboardingAndNavigationState();
                 showCard(QA_VIEW);
             });
+            buildConfigPanel.setOnManageGlobalDatabasesCallback(() -> showCard(DATABASES_VIEW));
             buildConfigPanel.setOnConfigureWithRoxyCallback(prompt -> {
                 showCard(QA_VIEW);
                 if (qaWorkspacePanel != null) {
@@ -299,7 +314,8 @@ public final class MainFrame extends JPanel {
 
     static boolean isProjectDependentCard(String cardName) {
         return QA_VIEW.equals(cardName) || TASK_VIEW.equals(cardName) || CACHE_VIEW.equals(cardName)
-                || BUILD_CONFIG_VIEW.equals(cardName) || PROJECT_MODEL_VIEW.equals(cardName);
+                || BUILD_CONFIG_VIEW.equals(cardName) || PROJECT_MODEL_VIEW.equals(cardName)
+                || PROJECT_DATABASES_VIEW.equals(cardName);
     }
 
     @EventListener
@@ -589,7 +605,8 @@ public final class MainFrame extends JPanel {
 
     private void initComponents(StatusPanel statusBar, CodebaseCachePanel codebaseCachePanel, JexlApiPanel jexlApiPanel,
             SystemToolsPanel systemToolsPanel, SettingsPanel settingsPanel, BuildConfigPanel buildConfigPanel,
-            ContextManagerPanel contextManagerPanel, @Nullable AgentMemoryPanel memoryPanel) {
+            ContextManagerPanel contextManagerPanel, @Nullable AgentMemoryPanel memoryPanel,
+            @Nullable GlobalDatabasesPanel databasesPanel) {
         setLayout(new MigLayout("fill, insets 0", "[210!, fill]0[fill, grow]", "[fill, grow]"));
 
         sidebar = new SidebarPanel(this::showCard);
@@ -684,6 +701,10 @@ public final class MainFrame extends JPanel {
             settingsHubTabs.addTab("System Tools",
                     FontIcon.of(Codicons.TOOLS, 15, SwingHtmlUtils.getMutedForegroundColor()), systemToolsPanel);
         }
+        if (databasesPanel != null) {
+            settingsHubTabs.addTab("Databases",
+                    FontIcon.of(Codicons.DATABASE, 15, SwingHtmlUtils.getMutedForegroundColor()), databasesPanel);
+        }
         updateSettingsHubReadiness(lastStartupTools);
         settingsHubTabs.addChangeListener(e -> {
             if (hubTabGuard.isActive()) {
@@ -692,6 +713,9 @@ public final class MainFrame extends JPanel {
             java.awt.Component selected = settingsHubTabs.getSelectedComponent();
             if (systemToolsPanel != null && systemToolsPanel.equals(selected)) {
                 currentCard = TOOLS_VIEW;
+            } else if (databasesPanel != null && databasesPanel.equals(selected)) {
+                currentCard = DATABASES_VIEW;
+                databasesPanel.refresh();
             } else {
                 currentCard = SETTINGS_VIEW;
             }
@@ -703,8 +727,11 @@ public final class MainFrame extends JPanel {
                 if (hubTabGuard.isActive()) {
                     return;
                 }
-                if (buildConfigPanel.settingsTabs.getSelectedIndex() == BuildConfigPanel.TAB_INDEX_AI_MODEL) {
+                int idx = buildConfigPanel.settingsTabs.getSelectedIndex();
+                if (idx == BuildConfigPanel.TAB_INDEX_AI_MODEL) {
                     currentCard = PROJECT_MODEL_VIEW;
+                } else if (idx == BuildConfigPanel.TAB_INDEX_DATABASES) {
+                    currentCard = PROJECT_DATABASES_VIEW;
                 } else {
                     currentCard = BUILD_CONFIG_VIEW;
                 }
@@ -1177,7 +1204,8 @@ public final class MainFrame extends JPanel {
 
     private void refreshHubTabIcons() {
         UiComponents.updateSelectedTabIcons(contextHubTabs, List.of(Codicons.FILE, Codicons.DATABASE, Codicons.CODE));
-        UiComponents.updateSelectedTabIcons(settingsHubTabs, List.of(Codicons.SETTINGS_GEAR, Codicons.TOOLS));
+        UiComponents.updateSelectedTabIcons(settingsHubTabs,
+                List.of(Codicons.SETTINGS_GEAR, Codicons.TOOLS, Codicons.DATABASE));
         if (buildConfigPanel != null) {
             buildConfigPanel.updateTabIcons();
         }
@@ -1200,6 +1228,8 @@ public final class MainFrame extends JPanel {
             codebaseCachePanel.refreshStatus();
         } else if (MEMORY_VIEW.equals(cardName) && agentMemoryPanel != null) {
             agentMemoryPanel.refresh();
+        } else if (DATABASES_VIEW.equals(cardName) && globalDatabasesPanel != null) {
+            globalDatabasesPanel.refresh();
         }
         updateExportMenuItemsState();
     }
@@ -1210,8 +1240,8 @@ public final class MainFrame extends JPanel {
         }
         return switch (cardName) {
             case CONTEXT_MGR_VIEW, CACHE_VIEW, API_VIEW -> CONTEXT_MGR_VIEW;
-            case SETTINGS_VIEW, TOOLS_VIEW -> SETTINGS_VIEW;
-            case BUILD_CONFIG_VIEW, PROJECT_MODEL_VIEW -> BUILD_CONFIG_VIEW;
+            case SETTINGS_VIEW, TOOLS_VIEW, DATABASES_VIEW -> SETTINGS_VIEW;
+            case BUILD_CONFIG_VIEW, PROJECT_MODEL_VIEW, PROJECT_DATABASES_VIEW -> BUILD_CONFIG_VIEW;
             default -> cardName;
         };
     }
@@ -1227,6 +1257,7 @@ public final class MainFrame extends JPanel {
                 case API_VIEW -> UiComponents.selectTabSafely(contextHubTabs, TAB_INDEX_THIRD);
                 case SETTINGS_VIEW -> UiComponents.selectTabSafely(settingsHubTabs, TAB_INDEX_FIRST);
                 case TOOLS_VIEW -> UiComponents.selectTabSafely(settingsHubTabs, TAB_INDEX_SECOND);
+                case DATABASES_VIEW -> UiComponents.selectTabSafely(settingsHubTabs, TAB_INDEX_THIRD);
                 case BUILD_CONFIG_VIEW -> {
                     if (buildConfigPanel != null) {
                         buildConfigPanel.selectBuildConfigTab();
@@ -1235,6 +1266,11 @@ public final class MainFrame extends JPanel {
                 case PROJECT_MODEL_VIEW -> {
                     if (buildConfigPanel != null) {
                         buildConfigPanel.selectAiModelTab();
+                    }
+                }
+                case PROJECT_DATABASES_VIEW -> {
+                    if (buildConfigPanel != null) {
+                        buildConfigPanel.selectDatabasesTab();
                     }
                 }
                 default -> {

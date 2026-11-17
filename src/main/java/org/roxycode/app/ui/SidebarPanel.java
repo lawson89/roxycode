@@ -21,9 +21,11 @@ final class SidebarPanel extends JPanel {
     static final String CARD_MEMORY = MainFrame.MEMORY_VIEW;
     static final String CARD_BUILD = MainFrame.BUILD_CONFIG_VIEW;
     static final String CARD_PROJECT_MODEL = MainFrame.PROJECT_MODEL_VIEW;
+    static final String CARD_PROJECT_DATABASES = MainFrame.PROJECT_DATABASES_VIEW;
     static final String CARD_SETTINGS = MainFrame.SETTINGS_VIEW;
     static final String CARD_JEXL_API = MainFrame.API_VIEW;
     static final String CARD_TOOLS = MainFrame.TOOLS_VIEW;
+    static final String CARD_DATABASES = MainFrame.DATABASES_VIEW;
     static final int LOGO_SIZE = 56;
     static final int LOGO_ARC = 14;
     static final String ASK_ROXY_LABEL = "Ask Roxy";
@@ -76,10 +78,12 @@ final class SidebarPanel extends JPanel {
         add(createSectionHeader("SETTINGS"), "gaptop 12");
         buildConfigBtn = createNavButton(PROJECT_SETTINGS_LABEL, MainFrame.BUILD_CONFIG_VIEW, Codicons.PACKAGE);
         cardButtons.put(MainFrame.PROJECT_MODEL_VIEW, buildConfigBtn);
+        cardButtons.put(MainFrame.PROJECT_DATABASES_VIEW, buildConfigBtn);
         add(buildConfigBtn);
         settingsBtn = createNavButton(SETTINGS_TOOLS_LABEL, MainFrame.SETTINGS_VIEW, Codicons.SETTINGS_GEAR);
         settingsBtn.setAttentionTooltip(TOOLS_ATTENTION_TOOLTIP);
         cardButtons.put(MainFrame.TOOLS_VIEW, settingsBtn);
+        cardButtons.put(MainFrame.DATABASES_VIEW, settingsBtn);
         add(settingsBtn);
 
         updateSelection(qaBtn);

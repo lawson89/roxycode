@@ -81,6 +81,9 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
       - writable_paths: Extra host paths mounted read-write in "native" mode for package/build caches (supports ~/ expansion, e.g., ["~/.m2", "~/.cargo"]).
       - image & workdir: Container image (e.g., "eclipse-temurin:25-jdk") and working directory ("/workspace") when mode = "docker".
 
-### Global Settings & System Tools (Settings & Tools Sidebar Hub)
+### Global Settings, System Tools & Databases (Settings & Tools Sidebar Hub)
 - **Global Settings & Menu Bar**: Configures Light/Dark theme, Authentication Provider (**Gemini API Key (Google AI Studio)** or **Google Cloud Vertex AI** with GCP Project ID, Vertex Location, and optional Service Account JSON key file or Application Default Credentials / ADC), default **Agent Profile** (**Max**, **Normal**, or **Speed**), max tool turns per request, chat memory window, always-on JEXL tool call log (`toolcalls.jsonl`), and Google Search grounding (webSearchService). Use **File -> Open Recent** in the menu bar to quickly switch between recently opened projects.
 - **System Tools**: Checks status and install commands for required CLI tools (**Ripgrep**, **Universal Ctags**) and optional tools/sandbox runtimes (**Git**, **Bubblewrap** / **Seatbelt**, **Docker**).
+- **Databases (Global Pool & Per-Project Grants)**:
+  - **Settings & Tools -> Databases**: Manages reusable read-only database connections in `~/.roxycode/databases.toml` (supports bundled OSS drivers for PostgreSQL, MariaDB, MySQL, SQL Server, SQLite, H2, HSQLDB, plus custom multi-JAR driver paths for Oracle/DB2/custom JDBC), stores passwords in the native OS keyring (with env var and session-only fallbacks), and provides **Test Read-Only Connection** with write-privilege warning detection.
+  - **Project Settings -> Databases**: Grants `0..N` global connections to the active project (`<projectDataDir>/databases.toml`) with optional per-project `default_schema` overrides and context notes. `dbService` and `## CONFIGURED DATABASES` are exposed to Roxy only when at least one database is granted to the active project.

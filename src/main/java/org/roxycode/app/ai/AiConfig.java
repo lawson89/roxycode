@@ -463,8 +463,10 @@ public class AiConfig {
 
     @Bean
     public JexlServiceRegistry jexlServiceRegistry(ApplicationContext context, SystemToolService systemToolService,
-            org.roxycode.app.service.SettingsService settingsService) {
-        JexlServiceRegistry registry = new JexlServiceRegistry(systemToolService, settingsService);
+            org.roxycode.app.service.SettingsService settingsService,
+            org.roxycode.app.service.DatabaseConfigService databaseConfigService) {
+        JexlServiceRegistry registry = new JexlServiceRegistry(systemToolService, settingsService,
+                databaseConfigService);
         Map<String, Object> beans = context.getBeansWithAnnotation(AgentService.class);
         for (Object bean : beans.values()) {
             registry.register(bean);

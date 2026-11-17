@@ -90,16 +90,19 @@ class BuildConfigPanelTest {
         BuildConfigPanel panel = createPanelOnEdt();
         assertFalse(loadCalledOnEdt.get());
 
-        // Verify two-tab layout structure
-        assertEquals(2, panel.settingsTabs.getTabCount());
+        // Verify three-tab layout structure
+        assertEquals(3, panel.settingsTabs.getTabCount());
         assertEquals(BuildConfigPanel.TAB_BUILD_CONFIG_TITLE,
                 panel.settingsTabs.getTitleAt(BuildConfigPanel.TAB_INDEX_BUILD_CONFIG));
         assertEquals(BuildConfigPanel.TAB_AI_MODEL_TITLE + " (Global)",
                 panel.settingsTabs.getTitleAt(BuildConfigPanel.TAB_INDEX_AI_MODEL));
+        assertEquals(BuildConfigPanel.TAB_DATABASES_TITLE,
+                panel.settingsTabs.getTitleAt(BuildConfigPanel.TAB_INDEX_DATABASES));
         assertEquals("Global (Normal)", panel.modelOverrideStatusPill.getText());
         assertEquals(BuildConfigPanel.TAB_INDEX_BUILD_CONFIG, panel.settingsTabs.getSelectedIndex());
         assertSame(panel.buildTabPanel, panel.settingsTabs.getComponentAt(BuildConfigPanel.TAB_INDEX_BUILD_CONFIG));
         assertSame(panel.modelTabPanel, panel.settingsTabs.getComponentAt(BuildConfigPanel.TAB_INDEX_AI_MODEL));
+        assertSame(panel.databasesTabPanel, panel.settingsTabs.getComponentAt(BuildConfigPanel.TAB_INDEX_DATABASES));
 
         // Tab 1: Build Configuration header & controls
         assertEquals(BuildConfigPanel.TITLE_TEXT, panel.titleLabel.getText());

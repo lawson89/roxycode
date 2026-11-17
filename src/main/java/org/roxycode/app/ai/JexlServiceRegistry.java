@@ -4,11 +4,15 @@ import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import java.util.*;
 import org.apache.commons.lang3.StringUtils;
+import org.roxycode.app.ai.services.DbService;
 import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.UserInputService;
 import org.roxycode.app.ai.services.WebSearchService;
+import org.roxycode.app.events.DatabaseConfigChangedEvent;
+import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
+import org.roxycode.app.service.DatabaseConfigService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.service.SystemToolService;
 import org.springframework.aop.support.AopUtils;
@@ -19,19 +23,27 @@ import org.springframework.lang.Nullable;
 public class JexlServiceRegistry {
     static final String GIT_SERVICE_NAME = "gitService";
     static final String WEB_SEARCH_SERVICE_NAME = "webSearchService";
+    static final String DB_SERVICE_NAME = "dbService";
 
     private final Map<String, Object> services = Collections.synchronizedMap(new LinkedHashMap<>());
     private final LLMDocGenerator docGenerator = new LLMDocGenerator();
     private final Cache<String, String> docCache = Caffeine.newBuilder().maximumSize(16).build();
     private final SystemToolService systemToolService;
     private final SettingsService settingsService;
+    private final DatabaseConfigService databaseConfigService;
     private Boolean gitAvailable;
     private Boolean webSearchAvailable;
 
     public JexlServiceRegistry(@Nullable SystemToolService systemToolService,
             @Nullable SettingsService settingsService) {
+        this(systemToolService, settingsService, null);
+    }
+
+    public JexlServiceRegistry(@Nullable SystemToolService systemToolService, @Nullable SettingsService settingsService,
+            @Nullable DatabaseConfigService databaseConfigService) {
         this.systemToolService = systemToolService;
         this.settingsService = settingsService;
+        this.databaseConfigService = databaseConfigService;
     }
 
     public synchronized void register(Object service) {
@@ -69,6 +81,16 @@ public class JexlServiceRegistry {
         }
     }
 
+    @EventListener
+    public synchronized void onDatabaseConfigChanged(DatabaseConfigChangedEvent event) {
+        docCache.invalidateAll();
+    }
+
+    @EventListener
+    public synchronized void onProjectChanged(ProjectChangedEvent event) {
+        docCache.invalidateAll();
+    }
+
     public synchronized boolean isGitAvailable() {
         if (gitAvailable != null) {
             return gitAvailable;
@@ -97,12 +119,19 @@ public class JexlServiceRegistry {
         return true;
     }
 
+    public synchronized boolean isDatabaseAvailable() {
+        return databaseConfigService != null && !databaseConfigService.listActiveProjectConnections().isEmpty();
+    }
+
     private boolean isServiceAvailable(String serviceName, Object service) {
         if (GIT_SERVICE_NAME.equals(serviceName) || service instanceof GitService) {
             return isGitAvailable();
         }
         if (WEB_SEARCH_SERVICE_NAME.equals(serviceName) || service instanceof WebSearchService) {
             return isWebSearchAvailable();
+        }
+        if (DB_SERVICE_NAME.equals(serviceName) || service instanceof DbService) {
+            return isDatabaseAvailable();
         }
         return true;
     }

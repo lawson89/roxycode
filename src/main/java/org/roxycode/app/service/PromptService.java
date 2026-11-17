@@ -25,10 +25,13 @@ import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
+import org.roxycode.app.service.DatabaseConfigService.ResolvedDatabaseConnection;
 import org.roxycode.app.service.ProjectService.ReferenceFolderMount;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 /**
@@ -50,6 +53,7 @@ public class PromptService {
     private static final String HEADER_JEXL_CONTEXT = "\n\n## JEXL CONTEXT\n";
     private static final String HEADER_USER_GUIDE_CONTEXT = "\n\n## ROXYCODE USER GUIDE\n";
     private static final String HEADER_REFERENCE_FOLDERS = "\n\n## READ-ONLY REFERENCE FOLDERS\n";
+    private static final String HEADER_CONFIGURED_DATABASES = "\n\n## CONFIGURED DATABASES\n";
     private static final String HEADER_GLOBAL_AGENT_MEMORY = "\n\n## GLOBAL AGENT MEMORY\n";
     private static final String HEADER_PROJECT_AGENT_MEMORY = "\n\n## PROJECT AGENT MEMORY & ARCHIVE\n";
     private static final String HEADER_REPO_MAP = "\n\n## REPOSITORY MAP\n";
@@ -72,11 +76,21 @@ public class PromptService {
     private final ProjectAnalysisService projectAnalysisService;
     private final RepoMapPackerService repoMapPackerService;
     private final MemoryService memoryService;
+    private final @Nullable DatabaseConfigService databaseConfigService;
 
     public PromptService(ProjectService projectService, SettingsService settingsService, PlanService planService,
             JexlServiceRegistry jexlServiceRegistry, GitService gitService,
             ProjectAnalysisService projectAnalysisService, RepoMapPackerService repoMapPackerService,
             MemoryService memoryService) {
+        this(projectService, settingsService, planService, jexlServiceRegistry, gitService, projectAnalysisService,
+                repoMapPackerService, memoryService, null);
+    }
+
+    @Autowired
+    public PromptService(ProjectService projectService, SettingsService settingsService, PlanService planService,
+            JexlServiceRegistry jexlServiceRegistry, GitService gitService,
+            ProjectAnalysisService projectAnalysisService, RepoMapPackerService repoMapPackerService,
+            MemoryService memoryService, @Nullable DatabaseConfigService databaseConfigService) {
         this.projectService = projectService;
         this.settingsService = settingsService;
         this.planService = planService;
@@ -85,18 +99,50 @@ public class PromptService {
         this.projectAnalysisService = projectAnalysisService;
         this.repoMapPackerService = repoMapPackerService;
         this.memoryService = memoryService;
+        this.databaseConfigService = databaseConfigService;
     }
 
     /**
-     * Generates the stable system context including user guide, JEXL documentation, reference folders, and agent
-     * memory.
+     * Generates the stable system context including user guide, JEXL documentation, reference folders, configured
+     * databases, and agent memory.
      * 
      * @return the stable context string
      */
     public String getStableContext() {
         return readClasspathResource(CLASSPATH_PROMPT) + HEADER_JEXL_CONTEXT + readClasspathResource(JEXL_DOC_PATH)
                 + HEADER_USER_GUIDE_CONTEXT + readClasspathResource(USER_GUIDE_DOC_PATH) + NEWLINE_DOUBLE
-                + loadGlobalContext() + loadProjectContext() + loadReferenceFoldersContext() + loadAgentMemoryContext();
+                + loadGlobalContext() + loadProjectContext() + loadReferenceFoldersContext()
+                + loadConfiguredDatabasesContext() + loadAgentMemoryContext();
+    }
+
+    String loadConfiguredDatabasesContext() {
+        if (databaseConfigService == null) {
+            return "";
+        }
+        List<ResolvedDatabaseConnection> active = databaseConfigService.listActiveProjectConnections();
+        if (active.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(HEADER_CONFIGURED_DATABASES);
+        sb.append("The following read-only database connections are granted to this project. Use ").append('`')
+                .append("dbService").append('`').append(" in ").append('`').append("executeJexl").append('`')
+                .append(" to inspect schemas/tables (").append('`').append("listSchemas").append('`').append(", ")
+                .append('`').append("listTables").append('`').append(", ").append('`').append("describeTable")
+                .append('`').append(") and run read-only queries (").append('`').append("query").append('`')
+                .append(", ").append('`').append("explain").append('`').append("):\n");
+        for (ResolvedDatabaseConnection conn : active) {
+            sb.append("- ").append('`').append(conn.config().id()).append('`').append(" (**")
+                    .append(conn.config().displayName()).append("**").append(", type: ").append(conn.config().type());
+            if (!conn.effectiveDefaultSchema().isBlank()) {
+                sb.append(", default_schema: ").append('`').append(conn.effectiveDefaultSchema()).append('`');
+            }
+            sb.append(')');
+            if (!conn.notes().isBlank()) {
+                sb.append(": ").append(conn.notes());
+            }
+            sb.append('\n');
+        }
+        return sb.toString();
     }
 
     String loadReferenceFoldersContext() {

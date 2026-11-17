@@ -30,6 +30,31 @@ import org.springframework.context.ApplicationEventPublisher;
 @ExtendWith(MockitoExtension.class)
 class PromptServiceTest {
 
+    @Test
+    void testConfiguredDatabasesContextIncludedOnlyWhenGranted() {
+        DatabaseConfigService dbConfigService = mock(DatabaseConfigService.class);
+        when(dbConfigService.listActiveProjectConnections()).thenReturn(List.of());
+        PromptService svc = new PromptService(projectService, settingsService, planService, jexlServiceRegistry,
+                gitService, projectAnalysisService, repoMapPackerService, null, dbConfigService);
+        assertEquals("", svc.loadConfiguredDatabasesContext());
+
+        org.roxycode.app.model.DatabaseConnectionConfig cfg = new org.roxycode.app.model.DatabaseConnectionConfig(
+                "qa-pg", "QA Postgres", "postgresql", "jdbc:postgresql://secret-host:5432/qa", "ro_user", "keyring", "",
+                List.of(), "", "public", 15, 200);
+        org.roxycode.app.model.ProjectDatabaseGrant grant = new org.roxycode.app.model.ProjectDatabaseGrant("qa-pg",
+                "billing", "Billing QA tables");
+        when(dbConfigService.listActiveProjectConnections()).thenReturn(List
+                .of(new DatabaseConfigService.ResolvedDatabaseConnection(cfg, grant, "billing", "Billing QA tables")));
+
+        String section = svc.loadConfiguredDatabasesContext();
+        assertTrue(section.contains("## CONFIGURED DATABASES"));
+        assertTrue(section.contains("qa-pg"));
+        assertTrue(section.contains("billing"));
+        assertTrue(section.contains("Billing QA tables"));
+        assertFalse(section.contains("secret-host"));
+        assertFalse(section.contains("ro_user"));
+    }
+
     @Mock
     private ProjectService projectService;
     @Mock

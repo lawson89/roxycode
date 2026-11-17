@@ -9,6 +9,8 @@ import javax.swing.Timer;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.roxycode.app.ai.JexlServiceRegistry;
+import org.roxycode.app.events.DatabaseConfigChangedEvent;
+import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.util.Edt;
@@ -60,6 +62,16 @@ final class JexlApiPanel extends JPanel {
 
     @EventListener
     public void onSettingsChanged(SettingsChangedEvent event) {
+        Edt.run(this::refresh);
+    }
+
+    @EventListener
+    public void onDatabaseConfigChanged(DatabaseConfigChangedEvent event) {
+        Edt.run(this::refresh);
+    }
+
+    @EventListener
+    public void onProjectChanged(ProjectChangedEvent event) {
         Edt.run(this::refresh);
     }
 

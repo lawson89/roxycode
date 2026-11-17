@@ -23,6 +23,7 @@ import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService.RepoMapSnapshot;
 import org.roxycode.app.events.ContextChangedEvent;
+import org.roxycode.app.events.DatabaseConfigChangedEvent;
 import org.roxycode.app.events.MemoryChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
@@ -123,6 +124,11 @@ final class CodebaseCachePanel extends JPanel {
 
     @EventListener
     public void onMemoryChanged(MemoryChangedEvent event) {
+        Edt.run(this::refreshStatus);
+    }
+
+    @EventListener
+    public void onDatabaseConfigChanged(DatabaseConfigChangedEvent event) {
         Edt.run(this::refreshStatus);
     }
 

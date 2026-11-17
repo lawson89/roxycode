@@ -26,9 +26,13 @@ import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.BuildContainerService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
+import org.roxycode.app.events.DatabaseConfigChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AgentProfile;
+import org.roxycode.app.model.DatabaseConnectionConfig;
+import org.roxycode.app.model.ProjectDatabaseGrant;
+import org.roxycode.app.service.DatabaseConfigService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.util.Edt;
@@ -50,8 +54,10 @@ final class BuildConfigPanel extends JPanel {
     static final int SUMMARY_DEBOUNCE_MS = 200;
     static final int TAB_INDEX_BUILD_CONFIG = 0;
     static final int TAB_INDEX_AI_MODEL = 1;
+    static final int TAB_INDEX_DATABASES = 2;
     static final String TAB_BUILD_CONFIG_TITLE = "Build Configuration";
     static final String TAB_AI_MODEL_TITLE = "AI Model Override";
+    static final String TAB_DATABASES_TITLE = "Databases";
     static final String TITLE_TEXT = "Build Configuration (build.toml)";
     static final String SUBTITLE_TEXT = "Configure project-specific build, test, lint, and sandbox execution commands (build.toml).";
     static final String MODEL_TITLE_TEXT = "AI Model Override";
@@ -96,9 +102,19 @@ final class BuildConfigPanel extends JPanel {
     private final transient GenericBuildToolService buildToolService;
     private final transient SettingsService settingsService;
     private final transient ProjectService projectService;
+    private final transient @Nullable DatabaseConfigService databaseConfigService;
     final JTabbedPane settingsTabs;
     final JPanel buildTabPanel;
     final JPanel modelTabPanel;
+    final JPanel databasesTabPanel;
+    final JPanel databasesCardPanel;
+    final JPanel grantRowsContainer;
+    final JButton manageGlobalDatabasesButton;
+    final JButton saveGrantsButton;
+    final JLabel grantsStatusLabel;
+    final Timer grantsStatusTimer;
+    final List<GrantRowControls> grantRowControls = new ArrayList<>();
+    private transient Runnable onManageGlobalDatabasesCallback;
     final JLabel titleLabel;
     final JLabel subtitleLabel;
     final JPanel summaryStripPanel;
@@ -152,13 +168,19 @@ final class BuildConfigPanel extends JPanel {
     transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
     transient CompletableFuture<?> summaryParseFuture = CompletableFuture.completedFuture(null);
 
-    @Autowired
     public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
             @Nullable ProjectService projectService) {
+        this(buildToolService, settingsService, projectService, null);
+    }
+
+    @Autowired
+    public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
+            @Nullable ProjectService projectService, @Nullable DatabaseConfigService databaseConfigService) {
         super(new BorderLayout());
         this.buildToolService = buildToolService;
         this.settingsService = settingsService;
         this.projectService = projectService;
+        this.databaseConfigService = databaseConfigService;
         setOpaque(true);
 
         // --- Tab 1: Build Configuration (build.toml) ---
@@ -316,11 +338,53 @@ final class BuildConfigPanel extends JPanel {
         modelCardsContainer.add(modelCardPanel, GROWX_WMIN_0);
         modelTabPanel.add(UiComponents.createBorderlessScrollPane(modelCardsContainer), "grow, wmin 0");
 
+        // --- Tab 3: Databases (Per-Project Grants) ---
+        databasesTabPanel = new JPanel(new MigLayout("fill, insets 20, hidemode 3", GROW_FILL, "[][]" + GROW_FILL));
+        databasesTabPanel.setOpaque(true);
+
+        JLabel dbTitleLabel = new JLabel("Project Database Grants");
+        JLabel dbSubtitleLabel = new JLabel(
+                "Select global read-only databases to expose to RoxyCode (dbService) for the active project.");
+        manageGlobalDatabasesButton = UiComponents.createActionButton("Manage Global Databases...",
+                Codicons.SETTINGS_GEAR, new Insets(6, 12, 6, 12), false, "arc: 8", e -> {
+                    if (onManageGlobalDatabasesCallback != null) {
+                        onManageGlobalDatabasesCallback.run();
+                    }
+                });
+        saveGrantsButton = UiComponents.createActionButton("Save Database Grants", Codicons.SAVE,
+                new Insets(6, 14, 6, 14), false, SAVE_BUTTON_BASE_STYLE + UiComponents.ACCENT_BUTTON_STYLE,
+                e -> saveDatabaseGrants());
+        grantsStatusLabel = new JLabel("");
+        grantsStatusLabel.setFont(grantsStatusLabel.getFont().deriveFont(Font.BOLD, 11.5f));
+        grantsStatusLabel.setVisible(false);
+        grantsStatusTimer = UiComponents.createStatusTimer(grantsStatusLabel, 3500);
+
+        JPanel dbActionPanel = new JPanel(new MigLayout("insets 0", "[]8[]", "[center]"));
+        dbActionPanel.setOpaque(false);
+        dbActionPanel.add(manageGlobalDatabasesButton);
+        dbActionPanel.add(saveGrantsButton);
+        databasesTabPanel.add(UiComponents.createPageHeader(dbTitleLabel, dbSubtitleLabel, dbActionPanel),
+                GROWX_WMIN_0 + ", wrap");
+        databasesTabPanel.add(grantsStatusLabel, "hidemode 3, wrap");
+
+        databasesCardPanel = new JPanel(new MigLayout("fillx, wrap 1, insets 16, gapy 10", GROW_FILL, ""));
+        UiComponents.styleCardPanel(databasesCardPanel);
+        grantRowsContainer = new JPanel(new MigLayout("fillx, wrap 1, insets 0, gapy 8", GROW_FILL, ""));
+        grantRowsContainer.setOpaque(false);
+        databasesCardPanel.add(grantRowsContainer, GROWX_WMIN_0);
+
+        JPanel dbCardsScroller = UiComponents
+                .createScrollableCardsPanel(new MigLayout("fillx, wrap 1, insets 4 2 16 6, gapy 14", GROW_FILL, ""));
+        dbCardsScroller.add(databasesCardPanel, GROWX_WMIN_0);
+        databasesTabPanel.add(UiComponents.createBorderlessScrollPane(dbCardsScroller), "grow, wmin 0");
+
         settingsTabs = UiComponents.createUnderlinedTabbedPane(null);
         settingsTabs.addTab(TAB_BUILD_CONFIG_TITLE, FontIcon.of(Codicons.PACKAGE, 15, SwingHtmlUtils.getAccentColor()),
                 buildTabPanel);
         settingsTabs.addTab(TAB_AI_MODEL_TITLE,
                 FontIcon.of(Codicons.HUBOT, 15, SwingHtmlUtils.getMutedForegroundColor()), modelTabPanel);
+        settingsTabs.addTab(TAB_DATABASES_TITLE,
+                FontIcon.of(Codicons.DATABASE, 15, SwingHtmlUtils.getMutedForegroundColor()), databasesTabPanel);
         settingsTabs.addChangeListener(e -> updateTabIcons());
 
         loadProfileOptions();
@@ -334,6 +398,7 @@ final class BuildConfigPanel extends JPanel {
         applySectionStyling();
         updateSummaryCards();
         lastAsyncFuture = loadConfig();
+        loadDatabaseGrants();
         updateBannerState();
     }
 
@@ -392,8 +457,13 @@ final class BuildConfigPanel extends JPanel {
         UiComponents.selectTabSafely(settingsTabs, TAB_INDEX_AI_MODEL);
     }
 
+    void selectDatabasesTab() {
+        UiComponents.selectTabSafely(settingsTabs, TAB_INDEX_DATABASES);
+        loadDatabaseGrants();
+    }
+
     void updateTabIcons() {
-        UiComponents.updateSelectedTabIcons(settingsTabs, List.of(Codicons.PACKAGE, Codicons.HUBOT));
+        UiComponents.updateSelectedTabIcons(settingsTabs, List.of(Codicons.PACKAGE, Codicons.HUBOT, Codicons.DATABASE));
     }
 
     void refreshDetectedTemplate() {
@@ -786,6 +856,9 @@ final class BuildConfigPanel extends JPanel {
 
         UiComponents.styleCardPanel(modelCardPanel);
         UiComponents.styleCardPanel(buildCardPanel);
+        if (databasesCardPanel != null) {
+            UiComponents.styleCardPanel(databasesCardPanel);
+        }
         UiComponents.styleCodePillBadge(buildTomlFileBadge);
         modelSectionHeaderLabel.setIcon(FontIcon.of(Codicons.HUBOT, 18, accentColor));
         UiComponents.updateInfoIconTheme(profileInfoIcon);
@@ -826,8 +899,14 @@ final class BuildConfigPanel extends JPanel {
             loadProfileOptions();
             refreshDetectedTemplate();
             loadConfig();
+            loadDatabaseGrants();
             updateBannerState();
         });
+    }
+
+    @EventListener
+    public void onDatabaseConfigChanged(DatabaseConfigChangedEvent event) {
+        Edt.run(this::loadDatabaseGrants);
     }
 
     private void onTomlTextEdited() {
@@ -962,6 +1041,155 @@ final class BuildConfigPanel extends JPanel {
 
     void setOnConfigureWithRoxyCallback(Consumer<String> callback) {
         this.onConfigureWithRoxyCallback = callback;
+    }
+
+    void setOnManageGlobalDatabasesCallback(Runnable callback) {
+        this.onManageGlobalDatabasesCallback = callback;
+    }
+
+    record GrantDataSnapshot(List<DatabaseConnectionConfig> globals, List<ProjectDatabaseGrant> grants) {
+    }
+
+    static final class GrantRowControls {
+        final DatabaseConnectionConfig config;
+        final javax.swing.JCheckBox grantCheckBox;
+        final javax.swing.JTextField schemaOverrideField;
+        final javax.swing.JTextField notesField;
+
+        GrantRowControls(DatabaseConnectionConfig config, javax.swing.JCheckBox grantCheckBox,
+                javax.swing.JTextField schemaOverrideField, javax.swing.JTextField notesField) {
+            this.config = config;
+            this.grantCheckBox = grantCheckBox;
+            this.schemaOverrideField = schemaOverrideField;
+            this.notesField = notesField;
+        }
+    }
+
+    CompletableFuture<GrantDataSnapshot> loadDatabaseGrants() {
+        if (databaseConfigService == null) {
+            updateDatabasesTabTitle(0);
+            return CompletableFuture.completedFuture(new GrantDataSnapshot(List.of(), List.of()));
+        }
+        CompletableFuture<GrantDataSnapshot> future = Edt
+                .supplyAsync(() -> new GrantDataSnapshot(databaseConfigService.listGlobalConnections(),
+                        databaseConfigService.listProjectGrants()), this::applyDatabaseGrantSnapshot);
+        lastAsyncFuture = future;
+        return future;
+    }
+
+    private void applyDatabaseGrantSnapshot(GrantDataSnapshot snapshot) {
+        grantRowsContainer.removeAll();
+        grantRowControls.clear();
+        if (snapshot.globals().isEmpty()) {
+            JLabel emptyLabel = new JLabel(
+                    "No global read-only databases configured yet. Click 'Manage Global Databases...' to add one.");
+            emptyLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
+            grantRowsContainer.add(emptyLabel, GROWX_WMIN_0);
+            updateDatabasesTabTitle(0);
+            grantRowsContainer.revalidate();
+            grantRowsContainer.repaint();
+            return;
+        }
+        java.util.Map<String, ProjectDatabaseGrant> grantById = new java.util.LinkedHashMap<>();
+        for (ProjectDatabaseGrant grant : snapshot.grants()) {
+            grantById.put(grant.connectionId(), grant);
+        }
+        int grantedCount = 0;
+        for (DatabaseConnectionConfig cfg : snapshot.globals()) {
+            ProjectDatabaseGrant existing = grantById.get(cfg.id());
+            boolean granted = existing != null;
+            if (granted) {
+                grantedCount++;
+            }
+            JPanel rowCard = new JPanel(
+                    new MigLayout("fillx, insets 10 12 10 12, wrap 2", "[140!, right]10[grow, fill]", ""));
+            UiComponents.styleCardPanel(rowCard);
+
+            javax.swing.JCheckBox checkBox = new javax.swing.JCheckBox(cfg.displayName(), granted);
+            checkBox.setFont(checkBox.getFont().deriveFont(Font.BOLD, 12.5f));
+            JLabel metaBadge = new JLabel(cfg.id() + "  •  " + cfg.resolveType().getDisplayName());
+            UiComponents.styleCodePillBadge(metaBadge);
+
+            JPanel topRow = new JPanel(new MigLayout("insets 0, fillx", "[grow, fill]push[]", "[center]"));
+            topRow.setOpaque(false);
+            topRow.add(checkBox);
+            topRow.add(metaBadge);
+            rowCard.add(topRow, "span 2, growx, wrap");
+
+            javax.swing.JTextField schemaField = new javax.swing.JTextField();
+            if (existing != null) {
+                schemaField.setText(existing.defaultSchema());
+            }
+            String schemaPlaceholder = "Optional schema override";
+            if (!cfg.defaultSchema().isBlank()) {
+                schemaPlaceholder = "Default: " + cfg.defaultSchema();
+            }
+            schemaField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, schemaPlaceholder);
+
+            javax.swing.JTextField notesField = new javax.swing.JTextField();
+            if (existing != null) {
+                notesField.setText(existing.notes());
+            }
+            notesField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT,
+                    "Optional project domain notes (injected into ## CONFIGURED DATABASES)");
+
+            rowCard.add(new JLabel("Schema Override:"));
+            rowCard.add(schemaField, GROWX_WMIN_0);
+            rowCard.add(new JLabel("Context Notes:"));
+            rowCard.add(notesField, GROWX_WMIN_0);
+
+            schemaField.setEnabled(granted);
+            notesField.setEnabled(granted);
+            checkBox.addActionListener(e -> {
+                boolean selected = checkBox.isSelected();
+                schemaField.setEnabled(selected);
+                notesField.setEnabled(selected);
+            });
+
+            grantRowControls.add(new GrantRowControls(cfg, checkBox, schemaField, notesField));
+            grantRowsContainer.add(rowCard, GROWX_WMIN_0);
+        }
+        updateDatabasesTabTitle(grantedCount);
+        grantRowsContainer.revalidate();
+        grantRowsContainer.repaint();
+    }
+
+    CompletableFuture<List<ProjectDatabaseGrant>> saveDatabaseGrants() {
+        if (databaseConfigService == null) {
+            return CompletableFuture.completedFuture(List.of());
+        }
+        List<ProjectDatabaseGrant> selectedGrants = new ArrayList<>();
+        for (GrantRowControls row : grantRowControls) {
+            if (row.grantCheckBox.isSelected()) {
+                selectedGrants.add(new ProjectDatabaseGrant(row.config.id(), row.schemaOverrideField.getText(),
+                        row.notesField.getText()));
+            }
+        }
+        saveGrantsButton.setEnabled(false);
+        CompletableFuture<List<ProjectDatabaseGrant>> future = Edt
+                .supplyAsync(() -> databaseConfigService.saveProjectGrants(selectedGrants), saved -> {
+                    saveGrantsButton.setEnabled(true);
+                    updateDatabasesTabTitle(saved.size());
+                    UiComponents.showStatusMessage(grantsStatusLabel, grantsStatusTimer,
+                            "Saved " + saved.size() + " database grant(s) for active project.", true);
+                }, error -> {
+                    saveGrantsButton.setEnabled(true);
+                    UiComponents.showStatusMessage(grantsStatusLabel, grantsStatusTimer,
+                            "Failed to save database grants: " + error.getMessage(), false);
+                });
+        lastAsyncFuture = future;
+        return future;
+    }
+
+    private void updateDatabasesTabTitle(int grantedCount) {
+        if (settingsTabs == null || settingsTabs.getTabCount() <= TAB_INDEX_DATABASES) {
+            return;
+        }
+        if (grantedCount > 0) {
+            settingsTabs.setTitleAt(TAB_INDEX_DATABASES, TAB_DATABASES_TITLE + " (" + grantedCount + " Granted)");
+        } else {
+            settingsTabs.setTitleAt(TAB_INDEX_DATABASES, TAB_DATABASES_TITLE);
+        }
     }
 
     void applyGeneratedBuildToml(String toml) {
