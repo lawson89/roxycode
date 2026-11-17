@@ -9,6 +9,7 @@ import javax.swing.SwingConstants;
 import javax.swing.Timer;
 import javax.swing.UIManager;
 import net.miginfocom.swing.MigLayout;
+import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.EnvironmentService;
@@ -63,7 +64,7 @@ final class StatusPanel extends JPanel {
 
     @EventListener
     public void onTokenUsage(TokenUsageEvent event) {
-        if (event == null) {
+        if (event == null || StringUtils.isBlank(event.conversationId())) {
             return;
         }
         synchronized (this) {

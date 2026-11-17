@@ -599,14 +599,20 @@ public class AiService implements AutoCloseable {
         public ChatClientResponse adviseCall(ChatClientRequest chatClientRequest, CallAdvisorChain callAdvisorChain) {
             String conversationId = resolveConversationId(chatClientRequest);
             WorkflowPhase explicitPhase = resolveExplicitWorkflowPhase(chatClientRequest);
-            boolean explicitThinking = hasExplicitThinkingLevel(chatClientRequest);
+            ThinkingLevel explicitThinkingLevel = resolveExplicitThinkingLevel(chatClientRequest);
+            boolean explicitThinking = explicitThinkingLevel != null;
             WorkflowPhase currentPhase = explicitPhase;
             if (currentPhase == null && !explicitThinking && planService != null) {
                 currentPhase = planService.getCurrentPhase();
             }
             String modelName = resolveRequestModelName(chatClientRequest, currentPhase);
             recordToolProgressIfPresent(chatClientRequest);
-            ThinkingLevel configuredLevel = ThinkingLevel.ADAPTIVE;
+            final ThinkingLevel configuredLevel;
+            if (explicitThinkingLevel != null && explicitPhase == null) {
+                configuredLevel = explicitThinkingLevel;
+            } else {
+                configuredLevel = ThinkingLevel.ADAPTIVE;
+            }
             ThinkingLevel activeSubTurnLevel = resolveActiveSubTurnThinkingLevel(configuredLevel, currentPhase,
                     modelName, chatClientRequest);
             ChatClientRequest resolvedRequest = chatClientRequest;
@@ -777,15 +783,16 @@ public class AiService implements AutoCloseable {
         return current;
     }
 
-    private static boolean hasExplicitThinkingLevel(@Nullable ChatClientRequest request) {
+    @Nullable
+    static ThinkingLevel resolveExplicitThinkingLevel(@Nullable ChatClientRequest request) {
         if (request == null || request.prompt() == null) {
-            return false;
+            return null;
         }
         ChatOptions options = request.prompt().getOptions();
-        if (options instanceof GoogleGenAiChatOptions genAiOptions) {
-            return genAiOptions.getThinkingLevel() != null;
+        if (options instanceof GoogleGenAiChatOptions genAiOptions && genAiOptions.getThinkingLevel() != null) {
+            return ThinkingLevel.fromGenAiThinkingLevel(genAiOptions.getThinkingLevel());
         }
-        return false;
+        return null;
     }
 
     private static ChatClientRequest applySubTurnThinkingLevel(ChatClientRequest request, ThinkingLevel configuredLevel,
@@ -829,18 +836,18 @@ public class AiService implements AutoCloseable {
         return " (attempt " + attempt + "/" + maxAttempts + ACTIVITY_ELLIPSIS_SUFFIX;
     }
 
-    private static String formatThinkingActivityMessage(String modelName, ThinkingLevel configuredLevel,
+    static String formatThinkingActivityMessage(String modelName, ThinkingLevel configuredLevel,
             ThinkingLevel activeSubTurnLevel) {
-        if (configuredLevel == ThinkingLevel.ADAPTIVE && activeSubTurnLevel != null
-                && activeSubTurnLevel != ThinkingLevel.DEFAULT) {
+        if (activeSubTurnLevel != null && activeSubTurnLevel != ThinkingLevel.DEFAULT
+                && activeSubTurnLevel != ThinkingLevel.ADAPTIVE) {
             return "Thinking with " + modelName + " (" + activeSubTurnLevel.getDisplayName() + ACTIVITY_ELLIPSIS_SUFFIX;
         }
         return "Thinking with " + modelName + "...";
     }
 
     private void publishActivity(String conversationId, String statusText) {
-        if (eventPublisher != null && StringUtils.isNotBlank(statusText)) {
-            eventPublisher.publishEvent(new AgentActivityEvent(StringUtils.defaultString(conversationId), statusText));
+        if (eventPublisher != null && StringUtils.isNotBlank(conversationId) && StringUtils.isNotBlank(statusText)) {
+            eventPublisher.publishEvent(new AgentActivityEvent(conversationId, statusText));
         }
     }
 
@@ -878,7 +885,8 @@ public class AiService implements AutoCloseable {
 
     void publishTokenUsageIfPresent(String conversationId, String modelName, @Nullable WorkflowPhase phase,
             @Nullable ChatResponse chatResponse) {
-        if (eventPublisher == null || chatResponse == null || chatResponse.getMetadata() == null) {
+        if (eventPublisher == null || StringUtils.isBlank(conversationId) || chatResponse == null
+                || chatResponse.getMetadata() == null) {
             return;
         }
         ExtractedTokenCounts counts = extractTokenCounts(chatResponse.getMetadata().getUsage());

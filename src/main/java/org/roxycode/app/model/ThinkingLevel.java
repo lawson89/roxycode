@@ -161,6 +161,25 @@ public enum ThinkingLevel {
         return DEFAULT;
     }
 
+    /**
+     * Resolves a {@link ThinkingLevel} from a Spring AI {@link GoogleGenAiThinkingLevel}.
+     *
+     * @param genAiLevel
+     *            the Spring AI thinking level, or {@code null}
+     * @return the matching {@link ThinkingLevel}, or {@link #DEFAULT} when {@code null} or unmatched
+     */
+    public static ThinkingLevel fromGenAiThinkingLevel(@Nullable GoogleGenAiThinkingLevel genAiLevel) {
+        if (genAiLevel == null) {
+            return DEFAULT;
+        }
+        for (ThinkingLevel level : values()) {
+            if (level.genAiThinkingLevel == genAiLevel) {
+                return level;
+            }
+        }
+        return DEFAULT;
+    }
+
     @Override
     public String toString() {
         return displayName;

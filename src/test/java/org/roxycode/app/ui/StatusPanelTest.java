@@ -33,5 +33,12 @@ class StatusPanelTest {
 
         assertEquals("Session: 155.0k tok ($0.03)", panel.tokenCostLabel.getText());
         assertContainsAll(panel.tokenCostLabel.getToolTipText(), "Calls: 2", "155,000 tok");
+
+        panel.onTokenUsage(new TokenUsageEvent("", "gemini-3.8-flash", 1_000_000, 10_000, 0, 10_000, 500, 100, 10_600,
+                null, 0.01, 0.0, 0.01, 0.01, 0.03));
+        SwingTestUtils.flushEdt();
+
+        assertEquals("Session: 155.0k tok ($0.03)", panel.tokenCostLabel.getText());
+        assertContainsAll(panel.tokenCostLabel.getToolTipText(), "Calls: 2", "155,000 tok");
     }
 }

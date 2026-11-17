@@ -51,6 +51,7 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.content.Media;
 import org.springframework.ai.google.genai.common.GoogleGenAiThinkingLevel;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
@@ -952,6 +953,9 @@ class AiServiceTest {
         assertEquals("gemini-3.8-flash", capturedOptions.getModel());
         assertEquals(GoogleGenAiThinkingLevel.LOW, capturedOptions.getThinkingLevel());
 
+        verify(eventPublisher, never()).publishEvent(any(AgentActivityEvent.class));
+        verify(eventPublisher, never()).publishEvent(any(TokenUsageEvent.class));
+
         when(titleModel.call(any(Prompt.class))).thenThrow(new RuntimeException("transient failure"));
         assertEquals("How does Spring AI retry work", service.generateTopicTitle(transcript));
     }
@@ -1102,6 +1106,36 @@ class AiServiceTest {
         assertEquals("application/pdf", userMsg.getMedia().get(0).getMimeType().toString());
         assertTrue(realMemory.get("default").isEmpty());
         verify(planService, never()).getCurrentPhase();
-        verify(eventPublisher, atLeastOnce()).publishEvent(any(TokenUsageEvent.class));
+        verify(eventPublisher, never()).publishEvent(any(AgentActivityEvent.class));
+        verify(eventPublisher, never()).publishEvent(any(TokenUsageEvent.class));
+    }
+
+    @Test
+    void testExplicitThinkingLevelResolutionAndActivityMessageFormatting() {
+        assertEquals(ThinkingLevel.DEFAULT, ThinkingLevel.fromGenAiThinkingLevel(null));
+        assertEquals(ThinkingLevel.LOW, ThinkingLevel.fromGenAiThinkingLevel(GoogleGenAiThinkingLevel.LOW));
+        assertEquals(ThinkingLevel.MEDIUM, ThinkingLevel.fromGenAiThinkingLevel(GoogleGenAiThinkingLevel.MEDIUM));
+        assertEquals(ThinkingLevel.HIGH, ThinkingLevel.fromGenAiThinkingLevel(GoogleGenAiThinkingLevel.HIGH));
+
+        ChatClientRequest lowRequest = ChatClientRequest
+                .builder().prompt(
+                        new Prompt("Summarize",
+                                GoogleGenAiChatOptions.builder().model(AiService.FLASH_UTILITY_MODEL)
+                                        .thinkingLevel(GoogleGenAiThinkingLevel.LOW).build()))
+                .context(Map.of()).build();
+        assertEquals(ThinkingLevel.LOW, AiService.resolveExplicitThinkingLevel(lowRequest));
+
+        ChatClientRequest noThinkingRequest = ChatClientRequest.builder()
+                .prompt(new Prompt("Hello", GoogleGenAiChatOptions.builder().model("gemini-3.5-flash").build()))
+                .context(Map.of()).build();
+        assertNull(AiService.resolveExplicitThinkingLevel(noThinkingRequest));
+        assertNull(AiService.resolveExplicitThinkingLevel(null));
+
+        assertEquals("Thinking with gemini-3.8-flash (Low)...", AiService
+                .formatThinkingActivityMessage(AiService.FLASH_UTILITY_MODEL, ThinkingLevel.LOW, ThinkingLevel.LOW));
+        assertEquals("Thinking with gemini-4-hydrogen (Medium)...", AiService
+                .formatThinkingActivityMessage("gemini-4-hydrogen", ThinkingLevel.ADAPTIVE, ThinkingLevel.MEDIUM));
+        assertEquals("Thinking with gemini-3.5-flash...", AiService.formatThinkingActivityMessage("gemini-3.5-flash",
+                ThinkingLevel.DEFAULT, ThinkingLevel.DEFAULT));
     }
 }
