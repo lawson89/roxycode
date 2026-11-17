@@ -1133,6 +1133,9 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     private void installDragAndDrop() {
+        if (GraphicsEnvironment.isHeadless()) {
+            return;
+        }
         installDropTarget(this);
         installDropTarget(outputArea);
         installDropTarget(outputScrollPane);

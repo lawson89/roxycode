@@ -6,6 +6,7 @@ import static org.mockito.Mockito.*;
 import static org.roxycode.app.ui.SwingTestUtils.assertContainsAll;
 
 import com.formdev.flatlaf.FlatClientProperties;
+import java.awt.GraphicsEnvironment;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
 import java.awt.datatransfer.UnsupportedFlavorException;
@@ -1083,9 +1084,11 @@ class ChatControllerTest extends ChatTestFixture {
         assertNull(ChatModel.loadFileAttachment(binaryFile));
 
         ChatPanel panel = createExploreChatPanel(directExecutor);
-        assertNotNull(panel.getDropTarget());
-        assertNotNull(panel.inputArea.getDropTarget());
-        assertNotNull(panel.outputArea.getDropTarget());
+        if (!GraphicsEnvironment.isHeadless()) {
+            assertNotNull(panel.getDropTarget());
+            assertNotNull(panel.inputArea.getDropTarget());
+            assertNotNull(panel.outputArea.getDropTarget());
+        }
 
         List<File> droppedFiles = List.of(logFile.toFile(), pdfFile.toFile(), pngFile.toFile());
         Transferable transferable = new Transferable() {
