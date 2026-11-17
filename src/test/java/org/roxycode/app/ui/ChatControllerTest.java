@@ -1120,8 +1120,8 @@ class ChatControllerTest extends ChatTestFixture {
         };
 
         assertTrue(panel.ingestTransferable(transferable));
-        panel.loadAttachmentsAsync(droppedFiles).get(5, TimeUnit.SECONDS);
-        flushEdt();
+        SwingTestUtils.awaitCondition(() -> SwingTestUtils
+                .callOnEdt(() -> panel.model.hasPendingAttachments() && panel.model.hasPendingImages()));
         assertTrue(panel.model.hasPendingAttachments());
 
         // Clear and re-attach cleanly via addPendingAttachment to verify exact count & chip removal

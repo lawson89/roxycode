@@ -25,6 +25,7 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import javax.swing.*;
 import javax.swing.text.DefaultEditorKit;
@@ -124,6 +125,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     private Boolean lastActivityWarningAccent;
     private boolean loading = false;
     private final List<Consumer<Boolean>> loadingListeners = new ArrayList<>();
+    private final AtomicLong attachmentLoadEpoch = new AtomicLong();
 
     @Configuration
     static class ChatPanelBeans {
@@ -909,6 +911,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     void clearAttachments() {
+        attachmentLoadEpoch.incrementAndGet();
         attachmentPanel.removeAll();
         attachmentPanel.setVisible(false);
     }
@@ -1020,7 +1023,11 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         if (file == null) {
             return CompletableFuture.completedFuture(null);
         }
+        long expectedEpoch = attachmentLoadEpoch.get();
         return Edt.supplyAsync(() -> ChatModel.loadFileAttachment(file.toPath()), attachment -> {
+            if (attachmentLoadEpoch.get() != expectedEpoch) {
+                return;
+            }
             if (attachment != null) {
                 addPendingAttachment(attachment);
             }
@@ -1031,6 +1038,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         if (files == null || files.isEmpty()) {
             return CompletableFuture.completedFuture(List.of());
         }
+        long expectedEpoch = attachmentLoadEpoch.get();
         List<File> snapshot = List.copyOf(files);
         return Edt.supplyAsync(() -> {
             List<PendingAttachment> loaded = new ArrayList<>();
@@ -1044,6 +1052,9 @@ final class ChatPanel extends JPanel implements AutoCloseable {
             }
             return List.copyOf(loaded);
         }, loaded -> {
+            if (attachmentLoadEpoch.get() != expectedEpoch) {
+                return;
+            }
             for (PendingAttachment att : loaded) {
                 addPendingAttachment(att);
             }
