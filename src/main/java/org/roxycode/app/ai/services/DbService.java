@@ -14,6 +14,7 @@ import java.sql.Clob;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.Driver;
+import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
@@ -42,6 +43,7 @@ import org.roxycode.app.model.DatabaseType;
 import org.roxycode.app.service.CredentialStoreService;
 import org.roxycode.app.service.DatabaseConfigService;
 import org.roxycode.app.service.DatabaseConfigService.ResolvedDatabaseConnection;
+import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
@@ -127,7 +129,7 @@ public class DbService implements AutoCloseable {
         List<DbConnectionSummary> summaries = new ArrayList<>(active.size());
         for (ResolvedDatabaseConnection item : active) {
             DatabaseConnectionConfig cfg = item.config();
-            summaries.add(new DbConnectionSummary(cfg.id(), cfg.displayName(), cfg.type(),
+            summaries.add(new DbConnectionSummary(cfg.id(), cfg.displayName(), cfg.type(), cfg.description(),
                     item.effectiveDefaultSchema(), item.notes(), cfg.queryTimeoutSeconds(), cfg.maxRows()));
         }
         return List.copyOf(summaries);
@@ -347,13 +349,18 @@ public class DbService implements AutoCloseable {
                 if (writeWarning) {
                     message = "Connected in read-only mode (warning: account may hold write privileges on the server).";
                 }
+                log.info("Database connection test succeeded for '{}' ({}) in {} ms [{}]", config.id(), config.type(),
+                        durationMs, summary);
                 return new DbTestResult(true, writeWarning, summary, message, durationMs);
             } finally {
                 rollbackQuietly(conn);
             }
         } catch (Exception e) {
             long durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos);
-            return new DbTestResult(false, false, "", "Connection failed: " + e.getMessage(), durationMs);
+            log.warn("Database connection test failed for '{}' ({}): {}", config.id(), config.type(),
+                    ExceptionUtils.getRootCauseMessage(e), e);
+            return new DbTestResult(false, false, "", "Connection failed: " + formatConnectionFailureMessage(e),
+                    durationMs);
         }
     }
 
@@ -457,8 +464,10 @@ public class DbService implements AutoCloseable {
             connectionCache.put(cfg.id(), created);
             return created;
         } catch (Exception e) {
-            throw new IllegalStateException("Failed to open read-only connection '" + cfg.id() + "': " + e.getMessage(),
-                    e);
+            log.warn("Failed to open read-only connection '{}' ({}): {}", cfg.id(), cfg.type(),
+                    ExceptionUtils.getRootCauseMessage(e), e);
+            throw new IllegalStateException(
+                    "Failed to open read-only connection '" + cfg.id() + "': " + formatConnectionFailureMessage(e), e);
         }
     }
 
@@ -472,6 +481,9 @@ public class DbService implements AutoCloseable {
         Connection conn = null;
         try {
             Thread.currentThread().setContextClassLoader(resolution.classLoader());
+            if (DriverManager.getLoginTimeout() <= 0) {
+                DriverManager.setLoginTimeout(config.queryTimeoutSeconds());
+            }
             conn = resolution.driver().connect(effectiveUrl, props);
             if (conn == null) {
                 throw new SQLException("JDBC driver returned null connection for URL: " + effectiveUrl);
@@ -633,18 +645,37 @@ public class DbService implements AutoCloseable {
         if (password != null && config.resolveCredentialSource() != CredentialSource.NONE) {
             props.setProperty("password", password);
         }
+        int timeoutSec = config.queryTimeoutSeconds();
+        String timeoutMs = String.valueOf(timeoutSec * 1000L);
         if (dbType == DatabaseType.SQLITE) {
             props.setProperty("open_mode", "1");
         } else if (dbType == DatabaseType.POSTGRESQL) {
             props.setProperty("readOnly", "true");
             props.setProperty("readOnlyMode", "always");
+            props.setProperty("loginTimeout", String.valueOf(timeoutSec));
+            props.setProperty("connectTimeout", String.valueOf(timeoutSec));
+        } else if (dbType == DatabaseType.MYSQL || dbType == DatabaseType.MARIADB) {
+            props.setProperty("connectTimeout", timeoutMs);
         } else if (dbType == DatabaseType.HSQLDB) {
             props.setProperty("readonly", "true");
             props.setProperty("ifexists", "true");
         } else if (dbType == DatabaseType.SQLSERVER) {
             props.setProperty("applicationIntent", "ReadOnly");
+            props.setProperty("loginTimeout", String.valueOf(timeoutSec));
         }
         return props;
+    }
+
+    static String formatConnectionFailureMessage(Throwable error) {
+        String message = ExceptionUtils.getRootCauseMessage(error);
+        SQLException sqlEx = ExceptionUtils.findCause(error, SQLException.class);
+        if (sqlEx != null) {
+            String sqlState = sqlEx.getSQLState();
+            if (sqlState != null && !sqlState.isBlank() && !message.contains(sqlState)) {
+                message = message + " (SQLState: " + sqlState + ")";
+            }
+        }
+        return message;
     }
 
     private static void configureReadOnlySession(Connection conn, DatabaseType dbType) throws SQLException {

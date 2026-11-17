@@ -225,7 +225,8 @@ class BuildConfigPanelTest {
 
         assertTrue(panel.saveButton.isEnabled());
         assertEquals(BuildConfigPanel.SAVE_BUTTON_TEXT, panel.saveButton.getText());
-        assertEquals("Error saving config: " + unsupportedSandboxMsg, panel.statusLabel.getText());
+        assertEquals(UiComponents.formatWrappingHtml("Error saving config: " + unsupportedSandboxMsg),
+                panel.statusLabel.getText());
         assertEquals("Error saving config: " + unsupportedSandboxMsg, panel.statusLabel.getToolTipText());
         assertTrue(panel.statusLabel.isVisible());
         assertFalse(panel.buildConfigHintLabel.isVisible());
@@ -499,5 +500,47 @@ class BuildConfigPanelTest {
 
         SwingTestUtils.clickOnEdt(panel.copyTomlButton);
         assertEquals("Copied!", panel.copyTomlButton.getText());
+    }
+
+    @Test
+    void testDatabaseGrantCardsDisplayGlobalDescriptionAndVisibleSaveStatus() throws Exception {
+        org.roxycode.app.service.DatabaseConfigService dbConfigService = mock(
+                org.roxycode.app.service.DatabaseConfigService.class);
+        org.roxycode.app.model.DatabaseConnectionConfig cfg = new org.roxycode.app.model.DatabaseConnectionConfig(
+                "qa-billing", "QA Billing", "Core billing and invoice tables", "postgresql",
+                "jdbc:postgresql://localhost:5432/billing", "ro_user", "keyring", "", java.util.List.of(), "", "public",
+                15, 200);
+        when(dbConfigService.listGlobalConnections()).thenReturn(java.util.List.of(cfg));
+        when(dbConfigService.listProjectGrants()).thenReturn(java.util.List.of());
+        when(dbConfigService.saveProjectGrants(anyList())).thenAnswer(inv -> inv.getArgument(0));
+
+        BuildConfigPanel panel = SwingTestUtils.callOnEdt(
+                () -> new BuildConfigPanel(buildToolService, settingsService, projectService, dbConfigService));
+        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
+        SwingTestUtils.flushEdt();
+
+        assertEquals(1, panel.grantRowControls.size());
+        assertTrue(containsLabelWithText(panel.grantRowsContainer, "Core billing and invoice tables"));
+
+        SwingTestUtils.runOnEdt(() -> panel.grantRowControls.get(0).grantCheckBox.setSelected(true));
+        SwingTestUtils.clickOnEdt(panel.saveGrantsButton);
+        SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
+        SwingTestUtils.flushEdt();
+
+        assertTrue(panel.grantsStatusLabel.isVisible());
+        assertTrue(panel.grantsStatusLabel.getText().contains("Saved 1 database grant(s)"));
+    }
+
+    private static boolean containsLabelWithText(java.awt.Container root, String expectedSubstring) {
+        for (java.awt.Component comp : root.getComponents()) {
+            if (comp instanceof javax.swing.JLabel label && label.getText() != null
+                    && label.getText().contains(expectedSubstring)) {
+                return true;
+            }
+            if (comp instanceof java.awt.Container nested && containsLabelWithText(nested, expectedSubstring)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

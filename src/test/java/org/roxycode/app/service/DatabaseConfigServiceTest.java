@@ -44,14 +44,16 @@ class DatabaseConfigServiceTest {
                         }
                     });
 
-            DatabaseConnectionConfig pg = new DatabaseConnectionConfig("qa-pg", "QA Postgres", "postgresql",
-                    "jdbc:postgresql://localhost:5432/qa", "ro_user", "keyring", "", List.of(), "", "public", 20, 150);
+            DatabaseConnectionConfig pg = new DatabaseConnectionConfig("qa-pg", "QA Postgres",
+                    "Core QA Postgres database", "postgresql", "jdbc:postgresql://localhost:5432/qa", "ro_user",
+                    "keyring", "", List.of(), "", "public", 20, 150);
             service.saveGlobalConnection(pg, "super-secret-pw", false);
 
             Path globalToml = tempDir.resolve("roxy-home").resolve("databases.toml");
             assertTrue(Files.exists(globalToml));
             String rawGlobalToml = Files.readString(globalToml);
             assertFalse(rawGlobalToml.contains("super-secret-pw"));
+            assertTrue(rawGlobalToml.contains("Core QA Postgres database"));
             assertTrue(credStore.hasStoredPassword("qa-pg"));
 
             service.saveProjectGrants(List.of(new ProjectDatabaseGrant("qa-pg", "billing", "Read-only billing tables"),
@@ -60,6 +62,7 @@ class DatabaseConfigServiceTest {
             List<ResolvedDatabaseConnection> active = service.listActiveProjectConnections();
             assertEquals(1, active.size());
             assertEquals("qa-pg", active.get(0).config().id());
+            assertEquals("Core QA Postgres database", active.get(0).config().description());
             assertEquals("billing", active.get(0).effectiveDefaultSchema());
             assertEquals("Read-only billing tables", active.get(0).notes());
 

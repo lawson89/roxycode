@@ -137,8 +137,18 @@ public class PromptService {
                 sb.append(", default_schema: ").append('`').append(conn.effectiveDefaultSchema()).append('`');
             }
             sb.append(')');
-            if (!conn.notes().isBlank()) {
-                sb.append(": ").append(conn.notes());
+            String description = conn.config().description();
+            String notes = conn.notes();
+            if (!description.isBlank() && !notes.isBlank()) {
+                if (description.endsWith(".")) {
+                    sb.append(" — ").append(description).append(" Project notes: ").append(notes);
+                } else {
+                    sb.append(" — ").append(description).append(" (Project notes: ").append(notes).append(')');
+                }
+            } else if (!description.isBlank()) {
+                sb.append(" — ").append(description);
+            } else if (!notes.isBlank()) {
+                sb.append(" — Project notes: ").append(notes);
             }
             sb.append('\n');
         }

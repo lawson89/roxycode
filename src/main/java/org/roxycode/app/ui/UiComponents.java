@@ -870,6 +870,10 @@ final class UiComponents {
             if (statusLabel != null) {
                 statusLabel.setText("");
                 statusLabel.setToolTipText(null);
+                if (statusLabel.getParent() != null) {
+                    statusLabel.getParent().revalidate();
+                    statusLabel.getParent().repaint();
+                }
             }
         });
         timer.setRepeats(false);
@@ -881,17 +885,32 @@ final class UiComponents {
             return;
         }
         Color statusColor;
+        String displayText = message;
         if (success) {
             statusColor = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
             statusLabel.setToolTipText(null);
         } else {
             statusColor = SwingHtmlUtils.getUiColor(new Color(0xdc, 0x35, 0x45), "Actions.Red");
             statusLabel.setToolTipText(message);
+            if (message != null && message.length() > 90) {
+                displayText = formatWrappingHtml(message);
+            }
         }
         statusLabel.setForeground(statusColor);
-        statusLabel.setText(message);
-        if (statusTimer != null) {
-            statusTimer.restart();
+        statusLabel.setText(displayText);
+        if (!statusLabel.isVisible()) {
+            statusLabel.setVisible(true);
+        }
+        if (statusLabel.getParent() != null) {
+            statusLabel.getParent().revalidate();
+            statusLabel.getParent().repaint();
+        }
+        if (success) {
+            if (statusTimer != null) {
+                statusTimer.restart();
+            }
+        } else {
+            stopTimer(statusTimer);
         }
     }
 
@@ -923,6 +942,10 @@ final class UiComponents {
         statusLabel.setToolTipText(null);
         if (hideLabel) {
             statusLabel.setVisible(false);
+            if (statusLabel.getParent() != null) {
+                statusLabel.getParent().revalidate();
+                statusLabel.getParent().repaint();
+            }
         }
     }
 

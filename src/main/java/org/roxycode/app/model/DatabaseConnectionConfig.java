@@ -11,7 +11,8 @@ import org.roxycode.app.util.PathUtils;
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record DatabaseConnectionConfig(@JsonProperty("id") String id, @JsonProperty("display_name") String displayName,
-        @JsonProperty("type") String type, @JsonProperty("url") String url, @JsonProperty("username") String username,
+        @JsonProperty("description") String description, @JsonProperty("type") String type,
+        @JsonProperty("url") String url, @JsonProperty("username") String username,
         @JsonProperty("credential_source") String credentialSource, @JsonProperty("password_env") String passwordEnv,
         @JsonProperty("driver_paths") List<String> driverPaths, @JsonProperty("driver_class") String driverClass,
         @JsonProperty("default_schema") String defaultSchema,
@@ -25,6 +26,7 @@ public record DatabaseConnectionConfig(@JsonProperty("id") String id, @JsonPrope
     public DatabaseConnectionConfig {
         id = normalizeId(id, displayName);
         displayName = normalizeText(displayName, id);
+        description = normalizeText(description, "");
         type = DatabaseType.fromString(type).getId();
         url = normalizeText(url, "");
         username = normalizeText(username, "");
@@ -35,6 +37,16 @@ public record DatabaseConnectionConfig(@JsonProperty("id") String id, @JsonPrope
         defaultSchema = normalizeText(defaultSchema, "");
         queryTimeoutSeconds = clampInt(queryTimeoutSeconds, DEFAULT_TIMEOUT_SECONDS, 1, MAX_TIMEOUT_SECONDS);
         maxRows = clampInt(maxRows, DEFAULT_MAX_ROWS, 1, MAX_ROWS_LIMIT);
+    }
+
+    /**
+     * Backward-compatible constructor without an explicit global description.
+     */
+    public DatabaseConnectionConfig(String id, String displayName, String type, String url, String username,
+            String credentialSource, String passwordEnv, List<String> driverPaths, String driverClass,
+            String defaultSchema, int queryTimeoutSeconds, int maxRows) {
+        this(id, displayName, "", type, url, username, credentialSource, passwordEnv, driverPaths, driverClass,
+                defaultSchema, queryTimeoutSeconds, maxRows);
     }
 
     /**

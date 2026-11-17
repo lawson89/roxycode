@@ -19,6 +19,7 @@ import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
+import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
 import javax.swing.JTextField;
@@ -41,6 +42,7 @@ import org.roxycode.app.model.DatabaseType;
 import org.roxycode.app.service.CredentialStoreService;
 import org.roxycode.app.service.DatabaseConfigService;
 import org.roxycode.app.util.Edt;
+import org.roxycode.app.util.ExceptionUtils;
 import org.roxycode.app.util.PathUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
@@ -61,6 +63,8 @@ final class GlobalDatabasesPanel extends JPanel {
     private static final String GROWX_WMIN_0 = "growx, wmin 0";
     private static final String ARC_8_STYLE = "arc: 8";
     private static final String ROW_CENTER = "[center]";
+    private static final String TEST_CONNECTION_TEXT = "Test Read-Only Connection";
+    private static final String TESTING_CONNECTION_TEXT = "Testing...";
 
     private final transient DatabaseConfigService databaseConfigService;
     private final transient CredentialStoreService credentialStoreService;
@@ -76,6 +80,7 @@ final class GlobalDatabasesPanel extends JPanel {
     final JPanel detailCard;
     final JTextField displayNameField = new JTextField();
     final JTextField idField = new JTextField();
+    final JTextField descriptionField = new JTextField();
     final JComboBox<DatabaseType> typeCombo = new JComboBox<>(DatabaseType.values());
     final JLabel driverHintLabel = new JLabel();
     final JTextField urlField = new JTextField();
@@ -104,6 +109,7 @@ final class GlobalDatabasesPanel extends JPanel {
     final JButton saveButton;
     final JButton revertButton;
     final JButton deleteButton;
+    final JProgressBar testConnectionProgressBar = new JProgressBar();
     final JLabel statusLabel = new JLabel("");
     final Timer statusTimer;
 
@@ -146,8 +152,10 @@ final class GlobalDatabasesPanel extends JPanel {
         removeDriverButton = UiComponents.createActionButton("Remove", Codicons.TRASH, new Insets(4, 10, 4, 10), false,
                 ARC_8_STYLE, e -> removeSelectedDriverPath());
 
-        testConnectionButton = UiComponents.createActionButton("Test Read-Only Connection", Codicons.PLUG,
+        testConnectionButton = UiComponents.createActionButton(TEST_CONNECTION_TEXT, Codicons.PLUG,
                 new Insets(6, 12, 6, 12), false, "arc: 8; font: bold", e -> testCurrentConnection());
+        testConnectionProgressBar.setVisible(false);
+        testConnectionProgressBar.setPreferredSize(new Dimension(120, 6));
         saveButton = UiComponents.createActionButton("Save Connection", Codicons.SAVE, new Insets(6, 14, 6, 14), false,
                 "arc: 8; font: bold; " + UiComponents.ACCENT_BUTTON_STYLE, e -> saveCurrentConnection());
         revertButton = UiComponents.createActionButton("Revert", Codicons.DISCARD, new Insets(6, 12, 6, 12), false,
@@ -196,6 +204,8 @@ final class GlobalDatabasesPanel extends JPanel {
 
         displayNameField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "e.g. QA Billing Postgres");
         idField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "qa-billing-postgres");
+        descriptionField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT,
+                "Optional purpose & key tables (e.g. Core order fulfillment, line items, and shipments)");
         defaultSchemaField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT,
                 "Optional default schema (e.g. public)");
         usernameField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "readonly_user");
@@ -210,6 +220,8 @@ final class GlobalDatabasesPanel extends JPanel {
         card.add(displayNameField, GROWX_WMIN_0);
         card.add(new JLabel("Connection ID:"));
         card.add(idField, GROWX_WMIN_0);
+        card.add(new JLabel("Description:"));
+        card.add(descriptionField, GROWX_WMIN_0);
 
         card.add(new JLabel("Database Type:"));
         JPanel typeRow = new JPanel(new MigLayout("insets 0, fillx", "[200!]10[grow, fill]", ROW_CENTER));
@@ -279,7 +291,8 @@ final class GlobalDatabasesPanel extends JPanel {
         actionRow.add(revertButton);
         actionRow.add(deleteButton);
         card.add(actionRow, "span 2, growx, wrap");
-        card.add(statusLabel, "span 2, growx, gaptop 4");
+        card.add(testConnectionProgressBar, "span 2, growx, gaptop 4, hidemode 3, wrap");
+        card.add(statusLabel, "span 2, growx, wmin 0, gaptop 4");
 
         return card;
     }
@@ -292,24 +305,44 @@ final class GlobalDatabasesPanel extends JPanel {
             }
         });
         SwingHtmlUtils.addChangeListener(displayNameField, () -> {
-            if (!formGuard.isActive() && creatingNew && !idEditedManually) {
-                formGuard
-                        .run(() -> idField.setText(PathUtils.sanitizeSlug(displayNameField.getText(), 48, "database")));
+            if (!formGuard.isActive()) {
+                if (creatingNew && !idEditedManually) {
+                    formGuard.run(
+                            () -> idField.setText(PathUtils.sanitizeSlug(displayNameField.getText(), 48, "database")));
+                }
+                UiComponents.clearStatusMessage(statusLabel, statusTimer, true);
             }
         });
         SwingHtmlUtils.addChangeListener(idField, () -> {
-            if (!formGuard.isActive() && creatingNew) {
-                idEditedManually = !idField.getText().isBlank();
+            if (!formGuard.isActive()) {
+                if (creatingNew) {
+                    idEditedManually = !idField.getText().isBlank();
+                }
+                UiComponents.clearStatusMessage(statusLabel, statusTimer, true);
             }
         });
+        Runnable clearStatusOnEdit = () -> {
+            if (!formGuard.isActive()) {
+                UiComponents.clearStatusMessage(statusLabel, statusTimer, true);
+            }
+        };
+        SwingHtmlUtils.addChangeListener(descriptionField, clearStatusOnEdit);
+        SwingHtmlUtils.addChangeListener(urlField, clearStatusOnEdit);
+        SwingHtmlUtils.addChangeListener(defaultSchemaField, clearStatusOnEdit);
+        SwingHtmlUtils.addChangeListener(usernameField, clearStatusOnEdit);
+        SwingHtmlUtils.addChangeListener(passwordField, clearStatusOnEdit);
+        SwingHtmlUtils.addChangeListener(passwordEnvField, clearStatusOnEdit);
+        SwingHtmlUtils.addChangeListener(driverClassField, clearStatusOnEdit);
         typeCombo.addActionListener(e -> {
             if (!formGuard.isActive()) {
                 updateTypeHints();
+                UiComponents.clearStatusMessage(statusLabel, statusTimer, true);
             }
         });
         credentialSourceCombo.addActionListener(e -> {
             if (!formGuard.isActive()) {
                 updateCredentialRowVisibility();
+                UiComponents.clearStatusMessage(statusLabel, statusTimer, true);
             }
         });
     }
@@ -346,7 +379,7 @@ final class GlobalDatabasesPanel extends JPanel {
             if (selectedConnection != null) {
                 DatabaseConnectionConfig refreshed = findById(loaded, selectedConnection.id());
                 if (refreshed != null) {
-                    populateForm(refreshed);
+                    populateForm(refreshed, false);
                 } else {
                     startNewConnection();
                 }
@@ -368,6 +401,7 @@ final class GlobalDatabasesPanel extends JPanel {
             displayNameField.setText("");
             idField.setText("");
             idField.setEditable(true);
+            descriptionField.setText("");
             typeCombo.setSelectedItem(DatabaseType.POSTGRESQL);
             urlField.setText("");
             defaultSchemaField.setText("");
@@ -380,6 +414,7 @@ final class GlobalDatabasesPanel extends JPanel {
             driverPathsModel.clear();
             driverClassField.setText("");
         });
+        UiComponents.clearStatusMessage(statusLabel, statusTimer, true);
         testWarningBanner.setVisibleState(false, "");
         confirmBar.cancel();
         deleteButton.setEnabled(false);
@@ -392,10 +427,10 @@ final class GlobalDatabasesPanel extends JPanel {
         if (config == null) {
             return;
         }
-        populateForm(config);
+        populateForm(config, true);
     }
 
-    private void populateForm(DatabaseConnectionConfig config) {
+    private void populateForm(DatabaseConnectionConfig config, boolean clearStatus) {
         creatingNew = false;
         selectedConnection = config;
         idEditedManually = true;
@@ -403,6 +438,7 @@ final class GlobalDatabasesPanel extends JPanel {
             displayNameField.setText(config.displayName());
             idField.setText(config.id());
             idField.setEditable(false);
+            descriptionField.setText(config.description());
             typeCombo.setSelectedItem(config.resolveType());
             urlField.setText(config.url());
             defaultSchemaField.setText(config.defaultSchema());
@@ -426,7 +462,10 @@ final class GlobalDatabasesPanel extends JPanel {
             }
             driverClassField.setText(config.driverClass());
         });
-        testWarningBanner.setVisibleState(false, "");
+        if (clearStatus) {
+            UiComponents.clearStatusMessage(statusLabel, statusTimer, true);
+            testWarningBanner.setVisibleState(false, "");
+        }
         confirmBar.cancel();
         deleteButton.setEnabled(true);
         updateTypeHints();
@@ -439,6 +478,7 @@ final class GlobalDatabasesPanel extends JPanel {
         for (DatabaseConnectionConfig cfg : allConnections) {
             if (query.isEmpty() || cfg.displayName().toLowerCase(Locale.ROOT).contains(query)
                     || cfg.id().toLowerCase(Locale.ROOT).contains(query)
+                    || cfg.description().toLowerCase(Locale.ROOT).contains(query)
                     || cfg.type().toLowerCase(Locale.ROOT).contains(query)) {
                 filtered.add(cfg);
             }
@@ -547,9 +587,9 @@ final class GlobalDatabasesPanel extends JPanel {
         for (int i = 0; i < driverPathsModel.size(); i++) {
             driverPaths.add(driverPathsModel.get(i));
         }
-        return new DatabaseConnectionConfig(idField.getText(), displayNameField.getText(), type.getId(),
-                urlField.getText(), usernameField.getText(), credSource.getId(), passwordEnvField.getText(),
-                driverPaths, driverClassField.getText(), defaultSchemaField.getText(),
+        return new DatabaseConnectionConfig(idField.getText(), displayNameField.getText(), descriptionField.getText(),
+                type.getId(), urlField.getText(), usernameField.getText(), credSource.getId(),
+                passwordEnvField.getText(), driverPaths, driverClassField.getText(), defaultSchemaField.getText(),
                 ((Number) timeoutSpinner.getValue()).intValue(), ((Number) maxRowsSpinner.getValue()).intValue());
     }
 
@@ -566,7 +606,11 @@ final class GlobalDatabasesPanel extends JPanel {
             typedPassword = new String(chars);
         }
         String finalTypedPassword = typedPassword;
+        UiComponents.clearStatusMessage(statusLabel, statusTimer, true);
         testConnectionButton.setEnabled(false);
+        testConnectionButton.setText(TESTING_CONNECTION_TEXT);
+        testConnectionProgressBar.setIndeterminate(true);
+        testConnectionProgressBar.setVisible(true);
         testWarningBanner.setVisibleState(false, "");
 
         CompletableFuture<DbTestResult> future = Edt.supplyAsync(() -> {
@@ -575,7 +619,7 @@ final class GlobalDatabasesPanel extends JPanel {
             }
             return dbService.testConnection(cfg, finalTypedPassword);
         }, result -> {
-            testConnectionButton.setEnabled(true);
+            restoreTestConnectionButtonState();
             if (!result.success()) {
                 UiComponents.showStatusMessage(statusLabel, statusTimer, result.message(), false);
                 return;
@@ -593,11 +637,19 @@ final class GlobalDatabasesPanel extends JPanel {
             UiComponents.showStatusMessage(statusLabel, statusTimer,
                     "Connected in " + result.durationMs() + " ms" + summary + ".", true);
         }, error -> {
-            testConnectionButton.setEnabled(true);
-            UiComponents.showStatusMessage(statusLabel, statusTimer, "Test failed: " + error.getMessage(), false);
+            restoreTestConnectionButtonState();
+            UiComponents.showStatusMessage(statusLabel, statusTimer,
+                    "Test failed: " + ExceptionUtils.getRootCauseMessage(error), false);
         });
         lastAsyncFuture = future;
         return future;
+    }
+
+    private void restoreTestConnectionButtonState() {
+        testConnectionButton.setEnabled(true);
+        testConnectionButton.setText(TEST_CONNECTION_TEXT);
+        testConnectionProgressBar.setIndeterminate(false);
+        testConnectionProgressBar.setVisible(false);
     }
 
     CompletableFuture<DatabaseConnectionConfig> saveCurrentConnection() {
@@ -634,7 +686,7 @@ final class GlobalDatabasesPanel extends JPanel {
 
     private void revertCurrentForm() {
         if (selectedConnection != null) {
-            populateForm(selectedConnection);
+            populateForm(selectedConnection, true);
         } else {
             startNewConnection();
         }
@@ -681,14 +733,17 @@ final class GlobalDatabasesPanel extends JPanel {
         private static final long serialVersionUID = 1L;
         private final JLabel titleLabel = new JLabel();
         private final JLabel metaLabel = new JLabel();
+        private final JLabel descriptionLabel = new JLabel();
 
         private ConnectionCellRenderer() {
-            setLayout(new MigLayout("fillx, insets 6 8 6 8, wrap 1", GROW_FILL, "[]2[]"));
+            setLayout(new MigLayout("fillx, insets 6 8 6 8, wrap 1, hidemode 3", GROW_FILL, "[]2[]2[]"));
             setOpaque(true);
             titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 12.5f));
             metaLabel.setFont(metaLabel.getFont().deriveFont(Font.PLAIN, 11f));
+            descriptionLabel.setFont(descriptionLabel.getFont().deriveFont(Font.PLAIN, 11f));
             add(titleLabel, "growx");
             add(metaLabel, "growx");
+            add(descriptionLabel, "growx");
             setBorder(new EmptyBorder(1, 0, 1, 0));
         }
 
@@ -699,10 +754,19 @@ final class GlobalDatabasesPanel extends JPanel {
             setBackground(colors.background());
             titleLabel.setForeground(colors.foreground());
             metaLabel.setForeground(colors.muted());
+            descriptionLabel.setForeground(colors.muted());
             if (value != null) {
                 titleLabel.setText(value.displayName());
                 metaLabel.setText(value.id() + "  •  " + value.resolveType().getDisplayName());
                 titleLabel.setIcon(FontIcon.of(Codicons.DATABASE, 14, colors.iconColor()));
+                String desc = value.description();
+                if (desc != null && !desc.isBlank()) {
+                    descriptionLabel.setText(desc);
+                    descriptionLabel.setVisible(true);
+                } else {
+                    descriptionLabel.setText("");
+                    descriptionLabel.setVisible(false);
+                }
             }
             return this;
         }

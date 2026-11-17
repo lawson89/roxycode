@@ -39,8 +39,8 @@ class PromptServiceTest {
         assertEquals("", svc.loadConfiguredDatabasesContext());
 
         org.roxycode.app.model.DatabaseConnectionConfig cfg = new org.roxycode.app.model.DatabaseConnectionConfig(
-                "qa-pg", "QA Postgres", "postgresql", "jdbc:postgresql://secret-host:5432/qa", "ro_user", "keyring", "",
-                List.of(), "", "public", 15, 200);
+                "qa-pg", "QA Postgres", "Core order fulfillment", "postgresql", "jdbc:postgresql://secret-host:5432/qa",
+                "ro_user", "keyring", "", List.of(), "", "public", 15, 200);
         org.roxycode.app.model.ProjectDatabaseGrant grant = new org.roxycode.app.model.ProjectDatabaseGrant("qa-pg",
                 "billing", "Billing QA tables");
         when(dbConfigService.listActiveProjectConnections()).thenReturn(List
@@ -50,7 +50,8 @@ class PromptServiceTest {
         assertTrue(section.contains("## CONFIGURED DATABASES"));
         assertTrue(section.contains("qa-pg"));
         assertTrue(section.contains("billing"));
-        assertTrue(section.contains("Billing QA tables"));
+        assertTrue(section.contains("Core order fulfillment"));
+        assertTrue(section.contains("Project notes: Billing QA tables"));
         assertFalse(section.contains("secret-host"));
         assertFalse(section.contains("ro_user"));
     }

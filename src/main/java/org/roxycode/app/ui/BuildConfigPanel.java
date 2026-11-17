@@ -365,7 +365,7 @@ final class BuildConfigPanel extends JPanel {
         dbActionPanel.add(saveGrantsButton);
         databasesTabPanel.add(UiComponents.createPageHeader(dbTitleLabel, dbSubtitleLabel, dbActionPanel),
                 GROWX_WMIN_0 + ", wrap");
-        databasesTabPanel.add(grantsStatusLabel, "hidemode 3, wrap");
+        databasesTabPanel.add(grantsStatusLabel, "growx, wmin 0, hidemode 3, wrap");
 
         databasesCardPanel = new JPanel(new MigLayout("fillx, wrap 1, insets 16, gapy 10", GROW_FILL, ""));
         UiComponents.styleCardPanel(databasesCardPanel);
@@ -1115,6 +1115,12 @@ final class BuildConfigPanel extends JPanel {
             topRow.add(checkBox);
             topRow.add(metaBadge);
             rowCard.add(topRow, "span 2, growx, wrap");
+            if (!cfg.description().isBlank()) {
+                JLabel descriptionLabel = new JLabel(UiComponents.formatWrappingHtml(cfg.description()));
+                descriptionLabel.setFont(descriptionLabel.getFont().deriveFont(Font.PLAIN, 11.5f));
+                descriptionLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
+                rowCard.add(descriptionLabel, "span 2, growx, gapbottom 4, wrap");
+            }
 
             javax.swing.JTextField schemaField = new javax.swing.JTextField();
             if (existing != null) {

@@ -42,14 +42,15 @@ class DbServiceTest {
 
         TestHarness harness = createHarness();
         try (harness.credStore; DbService dbService = harness.dbService) {
-            DatabaseConnectionConfig h2Cfg = new DatabaseConnectionConfig("h2-qa", "H2 QA", "h2", h2Url, "sa", "none",
-                    "", List.of(), "", "PUBLIC", 15, 2);
+            DatabaseConnectionConfig h2Cfg = new DatabaseConnectionConfig("h2-qa", "H2 QA",
+                    "QA orders and customers database", "h2", h2Url, "sa", "none", "", List.of(), "", "PUBLIC", 15, 2);
             harness.configService.saveGlobalConnection(h2Cfg, null, false);
             harness.configService.saveProjectGrants(List.of(new ProjectDatabaseGrant("h2-qa", "PUBLIC", "QA orders")));
 
             List<DbConnectionSummary> conns = dbService.listConnections();
             assertEquals(1, conns.size());
             assertEquals("h2-qa", conns.get(0).getId());
+            assertEquals("QA orders and customers database", conns.get(0).getDescription());
 
             List<String> schemas = dbService.listSchemas("h2-qa");
             assertTrue(schemas.contains("PUBLIC"));
@@ -111,7 +112,13 @@ class DbServiceTest {
                     "jdbc:sqlite:" + missingSqlite, "", "none", "", List.of(), "", "", 15, 50);
             DbTestResult missingTest = dbService.testConnection(missingCfg, null);
             assertFalse(missingTest.isSuccess());
+            assertTrue(missingTest.getMessage().startsWith("Connection failed:"));
             assertFalse(Files.exists(missingSqlite));
+
+            String formatted = DbService.formatConnectionFailureMessage(
+                    new RuntimeException("outer", new java.sql.SQLException("Invalid password", "28P01")));
+            assertTrue(formatted.contains("Invalid password"));
+            assertTrue(formatted.contains("SQLState: 28P01"));
         }
 
         Path jarDir = Files.createDirectories(tempDir.resolve("oracle-jars"));

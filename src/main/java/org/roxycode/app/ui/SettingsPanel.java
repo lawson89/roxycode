@@ -847,7 +847,6 @@ public final class SettingsPanel extends JPanel {
     }
 
     void showTestConnectionStatus(String message, boolean success) {
-        testConnectionStatusLabel.setVisible(true);
         UiComponents.showStatusMessage(testConnectionStatusLabel, testConnectionStatusTimer, message, success);
     }
 
