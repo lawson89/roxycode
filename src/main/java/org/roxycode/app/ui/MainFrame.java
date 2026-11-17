@@ -585,6 +585,9 @@ public final class MainFrame extends JPanel {
         if (hostFrame != null) {
             hostFrame.dispose();
         }
+        if (settingsService != null) {
+            settingsService.awaitPendingSave();
+        }
     }
 
     private String currentTitle;

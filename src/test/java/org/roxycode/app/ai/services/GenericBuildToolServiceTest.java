@@ -364,6 +364,7 @@ class GenericBuildToolServiceTest {
         assertTrue(integratedBuildService.buildAndTest().isSuccess());
         assertTrue(realPlanService.requestReview("All steps verified").contains("Autonomous transition"));
         assertEquals(WorkflowPhase.REVIEW, realPlanService.getCurrentPhase());
+        realPlanService.awaitPendingPersistence();
     }
 
     @Test

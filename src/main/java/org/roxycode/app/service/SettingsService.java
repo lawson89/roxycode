@@ -234,6 +234,17 @@ public class SettingsService {
         }
     }
 
+    /**
+     * Blocks until any queued asynchronous settings save completes.
+     */
+    public void awaitPendingSave() {
+        CompletableFuture<Void> pending;
+        synchronized (this) {
+            pending = lastSaveFuture;
+        }
+        pending.handle((v, ex) -> null).join();
+    }
+
     CompletableFuture<Void> getLastSaveFuture() {
         return lastSaveFuture;
     }
