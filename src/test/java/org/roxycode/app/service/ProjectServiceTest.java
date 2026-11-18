@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import org.roxycode.app.events.ProjectChangedEvent;
+import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.model.AgentProfile;
 
@@ -27,14 +28,21 @@ class ProjectServiceTest {
     void testProjectPersistence() {
         SettingsService settingsService = createSettingsService();
         AtomicReference<Path> notifiedPath = new AtomicReference<>();
+        AtomicReference<SettingsChangedEvent> settingsEvent = new AtomicReference<>();
         ProjectService projectService = new ProjectService(settingsService, event -> {
             if (event instanceof ProjectChangedEvent pce) {
                 notifiedPath.set(pce.projectRoot());
+            } else if (event instanceof SettingsChangedEvent sce) {
+                settingsEvent.set(sce);
             }
         });
         Path projectPath = tempDir.resolve("my-project");
         projectService.setCurrentProjectRoot(projectPath);
         assertEquals(projectPath, notifiedPath.get());
+        assertFalse(projectService.isBuildConfirmed());
+        projectService.setBuildConfirmed(true);
+        assertTrue(projectService.isBuildConfirmed());
+        assertNotNull(settingsEvent.get());
 
         ProjectService projectService2 = new ProjectService(settingsService, null);
         assertEquals(projectPath.toAbsolutePath().toString(),

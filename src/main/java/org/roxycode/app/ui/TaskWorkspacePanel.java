@@ -34,7 +34,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Lazy
-final class TaskWorkspacePanel extends JPanel {
+final class TaskWorkspacePanel extends JPanel implements UiComponents.ExportableView {
     private static final long serialVersionUID = 1L;
     private static final String LAYOUT_CENTER = "center";
     static final String PLAN_TAB_BASE_TITLE = "Plan";
@@ -202,6 +202,48 @@ final class TaskWorkspacePanel extends JPanel {
     @EventListener
     public void onPlanUpdated(PlanUpdatedEvent event) {
         Edt.run(() -> updateActivePhase(planService.getCurrentPhase()));
+    }
+
+    @Override
+    public boolean canExportHtml() {
+        if (taskTabs == null) {
+            return false;
+        }
+        java.awt.Component selected = taskTabs.getSelectedComponent();
+        if (planPanel != null && planPanel.equals(selected)) {
+            return planPanel.canExportPlan();
+        }
+        if (pastPlansPanel != null && pastPlansPanel.equals(selected)) {
+            return pastPlansPanel.canExportSelectedEntry();
+        }
+        return taskChatPanel != null && taskChatPanel.hasExportableContent();
+    }
+
+    @Override
+    public boolean exportHtml(java.awt.Component parent, @org.springframework.lang.Nullable String projectName,
+            boolean saveToFile) {
+        if (!canExportHtml()) {
+            return false;
+        }
+        java.awt.Component selected = taskTabs.getSelectedComponent();
+        if (planPanel != null && planPanel.equals(selected)) {
+            if (saveToFile) {
+                planPanel.saveCurrentPlanAsHtml(parent, projectName);
+            } else {
+                planPanel.exportCurrentPlanToBrowser(projectName);
+            }
+            return true;
+        }
+        if (pastPlansPanel != null && pastPlansPanel.equals(selected)) {
+            if (saveToFile) {
+                pastPlansPanel.saveCurrentEntryAsHtml(parent, projectName);
+            } else {
+                pastPlansPanel.exportCurrentEntryToBrowser(projectName);
+            }
+            return true;
+        }
+        return UiComponents.exportChatPanelHtml(parent, projectName, "Build Feature — Chat Session",
+                "build-feature-chat", taskChatPanel, saveToFile);
     }
 
     public void onViewShown() {

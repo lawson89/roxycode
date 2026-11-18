@@ -111,9 +111,6 @@ public final class MainFrame extends JPanel {
     private final transient UiComponents.UiGuard hubTabGuard = new UiComponents.UiGuard();
     private final Map<String, List<JMenuItem>> cardMenuItems = new LinkedHashMap<>();
     private final Map<String, RouteTarget> routeMap = new LinkedHashMap<>();
-    enum ExportKind {
-        NONE, QA_CHAT, QA_PAST_TOPICS, TASK_CHAT, TASK_PLAN, TASK_PAST_PLANS
-    }
 
     JMenuBar menuBar;
     JMenu recentProjectsMenu;
@@ -134,7 +131,8 @@ public final class MainFrame extends JPanel {
     private boolean lastAppliedIconHighlight;
     private boolean iconImagesApplied;
     Rectangle lastNormalBounds;
-    int simulatedExtendedState = Frame.NORMAL;
+    private boolean wasCredentialsConfigured;
+    private boolean wasBuildConfirmed;
 
     public MainFrame(SettingsService settingsService, ProjectService projectService, HeaderPanel header,
             StatusPanel statusBar, QaWorkspacePanel qaWorkspacePanel, TaskWorkspacePanel taskWorkspacePanel,
@@ -172,33 +170,15 @@ public final class MainFrame extends JPanel {
             this.hostFrame = new JFrame();
         }
 
+        this.wasCredentialsConfigured = settingsService != null && settingsService.hasConfiguredCredentials();
+        this.wasBuildConfirmed = projectService != null && projectService.hasActiveProject()
+                && projectService.isBuildConfirmed();
         setupLaf();
         setupWindow();
         initComponents(statusBar, codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel,
                 agentMemoryPanel, globalDatabasesPanel);
         setupMenuBar();
         registerDesktopHandlers();
-        if (settingsPanel != null) {
-            settingsPanel.setOnInitialApiKeyConfiguredCallback(() -> {
-                updateOnboardingAndNavigationState();
-                boolean hasProject = projectService != null && projectService.hasActiveProject();
-                if (hasProject) {
-                    if (projectService.isBuildConfirmed()) {
-                        showCard(QA_VIEW);
-                    } else {
-                        showCard(BUILD_CONFIG_VIEW);
-                    }
-                }
-            });
-        }
-        if (buildConfigPanel != null) {
-            buildConfigPanel.setOnConfirmSavedCallback(() -> {
-                updateOnboardingAndNavigationState();
-                showCard(QA_VIEW);
-            });
-            buildConfigPanel.setOnManageGlobalDatabasesCallback(() -> showCard(DATABASES_VIEW));
-
-        }
         if (qaWorkspacePanel != null) {
             qaWorkspacePanel.addWorkspaceStateListener(() -> Edt.run(() -> {
                 if (sidebar != null && qaChatPanel() != null) {
@@ -302,6 +282,8 @@ public final class MainFrame extends JPanel {
     public void onProjectChanged(ProjectChangedEvent event) {
         Edt.run(() -> {
             syncSidebarWaitingState();
+            wasBuildConfirmed = projectService != null && projectService.hasActiveProject()
+                    && projectService.isBuildConfirmed();
             updateWorkspaceState();
             updateOnboardingAndNavigationState();
         });
@@ -310,8 +292,24 @@ public final class MainFrame extends JPanel {
     @EventListener
     public void onSettingsChanged(SettingsChangedEvent event) {
         Edt.run(() -> {
+            boolean hasCredentials = settingsService != null && settingsService.hasConfiguredCredentials();
+            boolean hasProject = projectService != null && projectService.hasActiveProject();
+            boolean buildConfirmed = hasProject && projectService.isBuildConfirmed();
             updateOnboardingAndNavigationState();
             updateSettingsHubReadiness(lastStartupTools);
+            if (!wasCredentialsConfigured && hasCredentials) {
+                if (hasProject) {
+                    if (buildConfirmed) {
+                        showCard(QA_VIEW);
+                    } else {
+                        showCard(BUILD_CONFIG_VIEW);
+                    }
+                }
+            } else if (!wasBuildConfirmed && buildConfirmed && BUILD_CONFIG_VIEW.equals(currentCard)) {
+                showCard(QA_VIEW);
+            }
+            wasCredentialsConfigured = hasCredentials;
+            wasBuildConfirmed = buildConfirmed;
         });
     }
 
@@ -379,9 +377,6 @@ public final class MainFrame extends JPanel {
                 initY = settings.getWindowY();
             }
             lastNormalBounds = new Rectangle(initX, initY, initialSize.width, initialSize.height);
-            if (settings.isWindowMaximized()) {
-                simulatedExtendedState = Frame.MAXIMIZED_BOTH;
-            }
             return;
         }
         hostFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -516,34 +511,9 @@ public final class MainFrame extends JPanel {
         }
     }
 
-    int getWindowExtendedState() {
-        if (simulatedExtendedState != Frame.NORMAL) {
-            return simulatedExtendedState;
-        }
-        if (hostFrame != null) {
-            return hostFrame.getExtendedState();
-        }
-        return Frame.NORMAL;
-    }
-
-    Rectangle getCurrentWindowBounds() {
-        if (hostFrame != null) {
-            return hostFrame.getBounds();
-        }
-        return getBounds();
-    }
-
-    void setWindowBounds(int x, int y, int width, int height) {
-        setBounds(x, y, width, height);
-        if (hostFrame != null) {
-            hostFrame.setBounds(x, y, width, height);
-        }
-        recordNormalWindowBounds();
-    }
-
     void recordNormalWindowBounds() {
-        if ((getWindowExtendedState() & Frame.MAXIMIZED_BOTH) == 0) {
-            Rectangle bounds = getCurrentWindowBounds();
+        if (hostFrame != null && (hostFrame.getExtendedState() & Frame.MAXIMIZED_BOTH) == 0) {
+            Rectangle bounds = hostFrame.getBounds();
             if (bounds != null && bounds.width > 0 && bounds.height > 0) {
                 lastNormalBounds = new Rectangle(bounds);
             }
@@ -555,12 +525,14 @@ public final class MainFrame extends JPanel {
             return;
         }
         recordNormalWindowBounds();
-        boolean maximized = (getWindowExtendedState() & Frame.MAXIMIZED_BOTH) != 0;
+        boolean maximized = hostFrame != null && (hostFrame.getExtendedState() & Frame.MAXIMIZED_BOTH) != 0;
         Rectangle boundsToSave;
         if (lastNormalBounds != null) {
             boundsToSave = lastNormalBounds;
+        } else if (hostFrame != null) {
+            boundsToSave = hostFrame.getBounds();
         } else {
-            boundsToSave = getCurrentWindowBounds();
+            boundsToSave = getBounds();
         }
         AppSettings settings = settingsService.getSettings();
         if (boundsToSave != null && boundsToSave.width > 0 && boundsToSave.height > 0) {
@@ -612,10 +584,7 @@ public final class MainFrame extends JPanel {
         }
     }
 
-    private String currentTitle;
-
     public void setTitle(String title) {
-        this.currentTitle = title;
         if (hostFrame != null) {
             hostFrame.setTitle(title);
         }
@@ -625,7 +594,7 @@ public final class MainFrame extends JPanel {
         if (hostFrame != null) {
             return hostFrame.getTitle();
         }
-        return currentTitle;
+        return "";
     }
 
     private void initComponents(StatusPanel statusBar, CodebaseCachePanel codebaseCachePanel, JexlApiPanel jexlApiPanel,
@@ -634,18 +603,6 @@ public final class MainFrame extends JPanel {
         setLayout(new MigLayout("fill, insets 0", "[210!, fill]0[fill, grow]", "[fill, grow]"));
 
         sidebar = new SidebarPanel(this::showCard);
-        header.setOnNavigateToCard(this::showCard);
-        qaWorkspacePanel.setOnMoveToFeatureListener(content -> {
-            showCard(TASK_VIEW);
-            ChatPanel taskChat = taskChatPanel();
-            if (taskChat != null) {
-                boolean autoSubmitted = taskChat.submitMovedFeatureRequest(content);
-                ChatPanel qaChat = qaChatPanel();
-                if (qaChat != null) {
-                    qaChat.notifyFeatureRequestSent(autoSubmitted);
-                }
-            }
-        });
 
         // Workspace state listeners (busy, waiting, tab/export updates) are wired in constructor via
         // addWorkspaceStateListener
@@ -1147,12 +1104,8 @@ public final class MainFrame extends JPanel {
             badgeIcon = Codicons.WARNING;
             badgeText = "Credentials Required";
         }
-        String hex = SwingHtmlUtils.toHex(badgeColor);
-        aiConnectionReadinessBadge.setText(badgeText);
-        aiConnectionReadinessBadge.setForeground(badgeColor);
-        aiConnectionReadinessBadge.setIcon(FontIcon.of(badgeIcon, 13, badgeColor));
-        aiConnectionReadinessBadge.putClientProperty(FlatClientProperties.STYLE,
-                "font: bold -1; arc: 999; border: 3,10,3,10," + hex + ",1,999; background: fade(" + hex + ", 14%)");
+        UiComponents.stylePillBadge(aiConnectionReadinessBadge, badgeText, badgeColor, badgeIcon, 13, "3,10,3,10",
+                true);
     }
 
     void applyMenuBarStyling() {
@@ -1368,44 +1321,19 @@ public final class MainFrame extends JPanel {
         setTitle(projectName + " — RoxyCode");
     }
 
-    ExportKind resolveActiveExportKind() {
-        if (QA_VIEW.equals(currentCard) && qaWorkspacePanel != null && qaWorkspacePanel.qaTabs != null) {
-            java.awt.Component selected = qaWorkspacePanel.qaTabs.getSelectedComponent();
-            if (qaWorkspacePanel.pastTopicsPanel != null && qaWorkspacePanel.pastTopicsPanel.equals(selected)) {
-                if (qaWorkspacePanel.pastTopicsPanel.canExportSelectedEntry()) {
-                    return ExportKind.QA_PAST_TOPICS;
-                }
-                return ExportKind.NONE;
-            }
-            if (qaWorkspacePanel.qaChatPanel != null && qaWorkspacePanel.qaChatPanel.hasExportableContent()) {
-                return ExportKind.QA_CHAT;
-            }
-            return ExportKind.NONE;
+    private @Nullable UiComponents.ExportableView resolveActiveExportableView() {
+        if (QA_VIEW.equals(currentCard)) {
+            return qaWorkspacePanel;
         }
-        if (TASK_VIEW.equals(currentCard) && taskWorkspacePanel != null && taskWorkspacePanel.taskTabs != null) {
-            java.awt.Component selected = taskWorkspacePanel.taskTabs.getSelectedComponent();
-            if (taskWorkspacePanel.planPanel != null && taskWorkspacePanel.planPanel.equals(selected)) {
-                if (taskWorkspacePanel.planPanel.canExportPlan()) {
-                    return ExportKind.TASK_PLAN;
-                }
-                return ExportKind.NONE;
-            }
-            if (taskWorkspacePanel.pastPlansPanel != null && taskWorkspacePanel.pastPlansPanel.equals(selected)) {
-                if (taskWorkspacePanel.pastPlansPanel.canExportSelectedEntry()) {
-                    return ExportKind.TASK_PAST_PLANS;
-                }
-                return ExportKind.NONE;
-            }
-            if (taskWorkspacePanel.taskChatPanel != null && taskWorkspacePanel.taskChatPanel.hasExportableContent()) {
-                return ExportKind.TASK_CHAT;
-            }
-            return ExportKind.NONE;
+        if (TASK_VIEW.equals(currentCard)) {
+            return taskWorkspacePanel;
         }
-        return ExportKind.NONE;
+        return null;
     }
 
     void updateExportMenuItemsState() {
-        boolean canExport = resolveActiveExportKind() != ExportKind.NONE;
+        UiComponents.ExportableView view = resolveActiveExportableView();
+        boolean canExport = view != null && view.canExportHtml();
         if (printExportHtmlItem != null) {
             printExportHtmlItem.setEnabled(canExport);
         }
@@ -1415,59 +1343,10 @@ public final class MainFrame extends JPanel {
     }
 
     boolean exportCurrentView(boolean saveToFile) {
-        ExportKind kind = resolveActiveExportKind();
-        if (kind == ExportKind.NONE) {
+        UiComponents.ExportableView view = resolveActiveExportableView();
+        if (view == null || !view.canExportHtml()) {
             return false;
         }
-        String projectName = getActiveProjectName();
-        switch (kind) {
-            case QA_CHAT -> {
-                String html = HtmlExportService.buildChatExportHtml(projectName, "Ask Roxy — Chat Session",
-                        qaWorkspacePanel.qaChatPanel.exportMessages());
-                if (saveToFile) {
-                    HtmlExportService.saveHtmlWithChooser(this, "ask-roxy-chat", html);
-                } else {
-                    HtmlExportService.openHtmlInBrowserAsync("roxycode-chat-", html);
-                }
-                return true;
-            }
-            case TASK_CHAT -> {
-                String html = HtmlExportService.buildChatExportHtml(projectName, "Build Feature — Chat Session",
-                        taskWorkspacePanel.taskChatPanel.exportMessages());
-                if (saveToFile) {
-                    HtmlExportService.saveHtmlWithChooser(this, "build-feature-chat", html);
-                } else {
-                    HtmlExportService.openHtmlInBrowserAsync("roxycode-chat-", html);
-                }
-                return true;
-            }
-            case TASK_PLAN -> {
-                if (saveToFile) {
-                    taskWorkspacePanel.planPanel.saveCurrentPlanAsHtml(this, projectName);
-                } else {
-                    taskWorkspacePanel.planPanel.exportCurrentPlanToBrowser(projectName);
-                }
-                return true;
-            }
-            case QA_PAST_TOPICS -> {
-                if (saveToFile) {
-                    qaWorkspacePanel.pastTopicsPanel.saveCurrentEntryAsHtml(this, projectName);
-                } else {
-                    qaWorkspacePanel.pastTopicsPanel.exportCurrentEntryToBrowser(projectName);
-                }
-                return true;
-            }
-            case TASK_PAST_PLANS -> {
-                if (saveToFile) {
-                    taskWorkspacePanel.pastPlansPanel.saveCurrentEntryAsHtml(this, projectName);
-                } else {
-                    taskWorkspacePanel.pastPlansPanel.exportCurrentEntryToBrowser(projectName);
-                }
-                return true;
-            }
-            default -> {
-                return false;
-            }
-        }
+        return view.exportHtml(this, getActiveProjectName(), saveToFile);
     }
 }

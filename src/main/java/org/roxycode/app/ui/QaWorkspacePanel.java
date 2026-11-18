@@ -1,8 +1,6 @@
 package org.roxycode.app.ui;
 
-import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -24,7 +22,7 @@ import org.springframework.stereotype.Component;
 
 @Component
 @Lazy
-final class QaWorkspacePanel extends JPanel {
+final class QaWorkspacePanel extends JPanel implements UiComponents.ExportableView {
     private static final long serialVersionUID = 1L;
     private static final String LAYOUT_CENTER = "center";
     static final String MENTOR_MODE_BADGE_TEXT = "MENTOR MODE • Read-Only Q&A";
@@ -117,12 +115,39 @@ final class QaWorkspacePanel extends JPanel {
     }
 
     void applyBannerStyling() {
-        Color accent = SwingHtmlUtils.getAccentColor();
-        String bgHex = SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(accent, 0.12));
-        mentorModeLabel.setIcon(FontIcon.of(Codicons.SEARCH, 14, accent));
-        mentorModeLabel.setForeground(accent);
-        mentorModeLabel.putClientProperty(FlatClientProperties.STYLE,
-                "font: bold -1; background: " + bgHex + "; arc: 999; border: 4,12,4,12");
+        UiComponents.stylePillBadge(mentorModeLabel, MENTOR_MODE_BADGE_TEXT, SwingHtmlUtils.getAccentColor(),
+                Codicons.SEARCH, 14, "4,12,4,12", false);
+    }
+
+    @Override
+    public boolean canExportHtml() {
+        if (qaTabs == null) {
+            return false;
+        }
+        java.awt.Component selected = qaTabs.getSelectedComponent();
+        if (pastTopicsPanel != null && pastTopicsPanel.equals(selected)) {
+            return pastTopicsPanel.canExportSelectedEntry();
+        }
+        return qaChatPanel != null && qaChatPanel.hasExportableContent();
+    }
+
+    @Override
+    public boolean exportHtml(java.awt.Component parent, @org.springframework.lang.Nullable String projectName,
+            boolean saveToFile) {
+        if (!canExportHtml()) {
+            return false;
+        }
+        java.awt.Component selected = qaTabs.getSelectedComponent();
+        if (pastTopicsPanel != null && pastTopicsPanel.equals(selected)) {
+            if (saveToFile) {
+                pastTopicsPanel.saveCurrentEntryAsHtml(parent, projectName);
+            } else {
+                pastTopicsPanel.exportCurrentEntryToBrowser(projectName);
+            }
+            return true;
+        }
+        return UiComponents.exportChatPanelHtml(parent, projectName, "Ask Roxy — Chat Session", "ask-roxy-chat",
+                qaChatPanel, saveToFile);
     }
 
     void addWorkspaceStateListener(Runnable listener) {
@@ -139,12 +164,6 @@ final class QaWorkspacePanel extends JPanel {
         }
         if (pastTopicsPanel != null) {
             pastTopicsPanel.addExportStateListener(listener);
-        }
-    }
-
-    public void setOnMoveToFeatureListener(java.util.function.Consumer<String> listener) {
-        if (qaChatPanel != null) {
-            qaChatPanel.setOnMoveToFeatureListener(listener);
         }
     }
 

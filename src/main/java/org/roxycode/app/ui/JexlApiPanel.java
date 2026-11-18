@@ -91,7 +91,6 @@ final class JexlApiPanel extends JPanel {
 
     public void updateTheme() {
         SwingHtmlUtils.applyTheme(textPane, 10);
-        UiComponents.refreshActionButtonIcons(this);
         refresh();
     }
 

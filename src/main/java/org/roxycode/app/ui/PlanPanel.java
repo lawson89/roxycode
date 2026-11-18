@@ -44,8 +44,6 @@ final class PlanPanel extends JPanel {
     final JButton exportHtmlButton;
     private Timer copyCommitFeedbackTimer;
     private Timer copyFeedbackTimer;
-    String lastCopiedCommitMessage;
-    String lastCopiedMarkdown;
     private final transient UiComponents.HtmlExportSupport exportSupport = new UiComponents.HtmlExportSupport();
     private transient ImplementationPlan lastRenderedPlan;
     private boolean displayInitialized;
@@ -120,7 +118,6 @@ final class PlanPanel extends JPanel {
             return;
         }
         String commitMsg = plan.commitMessage();
-        this.lastCopiedCommitMessage = commitMsg;
         copyCommitFeedbackTimer = UiComponents.copyWithFeedback(copyCommitMessageButton, copyCommitFeedbackTimer,
                 commitMsg, COPY_COMMIT_MSG_TEXT, COPY_FEEDBACK_DELAY_MS);
     }
@@ -131,7 +128,6 @@ final class PlanPanel extends JPanel {
             return;
         }
         String markdown = plan.toFullMarkdown();
-        this.lastCopiedMarkdown = markdown;
         copyFeedbackTimer = UiComponents.copyWithFeedback(copyMarkdownButton, copyFeedbackTimer, markdown,
                 COPY_BUTTON_TEXT, COPY_FEEDBACK_DELAY_MS);
     }
@@ -171,7 +167,6 @@ final class PlanPanel extends JPanel {
         if (toolbar != null) {
             toolbar.setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));
         }
-        UiComponents.refreshActionButtonIcons(this);
         SwingHtmlUtils.applyTheme(displayArea, 15);
     }
 

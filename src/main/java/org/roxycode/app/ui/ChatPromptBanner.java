@@ -64,7 +64,6 @@ final class ChatPromptBanner extends JPanel {
                 label.setIcon(FontIcon.of(fontIcon.getIkon(), fontIcon.getIconSize(), accent));
             }
         }
-        UiComponents.refreshActionButtonIcons(this);
     }
 
     private void resetWithHeader(String text, Codicons icon) {

@@ -27,6 +27,7 @@ import org.roxycode.app.ai.services.GrepService;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.UserInputService;
+import org.roxycode.app.events.NavigateToViewEvent;
 import org.roxycode.app.events.UserInputRequestEvent;
 import org.roxycode.app.model.ChatTranscriptEntry;
 import org.roxycode.app.service.AiService;
@@ -77,17 +78,13 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     JButton approveButton;
     JButton rejectButton;
     private Timer copyCommitMsgTimer;
-    String lastCopiedCommitMessage;
     private final transient PlanService planService;
+    private final transient ApplicationEventPublisher eventPublisher;
     JButton resetSessionButton;
     JCheckBox autoApprovePlanCheckBox;
     final JPanel inlineActionPanel;
     final ChatPromptBanner userInputPromptPanel;
     final ChatActivityStrip activityStripPanel;
-    final JLabel activityStepLabel;
-    final transient FontIcon activityIcon;
-    final Timer activityAnimationTimer;
-    final Timer activityElapsedTimer;
     JLabel transitionLabel;
     JLabel transitionSubtitleLabel;
     final transient ChatTelemetryBar telemetryBar;
@@ -154,6 +151,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
             ChatMemory chatMemory, String sessionPrefix, WorkflowPhase lockedPhase, boolean isTaskMode,
             SettingsService settingsService, Executor turnExecutor) {
         this.planService = planService;
+        this.eventPublisher = eventPublisher;
         this.model = new ChatModel(sessionPrefix, lockedPhase, isTaskMode);
         this.controller = new ChatController(this.model, this, aiService, planService, eventPublisher, chatMemory,
                 settingsService, turnExecutor);
@@ -162,10 +160,6 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         this.inlineActionPanel = createInlineActionPanel();
         this.userInputPromptPanel = new ChatPromptBanner();
         this.activityStripPanel = new ChatActivityStrip(this.model, this.planService, () -> this.loading);
-        this.activityStepLabel = this.activityStripPanel.activityStepLabel;
-        this.activityIcon = this.activityStripPanel.activityIcon;
-        this.activityAnimationTimer = this.activityStripPanel.activityAnimationTimer;
-        this.activityElapsedTimer = this.activityStripPanel.activityElapsedTimer;
         this.telemetryBar = new ChatTelemetryBar(getFont());
         Component topComponent = createOutputSection(isTaskMode);
         JPanel inputSection = createInputSection(isTaskMode);
@@ -232,6 +226,11 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         outputArea.setOnStarterPromptListener(prompt -> {
             setInputText(prompt);
             focusInput();
+        });
+        outputArea.setOnMoveToFeatureListener(content -> {
+            if (this.eventPublisher != null) {
+                this.eventPublisher.publishEvent(new NavigateToViewEvent(MainFrame.TASK_VIEW, content));
+            }
         });
         outputScrollPane = new JScrollPane(outputArea);
         outputScrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
@@ -436,7 +435,6 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         if (transitionLabel != null && transitionLabel.getIcon() instanceof FontIcon fontIcon) {
             transitionLabel.setIcon(FontIcon.of(fontIcon.getIkon(), fontIcon.getIconSize(), accent));
         }
-        UiComponents.refreshActionButtonIcons(this);
         userInputPromptPanel.applyThemeStyling();
         if (activityStripPanel != null) {
             activityStripPanel.applyStyling();
@@ -516,12 +514,6 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         this.onViewPlanAction = action;
         if (viewPlanButton != null) {
             viewPlanButton.setVisible(action != null);
-        }
-    }
-
-    public void setOnMoveToFeatureListener(Consumer<String> listener) {
-        if (outputArea != null) {
-            outputArea.setOnMoveToFeatureListener(listener);
         }
     }
 
@@ -690,7 +682,6 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         if (StringUtils.isBlank(commitMsg)) {
             return;
         }
-        this.lastCopiedCommitMessage = commitMsg;
         copyCommitMsgTimer = UiComponents.copyWithFeedback(copyCommitMsgButton, copyCommitMsgTimer, commitMsg,
                 "Copy Commit Msg", 1500);
     }

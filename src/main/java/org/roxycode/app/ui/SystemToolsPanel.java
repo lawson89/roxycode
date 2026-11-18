@@ -82,7 +82,7 @@ final class SystemToolsPanel extends JPanel {
 
         add(UiComponents.createPageHeader(titleLabel, subtitleLabel, refreshBtn), "growx, wmin 0, wrap");
 
-        warningBanner = new UiComponents.WarningBanner();
+        warningBanner = new UiComponents.WarningBanner("");
         add(warningBanner, "growx, wmin 0, wrap, hidemode 3");
 
         progressBar = new JProgressBar();
@@ -249,18 +249,16 @@ final class SystemToolsPanel extends JPanel {
         if (lastMissingRequiredToolNames != null) {
             missingCount = lastMissingRequiredToolNames.size();
         }
+        String text;
         Color badgeColor;
         if (missingCount == 0) {
-            requiredSectionStatusBadge.setText(ALL_REQUIRED_OK_TEXT);
+            text = ALL_REQUIRED_OK_TEXT;
             badgeColor = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
         } else {
-            requiredSectionStatusBadge.setText(missingCount + " Missing");
+            text = missingCount + " Missing";
             badgeColor = SwingHtmlUtils.getUiColor(new Color(0xdc, 0x35, 0x45), "Actions.Red");
         }
-        String hex = SwingHtmlUtils.toHex(badgeColor);
-        requiredSectionStatusBadge.setForeground(badgeColor);
-        requiredSectionStatusBadge.putClientProperty(FlatClientProperties.STYLE,
-                "font: bold -1; arc: 999; border: 2,8,2,8," + hex + ",1,999; background: fade(" + hex + ", 14%)");
+        UiComponents.stylePillBadge(requiredSectionStatusBadge, text, badgeColor, null, 0, "2,8,2,8", true);
     }
 
     static String resolveRequirementBadgeText(SystemTool tool) {
@@ -560,11 +558,8 @@ final class SystemToolsPanel extends JPanel {
                 statusColor = SwingHtmlUtils.getUiColor(new Color(0xdc, 0x35, 0x45), "Actions.Red");
                 statusIcon = Codicons.ERROR;
             }
-            String hex = SwingHtmlUtils.toHex(statusColor);
-            statusBadge.setForeground(statusColor);
-            statusBadge.setIcon(FontIcon.of(statusIcon, 14, statusColor));
-            statusBadge.putClientProperty(FlatClientProperties.STYLE,
-                    "font: bold -1; arc: 999; border: 3,10,3,10," + hex + ",1,999; background: fade(" + hex + ", 14%)");
+            UiComponents.stylePillBadge(statusBadge, statusBadge.getText(), statusColor, statusIcon, 14, "3,10,3,10",
+                    true);
         }
 
         @Override

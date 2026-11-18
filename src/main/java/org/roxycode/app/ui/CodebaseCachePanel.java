@@ -112,7 +112,6 @@ final class CodebaseCachePanel extends JPanel {
     private Timer copyFeedbackTimer;
     private transient CacheStatusData latestStatusData;
     private boolean pendingEditorUpdate;
-    String lastCopiedContent;
 
     record CacheStatusData(Optional<RepoMapSnapshot> snapshot, long repoMapTokens, long stableTokens,
             long workflowDocsTokens, long contextFilesTokens, long agentMemoryTokens, long sessionTokens,
@@ -260,7 +259,6 @@ final class CodebaseCachePanel extends JPanel {
         UiComponents.styleCardPanel(contextConventionsCard);
         UiComponents.styleCardPanel(referenceConventionsCard);
         UiComponents.updateInfoIconTheme(promptLayersInfoIcon);
-        UiComponents.refreshActionButtonIcons(this);
         repoMapTokensLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
         stableTokensLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
         sessionTokensLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
@@ -288,7 +286,6 @@ final class CodebaseCachePanel extends JPanel {
             content = repoMapArea.getText();
         }
         String safe = StringUtils.defaultString(content);
-        this.lastCopiedContent = safe;
         copyFeedbackTimer = UiComponents.copyWithFeedback(copyButton, copyFeedbackTimer, safe, COPY_BUTTON_TEXT,
                 COPY_FEEDBACK_DELAY_MS);
     }

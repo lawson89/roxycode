@@ -1,11 +1,8 @@
 package org.roxycode.app.ui;
 
-import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.*;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.*;
@@ -20,8 +17,6 @@ import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.events.DatabaseConfigChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
-import org.roxycode.app.model.AgentProfile;
-import org.roxycode.app.model.ProjectDatabaseGrant;
 import org.roxycode.app.service.DatabaseConfigService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
@@ -30,6 +25,7 @@ import org.roxycode.app.util.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
 import org.springframework.lang.Nullable;
@@ -80,20 +76,9 @@ final class BuildConfigPanel extends JPanel {
     final JPanel buildTabPanel;
     final ProjectModelOverridePanel modelTabPanel;
     final ProjectDatabaseGrantsPanel databasesTabPanel;
-    final JPanel grantRowsContainer;
-    final JButton saveGrantsButton;
-    final JLabel grantsStatusLabel;
-    final List<ProjectDatabaseGrantsPanel.GrantRowControls> grantRowControls;
     final JLabel titleLabel;
     final JLabel subtitleLabel;
     final JPanel buildCardPanel;
-    final ProjectModelOverridePanel.GlobalDefaultCard globalDefaultProfileCard;
-    final Map<AgentProfile, UiComponents.AgentProfileCard> profileCards;
-    final JButton modelSaveButton;
-    final JLabel modelStatusLabel;
-    final JLabel modelOverrideStatusPill;
-    final JLabel profileInfoIcon;
-    final Timer modelSaveFeedbackTimer;
     final JLabel buildTomlFileBadge;
     final JLabel buildConfigInfoIcon;
     final JButton copyTomlButton;
@@ -109,17 +94,16 @@ final class BuildConfigPanel extends JPanel {
     private boolean textEditedByUser = false;
     private boolean lastStatusSuccess = true;
     private String savedTomlContent = "";
-    private transient Runnable onConfirmSavedCallback;
-    transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
 
     public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
             @Nullable ProjectService projectService) {
-        this(buildToolService, settingsService, projectService, null);
+        this(buildToolService, settingsService, projectService, null, null);
     }
 
     @Autowired
     public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
-            @Nullable ProjectService projectService, @Nullable DatabaseConfigService databaseConfigService) {
+            @Nullable ProjectService projectService, @Nullable DatabaseConfigService databaseConfigService,
+            @Nullable ApplicationEventPublisher eventPublisher) {
         super(new BorderLayout());
         this.buildToolService = buildToolService;
         this.settingsService = settingsService;
@@ -142,7 +126,7 @@ final class BuildConfigPanel extends JPanel {
         saveButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         saveButton.setIconTextGap(6);
 
-        saveFeedbackTimer = createFeedbackTimer(this::updateSaveButtonState);
+        saveFeedbackTimer = UiComponents.createSaveFeedbackTimer(this::updateSaveButtonState);
 
         buildTabPanel.add(UiComponents.createPageHeader(titleLabel, subtitleLabel, saveButton), "growx, wmin 0, wrap");
 
@@ -185,22 +169,11 @@ final class BuildConfigPanel extends JPanel {
             if (settingsTabs.getTabCount() > TAB_INDEX_AI_MODEL) {
                 settingsTabs.setTitleAt(TAB_INDEX_AI_MODEL, title);
             }
-        }, this::setLastAsyncFuture);
-        this.globalDefaultProfileCard = modelTabPanel.globalDefaultProfileCard;
-        this.profileCards = modelTabPanel.profileCards;
-        this.modelSaveButton = modelTabPanel.modelSaveButton;
-        this.modelStatusLabel = modelTabPanel.modelStatusLabel;
-        this.modelOverrideStatusPill = modelTabPanel.modelOverrideStatusPill;
-        this.profileInfoIcon = modelTabPanel.profileInfoIcon;
-        this.modelSaveFeedbackTimer = modelTabPanel.modelSaveFeedbackTimer;
+        });
 
         // --- Tab 3: Databases (Per-Project Grants) ---
-        databasesTabPanel = new ProjectDatabaseGrantsPanel(databaseConfigService, this::updateDatabasesTabTitle,
-                this::setLastAsyncFuture);
-        this.grantRowsContainer = databasesTabPanel.grantRowsContainer;
-        this.saveGrantsButton = databasesTabPanel.saveGrantsButton;
-        this.grantsStatusLabel = databasesTabPanel.grantsStatusLabel;
-        this.grantRowControls = databasesTabPanel.grantRowControls;
+        databasesTabPanel = new ProjectDatabaseGrantsPanel(databaseConfigService, eventPublisher,
+                this::updateDatabasesTabTitle);
 
         settingsTabs.addTab(TAB_BUILD_CONFIG_TITLE, FontIcon.of(Codicons.PACKAGE, 15, SwingHtmlUtils.getAccentColor()),
                 buildTabPanel);
@@ -209,7 +182,7 @@ final class BuildConfigPanel extends JPanel {
         settingsTabs.addTab(TAB_DATABASES_TITLE,
                 FontIcon.of(Codicons.DATABASE, 15, SwingHtmlUtils.getMutedForegroundColor()), databasesTabPanel);
 
-        loadProfileOptions();
+        modelTabPanel.loadProfileOptions();
 
         add(settingsTabs, BorderLayout.CENTER);
 
@@ -217,7 +190,8 @@ final class BuildConfigPanel extends JPanel {
         statusTimer.setRepeats(false);
 
         applySectionStyling();
-        lastAsyncFuture = CompletableFuture.allOf(loadConfig(), loadDatabaseGrants());
+        loadConfig();
+        databasesTabPanel.loadDatabaseGrants();
         updateBannerState();
     }
 
@@ -239,7 +213,7 @@ final class BuildConfigPanel extends JPanel {
 
     void selectDatabasesTab() {
         UiComponents.selectTabSafely(settingsTabs, TAB_INDEX_DATABASES);
-        loadDatabaseGrants();
+        databasesTabPanel.loadDatabaseGrants();
     }
 
     private void setEditorContentProgrammatically(String content, boolean updateSavedBaseline) {
@@ -268,22 +242,6 @@ final class BuildConfigPanel extends JPanel {
         UiComponents.clearStatusMessage(statusLabel, statusTimer, true);
     }
 
-    void showModelStatus(String message, boolean success) {
-        modelTabPanel.showModelStatus(message, success);
-    }
-
-    void clearModelStatus() {
-        modelTabPanel.clearModelStatus();
-    }
-
-    void loadProfileOptions() {
-        modelTabPanel.loadProfileOptions();
-    }
-
-    void selectProfileOverride(@Nullable String profileId) {
-        modelTabPanel.selectProfileOverride(profileId);
-    }
-
     boolean hasUnsavedChanges() {
         String currentText = "";
         if (textArea != null) {
@@ -292,49 +250,29 @@ final class BuildConfigPanel extends JPanel {
         return textEditedByUser || !Objects.equals(currentText, savedTomlContent);
     }
 
-    boolean hasUnsavedModelChanges() {
-        return modelTabPanel.hasUnsavedModelChanges();
-    }
-
-    private static Timer createFeedbackTimer(Runnable onExpire) {
-        Timer timer = new Timer(2500, null);
-        timer.setRepeats(false);
-        timer.addActionListener(e -> {
-            timer.stop();
-            onExpire.run();
-        });
-        return timer;
-    }
-
     void updateSaveButtonState() {
         if (saveButton == null) {
             return;
         }
         if (saveFeedbackTimer != null && saveFeedbackTimer.isRunning()) {
-            applyButtonPresentation(saveButton, SAVED_FEEDBACK_BUTTON_TEXT, Codicons.CHECK,
+            UiComponents.applyButtonPresentation(saveButton, SAVED_FEEDBACK_BUTTON_TEXT, Codicons.CHECK,
                     SAVE_BUTTON_BASE_STYLE + UiComponents.GREEN_BUTTON_STYLE);
             return;
         }
         if (hasUnsavedChanges()) {
-            applyButtonPresentation(saveButton, SAVE_BUTTON_TEXT, Codicons.SAVE,
+            UiComponents.applyButtonPresentation(saveButton, SAVE_BUTTON_TEXT, Codicons.SAVE,
                     SAVE_BUTTON_BASE_STYLE + UiComponents.ACCENT_BUTTON_STYLE);
             return;
         }
         boolean confirmed = projectService != null && projectService.hasActiveProject()
                 && projectService.isBuildConfirmed();
         if (confirmed) {
-            applyButtonPresentation(saveButton, CONFIRMED_BUTTON_TEXT, Codicons.CHECK,
+            UiComponents.applyButtonPresentation(saveButton, CONFIRMED_BUTTON_TEXT, Codicons.CHECK,
                     SAVE_BUTTON_BASE_STYLE + UiComponents.SUBTLE_GREEN_BUTTON_STYLE);
         } else {
-            applyButtonPresentation(saveButton, SAVE_BUTTON_TEXT, Codicons.SAVE,
+            UiComponents.applyButtonPresentation(saveButton, SAVE_BUTTON_TEXT, Codicons.SAVE,
                     SAVE_BUTTON_BASE_STYLE + UiComponents.ACCENT_BUTTON_STYLE);
         }
-    }
-
-    static void applyButtonPresentation(JButton button, String text, Codicons icon, String style) {
-        button.setText(text);
-        button.putClientProperty(FlatClientProperties.STYLE, style);
-        button.setIcon(FontIcon.of(icon, 16, UiComponents.resolveActionButtonIconColor(style)));
     }
 
     private void applySectionStyling() {
@@ -357,7 +295,7 @@ final class BuildConfigPanel extends JPanel {
         Edt.run(() -> {
             SwingHtmlUtils.applyRSyntaxTheme(textArea, settingsService);
             applySectionStyling();
-            loadProfileOptions();
+            modelTabPanel.loadProfileOptions();
             updateBannerState();
         });
     }
@@ -368,17 +306,17 @@ final class BuildConfigPanel extends JPanel {
             UiComponents.stopTimer(saveFeedbackTimer);
             UiComponents.stopTimer(modelTabPanel.modelSaveFeedbackTimer);
             clearBuildStatus();
-            clearModelStatus();
-            loadProfileOptions();
+            UiComponents.clearStatusMessage(modelTabPanel.modelStatusLabel, modelTabPanel.modelStatusTimer, false);
+            modelTabPanel.loadProfileOptions();
             loadConfig();
-            loadDatabaseGrants();
+            databasesTabPanel.loadDatabaseGrants();
             updateBannerState();
         });
     }
 
     @EventListener
     public void onDatabaseConfigChanged(DatabaseConfigChangedEvent event) {
-        Edt.run(this::loadDatabaseGrants);
+        Edt.run(databasesTabPanel::loadDatabaseGrants);
     }
 
     private void onTomlTextEdited() {
@@ -417,11 +355,9 @@ final class BuildConfigPanel extends JPanel {
 
     CompletableFuture<String> loadConfig() {
         if (buildToolService == null) {
-            CompletableFuture<String> done = CompletableFuture.completedFuture("");
-            lastAsyncFuture = done;
-            return done;
+            return CompletableFuture.completedFuture("");
         }
-        CompletableFuture<String> future = Edt.supplyAsync(() -> {
+        return Edt.supplyAsync(() -> {
             try {
                 return StringUtils.defaultString(buildToolService.getConfigContent());
             } catch (IOException e) {
@@ -429,22 +365,17 @@ final class BuildConfigPanel extends JPanel {
                 return "# Error loading config: " + e.getMessage();
             }
         }, content -> setEditorContentProgrammatically(content, true));
-        lastAsyncFuture = future;
-        return future;
     }
 
     CompletableFuture<Void> saveConfig() {
         UiComponents.stopTimer(saveFeedbackTimer);
 
         if (buildToolService == null && projectService == null) {
-            CompletableFuture<Void> done = CompletableFuture.completedFuture(null);
-            lastAsyncFuture = done;
-            return done;
+            return CompletableFuture.completedFuture(null);
         }
         String contentToSave = StringUtils.defaultString(textArea.getText());
-        final boolean wasBuildConfirmed = projectService != null && projectService.isBuildConfirmed();
         saveButton.setEnabled(false);
-        CompletableFuture<Void> future = Edt.runAsync(() -> {
+        return Edt.runAsync(() -> {
             try {
                 if (buildToolService != null) {
                     buildToolService.saveConfigContent(contentToSave);
@@ -463,9 +394,6 @@ final class BuildConfigPanel extends JPanel {
             updateBannerState();
 
             showBuildStatus("Configuration saved successfully!", true);
-            if (!wasBuildConfirmed && onConfirmSavedCallback != null) {
-                onConfirmSavedCallback.run();
-            }
         }, ex -> {
             saveButton.setEnabled(true);
             updateSaveButtonState();
@@ -473,38 +401,6 @@ final class BuildConfigPanel extends JPanel {
             log.error("Failed to save build config: {}", cause.getMessage());
             showBuildStatus("Error saving config: " + cause.getMessage(), false);
         });
-        lastAsyncFuture = future;
-        return future;
-    }
-
-    CompletableFuture<Void> saveModelConfig() {
-        CompletableFuture<Void> future = modelTabPanel.saveModelConfig();
-        lastAsyncFuture = future;
-        return future;
-    }
-
-    private void setLastAsyncFuture(CompletableFuture<?> future) {
-        this.lastAsyncFuture = future;
-    }
-
-    void setOnConfirmSavedCallback(Runnable callback) {
-        this.onConfirmSavedCallback = callback;
-    }
-
-    void setOnManageGlobalDatabasesCallback(Runnable callback) {
-        databasesTabPanel.setOnManageGlobalDatabasesCallback(callback);
-    }
-
-    CompletableFuture<ProjectDatabaseGrantsPanel.GrantDataSnapshot> loadDatabaseGrants() {
-        CompletableFuture<ProjectDatabaseGrantsPanel.GrantDataSnapshot> future = databasesTabPanel.loadDatabaseGrants();
-        lastAsyncFuture = future;
-        return future;
-    }
-
-    CompletableFuture<List<ProjectDatabaseGrant>> saveDatabaseGrants() {
-        CompletableFuture<List<ProjectDatabaseGrant>> future = databasesTabPanel.saveDatabaseGrants();
-        lastAsyncFuture = future;
-        return future;
     }
 
     private void updateDatabasesTabTitle(int grantedCount) {

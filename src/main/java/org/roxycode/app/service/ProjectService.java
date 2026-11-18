@@ -385,6 +385,7 @@ public class ProjectService {
         ProjectConfig existing = readProjectConfig();
         writeProjectConfig(new ProjectConfig(existing.agentProfile(), existing.geminiModel(), existing.thinkingLevel(),
                 confirmed));
+        publishSettingsChangedSnapshot();
     }
 
     /**

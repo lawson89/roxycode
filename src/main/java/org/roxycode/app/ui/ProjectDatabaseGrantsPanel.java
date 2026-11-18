@@ -17,10 +17,12 @@ import javax.swing.JTextField;
 import javax.swing.Timer;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
+import org.roxycode.app.events.NavigateToViewEvent;
 import org.roxycode.app.model.DatabaseConnectionConfig;
 import org.roxycode.app.model.ProjectDatabaseGrant;
 import org.roxycode.app.service.DatabaseConfigService;
 import org.roxycode.app.util.Edt;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.lang.Nullable;
 
 /**
@@ -33,9 +35,8 @@ final class ProjectDatabaseGrantsPanel extends JPanel {
     private static final String SAVE_BUTTON_BASE_STYLE = "font: bold; arc: 8; ";
 
     private final transient @Nullable DatabaseConfigService databaseConfigService;
+    private final transient @Nullable ApplicationEventPublisher eventPublisher;
     private final transient IntConsumer grantedCountListener;
-    private final transient @Nullable java.util.function.Consumer<CompletableFuture<?>> asyncFutureTracker;
-    private transient Runnable onManageGlobalDatabasesCallback;
 
     final JPanel databasesCardPanel;
     final JPanel grantRowsContainer;
@@ -44,7 +45,6 @@ final class ProjectDatabaseGrantsPanel extends JPanel {
     final JLabel grantsStatusLabel;
     final Timer grantsStatusTimer;
     final List<GrantRowControls> grantRowControls = new ArrayList<>();
-    transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
 
     record GrantDataSnapshot(List<DatabaseConnectionConfig> globals, List<ProjectDatabaseGrant> grants) {
     }
@@ -64,12 +64,12 @@ final class ProjectDatabaseGrantsPanel extends JPanel {
         }
     }
 
-    ProjectDatabaseGrantsPanel(@Nullable DatabaseConfigService databaseConfigService, IntConsumer grantedCountListener,
-            @Nullable java.util.function.Consumer<CompletableFuture<?>> asyncFutureTracker) {
+    ProjectDatabaseGrantsPanel(@Nullable DatabaseConfigService databaseConfigService,
+            @Nullable ApplicationEventPublisher eventPublisher, IntConsumer grantedCountListener) {
         super(new MigLayout("fill, insets 20, hidemode 3", GROW_FILL, "[][]" + GROW_FILL));
         this.databaseConfigService = databaseConfigService;
+        this.eventPublisher = eventPublisher;
         this.grantedCountListener = grantedCountListener;
-        this.asyncFutureTracker = asyncFutureTracker;
         setOpaque(true);
 
         JLabel dbTitleLabel = new JLabel("Project Database Grants");
@@ -77,8 +77,8 @@ final class ProjectDatabaseGrantsPanel extends JPanel {
                 "Select global read-only databases to expose to RoxyCode (dbService) for the active project.");
         manageGlobalDatabasesButton = UiComponents.createActionButton("Manage Global Databases...",
                 Codicons.SETTINGS_GEAR, new Insets(6, 12, 6, 12), false, "arc: 8", e -> {
-                    if (onManageGlobalDatabasesCallback != null) {
-                        onManageGlobalDatabasesCallback.run();
+                    if (this.eventPublisher != null) {
+                        this.eventPublisher.publishEvent(new NavigateToViewEvent(MainFrame.DATABASES_VIEW, null));
                     }
                 });
         saveGrantsButton = UiComponents.createActionButton("Save Database Grants", Codicons.SAVE,
@@ -102,14 +102,8 @@ final class ProjectDatabaseGrantsPanel extends JPanel {
         grantRowsContainer.setOpaque(false);
         databasesCardPanel.add(grantRowsContainer, GROWX_WMIN_0);
 
-        JPanel dbCardsScroller = UiComponents
-                .createScrollableCardsPanel(new MigLayout("fillx, wrap 1, insets 4 2 16 6, gapy 14", GROW_FILL, ""));
-        dbCardsScroller.add(databasesCardPanel, GROWX_WMIN_0);
-        add(UiComponents.createBorderlessScrollPane(dbCardsScroller), "grow, wmin 0");
-    }
-
-    void setOnManageGlobalDatabasesCallback(@Nullable Runnable callback) {
-        this.onManageGlobalDatabasesCallback = callback;
+        add(UiComponents.createCardsScrollPane(new MigLayout("fillx, wrap 1, insets 4 2 16 6, gapy 14", GROW_FILL, ""),
+                databasesCardPanel), "grow, wmin 0");
     }
 
     @Override
@@ -125,11 +119,8 @@ final class ProjectDatabaseGrantsPanel extends JPanel {
             notifyGrantedCount(0);
             return CompletableFuture.completedFuture(new GrantDataSnapshot(List.of(), List.of()));
         }
-        CompletableFuture<GrantDataSnapshot> future = Edt
-                .supplyAsync(() -> new GrantDataSnapshot(databaseConfigService.listGlobalConnections(),
-                        databaseConfigService.listProjectGrants()), this::applyDatabaseGrantSnapshot);
-        trackAsyncFuture(future);
-        return future;
+        return Edt.supplyAsync(() -> new GrantDataSnapshot(databaseConfigService.listGlobalConnections(),
+                databaseConfigService.listProjectGrants()), this::applyDatabaseGrantSnapshot);
     }
 
     private void applyDatabaseGrantSnapshot(GrantDataSnapshot snapshot) {
@@ -227,26 +218,16 @@ final class ProjectDatabaseGrantsPanel extends JPanel {
             }
         }
         saveGrantsButton.setEnabled(false);
-        CompletableFuture<List<ProjectDatabaseGrant>> future = Edt
-                .supplyAsync(() -> databaseConfigService.saveProjectGrants(selectedGrants), saved -> {
-                    saveGrantsButton.setEnabled(true);
-                    notifyGrantedCount(saved.size());
-                    UiComponents.showStatusMessage(grantsStatusLabel, grantsStatusTimer,
-                            "Saved " + saved.size() + " database grant(s) for active project.", true);
-                }, error -> {
-                    saveGrantsButton.setEnabled(true);
-                    UiComponents.showStatusMessage(grantsStatusLabel, grantsStatusTimer,
-                            "Failed to save database grants: " + error.getMessage(), false);
-                });
-        trackAsyncFuture(future);
-        return future;
-    }
-
-    private void trackAsyncFuture(CompletableFuture<?> future) {
-        lastAsyncFuture = future;
-        if (asyncFutureTracker != null) {
-            asyncFutureTracker.accept(future);
-        }
+        return Edt.supplyAsync(() -> databaseConfigService.saveProjectGrants(selectedGrants), saved -> {
+            saveGrantsButton.setEnabled(true);
+            notifyGrantedCount(saved.size());
+            UiComponents.showStatusMessage(grantsStatusLabel, grantsStatusTimer,
+                    "Saved " + saved.size() + " database grant(s) for active project.", true);
+        }, error -> {
+            saveGrantsButton.setEnabled(true);
+            UiComponents.showStatusMessage(grantsStatusLabel, grantsStatusTimer,
+                    "Failed to save database grants: " + error.getMessage(), false);
+        });
     }
 
     private void notifyGrantedCount(int grantedCount) {

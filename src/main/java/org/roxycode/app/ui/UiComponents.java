@@ -61,6 +61,8 @@ import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.ListCellRenderer;
+import javax.swing.ListSelectionModel;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.Scrollable;
 import javax.swing.Timer;
@@ -116,6 +118,26 @@ final class UiComponents {
     private static final String TEMP_THUMB_DIR_PREFIX = "roxycode-thumbs-";
     private static final Map<String, HtmlImagePreview> CODICON_BADGE_CACHE = new ConcurrentHashMap<>();
     private static Path tempThumbnailDir;
+
+    interface ExportableView {
+        boolean canExportHtml();
+
+        boolean exportHtml(Component parent, @Nullable String projectName, boolean saveToFile);
+    }
+
+    static boolean exportChatPanelHtml(Component parent, @Nullable String projectName, String title,
+            String saveSuggestedName, @Nullable ChatPanel chatPanel, boolean saveToFile) {
+        if (chatPanel == null || !chatPanel.hasExportableContent()) {
+            return false;
+        }
+        String html = HtmlExportService.buildChatExportHtml(projectName, title, chatPanel.exportMessages());
+        if (saveToFile) {
+            HtmlExportService.saveHtmlWithChooser(parent, saveSuggestedName, html);
+        } else {
+            HtmlExportService.openHtmlInBrowserAsync("roxycode-chat-", html);
+        }
+        return true;
+    }
 
     record HtmlImagePreview(String url, int width, int height) {
     }
@@ -409,18 +431,10 @@ final class UiComponents {
      * Creates a copy button with the standard clippy icon.
      */
     static JButton createCopyButton(String text, boolean enabled, Runnable onCopy) {
-        JButton button = new JButton(text, FontIcon.of(Codicons.CLIPPY, 14, resolveActionButtonIconColor(null)));
+        JButton button = new JButton(text,
+                FontIcon.of(Codicons.CLIPPY, 14, resolveActionButtonIconColor((String) null)));
         button.setEnabled(enabled);
         button.addActionListener(e -> onCopy.run());
-        return button;
-    }
-
-    static JButton createProjectSwitcherButton(String text, java.awt.event.ActionListener listener) {
-        JButton button = new JButton(text);
-        button.setIconTextGap(6);
-        button.setFocusable(false);
-        button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        button.addActionListener(listener);
         return button;
     }
 
@@ -495,7 +509,7 @@ final class UiComponents {
     static Timer copyWithFeedback(JButton button, @Nullable Timer existingTimer, String content, String originalText,
             int delayMs) {
         SwingHtmlUtils.copyToClipboard(content);
-        Color iconColor = resolveActionButtonIconColor(null);
+        Color iconColor = resolveActionButtonIconColor((String) null);
         return SwingHtmlUtils.showCopyButtonFeedback(button, existingTimer, "Copied!",
                 FontIcon.of(Codicons.CHECK, 14, iconColor), originalText, FontIcon.of(Codicons.CLIPPY, 14, iconColor),
                 delayMs);
@@ -519,6 +533,14 @@ final class UiComponents {
         scrollPane.getViewport().setOpaque(true);
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
         return scrollPane;
+    }
+
+    static JScrollPane createCardsScrollPane(LayoutManager layout, JComponent... cards) {
+        JPanel panel = createScrollableCardsPanel(layout);
+        for (JComponent card : cards) {
+            panel.add(card, GROWX_WMIN_0);
+        }
+        return createBorderlessScrollPane(panel);
     }
 
     /**
@@ -685,6 +707,11 @@ final class UiComponents {
     /**
      * Combines a field text block with a control component in a row.
      */
+    static JPanel createFieldRow(String title, String description, @Nullable JLabel badge, JComponent control,
+            String controlConstraints) {
+        return createFieldRow(createFieldTextBlock(title, description, badge), control, controlConstraints);
+    }
+
     static JPanel createFieldRow(JPanel fieldBlock, JComponent control, String controlConstraints) {
         JPanel row = new JPanel(new MigLayout("fillx, insets 0", "[0:0, grow, fill]16[right]", ROW_CENTER));
         row.setOpaque(false);
@@ -724,6 +751,27 @@ final class UiComponents {
         badge.setIconTextGap(5);
         badge.putClientProperty(FlatClientProperties.STYLE,
                 "font: $monospaced.font -1; arc: 8; border: 2,8,2,8," + borderHex + ",1,8; background: " + pillBg);
+    }
+
+    static void stylePillBadge(JLabel badge, String text, Color color, @Nullable Codicons icon, int iconSize,
+            String padding, boolean bordered) {
+        badge.setText(text);
+        badge.setForeground(color);
+        if (icon != null) {
+            badge.setIcon(FontIcon.of(icon, iconSize, color));
+            badge.setIconTextGap(5);
+        } else {
+            badge.setIcon(null);
+        }
+        String hex = SwingHtmlUtils.toHex(color);
+        String borderDirective;
+        if (bordered) {
+            borderDirective = "border: " + padding + "," + hex + ",1,999";
+        } else {
+            borderDirective = "border: " + padding;
+        }
+        badge.putClientProperty(FlatClientProperties.STYLE,
+                "font: bold -1; arc: 999; " + borderDirective + "; background: fade(" + hex + ", 14%)");
     }
 
     static void applySelectableCardTheme(JPanel card, JLabel radioIconLabel, JLabel titleLabel,
@@ -1040,6 +1088,15 @@ final class UiComponents {
         }
     }
 
+    static Color resolveActionButtonIconColor(JButton button) {
+        Object rawStyle = button.getClientProperty(FlatClientProperties.STYLE);
+        String style = null;
+        if (rawStyle instanceof String s) {
+            style = s;
+        }
+        return resolveActionButtonIconColor(style);
+    }
+
     static Color resolveActionButtonIconColor(@Nullable String style) {
         if (style != null && style.contains("foreground: #ffffff")) {
             return Color.WHITE;
@@ -1055,15 +1112,7 @@ final class UiComponents {
 
     static JButton createActionButton(String text, @Nullable Codicons icon, @Nullable Insets margin, boolean borderless,
             @Nullable String style, @Nullable ActionListener listener) {
-        FontIcon fontIcon = null;
-        if (icon != null) {
-            if (borderless) {
-                fontIcon = FontIcon.of(icon, 16);
-            } else {
-                fontIcon = createThemeIcon(icon, 16, () -> resolveActionButtonIconColor(style));
-            }
-        }
-        JButton btn = new JButton(text, fontIcon);
+        JButton btn = new JButton(text);
         if (margin != null) {
             btn.setMargin(margin);
         }
@@ -1074,33 +1123,33 @@ final class UiComponents {
         if (style != null) {
             btn.putClientProperty(FlatClientProperties.STYLE, style);
         }
+        if (icon != null) {
+            if (borderless) {
+                btn.setIcon(FontIcon.of(icon, 16));
+            } else {
+                btn.setIcon(createThemeIcon(icon, 16, () -> resolveActionButtonIconColor(btn)));
+            }
+        }
         if (listener != null) {
             btn.addActionListener(listener);
         }
         return btn;
     }
 
-    static void refreshActionButtonIcons(@Nullable JComponent container) {
-        if (container == null) {
-            return;
-        }
-        for (Component child : container.getComponents()) {
-            if (child instanceof JButton button && button.getIcon() instanceof FontIcon fontIcon) {
-                boolean borderless = FlatClientProperties.BUTTON_TYPE_BORDERLESS
-                        .equals(button.getClientProperty(FlatClientProperties.BUTTON_TYPE));
-                if (!borderless) {
-                    Object rawStyle = button.getClientProperty(FlatClientProperties.STYLE);
-                    String style = null;
-                    if (rawStyle instanceof String s) {
-                        style = s;
-                    }
-                    button.setIcon(FontIcon.of(fontIcon.getIkon(), fontIcon.getIconSize(),
-                            resolveActionButtonIconColor(style)));
-                }
-            } else if (child instanceof JComponent childContainer) {
-                refreshActionButtonIcons(childContainer);
-            }
-        }
+    static void applyButtonPresentation(JButton button, String text, Codicons icon, String style) {
+        button.setText(text);
+        button.putClientProperty(FlatClientProperties.STYLE, style);
+        button.setIcon(createThemeIcon(icon, 16, () -> resolveActionButtonIconColor(button)));
+    }
+
+    static Timer createSaveFeedbackTimer(Runnable onExpire) {
+        Timer timer = new Timer(2500, null);
+        timer.setRepeats(false);
+        timer.addActionListener(e -> {
+            timer.stop();
+            onExpire.run();
+        });
+        return timer;
     }
 
     @SuppressWarnings("PMD.UnusedAssignment")
@@ -1197,13 +1246,6 @@ final class UiComponents {
             }
         }
 
-        boolean isPromptVisible() {
-            return isVisible();
-        }
-
-        String getMessage() {
-            return promptLabel.getText();
-        }
     }
 
     static void applyKeyringStatusBadge(JLabel badge, boolean available, String readyText, String fallbackText) {
@@ -1261,10 +1303,6 @@ final class UiComponents {
         final JLabel iconLabel;
         final JLabel messageLabel;
 
-        WarningBanner() {
-            this("");
-        }
-
         WarningBanner(String initialMessage) {
             super(new MigLayout("fillx, insets 0", "[][0:0, grow, fill]", "[]"));
             this.iconLabel = new JLabel();
@@ -1321,16 +1359,6 @@ final class UiComponents {
                 selectFirstIfUnmatched);
     }
 
-    static <T> void replaceListItems(DefaultListModel<T> model, @Nullable List<T> items) {
-        model.clear();
-        if (items == null) {
-            return;
-        }
-        for (T item : items) {
-            model.addElement(item);
-        }
-    }
-
     static <T, K> int replaceListItemsPreservingSelection(DefaultListModel<T> model, JList<T> list,
             @Nullable List<T> items, Function<T, K> keyExtractor, @Nullable K keyToSelect,
             boolean selectFirstIfUnmatched) {
@@ -1368,6 +1396,131 @@ final class UiComponents {
         return new ListCellColors(SwingHtmlUtils.getUiColor(list.getBackground(), "List.background"),
                 SwingHtmlUtils.getUiColor(list.getForeground(), UI_LABEL_FOREGROUND),
                 SwingHtmlUtils.getMutedForegroundColor(), SwingHtmlUtils.getAccentColor());
+    }
+
+    record MasterCellData(String title, @Nullable Codicons icon, @Nullable String pillText, String subtitle,
+            @Nullable String detail, @Nullable String tooltip) {
+    }
+
+    static final class MasterListCell<T> extends JPanel implements ListCellRenderer<T> {
+        private static final long serialVersionUID = 1L;
+        private final transient Function<T, MasterCellData> mapper;
+        private final JLabel titleLabel = new JLabel();
+        private final JLabel pillLabel = new JLabel();
+        private final JLabel subtitleLabel = new JLabel();
+        private final JLabel detailLabel = new JLabel();
+
+        MasterListCell(String titleStyle, String detailStyle, Function<T, MasterCellData> mapper) {
+            super(new MigLayout("insets 6 10 6 10, fillx, wrap 1, gapy 2, hidemode 3", GROW_FILL));
+            this.mapper = mapper;
+            setOpaque(true);
+            titleLabel.setIconTextGap(6);
+            titleLabel.putClientProperty(FlatClientProperties.STYLE, titleStyle);
+            pillLabel.putClientProperty(FlatClientProperties.STYLE, "font: -2 bold; border: 1,6,1,6; arc: 10");
+            pillLabel.setOpaque(true);
+            subtitleLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
+            detailLabel.putClientProperty(FlatClientProperties.STYLE, detailStyle);
+
+            JPanel topRow = new JPanel(new MigLayout("insets 0, fillx", "[grow, fill][]", "[]"));
+            topRow.setOpaque(false);
+            topRow.add(titleLabel, GROWX_WMIN_0);
+            topRow.add(pillLabel, "hidemode 3");
+            add(topRow, GROWX_WMIN_0);
+            add(subtitleLabel, GROWX_WMIN_0);
+            add(detailLabel, GROWX_WMIN_0);
+        }
+
+        @Override
+        public Component getListCellRendererComponent(JList<? extends T> list, T value, int index, boolean isSelected,
+                boolean cellHasFocus) {
+            ListCellColors colors = resolveListCellColors(list, isSelected);
+            setBackground(colors.background());
+            setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));
+            if (value == null) {
+                return this;
+            }
+            MasterCellData data = mapper.apply(value);
+            titleLabel.setText(data.title());
+            titleLabel.setForeground(colors.foreground());
+            if (data.icon() != null) {
+                titleLabel.setIcon(FontIcon.of(data.icon(), 14, colors.iconColor()));
+            } else {
+                titleLabel.setIcon(null);
+            }
+
+            boolean hasPill = StringUtils.isNotBlank(data.pillText());
+            pillLabel.setVisible(hasPill);
+            if (hasPill) {
+                pillLabel.setText(data.pillText());
+                Color accent = SwingHtmlUtils.getAccentColor();
+                pillLabel.setForeground(accent);
+                pillLabel.setBackground(SwingHtmlUtils.getTintedBackground(accent, 0.16));
+            }
+
+            subtitleLabel.setText(data.subtitle());
+            subtitleLabel.setForeground(colors.muted());
+
+            boolean hasDetail = StringUtils.isNotBlank(data.detail());
+            detailLabel.setVisible(hasDetail);
+            if (hasDetail) {
+                detailLabel.setText(data.detail());
+                detailLabel.setForeground(colors.muted());
+            } else {
+                detailLabel.setText("");
+            }
+            setToolTipText(data.tooltip());
+            return this;
+        }
+    }
+
+    static final class MasterListPanel<T, K> extends JPanel {
+        private static final long serialVersionUID = 1L;
+        final JTextField searchField;
+        final DefaultListModel<T> listModel = new DefaultListModel<>();
+        final JList<T> itemList = new JList<>(listModel);
+        final transient UiGuard selectionGuard = new UiGuard();
+
+        MasterListPanel(String searchPlaceholder, @Nullable JButton actionButton, ListCellRenderer<T> cellRenderer,
+                Runnable onDebouncedSearch, Consumer<T> onSelectionChanged) {
+            super(new MigLayout("insets 8, fill, wrap 1", GROW_FILL, "[]8[grow, fill]"));
+            styleCardPanel(this);
+            this.searchField = createSearchField(searchPlaceholder, onDebouncedSearch);
+            itemList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+            itemList.setCellRenderer(cellRenderer);
+            itemList.addListSelectionListener(e -> {
+                if (!e.getValueIsAdjusting() && !selectionGuard.isActive()) {
+                    onSelectionChanged.accept(itemList.getSelectedValue());
+                }
+            });
+
+            if (actionButton != null) {
+                JPanel topBar = new JPanel(new MigLayout("insets 0, fillx", "[0:0, grow, fill]6[]", ROW_CENTER));
+                topBar.setOpaque(false);
+                topBar.add(searchField, GROWX_WMIN_0);
+                topBar.add(actionButton);
+                add(topBar, GROWX_WMIN_0);
+            } else {
+                add(searchField, GROWX_WMIN_0);
+            }
+            JScrollPane scrollPane = new JScrollPane(itemList);
+            scrollPane.setBorder(BorderFactory.createEmptyBorder());
+            add(scrollPane, "grow");
+        }
+
+        int filter(@Nullable List<T> items, BiPredicate<T, String> matcher, Function<T, K> keyExtractor,
+                @Nullable K keyToSelect, boolean selectFirstIfUnmatched) {
+            return filterAndPreserveSelection(listModel, itemList, items, searchField.getText(), matcher, keyExtractor,
+                    keyToSelect, selectionGuard, selectFirstIfUnmatched);
+        }
+
+        void clearSelection() {
+            selectionGuard.run(itemList::clearSelection);
+        }
+
+        void applyTheme() {
+            styleCardPanel(this);
+            itemList.repaint();
+        }
     }
 
     private static final class ScrollableCardsPanel extends JPanel implements Scrollable {

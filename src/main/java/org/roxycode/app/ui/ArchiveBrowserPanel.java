@@ -2,13 +2,13 @@ package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.FlowLayout;
 import java.nio.file.Path;
 import java.awt.event.KeyEvent;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.IntConsumer;
 import javax.swing.BorderFactory;
@@ -22,7 +22,6 @@ import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
-import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
 import javax.swing.Timer;
 import net.miginfocom.swing.MigLayout;
@@ -111,10 +110,8 @@ final class ArchiveBrowserPanel extends JPanel {
     private Timer copyFeedbackTimer;
     private final transient UiComponents.HtmlExportSupport exportSupport = new UiComponents.HtmlExportSupport();
     private String currentRawMarkdown = "";
-    String lastCopiedMarkdown;
     private transient ArchiveEntrySummary currentSelectedEntry;
     private transient IntConsumer onTotalCountChanged;
-    transient CompletableFuture<String> lastSelectionFuture = CompletableFuture.completedFuture("");
 
     public ArchiveBrowserPanel(MemoryService memoryService, ArchiveMode mode) {
         super(new BorderLayout());
@@ -139,7 +136,8 @@ final class ArchiveBrowserPanel extends JPanel {
         add(topBar, BorderLayout.NORTH);
 
         entryList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        entryList.setCellRenderer(new ArchiveEntryCellRenderer());
+        entryList.setCellRenderer(
+                new UiComponents.MasterListCell<>("font: bold 0", "font: italic -1", this::toCellData));
         entryList.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 onEntrySelected(entryList.getSelectedValue());
@@ -232,7 +230,7 @@ final class ArchiveBrowserPanel extends JPanel {
         return Edt.supplyAsync(() -> loadEntriesForQuery(q), results -> applySearchResults(results, q), e -> {
             log.warn("Failed to load archive entries for {}: {}", mode, e.getMessage());
             applySearchResults(List.of(), q);
-        }).thenCompose(results -> lastSelectionFuture);
+        });
     }
 
     private List<ArchiveEntrySummary> loadEntriesForQuery(String query) {
@@ -264,7 +262,6 @@ final class ArchiveBrowserPanel extends JPanel {
         if ((query == null || query.isBlank()) && onTotalCountChanged != null) {
             onTotalCountChanged.accept(safeResults.size());
         }
-        lastSelectionFuture = CompletableFuture.completedFuture("");
         int selectedIndex = UiComponents.replaceListItemsPreservingSelection(listModel, entryList, safeResults,
                 ArchiveEntrySummary::filename, previousFilename, true);
         if (selectedIndex < 0) {
@@ -278,7 +275,6 @@ final class ArchiveBrowserPanel extends JPanel {
             cancelRename();
             deleteConfirmBar.cancel();
             renderEmptyState(query != null && !query.isBlank());
-            lastSelectionFuture = CompletableFuture.completedFuture("");
             exportSupport.notifyListeners();
         }
     }
@@ -295,22 +291,18 @@ final class ArchiveBrowserPanel extends JPanel {
             copyMarkdownButton.setEnabled(false);
             exportHtmlButton.setEnabled(false);
             renderEmptyState(searchField != null && !searchField.getText().isBlank());
-            CompletableFuture<String> done = CompletableFuture.completedFuture("");
-            lastSelectionFuture = done;
             exportSupport.notifyListeners();
-            return done;
+            return CompletableFuture.completedFuture("");
         }
 
         renameButton.setEnabled(true);
         deleteButton.setEnabled(true);
         detailSummaryLabel.setText(entry.title());
-        CompletableFuture<String> future = Edt.supplyAsync(() -> readEntryMarkdown(entry.filename()),
+        return Edt.supplyAsync(() -> readEntryMarkdown(entry.filename()),
                 normalized -> applyDetailContent(entry, normalized), e -> {
                     log.warn("Failed to read archived markdown {}: {}", entry.filename(), e.getMessage());
                     applyDetailContent(entry, "");
                 });
-        lastSelectionFuture = future;
-        return future;
     }
 
     private String readEntryMarkdown(String filename) {
@@ -430,7 +422,6 @@ final class ArchiveBrowserPanel extends JPanel {
         if (currentRawMarkdown == null || currentRawMarkdown.isBlank()) {
             return;
         }
-        this.lastCopiedMarkdown = currentRawMarkdown;
         copyFeedbackTimer = UiComponents.copyWithFeedback(copyMarkdownButton, copyFeedbackTimer, currentRawMarkdown,
                 COPY_BUTTON_TEXT, COPY_FEEDBACK_DELAY_MS);
     }
@@ -464,25 +455,15 @@ final class ArchiveBrowserPanel extends JPanel {
         String filename = currentSelectedEntry.filename();
         String newTitle = renameField.getText();
         saveRenameButton.setEnabled(false);
-        return Edt.supplyAsync(() -> {
+        return runArchiveMutation("rename", filename, () -> {
             if (mode == ArchiveMode.PLANS) {
                 return memoryService.renameArchivedPlan(filename, newTitle);
             }
             return memoryService.renameArchivedTopic(filename, newTitle);
-        }, result -> {
+        }, () -> {
             saveRenameButton.setEnabled(true);
-            if (result != null && result.success()) {
-                cancelRename();
-            }
-        }, ex -> {
-            saveRenameButton.setEnabled(true);
-            log.warn("Failed to rename archived {} {}: {}", mode.singularNoun, filename, ex.getMessage());
-        }).thenCompose(result -> {
-            if (result != null && result.success()) {
-                return refresh().thenApply(v -> result);
-            }
-            return CompletableFuture.completedFuture(result);
-        });
+            cancelRename();
+        }, () -> saveRenameButton.setEnabled(true));
     }
 
     void promptDeleteEntry() {
@@ -500,20 +481,32 @@ final class ArchiveBrowserPanel extends JPanel {
         if (memoryService == null || StringUtils.isBlank(filename)) {
             return CompletableFuture.completedFuture(new EditorResult(false, "", "Invalid " + mode.singularNoun));
         }
-        return Edt.supplyAsync(() -> {
+        return runArchiveMutation("delete", filename, () -> {
             if (mode == ArchiveMode.PLANS) {
                 return memoryService.deleteArchivedPlan(filename);
             }
             return memoryService.deleteArchivedTopic(filename);
-        }, result -> {
-            // Post-delete refresh is chained via thenCompose below.
-        }, ex -> log.warn("Failed to delete archived {} {}: {}", mode.singularNoun, filename, ex.getMessage()))
-                .thenCompose(result -> {
-                    if (result != null && result.success()) {
-                        return refresh().thenApply(v -> result);
-                    }
-                    return CompletableFuture.completedFuture(result);
-                });
+        }, () -> {
+        }, () -> {
+        });
+    }
+
+    private CompletableFuture<EditorResult> runArchiveMutation(String action, String filename,
+            Callable<EditorResult> task, Runnable onSuccessUi, Runnable onFinallyUi) {
+        return Edt.supplyAsync(task, result -> {
+            onFinallyUi.run();
+            if (result != null && result.success()) {
+                onSuccessUi.run();
+            }
+        }, ex -> {
+            onFinallyUi.run();
+            log.warn("Failed to {} archived {} {}: {}", action, mode.singularNoun, filename, ex.getMessage());
+        }).thenCompose(result -> {
+            if (result != null && result.success()) {
+                return refresh().thenApply(v -> result);
+            }
+            return CompletableFuture.completedFuture(result);
+        });
     }
 
     private String formatCountText(int count) {
@@ -544,67 +537,26 @@ final class ArchiveBrowserPanel extends JPanel {
         }
     }
 
-    private final class ArchiveEntryCellRenderer extends JPanel implements ListCellRenderer<ArchiveEntrySummary> {
-        private static final long serialVersionUID = 1L;
-
-        private final JLabel titleLabel = new JLabel();
-        private final JLabel subtitleLabel = new JLabel();
-        private final JLabel snippetLabel = new JLabel();
-
-        ArchiveEntryCellRenderer() {
-            super(new MigLayout("insets 6 10 6 10, fillx, wrap 1, gapy 2", "[grow, fill]"));
-            setOpaque(true);
-            titleLabel.setIconTextGap(6);
-            titleLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold 0");
-            subtitleLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
-            snippetLabel.putClientProperty(FlatClientProperties.STYLE, "font: italic -1");
-
-            add(titleLabel, "growx");
-            add(subtitleLabel, "growx");
-            add(snippetLabel, "growx, hidemode 3");
+    private UiComponents.MasterCellData toCellData(ArchiveEntrySummary value) {
+        String dateStr = PathUtils.formatTimestampDisplay(value.timestamp(), TIMESTAMP_PREFIX_LEN, "");
+        String author = StringUtils.defaultIfBlank(value.createdBy(), "User");
+        StringBuilder sub = new StringBuilder();
+        if (!dateStr.isEmpty()) {
+            sub.append(dateStr).append("  •  ");
         }
-
-        @Override
-        public Component getListCellRendererComponent(JList<? extends ArchiveEntrySummary> list,
-                ArchiveEntrySummary value, int index, boolean isSelected, boolean cellHasFocus) {
-            UiComponents.ListCellColors colors = UiComponents.resolveListCellColors(list, isSelected);
-            Color muted = colors.muted();
-            setBackground(colors.background());
-            setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));
-
-            if (value != null) {
-                titleLabel.setText(value.title());
-                titleLabel.setForeground(colors.foreground());
-                titleLabel.setIcon(FontIcon.of(mode.getIcon(), 14, colors.iconColor()));
-
-                String dateStr = PathUtils.formatTimestampDisplay(value.timestamp(), TIMESTAMP_PREFIX_LEN, "");
-                String author = StringUtils.defaultIfBlank(value.createdBy(), "User");
-                StringBuilder sub = new StringBuilder();
-                if (!dateStr.isEmpty()) {
-                    sub.append(dateStr).append("  •  ");
-                }
-                sub.append(author);
-                if (mode == ArchiveMode.TOPICS && value.messageCount() > 0) {
-                    sub.append("  •  ").append(value.messageCount()).append(" msgs");
-                } else if (mode == ArchiveMode.PLANS && (value.totalTokens() > 0L || value.estimatedCostUsd() > 0.0)) {
-                    sub.append("  •  ").append(TokenUtils.formatTokenCount(value.totalTokens())).append(" tok (")
-                            .append(TokenUtils.formatCostUsd(value.estimatedCostUsd())).append(")");
-                }
-                subtitleLabel.setText(sub.toString());
-                subtitleLabel.setForeground(muted);
-
-                String snippet = value.matchSnippet();
-                boolean hasSnippet = snippet != null && !snippet.isBlank();
-                if (hasSnippet) {
-                    snippetLabel.setText(StringUtils.abbreviate(snippet.trim(), MAX_SNIPPET_LENGTH));
-                } else {
-                    snippetLabel.setText("");
-                }
-                snippetLabel.setForeground(muted);
-                snippetLabel.setVisible(hasSnippet);
-                setToolTipText(value.title() + " (" + value.filename() + ")");
-            }
-            return this;
+        sub.append(author);
+        if (mode == ArchiveMode.TOPICS && value.messageCount() > 0) {
+            sub.append("  •  ").append(value.messageCount()).append(" msgs");
+        } else if (mode == ArchiveMode.PLANS && (value.totalTokens() > 0L || value.estimatedCostUsd() > 0.0)) {
+            sub.append("  •  ").append(TokenUtils.formatTokenCount(value.totalTokens())).append(" tok (")
+                    .append(TokenUtils.formatCostUsd(value.estimatedCostUsd())).append(")");
         }
+        String snippet = value.matchSnippet();
+        String detail = null;
+        if (snippet != null && !snippet.isBlank()) {
+            detail = StringUtils.abbreviate(snippet.trim(), MAX_SNIPPET_LENGTH);
+        }
+        return new UiComponents.MasterCellData(value.title(), mode.getIcon(), null, sub.toString(), detail,
+                value.title() + " (" + value.filename() + ")");
     }
 }

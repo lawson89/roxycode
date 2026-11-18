@@ -22,15 +22,12 @@ import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JSpinner;
 import javax.swing.JTextField;
-import javax.swing.ListCellRenderer;
-import javax.swing.ListSelectionModel;
 import javax.swing.SpinnerNumberModel;
 import javax.swing.Timer;
-import javax.swing.border.EmptyBorder;
+import javax.swing.text.JTextComponent;
 import com.formdev.flatlaf.util.SystemFileChooser;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
-import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.DbService;
 import org.roxycode.app.ai.services.DbTestResult;
 import org.roxycode.app.events.DatabaseConfigChangedEvent;
@@ -69,12 +66,8 @@ final class GlobalDatabasesPanel extends JPanel {
     private final transient DbService dbService;
     private final transient UiComponents.UiGuard formGuard = new UiComponents.UiGuard();
 
-    final JTextField filterField;
-    final DefaultListModel<DatabaseConnectionConfig> listModel = new DefaultListModel<>();
-    final JList<DatabaseConnectionConfig> connectionList = new JList<>(listModel);
     final JButton newButton;
-
-    final JPanel masterCard;
+    final UiComponents.MasterListPanel<DatabaseConnectionConfig, String> masterPanel;
     final JPanel detailCard;
     final JTextField displayNameField = new JTextField();
     final JTextField idField = new JTextField();
@@ -101,7 +94,7 @@ final class GlobalDatabasesPanel extends JPanel {
     final JButton removeDriverButton;
     final JTextField driverClassField = new JTextField();
 
-    final UiComponents.WarningBanner testWarningBanner = new UiComponents.WarningBanner();
+    final UiComponents.WarningBanner testWarningBanner = new UiComponents.WarningBanner("");
     final UiComponents.InlineConfirmBar confirmBar = new UiComponents.InlineConfirmBar();
     final JButton testConnectionButton;
     final JButton saveButton;
@@ -116,7 +109,6 @@ final class GlobalDatabasesPanel extends JPanel {
     private boolean idEditedManually;
     private boolean creatingNew = true;
     private @Nullable File lastDriverDirectory;
-    transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
 
     @Autowired
     GlobalDatabasesPanel(DatabaseConfigService databaseConfigService, CredentialStoreService credentialStoreService,
@@ -132,14 +124,11 @@ final class GlobalDatabasesPanel extends JPanel {
         JPanel headerPanel = UiComponents.createPageHeader(titleLabel, subtitleLabel, null);
         add(headerPanel, "growx, wmin 0, wrap");
 
-        filterField = UiComponents.createSearchField("Filter connections...", this::applyFilter);
-        newButton = UiComponents.createActionButton("New Connection", Codicons.ADD, new Insets(5, 10, 5, 10), false,
+        newButton = UiComponents.createActionButton("New", Codicons.ADD, new Insets(5, 10, 5, 10), false,
                 "arc: 8; font: bold", e -> startNewConnection());
-
-        connectionList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        connectionList.setCellRenderer(new ConnectionCellRenderer());
-
-        masterCard = buildMasterCard();
+        masterPanel = new UiComponents.MasterListPanel<>("Filter connections...", newButton,
+                new UiComponents.MasterListCell<>("font: bold", "font: -1", GlobalDatabasesPanel::toCellData),
+                this::applyFilter, this::onConnectionSelected);
 
         addJarButton = UiComponents.createActionButton("Add JAR...", Codicons.FILE_ZIP, new Insets(4, 10, 4, 10), false,
                 ARC_8_STYLE, e -> chooseDriverJar());
@@ -167,7 +156,7 @@ final class GlobalDatabasesPanel extends JPanel {
 
         JPanel splitBody = new JPanel(new MigLayout("fill, insets 0", "[260!, fill]14[grow, fill]", GROW_FILL));
         splitBody.setOpaque(false);
-        splitBody.add(masterCard, "growy");
+        splitBody.add(masterPanel, "growy");
         splitBody.add(UiComponents.createBorderlessScrollPane(detailCard), "grow, wmin 0");
         add(splitBody, "grow, wmin 0");
 
@@ -176,21 +165,6 @@ final class GlobalDatabasesPanel extends JPanel {
         updateCredentialRowVisibility();
         updateTypeHints();
         refresh();
-    }
-
-    private JPanel buildMasterCard() {
-        JPanel card = new JPanel(new MigLayout("fill, insets 14, wrap 1, hidemode 3", GROW_FILL, "[]8[]8" + GROW_FILL));
-        UiComponents.styleCardPanel(card);
-        JPanel topBar = new JPanel(new MigLayout("fillx, insets 0", GROW_FILL, "[][]"));
-        topBar.setOpaque(false);
-        topBar.add(newButton, "growx, wrap");
-        topBar.add(filterField, "growx, gaptop 6");
-        card.add(topBar, GROWX_WMIN_0);
-
-        JScrollPane listScroll = new JScrollPane(connectionList);
-        listScroll.setBorder(SwingHtmlUtils.createThemeMatteBorder(1, 1, 1, 1));
-        card.add(listScroll, "grow, push");
-        return card;
     }
 
     private JPanel buildDetailCard() {
@@ -212,54 +186,44 @@ final class GlobalDatabasesPanel extends JPanel {
 
         card.add(UiComponents.createSectionHeader("Connection Identity", Codicons.DATABASE, "font: bold +1"),
                 "span 2, growx, wrap");
-        card.add(new JLabel("Display Name:"));
-        card.add(displayNameField, GROWX_WMIN_0);
-        card.add(new JLabel("Connection ID:"));
-        card.add(idField, GROWX_WMIN_0);
-        card.add(new JLabel("Description:"));
-        card.add(descriptionField, GROWX_WMIN_0);
+        addFormRow(card, "Display Name:", displayNameField);
+        addFormRow(card, "Connection ID:", idField);
+        addFormRow(card, "Description:", descriptionField);
 
-        card.add(new JLabel("Database Type:"));
         JPanel typeRow = new JPanel(new MigLayout("insets 0, fillx", "[200!]10[grow, fill]", ROW_CENTER));
         typeRow.setOpaque(false);
         typeRow.add(typeCombo);
         typeRow.add(driverHintLabel, GROWX_WMIN_0);
-        card.add(typeRow, GROWX_WMIN_0);
+        addFormRow(card, "Database Type:", typeRow);
 
-        card.add(new JLabel("JDBC URL:"));
-        card.add(urlField, GROWX_WMIN_0);
-        card.add(new JLabel("Default Schema:"));
-        card.add(defaultSchemaField, GROWX_WMIN_0);
+        addFormRow(card, "JDBC URL:", urlField);
+        addFormRow(card, "Default Schema:", defaultSchemaField);
 
         card.add(UiComponents.createSectionHeader("Credentials & Limits", Codicons.LOCK, "font: bold +1"),
                 "span 2, growx, gaptop 10, wrap");
-        card.add(new JLabel("Username:"));
-        card.add(usernameField, GROWX_WMIN_0);
+        addFormRow(card, "Username:", usernameField);
 
-        card.add(new JLabel("Credential Source:"));
         JPanel credSourceRow = new JPanel(new MigLayout("insets 0, fillx", "[200!]10[grow, fill]", ROW_CENTER));
         credSourceRow.setOpaque(false);
         credSourceRow.add(credentialSourceCombo);
         credSourceRow.add(keyringStatusBadge, GROWX_WMIN_0);
-        card.add(credSourceRow, GROWX_WMIN_0);
+        addFormRow(card, "Credential Source:", credSourceRow);
 
         card.add(passwordRowLabel);
         card.add(passwordField, GROWX_WMIN_0);
         card.add(passwordEnvRowLabel);
         card.add(passwordEnvField, GROWX_WMIN_0);
 
-        card.add(new JLabel("Limits:"));
         JPanel limitsRow = new JPanel(new MigLayout("insets 0", "[]6[90!]18[]6[90!]", ROW_CENTER));
         limitsRow.setOpaque(false);
         limitsRow.add(new JLabel("Timeout (s):"));
         limitsRow.add(timeoutSpinner, "w 90!");
         limitsRow.add(new JLabel("Max Rows:"));
         limitsRow.add(maxRowsSpinner, "w 90!");
-        card.add(limitsRow, GROWX_WMIN_0);
+        addFormRow(card, "Limits:", limitsRow);
 
         card.add(UiComponents.createSectionHeader("Custom Driver JARs (Optional — Oracle / DB2 / Custom)",
                 Codicons.PACKAGE, "font: bold +1"), "span 2, growx, gaptop 10, wrap");
-        card.add(new JLabel("Driver JARs / Dirs:"));
         JPanel driverBox = new JPanel(new MigLayout("insets 0, fillx", GROW_FILL, "[]6[]"));
         driverBox.setOpaque(false);
         driverPathsList.setVisibleRowCount(3);
@@ -272,10 +236,9 @@ final class GlobalDatabasesPanel extends JPanel {
         driverButtons.add(addFolderButton);
         driverButtons.add(removeDriverButton);
         driverBox.add(driverButtons, GROWX_WMIN_0);
-        card.add(driverBox, GROWX_WMIN_0);
+        addFormRow(card, "Driver JARs / Dirs:", driverBox);
 
-        card.add(new JLabel("Driver Class:"));
-        card.add(driverClassField, GROWX_WMIN_0);
+        addFormRow(card, "Driver Class:", driverClassField);
 
         card.add(testWarningBanner, "span 2, growx, gaptop 8, wrap");
         card.add(confirmBar, "span 2, growx, gaptop 6, wrap");
@@ -293,12 +256,12 @@ final class GlobalDatabasesPanel extends JPanel {
         return card;
     }
 
+    private static void addFormRow(JPanel card, String labelText, Component field) {
+        card.add(new JLabel(labelText));
+        card.add(field, GROWX_WMIN_0);
+    }
+
     private void setupListeners() {
-        connectionList.addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting() && !formGuard.isActive()) {
-                onConnectionSelected(connectionList.getSelectedValue());
-            }
-        });
         SwingHtmlUtils.addChangeListener(displayNameField, () -> {
             if (!formGuard.isActive()) {
                 if (creatingNew && !idEditedManually) {
@@ -321,13 +284,10 @@ final class GlobalDatabasesPanel extends JPanel {
                 UiComponents.clearStatusMessage(statusLabel, statusTimer, true);
             }
         };
-        SwingHtmlUtils.addChangeListener(descriptionField, clearStatusOnEdit);
-        SwingHtmlUtils.addChangeListener(urlField, clearStatusOnEdit);
-        SwingHtmlUtils.addChangeListener(defaultSchemaField, clearStatusOnEdit);
-        SwingHtmlUtils.addChangeListener(usernameField, clearStatusOnEdit);
-        SwingHtmlUtils.addChangeListener(passwordField, clearStatusOnEdit);
-        SwingHtmlUtils.addChangeListener(passwordEnvField, clearStatusOnEdit);
-        SwingHtmlUtils.addChangeListener(driverClassField, clearStatusOnEdit);
+        for (JTextComponent field : List.of(descriptionField, urlField, defaultSchemaField, usernameField,
+                passwordField, passwordEnvField, driverClassField)) {
+            SwingHtmlUtils.addChangeListener(field, clearStatusOnEdit);
+        }
         typeCombo.addActionListener(e -> {
             if (!formGuard.isActive()) {
                 updateTypeHints();
@@ -352,13 +312,13 @@ final class GlobalDatabasesPanel extends JPanel {
     @Override
     public void updateUI() {
         super.updateUI();
-        if (masterCard != null && detailCard != null) {
+        if (masterPanel != null && detailCard != null) {
             applyThemeStyling();
         }
     }
 
     void applyThemeStyling() {
-        UiComponents.styleCardPanel(masterCard);
+        masterPanel.applyTheme();
         UiComponents.styleCardPanel(detailCard);
         updateKeyringBadge();
     }
@@ -367,7 +327,7 @@ final class GlobalDatabasesPanel extends JPanel {
      * Reloads global connections from disk and refreshes the list selection.
      */
     public CompletableFuture<List<DatabaseConnectionConfig>> refresh() {
-        lastAsyncFuture = Edt.supplyAsync(databaseConfigService::listGlobalConnections, loaded -> {
+        return Edt.supplyAsync(databaseConfigService::listGlobalConnections, loaded -> {
             allConnections = loaded;
             applyFilter();
             if (selectedConnection != null) {
@@ -380,11 +340,10 @@ final class GlobalDatabasesPanel extends JPanel {
                     startNewConnection();
                 }
             } else if (!loaded.isEmpty() && creatingNew && displayNameField.getText().isBlank()) {
-                connectionList.setSelectedIndex(0);
+                masterPanel.itemList.setSelectedIndex(0);
             }
             updateKeyringBadge();
         });
-        return (CompletableFuture<List<DatabaseConnectionConfig>>) lastAsyncFuture;
     }
 
     @SuppressWarnings("PMD.NullAssignment")
@@ -393,7 +352,7 @@ final class GlobalDatabasesPanel extends JPanel {
         selectedConnection = null;
         idEditedManually = false;
         formGuard.run(() -> {
-            connectionList.clearSelection();
+            masterPanel.clearSelection();
             displayNameField.setText("");
             idField.setText("");
             idField.setEditable(true);
@@ -473,14 +432,13 @@ final class GlobalDatabasesPanel extends JPanel {
         if (selectedConnection != null) {
             selectedId = selectedConnection.id();
         }
-        UiComponents.filterAndPreserveSelection(listModel, connectionList, allConnections, filterField.getText(),
-                (cfg, query) -> {
-                    String q = query.toLowerCase(Locale.ROOT);
-                    return cfg.displayName().toLowerCase(Locale.ROOT).contains(q)
-                            || cfg.id().toLowerCase(Locale.ROOT).contains(q)
-                            || cfg.description().toLowerCase(Locale.ROOT).contains(q)
-                            || cfg.type().toLowerCase(Locale.ROOT).contains(q);
-                }, DatabaseConnectionConfig::id, selectedId, formGuard, false);
+        masterPanel.filter(allConnections, (cfg, query) -> {
+            String q = query.toLowerCase(Locale.ROOT);
+            return cfg.displayName().toLowerCase(Locale.ROOT).contains(q)
+                    || cfg.id().toLowerCase(Locale.ROOT).contains(q)
+                    || cfg.description().toLowerCase(Locale.ROOT).contains(q)
+                    || cfg.type().toLowerCase(Locale.ROOT).contains(q);
+        }, DatabaseConnectionConfig::id, selectedId, false);
     }
 
     private void updateTypeHints() {
@@ -594,7 +552,7 @@ final class GlobalDatabasesPanel extends JPanel {
         testConnectionProgressBar.setVisible(true);
         testWarningBanner.setVisibleState(false, "");
 
-        CompletableFuture<DbTestResult> future = Edt.supplyAsync(() -> {
+        return Edt.supplyAsync(() -> {
             if (dbService == null) {
                 return new DbTestResult(false, false, "", "DbService is unavailable.", 0L);
             }
@@ -622,8 +580,6 @@ final class GlobalDatabasesPanel extends JPanel {
             UiComponents.showStatusMessage(statusLabel, statusTimer,
                     "Test failed: " + ExceptionUtils.getRootCauseMessage(error), false);
         });
-        lastAsyncFuture = future;
-        return future;
     }
 
     private void restoreTestConnectionButtonState() {
@@ -647,9 +603,7 @@ final class GlobalDatabasesPanel extends JPanel {
         String finalTypedPassword = typedPassword;
         saveButton.setEnabled(false);
 
-        CompletableFuture<DatabaseConnectionConfig> future = Edt.supplyAsync(() -> {
-            return databaseConfigService.saveGlobalConnection(cfg, finalTypedPassword);
-        }, saved -> {
+        return Edt.supplyAsync(() -> databaseConfigService.saveGlobalConnection(cfg, finalTypedPassword), saved -> {
             saveButton.setEnabled(true);
             selectedConnection = saved;
             creatingNew = false;
@@ -661,8 +615,6 @@ final class GlobalDatabasesPanel extends JPanel {
             saveButton.setEnabled(true);
             UiComponents.showStatusMessage(statusLabel, statusTimer, "Save failed: " + error.getMessage(), false);
         });
-        lastAsyncFuture = future;
-        return future;
     }
 
     private void revertCurrentForm() {
@@ -684,63 +636,25 @@ final class GlobalDatabasesPanel extends JPanel {
 
     @SuppressWarnings("PMD.NullAssignment")
     CompletableFuture<Boolean> performDelete(String connectionId) {
-        CompletableFuture<Boolean> future = Edt
-                .supplyAsync(() -> databaseConfigService.deleteGlobalConnection(connectionId), deleted -> {
-                    if (Boolean.TRUE.equals(deleted)) {
-                        selectedConnection = null;
-                        startNewConnection();
-                        UiComponents.showStatusMessage(statusLabel, statusTimer,
-                                "Deleted connection '" + connectionId + "'.", true);
-                        refresh();
-                    }
-                }, error -> UiComponents.showStatusMessage(statusLabel, statusTimer,
-                        "Delete failed: " + error.getMessage(), false));
-        lastAsyncFuture = future;
-        return future;
+        return Edt.supplyAsync(() -> databaseConfigService.deleteGlobalConnection(connectionId), deleted -> {
+            if (Boolean.TRUE.equals(deleted)) {
+                selectedConnection = null;
+                startNewConnection();
+                UiComponents.showStatusMessage(statusLabel, statusTimer, "Deleted connection '" + connectionId + "'.",
+                        true);
+                refresh();
+            }
+        }, error -> UiComponents.showStatusMessage(statusLabel, statusTimer, "Delete failed: " + error.getMessage(),
+                false));
     }
 
-    private static final class ConnectionCellRenderer extends JPanel
-            implements
-                ListCellRenderer<DatabaseConnectionConfig> {
-        private static final long serialVersionUID = 1L;
-        private final JLabel titleLabel = new JLabel();
-        private final JLabel metaLabel = new JLabel();
-        private final JLabel descriptionLabel = new JLabel();
-
-        private ConnectionCellRenderer() {
-            setLayout(new MigLayout("fillx, insets 6 8 6 8, wrap 1, hidemode 3", GROW_FILL, "[]2[]2[]"));
-            setOpaque(true);
-            titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 12.5f));
-            metaLabel.setFont(metaLabel.getFont().deriveFont(Font.PLAIN, 11f));
-            descriptionLabel.setFont(descriptionLabel.getFont().deriveFont(Font.PLAIN, 11f));
-            add(titleLabel, "growx");
-            add(metaLabel, "growx");
-            add(descriptionLabel, "growx");
-            setBorder(new EmptyBorder(1, 0, 1, 0));
+    private static UiComponents.MasterCellData toCellData(DatabaseConnectionConfig value) {
+        String desc = value.description();
+        String detail = null;
+        if (desc != null && !desc.isBlank()) {
+            detail = desc;
         }
-
-        @Override
-        public Component getListCellRendererComponent(JList<? extends DatabaseConnectionConfig> list,
-                DatabaseConnectionConfig value, int index, boolean isSelected, boolean cellHasFocus) {
-            UiComponents.ListCellColors colors = UiComponents.resolveListCellColors(list, isSelected);
-            setBackground(colors.background());
-            titleLabel.setForeground(colors.foreground());
-            metaLabel.setForeground(colors.muted());
-            descriptionLabel.setForeground(colors.muted());
-            if (value != null) {
-                titleLabel.setText(value.displayName());
-                metaLabel.setText(value.id() + "  •  " + value.resolveType().getDisplayName());
-                titleLabel.setIcon(FontIcon.of(Codicons.DATABASE, 14, colors.iconColor()));
-                String desc = value.description();
-                if (desc != null && !desc.isBlank()) {
-                    descriptionLabel.setText(desc);
-                    descriptionLabel.setVisible(true);
-                } else {
-                    descriptionLabel.setText("");
-                    descriptionLabel.setVisible(false);
-                }
-            }
-            return this;
-        }
+        return new UiComponents.MasterCellData(value.displayName(), Codicons.DATABASE, null,
+                value.id() + "  •  " + value.resolveType().getDisplayName(), detail, null);
     }
 }

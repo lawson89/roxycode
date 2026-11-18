@@ -123,12 +123,7 @@ public final class SettingsPanel extends JPanel {
     final JButton saveButton;
     final JLabel statusLabel;
     final Timer statusTimer;
-    private JLabel authHeaderLabel;
-    private JLabel profileHeaderLabel;
-    private JLabel appearanceHeaderLabel;
-    private JLabel agentExecutionHeaderLabel;
     private transient SettingsSnapshot savedBaseline;
-    private transient Runnable onInitialApiKeyConfiguredCallback;
 
     private final transient UiComponents.UiGuard settingsUpdateGuard = new UiComponents.UiGuard();
 
@@ -285,13 +280,14 @@ public final class SettingsPanel extends JPanel {
         add(UiComponents.createBorderlessScrollPane(cardsContainer), GROW_WMIN_0);
 
         statusTimer = UiComponents.createStatusTimer(statusLabel, 3000);
-        testConnectionStatusTimer = new Timer(5000, e -> clearTestConnectionStatus());
+        testConnectionStatusTimer = new Timer(5000,
+                e -> UiComponents.clearStatusMessage(testConnectionStatusLabel, null, true));
         testConnectionStatusTimer.setRepeats(false);
 
         updateAuthProviderVisibility();
         applyThemeStyling();
         updateOnboardingBannerState();
-        captureSavedBaseline();
+        savedBaseline = captureCurrentSnapshot();
         updateSaveButtonState();
     }
 
@@ -310,8 +306,7 @@ public final class SettingsPanel extends JPanel {
 
         JPanel headerRow = new JPanel(new MigLayout("fillx, insets 0, gapx 10", "[grow, fill][right]", ROW_CENTER));
         headerRow.setOpaque(false);
-        authHeaderLabel = UiComponents.createSectionHeader(SECTION_AUTH_TITLE, Codicons.KEY, HEADER_FONT_STYLE);
-        headerRow.add(authHeaderLabel, WMIN_0);
+        headerRow.add(UiComponents.createSectionHeader(SECTION_AUTH_TITLE, Codicons.KEY, HEADER_FONT_STYLE), WMIN_0);
         headerRow.add(segmentedProviderPanel, "right");
         card.add(headerRow, HEADER_CONSTRAINTS);
         card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
@@ -329,34 +324,21 @@ public final class SettingsPanel extends JPanel {
         JPanel vertexFieldsGrid = new JPanel(
                 new MigLayout("fillx, insets 0, gapx 14", "[grow, fill, sg vfield]14[grow, fill, sg vfield]", ""));
         vertexFieldsGrid.setOpaque(false);
-
-        JPanel projectBlock = new JPanel(new MigLayout("fillx, insets 0, wrap 1, gapy 4", GROW_FILL, ""));
-        projectBlock.setOpaque(false);
-        projectBlock.add(UiComponents.createFieldTextBlock("GCP Project ID",
-                "Google Cloud project ID with the Vertex AI API enabled.", null), GROWX_WMIN_0);
-        projectBlock.add(vertexProjectIdField, GROWX_WMIN_0);
-
-        JPanel locationBlock = new JPanel(new MigLayout("fillx, insets 0, wrap 1, gapy 4", GROW_FILL, ""));
-        locationBlock.setOpaque(false);
-        locationBlock.add(UiComponents.createFieldTextBlock("Vertex Location",
-                "Google Cloud region or 'global' endpoint for Vertex AI model calls.", null), GROWX_WMIN_0);
-        locationBlock.add(vertexLocationField, GROWX_WMIN_0);
-
-        vertexFieldsGrid.add(projectBlock, GROWX_WMIN_0);
-        vertexFieldsGrid.add(locationBlock, GROWX_WMIN_0);
+        vertexFieldsGrid.add(createLabeledFieldBlock("GCP Project ID",
+                "Google Cloud project ID with the Vertex AI API enabled.", vertexProjectIdField), GROWX_WMIN_0);
+        vertexFieldsGrid.add(
+                createLabeledFieldBlock("Vertex Location",
+                        "Google Cloud region or 'global' endpoint for Vertex AI model calls.", vertexLocationField),
+                GROWX_WMIN_0);
         vertexAiPanel.add(vertexFieldsGrid, GROWX_WMIN_0);
 
-        JPanel credentialsRow = new JPanel(new MigLayout("fillx, insets 0, wrap 1, gapy 4", GROW_FILL, ""));
-        credentialsRow.setOpaque(false);
-        credentialsRow.add(UiComponents.createFieldTextBlock("Service Account JSON (Optional)",
-                "Path to a GCP Service Account JSON key file. Leave blank to use Application Default Credentials (ADC).",
-                null), GROWX_WMIN_0);
         JPanel credentialsInputRow = new JPanel(new MigLayout("insets 0, gapx 8", "[grow, fill][]", ROW_CENTER));
         credentialsInputRow.setOpaque(false);
         credentialsInputRow.add(vertexCredentialsPathField, GROWX_WMIN_0);
         credentialsInputRow.add(browseCredentialsButton);
-        credentialsRow.add(credentialsInputRow, GROWX_WMIN_0);
-        vertexAiPanel.add(credentialsRow, GROWX_WMIN_0);
+        vertexAiPanel.add(createLabeledFieldBlock("Service Account JSON (Optional)",
+                "Path to a GCP Service Account JSON key file. Leave blank to use Application Default Credentials (ADC).",
+                credentialsInputRow), GROWX_WMIN_0);
 
         card.add(apiKeyPanel, "growx, wmin 0, hidemode 3");
         card.add(vertexAiPanel, "growx, wmin 0, hidemode 3");
@@ -378,8 +360,8 @@ public final class SettingsPanel extends JPanel {
 
         JPanel headerRow = new JPanel(new MigLayout("fillx, insets 0, gapx 8", "[grow, fill][][]", ROW_CENTER));
         headerRow.setOpaque(false);
-        profileHeaderLabel = UiComponents.createSectionHeader(SECTION_PROFILE_TITLE, Codicons.HUBOT, HEADER_FONT_STYLE);
-        headerRow.add(profileHeaderLabel, WMIN_0);
+        headerRow.add(UiComponents.createSectionHeader(SECTION_PROFILE_TITLE, Codicons.HUBOT, HEADER_FONT_STYLE),
+                WMIN_0);
 
         JLabel overrideHint = new JLabel("Can be overridden per-project in Project Settings");
         overrideHint.putClientProperty(FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
@@ -399,25 +381,15 @@ public final class SettingsPanel extends JPanel {
         JPanel card = new JPanel(new MigLayout(CARD_LAYOUT_CONSTRAINTS, GROW_FILL, ""));
         UiComponents.styleCardPanel(card);
 
-        agentExecutionHeaderLabel = UiComponents.createSectionHeader(SECTION_AGENT_EXECUTION_TITLE, Codicons.PULSE,
-                HEADER_FONT_STYLE);
-        card.add(agentExecutionHeaderLabel, HEADER_CONSTRAINTS);
+        card.add(UiComponents.createSectionHeader(SECTION_AGENT_EXECUTION_TITLE, Codicons.PULSE, HEADER_FONT_STYLE),
+                HEADER_CONSTRAINTS);
         card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
 
-        card.add(
-                UiComponents.createFieldRow(
-                        UiComponents.createFieldTextBlock("Max Tool Turns per Prompt",
-                                "Autonomous JEXL turns before pause (1–100).", null),
-                        maxAgentToolTurnsSpinner, "w 90:110:130"),
-                GROWX_WMIN_0);
-
+        card.add(UiComponents.createFieldRow("Max Tool Turns per Prompt", "Autonomous JEXL turns before pause (1–100).",
+                null, maxAgentToolTurnsSpinner, "w 90:110:130"), GROWX_WMIN_0);
         card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
-
-        card.add(
-                UiComponents.createFieldRow(UiComponents.createFieldTextBlock("Chat Memory Window",
-                        "Retained messages per session (1–500).", null), maxMessagesSpinner, "w 90:110:130"),
-                GROWX_WMIN_0);
-
+        card.add(UiComponents.createFieldRow("Chat Memory Window", "Retained messages per session (1–500).", null,
+                maxMessagesSpinner, "w 90:110:130"), GROWX_WMIN_0);
         card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
         card.add(googleGroundingCheckBox, GROWX_WMIN_0);
 
@@ -428,27 +400,31 @@ public final class SettingsPanel extends JPanel {
         JPanel card = new JPanel(new MigLayout(CARD_LAYOUT_CONSTRAINTS, GROW_FILL, ""));
         UiComponents.styleCardPanel(card);
 
-        appearanceHeaderLabel = UiComponents.createSectionHeader(SECTION_APPEARANCE_TITLE, Codicons.SYMBOL_COLOR,
-                HEADER_FONT_STYLE);
-        card.add(appearanceHeaderLabel, HEADER_CONSTRAINTS);
+        card.add(UiComponents.createSectionHeader(SECTION_APPEARANCE_TITLE, Codicons.SYMBOL_COLOR, HEADER_FONT_STYLE),
+                HEADER_CONSTRAINTS);
         card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
 
-        card.add(UiComponents.createFieldRow(
-                UiComponents.createFieldTextBlock("Interface Theme", "Applies immediately across all panels.", null),
+        card.add(UiComponents.createFieldRow("Interface Theme", "Applies immediately across all panels.", null,
                 themeCombo, "w 160:190:220"), GROWX_WMIN_0);
-
         card.add(createRowSeparator(), SEPARATOR_CONSTRAINTS);
 
         JPanel logControlPanel = new JPanel(new MigLayout("insets 0, gapx 8", "[][right]", ROW_CENTER));
         logControlPanel.setOpaque(false);
         logControlPanel.add(toolLogPathLabel);
         logControlPanel.add(openToolLogButton);
-        card.add(UiComponents.createFieldRow(
-                UiComponents.createFieldTextBlock("JEXL Tool Call Log",
-                        "Always-on structured JSONL log of every JEXL script and result.", null),
-                logControlPanel, "right"), GROWX_WMIN_0);
+        card.add(UiComponents.createFieldRow("JEXL Tool Call Log",
+                "Always-on structured JSONL log of every JEXL script and result.", null, logControlPanel, "right"),
+                GROWX_WMIN_0);
 
         return card;
+    }
+
+    private static JPanel createLabeledFieldBlock(String title, String description, JComponent control) {
+        JPanel block = new JPanel(new MigLayout("fillx, insets 0, wrap 1, gapy 4", GROW_FILL, ""));
+        block.setOpaque(false);
+        block.add(UiComponents.createFieldTextBlock(title, description, null), GROWX_WMIN_0);
+        block.add(control, GROWX_WMIN_0);
+        return block;
     }
 
     private static JSeparator createRowSeparator() {
@@ -468,10 +444,6 @@ public final class SettingsPanel extends JPanel {
         }
     }
 
-    AgentProfile getSelectedProfile() {
-        return selectedProfile;
-    }
-
     void selectProfileFromCard(AgentProfile profile) {
         if (profile != null && selectedProfile != profile) {
             applySelectedProfile(profile);
@@ -485,24 +457,11 @@ public final class SettingsPanel extends JPanel {
         Color greenColor = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
 
         statusLabel.setForeground(greenColor);
-        if (authHeaderLabel != null) {
-            authHeaderLabel.setIcon(FontIcon.of(Codicons.KEY, 18, accentColor));
-        }
-        if (profileHeaderLabel != null) {
-            profileHeaderLabel.setIcon(FontIcon.of(Codicons.HUBOT, 18, accentColor));
-        }
-        if (appearanceHeaderLabel != null) {
-            appearanceHeaderLabel.setIcon(FontIcon.of(Codicons.SYMBOL_COLOR, 18, accentColor));
-        }
-        if (agentExecutionHeaderLabel != null) {
-            agentExecutionHeaderLabel.setIcon(FontIcon.of(Codicons.PULSE, 18, accentColor));
-        }
         UiComponents.updateInfoIconTheme(profileInfoIcon);
 
         String accentHex = SwingHtmlUtils.toHex(accentColor);
         String borderHex = UiComponents.getCardBorderHex();
         String pillBg = UiComponents.getPillBackgroundDirective();
-        UiComponents.refreshActionButtonIcons(this);
 
         if (segmentedProviderPanel != null) {
             segmentedProviderPanel.setOpaque(true);
@@ -590,26 +549,22 @@ public final class SettingsPanel extends JPanel {
         apiKeyPanel.setVisible(!vertexSelected);
         vertexAiPanel.setVisible(vertexSelected);
         if (testConnectionStatusLabel != null) {
-            clearTestConnectionStatus();
+            UiComponents.clearStatusMessage(testConnectionStatusLabel, testConnectionStatusTimer, true);
         }
         revalidate();
         repaint();
     }
 
-    private File chooseServiceAccountJsonFile() {
+    void browseServiceAccountCredentials() {
         SystemFileChooser.FileNameExtensionFilter jsonFilter = new SystemFileChooser.FileNameExtensionFilter(
                 "Service Account JSON (*.json)", "json");
-        return UiComponents.chooseOpenFile(this, "Select GCP Service Account JSON Key", jsonFilter);
-    }
-
-    void browseServiceAccountCredentials() {
-        File selected = chooseServiceAccountJsonFile();
+        File selected = UiComponents.chooseOpenFile(this, "Select GCP Service Account JSON Key", jsonFilter);
         if (selected != null) {
             vertexCredentialsPathField.setText(selected.getAbsolutePath());
         }
     }
 
-    Path resolveToolCallLogFile() {
+    void openToolCallLog() {
         Path roxyHome = null;
         if (settingsService != null) {
             roxyHome = settingsService.getRoxyHomeDir();
@@ -617,18 +572,7 @@ public final class SettingsPanel extends JPanel {
         if (roxyHome == null) {
             roxyHome = SettingsService.getDefaultRoxyHomeDir();
         }
-        return roxyHome.resolve("logs").resolve("toolcalls.jsonl");
-    }
-
-    void openToolCallLog() {
-        Path logFile = resolveToolCallLogFile();
-        openLogFileOnDesktop(logFile);
-    }
-
-    private static void openLogFileOnDesktop(Path logFile) {
-        if (logFile == null) {
-            return;
-        }
+        Path logFile = roxyHome.resolve("logs").resolve("toolcalls.jsonl");
         Path target = logFile;
         if (!Files.exists(target)) {
             target = logFile.getParent();
@@ -673,10 +617,6 @@ public final class SettingsPanel extends JPanel {
                 toolTurns, maxMessages, groundingEnabled);
     }
 
-    void captureSavedBaseline() {
-        savedBaseline = captureCurrentSnapshot();
-    }
-
     boolean hasUnsavedChanges() {
         if (savedBaseline == null) {
             return false;
@@ -697,7 +637,7 @@ public final class SettingsPanel extends JPanel {
             saveButton.putClientProperty(FlatClientProperties.STYLE,
                     SAVE_BUTTON_BASE_STYLE + UiComponents.SUBTLE_GREEN_BUTTON_STYLE);
         }
-        UiComponents.refreshActionButtonIcons(saveButton);
+        saveButton.repaint();
     }
 
     @EventListener
@@ -740,7 +680,7 @@ public final class SettingsPanel extends JPanel {
                 googleGroundingCheckBox.setSelected(groundingEnabled);
             }
             updateOnboardingBannerState();
-            captureSavedBaseline();
+            savedBaseline = captureCurrentSnapshot();
             updateSaveButtonState();
         });
     }
@@ -773,15 +713,18 @@ public final class SettingsPanel extends JPanel {
 
         if (vertexSelected) {
             if (projectId.isEmpty()) {
-                showTestConnectionStatus(CONNECTION_FAILED_PREFIX + "Please enter a GCP Project ID first.", false);
+                UiComponents.showStatusMessage(testConnectionStatusLabel, testConnectionStatusTimer,
+                        CONNECTION_FAILED_PREFIX + "Please enter a GCP Project ID first.", false);
                 return CompletableFuture.completedFuture(null);
             }
             if (location.isEmpty()) {
-                showTestConnectionStatus(CONNECTION_FAILED_PREFIX + "Please enter a Vertex Location first.", false);
+                UiComponents.showStatusMessage(testConnectionStatusLabel, testConnectionStatusTimer,
+                        CONNECTION_FAILED_PREFIX + "Please enter a Vertex Location first.", false);
                 return CompletableFuture.completedFuture(null);
             }
         } else if (apiKey.isEmpty()) {
-            showTestConnectionStatus(CONNECTION_FAILED_PREFIX + "Please enter a Gemini API Key first.", false);
+            UiComponents.showStatusMessage(testConnectionStatusLabel, testConnectionStatusTimer,
+                    CONNECTION_FAILED_PREFIX + "Please enter a Gemini API Key first.", false);
             return CompletableFuture.completedFuture(null);
         }
 
@@ -794,7 +737,7 @@ public final class SettingsPanel extends JPanel {
             connectionConfig = GenAiConnectionConfig.forApiKey(apiKey);
         }
 
-        clearTestConnectionStatus();
+        UiComponents.clearStatusMessage(testConnectionStatusLabel, testConnectionStatusTimer, true);
         testConnectionButton.setEnabled(false);
         testConnectionButton.setText(TESTING_CONNECTION_TEXT);
         testConnectionProgressBar.setIndeterminate(true);
@@ -809,10 +752,12 @@ public final class SettingsPanel extends JPanel {
         }, response -> {
             long elapsedMs = Math.max(1L, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNanos));
             restoreTestConnectionButtonState();
-            showTestConnectionStatus(CONNECTION_SUCCESS_TEXT + " (" + modelName + " • " + elapsedMs + " ms)", true);
+            UiComponents.showStatusMessage(testConnectionStatusLabel, testConnectionStatusTimer,
+                    CONNECTION_SUCCESS_TEXT + " (" + modelName + " • " + elapsedMs + " ms)", true);
         }, error -> {
             restoreTestConnectionButtonState();
-            showTestConnectionStatus(CONNECTION_FAILED_PREFIX + ExceptionUtils.getRootCauseMessage(error), false);
+            UiComponents.showStatusMessage(testConnectionStatusLabel, testConnectionStatusTimer,
+                    CONNECTION_FAILED_PREFIX + ExceptionUtils.getRootCauseMessage(error), false);
         });
         return future;
     }
@@ -824,23 +769,10 @@ public final class SettingsPanel extends JPanel {
         testConnectionProgressBar.setVisible(false);
     }
 
-    void showTestConnectionStatus(String message, boolean success) {
-        UiComponents.showStatusMessage(testConnectionStatusLabel, testConnectionStatusTimer, message, success);
-    }
-
-    void clearTestConnectionStatus() {
-        UiComponents.clearStatusMessage(testConnectionStatusLabel, testConnectionStatusTimer, true);
-    }
-
-    private void showStatusMessage(String message, boolean success) {
-        UiComponents.showStatusMessage(statusLabel, statusTimer, message, success);
-    }
-
     private void saveSettings() {
         commitSpinnerEdit(maxAgentToolTurnsSpinner);
         commitSpinnerEdit(maxMessagesSpinner);
 
-        boolean hadConfiguredCredentials = hasConfiguredCredentials();
         AppSettings settings = settingsService.getSettings();
         String newApiKey = new String(geminiApiKeyField.getPassword());
         boolean vertexEnabled = isVertexAiSelected();
@@ -860,17 +792,10 @@ public final class SettingsPanel extends JPanel {
         settings.setGoogleGroundingEnabled(googleGroundingCheckBox.isSelected());
         settingsService.saveSettings();
         updateOnboardingBannerState();
-        captureSavedBaseline();
+        savedBaseline = captureCurrentSnapshot();
         updateSaveButtonState();
 
-        showStatusMessage(SAVED_APPLIED_TEXT, true);
-        if (!hadConfiguredCredentials && hasConfiguredCredentials() && onInitialApiKeyConfiguredCallback != null) {
-            onInitialApiKeyConfiguredCallback.run();
-        }
-    }
-
-    void setOnInitialApiKeyConfiguredCallback(Runnable callback) {
-        this.onInitialApiKeyConfiguredCallback = callback;
+        UiComponents.showStatusMessage(statusLabel, statusTimer, SAVED_APPLIED_TEXT, true);
     }
 
     public static void applyTheme(String themeName) {

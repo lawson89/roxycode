@@ -10,18 +10,14 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import javax.swing.BorderFactory;
-import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.JLabel;
-import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
-import javax.swing.ListCellRenderer;
-import javax.swing.ListSelectionModel;
 import javax.swing.SwingConstants;
 import javax.swing.Timer;
 import net.miginfocom.swing.MigLayout;
@@ -188,7 +184,6 @@ final class AgentMemoryPanel extends JPanel {
         private static final long serialVersionUID = 1L;
         private static final String CARD_CONTENT = "CONTENT";
         private static final String CARD_EMPTY = "EMPTY";
-        static final int SEARCH_DEBOUNCE_MS = 150;
         static final int EDITOR_STATS_DEBOUNCE_MS = 150;
 
         private final boolean globalScope;
@@ -196,10 +191,8 @@ final class AgentMemoryPanel extends JPanel {
         private final CardLayout cardLayout = new CardLayout();
         private final JPanel cardContainer = new JPanel(cardLayout);
 
-        final JTextField searchField = UiComponents.createSearchField("Search id, summary, tags...", null);
         final JButton newButton;
-        final DefaultListModel<MemoryEntry> listModel = new DefaultListModel<>();
-        final JList<MemoryEntry> entryList = new JList<>(listModel);
+        final UiComponents.MasterListPanel<MemoryEntry, String> masterPanel;
 
         final JTextField idField = new JTextField();
         final JTextField tagsField = new JTextField();
@@ -218,9 +211,7 @@ final class AgentMemoryPanel extends JPanel {
         final UiComponents.InlineConfirmBar deleteConfirmBar = new UiComponents.InlineConfirmBar();
 
         private final Timer statusTimer;
-        final Timer searchDebounceTimer;
         final Timer editorStatsDebounceTimer;
-        transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
         private final transient UiComponents.UiGuard editorSyncGuard = new UiComponents.UiGuard();
 
         private List<MemoryEntry> allEntries = List.of();
@@ -242,14 +233,17 @@ final class AgentMemoryPanel extends JPanel {
             }
 
             this.newButton = UiComponents.createActionButton("New", Codicons.ADD, null, false, null, null);
+            this.masterPanel = new UiComponents.MasterListPanel<>("Search id, summary, tags...", newButton,
+                    new UiComponents.MasterListCell<>("font: bold $monospaced.font", "font: -1",
+                            MemoryScopeView::toCellData),
+                    this::applyFilter, this::onEntrySelected);
+            this.masterPanel.setMinimumSize(new Dimension(250, 200));
             this.saveButton = UiComponents.createActionButton("Save Memory", Codicons.SAVE, null, false,
                     UiComponents.ACCENT_BUTTON_STYLE, null);
             this.revertButton = UiComponents.createActionButton("Revert", Codicons.DISCARD, null, false, null, null);
             this.deleteButton = UiComponents.createActionButton("Delete", Codicons.TRASH, null, false,
                     UiComponents.SUBTLE_RED_BUTTON_STYLE, null);
             this.statusTimer = UiComponents.createStatusTimer(statusLabel, 4000);
-            this.searchDebounceTimer = new Timer(SEARCH_DEBOUNCE_MS, e -> applyFilter());
-            this.searchDebounceTimer.setRepeats(false);
             this.editorStatsDebounceTimer = new Timer(EDITOR_STATS_DEBOUNCE_MS, e -> updateEditorButtonsAndStats());
             this.editorStatsDebounceTimer.setRepeats(false);
 
@@ -262,7 +256,6 @@ final class AgentMemoryPanel extends JPanel {
             this.detailsScrollPane.setFoldIndicatorEnabled(false);
             this.detailsScrollPane.setLineNumbersEnabled(false);
 
-            JPanel masterPanel = buildMasterPanel();
             JPanel detailPanel = buildDetailPanel();
 
             JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, masterPanel, detailPanel);
@@ -282,23 +275,6 @@ final class AgentMemoryPanel extends JPanel {
             setupListeners();
             updateTheme();
             startNewEntry();
-        }
-
-        private JPanel buildMasterPanel() {
-            JPanel panel = new JPanel(new MigLayout("insets 8 4 8 8, fill, wrap 1", "[grow, fill]", "[][grow, fill]"));
-            panel.setMinimumSize(new Dimension(250, 200));
-
-            JPanel searchRow = new JPanel(new MigLayout("insets 0, fillx", "[grow, fill][]", "[]"));
-            searchRow.setOpaque(false);
-            searchRow.add(searchField, CONSTRAINTS_GROWX);
-            searchRow.add(newButton);
-            panel.add(searchRow, CONSTRAINTS_GROWX);
-
-            entryList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-            entryList.setCellRenderer(new MemoryEntryCellRenderer());
-            JScrollPane listScroll = new JScrollPane(entryList);
-            panel.add(listScroll, "grow");
-            return panel;
         }
 
         private JPanel buildDetailPanel() {
@@ -321,19 +297,13 @@ final class AgentMemoryPanel extends JPanel {
             metaRow.add(tagsField, CONSTRAINTS_GROWX);
             panel.add(metaRow, CONSTRAINTS_GROWX);
 
-            JPanel summaryHeaderRow = new JPanel(new MigLayout("insets 4 0 0 0, fillx", "[][][grow, fill][]", "[]"));
+            JPanel summaryHeaderRow = new JPanel(new MigLayout("insets 4 0 0 0, fillx", "[][][]", "[]"));
             summaryHeaderRow.setOpaque(false);
             summaryTitleLabel.putClientProperty(FlatClientProperties.STYLE, STYLE_FONT_BOLD);
             summaryStatsLabel.putClientProperty(FlatClientProperties.STYLE,
                     "font: -1; foreground: $Label.disabledForeground");
             summaryHeaderRow.add(summaryTitleLabel);
-            summaryHeaderRow.add(memoryInfoIcon, "gapleft 4");
-            summaryHeaderRow.add(new JPanel() {
-                private static final long serialVersionUID = 1L;
-                {
-                    setOpaque(false);
-                }
-            }, CONSTRAINTS_GROWX);
+            summaryHeaderRow.add(memoryInfoIcon, "gapleft 4, push");
             summaryHeaderRow.add(summaryStatsLabel);
             panel.add(summaryHeaderRow, CONSTRAINTS_GROWX);
 
@@ -360,17 +330,10 @@ final class AgentMemoryPanel extends JPanel {
         }
 
         private void setupListeners() {
-            SwingHtmlUtils.addChangeListener(searchField, () -> searchDebounceTimer.restart());
             newButton.addActionListener(e -> startNewEntry());
             saveButton.addActionListener(e -> saveCurrentMemory());
             revertButton.addActionListener(e -> revertCurrentMemory());
             deleteButton.addActionListener(e -> promptDeleteCurrentMemory());
-
-            entryList.addListSelectionListener(e -> {
-                if (!e.getValueIsAdjusting()) {
-                    onEntrySelected(entryList.getSelectedValue());
-                }
-            });
 
             SwingHtmlUtils.addChangeListener(idField, this::onIdFieldEdited);
             SwingHtmlUtils.addChangeListener(tagsField, () -> editorStatsDebounceTimer.restart());
@@ -444,20 +407,17 @@ final class AgentMemoryPanel extends JPanel {
         }
 
         CompletableFuture<List<MemoryEntry>> refresh() {
-            UiComponents.stopTimer(searchDebounceTimer);
             if (!isScopeAvailable()) {
                 cardLayout.show(cardContainer, CARD_EMPTY);
                 allEntries = List.of();
-                listModel.clear();
+                masterPanel.listModel.clear();
                 updateTabTitle(globalScope, 0);
                 startNewEntry();
                 return CompletableFuture.completedFuture(List.of());
             }
             cardLayout.show(cardContainer, CARD_CONTENT);
-            lastAsyncFuture = Edt.supplyAsync(() -> memoryService.readAll(scopeName), this::applyLoadedEntries,
-                    ex -> log.warn("Failed to load {} memories: {}", scopeName,
-                            ExceptionUtils.getRootCauseMessage(ex)));
-            return (CompletableFuture<List<MemoryEntry>>) lastAsyncFuture;
+            return Edt.supplyAsync(() -> memoryService.readAll(scopeName), this::applyLoadedEntries, ex -> log
+                    .warn("Failed to load {} memories: {}", scopeName, ExceptionUtils.getRootCauseMessage(ex)));
         }
 
         private void applyLoadedEntries(List<MemoryEntry> entries) {
@@ -483,8 +443,8 @@ final class AgentMemoryPanel extends JPanel {
             if (selectedEntry != null) {
                 previouslySelectedId = selectedEntry.id();
             }
-            UiComponents.filterAndPreserveSelection(listModel, entryList, allEntries, searchField.getText(),
-                    MemoryScopeView::matchesFilter, MemoryEntry::id, previouslySelectedId, editorSyncGuard, false);
+            masterPanel.filter(allEntries, MemoryScopeView::matchesFilter, MemoryEntry::id, previouslySelectedId,
+                    false);
         }
 
         private static boolean matchesFilter(MemoryEntry entry, String query) {
@@ -512,7 +472,7 @@ final class AgentMemoryPanel extends JPanel {
             idManuallyEdited = false;
             deleteConfirmBar.cancel();
             editorSyncGuard.run(() -> {
-                entryList.clearSelection();
+                masterPanel.clearSelection();
                 loadedId = "";
                 loadedTags = "";
                 loadedSummary = "";
@@ -597,42 +557,31 @@ final class AgentMemoryPanel extends JPanel {
             final String targetId = sanitizedId;
             saveButton.setEnabled(false);
 
-            lastAsyncFuture = Edt.supplyAsync(
+            return Edt.supplyAsync(
                     () -> memoryEventRefreshGuard
                             .supply(() -> memoryService.put(scopeName, targetId, summary, tags, details)),
-                    result -> handleMemorySaved(result, targetId), ex -> {
+                    result -> handleEditorResult(result, "Saved memory '" + targetId + "'", "Failed to save memory",
+                            () -> {
+                                creatingNewEntry = false;
+                                idManuallyEdited = true;
+                                editorSyncGuard.run(() -> {
+                                    loadedId = targetId;
+                                    loadedTags = MemoryService
+                                            .formatTagsDisplay(MemoryService.parseTagsString(tagsField.getText()));
+                                    loadedSummary = summaryArea.getText().trim();
+                                    loadedDetails = detailsEditor.getText().stripTrailing();
+                                    idField.setText(loadedId);
+                                    tagsField.setText(loadedTags);
+                                    summaryArea.setText(loadedSummary);
+                                    detailsEditor.setText(loadedDetails);
+                                    selectedEntry = new MemoryEntry(loadedId, loadedSummary,
+                                            MemoryService.parseTagsString(loadedTags), loadedDetails, "");
+                                });
+                            }),
+                    ex -> {
                         updateEditorButtonsAndStats();
                         showStatus("Failed to save memory: " + ExceptionUtils.getRootCauseMessage(ex), false);
                     });
-            return (CompletableFuture<EditorResult>) lastAsyncFuture;
-        }
-
-        private void handleMemorySaved(@Nullable EditorResult result, String savedId) {
-            if (result != null && result.success()) {
-                creatingNewEntry = false;
-                idManuallyEdited = true;
-                editorSyncGuard.run(() -> {
-                    loadedId = savedId;
-                    loadedTags = MemoryService.formatTagsDisplay(MemoryService.parseTagsString(tagsField.getText()));
-                    loadedSummary = summaryArea.getText().trim();
-                    loadedDetails = detailsEditor.getText().stripTrailing();
-                    idField.setText(loadedId);
-                    tagsField.setText(loadedTags);
-                    summaryArea.setText(loadedSummary);
-                    detailsEditor.setText(loadedDetails);
-                    selectedEntry = new MemoryEntry(loadedId, loadedSummary, MemoryService.parseTagsString(loadedTags),
-                            loadedDetails, "");
-                });
-                showStatus("Saved memory '" + savedId + "'", true);
-                refresh();
-            } else {
-                String err = "Failed to save memory";
-                if (result != null && StringUtils.isNotBlank(result.errorHint())) {
-                    err = result.errorHint();
-                }
-                showStatus(err, false);
-                updateEditorButtonsAndStats();
-            }
         }
 
         void promptDeleteCurrentMemory() {
@@ -645,22 +594,23 @@ final class AgentMemoryPanel extends JPanel {
 
         CompletableFuture<EditorResult> performDelete(String id) {
             deleteButton.setEnabled(false);
-            lastAsyncFuture = Edt.supplyAsync(
-                    () -> memoryEventRefreshGuard.supply(() -> memoryService.delete(scopeName, id)),
-                    result -> handleMemoryDeleted(result, id), ex -> {
+            return Edt.supplyAsync(() -> memoryEventRefreshGuard.supply(() -> memoryService.delete(scopeName, id)),
+                    result -> handleEditorResult(result, "Deleted memory '" + id + "'", "Failed to delete memory",
+                            this::startNewEntry),
+                    ex -> {
                         updateEditorButtonsAndStats();
                         showStatus("Failed to delete memory: " + ExceptionUtils.getRootCauseMessage(ex), false);
                     });
-            return (CompletableFuture<EditorResult>) lastAsyncFuture;
         }
 
-        private void handleMemoryDeleted(@Nullable EditorResult result, String deletedId) {
+        private void handleEditorResult(@Nullable EditorResult result, String successMessage,
+                String defaultErrorMessage, Runnable onSuccess) {
             if (result != null && result.success()) {
-                showStatus("Deleted memory '" + deletedId + "'", true);
-                startNewEntry();
+                onSuccess.run();
+                showStatus(successMessage, true);
                 refresh();
             } else {
-                String err = "Failed to delete memory";
+                String err = defaultErrorMessage;
                 if (result != null && StringUtils.isNotBlank(result.errorHint())) {
                     err = result.errorHint();
                 }
@@ -681,77 +631,29 @@ final class AgentMemoryPanel extends JPanel {
             summaryScrollPane
                     .setBorder(BorderFactory.createLineBorder(SwingHtmlUtils.blendColor(accent, tintedBg, 0.5)));
             SwingHtmlUtils.applyRSyntaxTheme(detailsEditor, settingsService);
-            entryList.repaint();
-        }
-    }
-
-    private static final class MemoryEntryCellRenderer extends JPanel implements ListCellRenderer<MemoryEntry> {
-        private static final long serialVersionUID = 1L;
-        private final JLabel idLabel = new JLabel();
-        private final JLabel detailsPill = new JLabel("+details");
-        private final JLabel summaryLabel = new JLabel();
-        private final JLabel metaLabel = new JLabel();
-
-        MemoryEntryCellRenderer() {
-            super(new MigLayout("insets 6 10 6 10, fillx, wrap 1, gapy 2", "[grow, fill]"));
-            setOpaque(true);
-            idLabel.setIconTextGap(6);
-            idLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold $monospaced.font");
-            detailsPill.putClientProperty(FlatClientProperties.STYLE, "font: -2 bold; border: 1,6,1,6; arc: 10");
-            detailsPill.setOpaque(true);
-            summaryLabel.putClientProperty(FlatClientProperties.STYLE, "font: 0");
-            metaLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
-
-            JPanel topRow = new JPanel(new MigLayout("insets 0, fillx", "[grow, fill][]", "[]"));
-            topRow.setOpaque(false);
-            topRow.add(idLabel, CONSTRAINTS_GROWX);
-            topRow.add(detailsPill, "hidemode 3");
-            add(topRow, CONSTRAINTS_GROWX);
-            add(summaryLabel, CONSTRAINTS_GROWX);
-            add(metaLabel, CONSTRAINTS_GROWX);
+            masterPanel.applyTheme();
         }
 
-        @Override
-        public java.awt.Component getListCellRendererComponent(JList<? extends MemoryEntry> list, MemoryEntry value,
-                int index, boolean isSelected, boolean cellHasFocus) {
-            UiComponents.ListCellColors colors = UiComponents.resolveListCellColors(list, isSelected);
-            setBackground(colors.background());
-            setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));
-
-            if (value != null) {
-                idLabel.setText(value.id());
-                idLabel.setForeground(colors.foreground());
-                idLabel.setIcon(FontIcon.of(Codicons.NOTE, 14, colors.iconColor()));
-
-                boolean hasDetails = StringUtils.isNotBlank(value.details());
-                detailsPill.setVisible(hasDetails);
-                if (hasDetails) {
-                    Color accent = SwingHtmlUtils.getAccentColor();
-                    detailsPill.setForeground(accent);
-                    detailsPill.setBackground(SwingHtmlUtils.getTintedBackground(accent, 0.16));
-                }
-
-                summaryLabel.setText(value.summary());
-                summaryLabel.setForeground(colors.foreground());
-
-                StringBuilder meta = new StringBuilder();
-                if (!value.tags().isEmpty()) {
-                    meta.append('[').append(MemoryService.formatTagsDisplay(value.tags())).append(']');
-                }
-                if (StringUtils.isNotBlank(value.updatedAt())) {
-                    String formattedTs = PathUtils.formatTimestampDisplay(value.updatedAt(), TIMESTAMP_DISPLAY_LEN, "");
-                    if (!formattedTs.isEmpty()) {
-                        if (meta.length() > 0) {
-                            meta.append("  •  ");
-                        }
-                        meta.append(formattedTs);
-                    }
-                }
-                metaLabel.setText(meta.toString());
-                metaLabel.setForeground(colors.muted());
-                setToolTipText(value.id() + ": " + value.summary());
+        private static UiComponents.MasterCellData toCellData(MemoryEntry value) {
+            String pillText = null;
+            if (StringUtils.isNotBlank(value.details())) {
+                pillText = "+details";
             }
-            return this;
+            StringBuilder meta = new StringBuilder();
+            if (!value.tags().isEmpty()) {
+                meta.append('[').append(MemoryService.formatTagsDisplay(value.tags())).append(']');
+            }
+            if (StringUtils.isNotBlank(value.updatedAt())) {
+                String formattedTs = PathUtils.formatTimestampDisplay(value.updatedAt(), TIMESTAMP_DISPLAY_LEN, "");
+                if (!formattedTs.isEmpty()) {
+                    if (meta.length() > 0) {
+                        meta.append("  •  ");
+                    }
+                    meta.append(formattedTs);
+                }
+            }
+            return new UiComponents.MasterCellData(value.id(), Codicons.NOTE, pillText, value.summary(),
+                    meta.toString(), value.id() + ": " + value.summary());
         }
     }
 }

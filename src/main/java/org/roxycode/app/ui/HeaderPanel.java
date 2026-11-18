@@ -8,12 +8,12 @@ import java.awt.event.MouseEvent;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.concurrent.CompletableFuture;
-import java.util.function.Consumer;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GitService;
+import org.roxycode.app.events.NavigateToViewEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AgentProfile;
@@ -23,8 +23,11 @@ import org.roxycode.app.service.SettingsService;
 import org.roxycode.app.util.Edt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.context.event.EventListener;
+import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -39,13 +42,12 @@ final class HeaderPanel extends JPanel {
     private static final Color BRANCH_ACCENT_DARK = new Color(0x2d, 0xd4, 0xbf);
     private static final Color MODEL_ACCENT_LIGHT = new Color(0x7c, 0x3a, 0xed);
     private static final Color MODEL_ACCENT_DARK = new Color(0xa7, 0x8b, 0xfa);
-    private static final String PILL_STYLE_PREFIX = "font: bold -1; background: ";
-    private static final String PILL_STYLE_SUFFIX = "; arc: 10; border: 3,8,3,8";
+    private static final String PILL_PADDING = "3,8,3,8";
 
     private final transient ProjectService projectService;
     private final transient GitService gitService;
     private final transient SettingsService settingsService;
-    private transient Consumer<String> onNavigateToCard;
+    private final transient @Nullable ApplicationEventPublisher eventPublisher;
 
     final JButton projectSwitcherButton;
     final JLabel noProjectNoticeLabel;
@@ -55,9 +57,16 @@ final class HeaderPanel extends JPanel {
     final JButton themeToggleButton;
 
     public HeaderPanel(ProjectService projectService, GitService gitService, SettingsService settingsService) {
+        this(projectService, gitService, settingsService, null);
+    }
+
+    @Autowired
+    public HeaderPanel(ProjectService projectService, GitService gitService, SettingsService settingsService,
+            @Nullable ApplicationEventPublisher eventPublisher) {
         this.projectService = projectService;
         this.gitService = gitService;
         this.settingsService = settingsService;
+        this.eventPublisher = eventPublisher;
 
         setLayout(new MigLayout("insets 2 15 2 15, fillx", "[left]push[right]", LAYOUT_CENTER));
         putClientProperty(FlatClientProperties.STYLE, "background: darken($Panel.background, 2%)");
@@ -66,7 +75,11 @@ final class HeaderPanel extends JPanel {
         JPanel leftPanel = new JPanel(new MigLayout("insets 0, hidemode 3", "[]8[]12[]", LAYOUT_CENTER));
         leftPanel.setOpaque(false);
 
-        projectSwitcherButton = UiComponents.createProjectSwitcherButton(OPEN_PROJECT_TEXT, e -> chooseProject());
+        projectSwitcherButton = new JButton(OPEN_PROJECT_TEXT);
+        projectSwitcherButton.setIconTextGap(6);
+        projectSwitcherButton.setFocusable(false);
+        projectSwitcherButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        projectSwitcherButton.addActionListener(e -> chooseProject());
         leftPanel.add(projectSwitcherButton);
 
         noProjectNoticeLabel = new JLabel(NO_PROJECT_NOTICE_TEXT);
@@ -170,35 +183,27 @@ final class HeaderPanel extends JPanel {
         Color branchAccent = resolveBranchAccentColor();
         Color modelAccent = resolveModelAccentColor();
         String accentHex = SwingHtmlUtils.toHex(accent);
-        String branchBgHex = SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(branchAccent, 0.12));
-        String modelBgHex = SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(modelAccent, 0.12));
 
         projectSwitcherButton.putClientProperty(FlatClientProperties.STYLE,
                 "arc: 10; font: bold; margin: 3,10,3,10; background: fade(" + accentHex
                         + ", 10%); hoverBackground: fade(" + accentHex + ", 20%); pressedBackground: fade(" + accentHex
                         + ", 28%); borderColor: fade(" + accentHex + ", 35%)");
 
-        Color warnColor = SwingHtmlUtils.getWarningColor();
-        String warnBgHex = SwingHtmlUtils.toHex(SwingHtmlUtils.getTintedBackground(warnColor, 0.14));
-        styleHeaderPill(noProjectNoticeLabel, warnColor, warnBgHex, Codicons.WARNING);
+        UiComponents.stylePillBadge(noProjectNoticeLabel, noProjectNoticeLabel.getText(),
+                SwingHtmlUtils.getWarningColor(), Codicons.WARNING, 14, PILL_PADDING, false);
 
         Codicons branchIcon = null;
         if (branchLabel.getText() != null && !branchLabel.getText().isEmpty()) {
             branchIcon = Codicons.SOURCE_CONTROL;
         }
-        styleHeaderPill(branchLabel, branchAccent, branchBgHex, branchIcon);
-        styleHeaderPill(modelLabel, modelAccent, modelBgHex, Codicons.HUBOT);
-        styleHeaderPill(groundingLabel, modelAccent, modelBgHex, Codicons.GLOBE);
+        UiComponents.stylePillBadge(branchLabel, branchLabel.getText(), branchAccent, branchIcon, 14, PILL_PADDING,
+                false);
+        UiComponents.stylePillBadge(modelLabel, modelLabel.getText(), modelAccent, Codicons.HUBOT, 14, PILL_PADDING,
+                false);
+        UiComponents.stylePillBadge(groundingLabel, groundingLabel.getText(), modelAccent, Codicons.GLOBE, 14,
+                PILL_PADDING, false);
 
         themeToggleButton.setIcon(FontIcon.of(Codicons.COLOR_MODE, 16, UiComponents.resolveForegroundColor()));
-    }
-
-    private static void styleHeaderPill(JLabel label, Color fgColor, String bgHex, Codicons icon) {
-        label.setForeground(fgColor);
-        label.putClientProperty(FlatClientProperties.STYLE, PILL_STYLE_PREFIX + bgHex + PILL_STYLE_SUFFIX);
-        if (icon != null) {
-            label.setIcon(FontIcon.of(icon, 14, fgColor));
-        }
     }
 
     @EventListener
@@ -265,26 +270,22 @@ final class HeaderPanel extends JPanel {
                 + resolvedProfile.getBadgeSummary() + ") — Click to configure Agent Profile");
     }
 
-    public void setOnNavigateToCard(Consumer<String> onNavigateToCard) {
-        this.onNavigateToCard = onNavigateToCard;
-    }
-
     void navigateFromModelPill() {
-        if (onNavigateToCard == null) {
+        if (eventPublisher == null) {
             return;
         }
         boolean hasProject = projectService != null && projectService.hasActiveProject();
         boolean hasCredentials = settingsService != null && settingsService.hasConfiguredCredentials();
         if (hasProject && hasCredentials) {
-            onNavigateToCard.accept(MainFrame.PROJECT_MODEL_VIEW);
+            eventPublisher.publishEvent(new NavigateToViewEvent(MainFrame.PROJECT_MODEL_VIEW, null));
         } else {
-            onNavigateToCard.accept(MainFrame.SETTINGS_VIEW);
+            eventPublisher.publishEvent(new NavigateToViewEvent(MainFrame.SETTINGS_VIEW, null));
         }
     }
 
     void navigateFromGroundingPill() {
-        if (onNavigateToCard != null) {
-            onNavigateToCard.accept(MainFrame.SETTINGS_VIEW);
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new NavigateToViewEvent(MainFrame.SETTINGS_VIEW, null));
         }
     }
 

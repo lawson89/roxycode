@@ -9,7 +9,6 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.EnumMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 import javax.swing.JButton;
@@ -19,7 +18,6 @@ import javax.swing.Timer;
 import net.miginfocom.swing.MigLayout;
 import org.apache.commons.lang3.StringUtils;
 import org.kordamp.ikonli.codicons.Codicons;
-import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.model.AgentProfile;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
@@ -41,13 +39,11 @@ final class ProjectModelOverridePanel extends JPanel {
     private static final String ROW_CENTER = "[center]";
     private static final String HEADER_FONT_STYLE = "font: bold +2";
     private static final String SAVE_BUTTON_BASE_STYLE = "font: bold; arc: 8; ";
-    private static final String BORDER_BG_STYLE = ",1,10; background: ";
 
     private final transient SettingsService settingsService;
     private final transient ProjectService projectService;
     private final transient UiComponents.UiGuard updateGuard = new UiComponents.UiGuard();
     private final transient Consumer<String> tabTitleUpdater;
-    private final transient @Nullable Consumer<CompletableFuture<?>> asyncFutureTracker;
 
     final JLabel modelTitleLabel;
     final JLabel modelSubtitleLabel;
@@ -63,17 +59,14 @@ final class ProjectModelOverridePanel extends JPanel {
     final Timer modelStatusTimer;
     final Timer modelSaveFeedbackTimer;
 
-    private String savedProfileId = "";
     String selectedProfileId = "";
-    transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
 
     ProjectModelOverridePanel(SettingsService settingsService, ProjectService projectService,
-            Consumer<String> tabTitleUpdater, @Nullable Consumer<CompletableFuture<?>> asyncFutureTracker) {
+            Consumer<String> tabTitleUpdater) {
         super(new MigLayout("fill, insets 20, hidemode 3", GROW_FILL, "[]14" + GROW_FILL));
         this.settingsService = settingsService;
         this.projectService = projectService;
         this.tabTitleUpdater = tabTitleUpdater;
-        this.asyncFutureTracker = asyncFutureTracker;
         setOpaque(true);
 
         modelTitleLabel = new JLabel(BuildConfigPanel.MODEL_TITLE_TEXT);
@@ -89,12 +82,7 @@ final class ProjectModelOverridePanel extends JPanel {
         modelSaveButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         modelSaveButton.setIconTextGap(6);
 
-        modelSaveFeedbackTimer = new Timer(2500, null);
-        modelSaveFeedbackTimer.setRepeats(false);
-        modelSaveFeedbackTimer.addActionListener(e -> {
-            modelSaveFeedbackTimer.stop();
-            updateModelSaveButtonState();
-        });
+        modelSaveFeedbackTimer = UiComponents.createSaveFeedbackTimer(this::updateModelSaveButtonState);
 
         JPanel modelHeaderActions = new JPanel(new MigLayout("insets 0, gapx 10", "[][][]", ROW_CENTER));
         modelHeaderActions.setOpaque(false);
@@ -129,10 +117,8 @@ final class ProjectModelOverridePanel extends JPanel {
                 selected -> selectProfileOverride(selected.getId()));
         modelCardPanel.add(profileGrid, GROWX_WMIN_0);
 
-        JPanel modelCardsContainer = UiComponents
-                .createScrollableCardsPanel(new MigLayout("fillx, wrap 1, insets 4 2 16 6, gapy 14", GROW_FILL, ""));
-        modelCardsContainer.add(modelCardPanel, GROWX_WMIN_0);
-        add(UiComponents.createBorderlessScrollPane(modelCardsContainer), "grow, wmin 0");
+        add(UiComponents.createCardsScrollPane(new MigLayout("fillx, wrap 1, insets 4 2 16 6, gapy 14", GROW_FILL, ""),
+                modelCardPanel), "grow, wmin 0");
 
         applyThemeStyling();
     }
@@ -160,10 +146,7 @@ final class ProjectModelOverridePanel extends JPanel {
             projectProfile = StringUtils.defaultString(projectService.getProjectAgentProfile());
         }
         final String targetProfile = normalizeProfileId(projectProfile);
-        updateGuard.run(() -> {
-            selectProfileOverride(targetProfile);
-            savedProfileId = selectedProfileId;
-        });
+        updateGuard.run(() -> selectProfileOverride(targetProfile));
         globalDefaultProfileCard.updateGlobalProfileDisplay(globalProfile);
         updateModelSaveButtonState();
     }
@@ -179,7 +162,7 @@ final class ProjectModelOverridePanel extends JPanel {
         updateModelOverrideIndicators();
         if (!updateGuard.isActive()) {
             UiComponents.stopTimer(modelSaveFeedbackTimer);
-            clearModelStatus();
+            UiComponents.clearStatusMessage(modelStatusLabel, modelStatusTimer, false);
             updateModelSaveButtonState();
         }
     }
@@ -206,23 +189,12 @@ final class ProjectModelOverridePanel extends JPanel {
             tabTitle = BuildConfigPanel.TAB_AI_MODEL_TITLE + " (Global)";
         }
         if (modelOverrideStatusPill != null) {
-            modelOverrideStatusPill.setText(pillText);
-            Color accentColor = SwingHtmlUtils.getAccentColor();
-            Color mutedColor = SwingHtmlUtils.getMutedForegroundColor();
-            String borderHex = UiComponents.getCardBorderHex();
-            String pillBg = UiComponents.getPillBackgroundDirective();
             if (overridden) {
-                String accentHex = SwingHtmlUtils.toHex(accentColor);
-                modelOverrideStatusPill.setForeground(accentColor);
-                modelOverrideStatusPill.setIcon(FontIcon.of(Codicons.HUBOT, 13, accentColor));
-                modelOverrideStatusPill.putClientProperty(FlatClientProperties.STYLE,
-                        "font: bold -1; arc: 10; border: 3,9,3,9," + accentHex + BORDER_BG_STYLE + "fade(" + accentHex
-                                + ", 10%)");
+                UiComponents.stylePillBadge(modelOverrideStatusPill, pillText, SwingHtmlUtils.getAccentColor(),
+                        Codicons.HUBOT, 13, "3,9,3,9", true);
             } else {
-                modelOverrideStatusPill.setForeground(mutedColor);
-                modelOverrideStatusPill.setIcon(FontIcon.of(Codicons.GLOBE, 13, mutedColor));
-                modelOverrideStatusPill.putClientProperty(FlatClientProperties.STYLE,
-                        "font: bold -1; arc: 10; border: 3,9,3,9," + borderHex + BORDER_BG_STYLE + pillBg);
+                UiComponents.stylePillBadge(modelOverrideStatusPill, pillText, SwingHtmlUtils.getMutedForegroundColor(),
+                        Codicons.GLOBE, 13, "3,9,3,9", true);
             }
         }
         if (tabTitleUpdater != null) {
@@ -230,66 +202,44 @@ final class ProjectModelOverridePanel extends JPanel {
         }
     }
 
-    boolean hasUnsavedModelChanges() {
-        return !Objects.equals(selectedProfileId, savedProfileId);
-    }
-
     void updateModelSaveButtonState() {
         if (modelSaveButton == null) {
             return;
         }
         if (modelSaveFeedbackTimer != null && modelSaveFeedbackTimer.isRunning()) {
-            BuildConfigPanel.applyButtonPresentation(modelSaveButton, BuildConfigPanel.MODEL_SAVED_FEEDBACK_BUTTON_TEXT,
+            UiComponents.applyButtonPresentation(modelSaveButton, BuildConfigPanel.MODEL_SAVED_FEEDBACK_BUTTON_TEXT,
                     Codicons.CHECK, SAVE_BUTTON_BASE_STYLE + UiComponents.GREEN_BUTTON_STYLE);
         } else {
-            BuildConfigPanel.applyButtonPresentation(modelSaveButton, BuildConfigPanel.MODEL_SAVE_BUTTON_TEXT,
+            UiComponents.applyButtonPresentation(modelSaveButton, BuildConfigPanel.MODEL_SAVE_BUTTON_TEXT,
                     Codicons.SAVE, SAVE_BUTTON_BASE_STYLE + UiComponents.ACCENT_BUTTON_STYLE);
         }
-    }
-
-    void showModelStatus(String message, boolean success) {
-        UiComponents.showStatusMessage(modelStatusLabel, modelStatusTimer, message, success);
-    }
-
-    void clearModelStatus() {
-        UiComponents.clearStatusMessage(modelStatusLabel, modelStatusTimer, false);
     }
 
     CompletableFuture<Void> saveModelConfig() {
         UiComponents.stopTimer(modelSaveFeedbackTimer);
         if (projectService == null) {
-            CompletableFuture<Void> done = CompletableFuture.completedFuture(null);
-            trackAsyncFuture(done);
-            return done;
+            return CompletableFuture.completedFuture(null);
         }
         final String profileOverrideToSave = selectedProfileId;
         modelSaveButton.setEnabled(false);
-        CompletableFuture<Void> future = Edt.runAsync(() -> {
+        return Edt.runAsync(() -> {
             if (projectService.hasActiveProject()) {
                 projectService.setProjectAgentProfile(profileOverrideToSave);
             }
         }, () -> {
             modelSaveButton.setEnabled(true);
-            savedProfileId = profileOverrideToSave;
             modelSaveFeedbackTimer.restart();
             updateModelSaveButtonState();
-            showModelStatus(BuildConfigPanel.MODEL_SAVED_STATUS_TEXT, true);
+            UiComponents.showStatusMessage(modelStatusLabel, modelStatusTimer, BuildConfigPanel.MODEL_SAVED_STATUS_TEXT,
+                    true);
         }, ex -> {
             modelSaveButton.setEnabled(true);
             updateModelSaveButtonState();
             Throwable cause = ExceptionUtils.getRootCause(ex);
             log.error("Failed to save project model override: {}", cause.getMessage());
-            showModelStatus("Error saving model settings: " + cause.getMessage(), false);
+            UiComponents.showStatusMessage(modelStatusLabel, modelStatusTimer,
+                    "Error saving model settings: " + cause.getMessage(), false);
         });
-        trackAsyncFuture(future);
-        return future;
-    }
-
-    private void trackAsyncFuture(CompletableFuture<?> future) {
-        lastAsyncFuture = future;
-        if (asyncFutureTracker != null) {
-            asyncFutureTracker.accept(future);
-        }
     }
 
     final class GlobalDefaultCard extends JPanel {
