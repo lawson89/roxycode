@@ -329,12 +329,7 @@ final class ChatController implements AutoCloseable {
                 view.appendMessage(ROLE_SYSTEM, "No " + scope + " memories saved.");
                 return;
             }
-            StringBuilder sb = new StringBuilder("### ").append(StringUtils.capitalize(scope)).append(" Memories (")
-                    .append(entries.size()).append(")\n");
-            for (MemoryMetadata entry : entries) {
-                sb.append(MemoryService.formatCatalogLine(entry)).append("\n");
-            }
-            view.appendMessage(ROLE_SYSTEM, sb.toString().stripTrailing());
+            appendMemoryCatalogMessage("### " + StringUtils.capitalize(scope) + " Memories", entries);
             return;
         }
         try {
@@ -408,9 +403,12 @@ final class ChatController implements AutoCloseable {
             view.appendMessage(ROLE_SYSTEM, "No " + scope + " memories matching " + BT + query + BT + ".");
             return;
         }
-        StringBuilder sb = new StringBuilder("### Matching ").append(StringUtils.capitalize(scope))
-                .append(" Memories (").append(matches.size()).append(")\n");
-        for (MemoryMetadata entry : matches) {
+        appendMemoryCatalogMessage("### Matching " + StringUtils.capitalize(scope) + " Memories", matches);
+    }
+
+    private void appendMemoryCatalogMessage(String heading, List<MemoryMetadata> entries) {
+        StringBuilder sb = new StringBuilder(heading).append(" (").append(entries.size()).append(")\n");
+        for (MemoryMetadata entry : entries) {
             sb.append(MemoryService.formatCatalogLine(entry)).append("\n");
         }
         view.appendMessage(ROLE_SYSTEM, sb.toString().stripTrailing());
@@ -534,7 +532,7 @@ final class ChatController implements AutoCloseable {
 
     public void resetSession() {
         if (!model.isTaskMode()) {
-            performNewTopicReset(true, null);
+            performNewTopicReset();
             return;
         }
         view.showResetSessionPrompt(this::performResetSession);
@@ -542,7 +540,7 @@ final class ChatController implements AutoCloseable {
 
     void performResetSession() {
         if (!model.isTaskMode()) {
-            performNewTopicReset(true, null);
+            performNewTopicReset();
         } else {
             resetSessionState(true, "Session reset.");
         }
@@ -552,27 +550,25 @@ final class ChatController implements AutoCloseable {
         resetSessionState(false, null);
     }
 
-    void performNewTopicReset(boolean saveTopic, String customTopicTitle) {
+    void performNewTopicReset() {
         List<ChatTranscriptEntry> capturedTranscript = view.getConversationMessages();
-        boolean shouldArchive = saveTopic && !capturedTranscript.isEmpty() && memoryService != null;
+        boolean shouldArchive = !capturedTranscript.isEmpty() && memoryService != null;
         String notice = "Started a new topic.";
         if (shouldArchive) {
             notice = null;
         }
         resetSessionState(true, notice);
         if (shouldArchive) {
-            turnExecutor.execute(() -> archiveCapturedTopic(capturedTranscript, customTopicTitle));
+            turnExecutor.execute(() -> archiveCapturedTopic(capturedTranscript));
         }
     }
 
-    private void archiveCapturedTopic(List<ChatTranscriptEntry> capturedTranscript, String customTopicTitle) {
-        String title = MemoryService.cleanTopicTitle(customTopicTitle);
-        if (title.isEmpty()) {
-            if (aiService != null) {
-                title = aiService.generateTopicTitle(capturedTranscript);
-            } else {
-                title = MemoryService.deriveDefaultTopicTitle(capturedTranscript);
-            }
+    private void archiveCapturedTopic(List<ChatTranscriptEntry> capturedTranscript) {
+        String title;
+        if (aiService != null) {
+            title = aiService.generateTopicTitle(capturedTranscript);
+        } else {
+            title = MemoryService.deriveDefaultTopicTitle(capturedTranscript);
         }
         String user = EnvironmentService.resolveCurrentUser(environmentService);
         String filename = memoryService.archiveTopicConversation(title, user, Instant.now().toString(),
@@ -629,18 +625,14 @@ final class ChatController implements AutoCloseable {
     public void triggerTurn(String text) {
         List<PendingAttachment> pendingAttachments = model.drainPendingAttachments();
         view.clearAttachments();
-        triggerTurn(text, pendingAttachments);
-    }
-
-    private record UserMessageRenderData(String text, List<String> thumbnailBase64List,
-            List<String> attachedFileNames) {
-    }
-
-    private void triggerTurn(String text, List<PendingAttachment> pendingAttachments) {
         if (text == null || text.trim().isEmpty()) {
             return;
         }
         triggerTurn(() -> text, pendingAttachments, null);
+    }
+
+    private record UserMessageRenderData(String text, List<String> thumbnailBase64List,
+            List<String> attachedFileNames) {
     }
 
     private void triggerTurn(Supplier<String> promptSupplier, List<PendingAttachment> pendingAttachments) {

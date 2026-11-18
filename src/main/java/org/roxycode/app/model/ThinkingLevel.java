@@ -52,25 +52,6 @@ public enum ThinkingLevel {
     }
 
     /**
-     * Resolves the concrete sub-turn thinking level for a model call using the default (non-model-specific) adaptive
-     * trajectory.
-     *
-     * @param phase
-     *            the current workflow phase
-     * @param planSubmitted
-     *            whether an implementation plan is currently submitted
-     * @param hasToolResponses
-     *            whether the prompt already contains tool execution responses
-     * @param lastToolCallFailed
-     *            whether the most recent tool execution response contains a failure or error
-     * @return the concrete {@link ThinkingLevel} to apply to the model call
-     */
-    public ThinkingLevel resolveSubTurnLevel(@Nullable WorkflowPhase phase, boolean planSubmitted,
-            boolean hasToolResponses, boolean lastToolCallFailed) {
-        return resolveSubTurnLevel(phase, null, planSubmitted, hasToolResponses, lastToolCallFailed);
-    }
-
-    /**
      * Resolves the concrete sub-turn thinking level for a model call. When this level is {@link #ADAPTIVE}, the
      * thinking budget is chosen dynamically based on the active workflow phase, target model, and sub-turn state:
      * <ul>

@@ -15,17 +15,6 @@ import org.kordamp.ikonli.swing.FontIcon;
 
 final class SidebarPanel extends JPanel {
     private static final long serialVersionUID = 1L;
-    static final String CARD_QA = MainFrame.QA_VIEW;
-    static final String CARD_TASK = MainFrame.TASK_VIEW;
-    static final String CARD_CONTEXT = MainFrame.CONTEXT_MGR_VIEW;
-    static final String CARD_MEMORY = MainFrame.MEMORY_VIEW;
-    static final String CARD_BUILD = MainFrame.BUILD_CONFIG_VIEW;
-    static final String CARD_PROJECT_MODEL = MainFrame.PROJECT_MODEL_VIEW;
-    static final String CARD_PROJECT_DATABASES = MainFrame.PROJECT_DATABASES_VIEW;
-    static final String CARD_SETTINGS = MainFrame.SETTINGS_VIEW;
-    static final String CARD_JEXL_API = MainFrame.API_VIEW;
-    static final String CARD_TOOLS = MainFrame.TOOLS_VIEW;
-    static final String CARD_DATABASES = MainFrame.DATABASES_VIEW;
     static final int LOGO_SIZE = 56;
     static final int LOGO_ARC = 14;
     static final String ASK_ROXY_LABEL = "Ask Roxy";

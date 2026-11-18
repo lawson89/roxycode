@@ -693,12 +693,6 @@ public class AiService implements AutoCloseable {
     }
 
     ThinkingLevel resolveActiveSubTurnThinkingLevel(ThinkingLevel configuredLevel, @Nullable WorkflowPhase phase,
-            @Nullable ChatClientRequest request) {
-        return resolveActiveSubTurnThinkingLevel(configuredLevel, phase, resolveRequestModelName(request, phase),
-                request);
-    }
-
-    ThinkingLevel resolveActiveSubTurnThinkingLevel(ThinkingLevel configuredLevel, @Nullable WorkflowPhase phase,
             @Nullable String modelName, @Nullable ChatClientRequest request) {
         ThinkingLevel resolvedConfigured = Objects.requireNonNullElse(configuredLevel, ThinkingLevel.DEFAULT);
         if (resolvedConfigured != ThinkingLevel.ADAPTIVE) {

@@ -190,7 +190,7 @@ public class PromptService {
             return;
         }
         sb.append(HEADER_GLOBAL_AGENT_MEMORY);
-        boolean hasDetails = appendMemoryCatalog(sb, "Global Memories", globalMemories, false);
+        boolean hasDetails = appendMemoryCatalog(sb, "Global Memories", globalMemories);
         if (hasDetails) {
             sb.append(
                     "Call memoryService.read('global', id) or memoryService.readAll('global') when entries marked (+details) are relevant.\n");
@@ -208,7 +208,7 @@ public class PromptService {
         }
         sb.append(HEADER_PROJECT_AGENT_MEMORY);
         boolean hasPreceding = !projectMemories.isEmpty();
-        boolean hasDetails = appendMemoryCatalog(sb, "Project Memories", projectMemories, false);
+        boolean hasDetails = appendMemoryCatalog(sb, "Project Memories", projectMemories);
         hasPreceding = appendCatalog(sb, "Recent Archived Plans", archivedPlans, MAX_RECENT_ARCHIVED_PLANS,
                 hasPreceding);
         appendCatalog(sb, "Recent Archived Topics", archivedTopics, MAX_RECENT_ARCHIVED_PLANS, hasPreceding);
@@ -222,27 +222,19 @@ public class PromptService {
         }
     }
 
-    private static boolean appendMemoryCatalog(StringBuilder sb, String title, List<MemoryMetadata> entries,
-            boolean hasPreceding) {
+    private static boolean appendMemoryCatalog(StringBuilder sb, String title, List<MemoryMetadata> entries) {
         if (entries.isEmpty()) {
-            return hasPreceding;
-        }
-        if (hasPreceding) {
-            sb.append("\n");
+            return false;
         }
         sb.append("### ").append(title).append("\n");
         boolean anyHasDetails = false;
         for (MemoryMetadata entry : entries) {
-            sb.append(formatMemoryCatalogLine(entry)).append("\n");
+            sb.append(MemoryService.formatCatalogLine(entry)).append("\n");
             if (entry.hasDetails()) {
                 anyHasDetails = true;
             }
         }
         return anyHasDetails;
-    }
-
-    static String formatMemoryCatalogLine(MemoryMetadata entry) {
-        return MemoryService.formatCatalogLine(entry);
     }
 
     private static boolean appendCatalog(StringBuilder sb, String title, List<String> items, int limit,

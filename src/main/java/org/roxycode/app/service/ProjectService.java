@@ -179,7 +179,7 @@ public class ProjectService {
         String savedPath = settingsService.getSettings().getCurrentProjectPath();
         if (StringUtils.isNotEmpty(savedPath)) {
             this.currentProjectRoot = Paths.get(savedPath);
-            recordRecentProjectInSettings(this.currentProjectRoot, false);
+            recordRecentProjectInSettings(this.currentProjectRoot);
         }
     }
 
@@ -211,7 +211,7 @@ public class ProjectService {
         if (newRoot != null) {
             this.currentProjectRoot = newRoot;
             settingsService.getSettings().setCurrentProjectPath(newRoot.toAbsolutePath().toString());
-            recordRecentProjectInSettings(newRoot, false);
+            recordRecentProjectInSettings(newRoot);
             settingsService.saveSettings();
             eventPublisher.publishEvent(new ProjectChangedEvent(newRoot));
         }
@@ -248,7 +248,7 @@ public class ProjectService {
         return List.copyOf(result);
     }
 
-    private void recordRecentProjectInSettings(Path projectRoot, boolean saveImmediately) {
+    private void recordRecentProjectInSettings(Path projectRoot) {
         if (projectRoot == null || settingsService == null || settingsService.getSettings() == null) {
             return;
         }
@@ -271,9 +271,6 @@ public class ProjectService {
             }
         }
         settings.setRecentProjectPaths(updated);
-        if (saveImmediately) {
-            settingsService.saveSettings();
-        }
     }
 
     /**
@@ -301,34 +298,47 @@ public class ProjectService {
         return new FileStamp(Instant.EPOCH, -1L);
     }
 
-    private ProjectConfig readProjectConfig() {
+    private <T> T readCachedProjectToml(String fileName, Class<T> type, T defaultValue, CachedConfig<T> currentCache,
+            java.util.function.Consumer<CachedConfig<T>> cacheSetter) {
         if (!hasActiveProject()) {
-            return ProjectConfig.DEFAULT;
+            return defaultValue;
         }
-        Path configFile = resolveProjectDataPath(PROJECT_CONFIG_FILE);
+        Path configFile = resolveProjectDataPath(fileName);
         FileStamp stamp = readFileStamp(configFile);
-        CachedConfig<ProjectConfig> cached = this.cachedProjectConfig;
-        if (cached != null && cached.filePath().equals(configFile) && cached.stamp().equals(stamp)) {
-            return cached.config();
+        if (currentCache != null && currentCache.filePath().equals(configFile) && currentCache.stamp().equals(stamp)) {
+            return currentCache.config();
         }
-        ProjectConfig loaded = PathUtils.readTomlOrDefault(configFile, ProjectConfig.class, ProjectConfig.DEFAULT,
-                AiConfig.SHARED_TOML_MAPPER);
-        this.cachedProjectConfig = new CachedConfig<>(configFile, stamp, loaded);
+        T loaded = PathUtils.readTomlOrDefault(configFile, type, defaultValue, AiConfig.SHARED_TOML_MAPPER);
+        cacheSetter.accept(new CachedConfig<>(configFile, stamp, loaded));
         return loaded;
     }
 
-    private void writeProjectConfig(ProjectConfig config) {
+    private <T> void writeCachedProjectToml(String fileName, T config, String errorLabel,
+            java.util.function.Consumer<CachedConfig<T>> cacheSetter) {
         if (!hasActiveProject()) {
             throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
-        Path configFile = resolveProjectDataPath(PROJECT_CONFIG_FILE);
+        Path configFile = resolveProjectDataPath(fileName);
         try {
             PathUtils.writeToml(configFile, config, AiConfig.SHARED_TOML_MAPPER);
-            this.cachedProjectConfig = new CachedConfig<>(configFile, readFileStamp(configFile), config);
+            cacheSetter.accept(new CachedConfig<>(configFile, readFileStamp(configFile), config));
         } catch (IOException e) {
-            log.error("Failed to save project config {}: {}", configFile, e.getMessage());
-            throw new UncheckedIOException("Failed to save project config", e);
+            log.error("Failed to save {} {}: {}", errorLabel, configFile, e.getMessage());
+            throw new UncheckedIOException("Failed to save " + errorLabel, e);
         }
+    }
+
+    private ProjectConfig readProjectConfig() {
+        return readCachedProjectToml(PROJECT_CONFIG_FILE, ProjectConfig.class, ProjectConfig.DEFAULT,
+                this.cachedProjectConfig, c -> {
+                    this.cachedProjectConfig = c;
+                });
+    }
+
+    private void writeProjectConfig(ProjectConfig config) {
+        writeCachedProjectToml(PROJECT_CONFIG_FILE, config, "project config", c -> {
+            this.cachedProjectConfig = c;
+        });
     }
 
     /**
@@ -499,35 +509,18 @@ public class ProjectService {
     }
 
     private ProjectContextConfig readProjectContextConfig() {
-        if (!hasActiveProject()) {
-            return ProjectContextConfig.EMPTY;
-        }
-        Path configFile = resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE);
-        FileStamp stamp = readFileStamp(configFile);
-        CachedConfig<ProjectContextConfig> cached = this.cachedProjectContextConfig;
-        if (cached != null && cached.filePath().equals(configFile) && cached.stamp().equals(stamp)) {
-            return cached.config();
-        }
-        ProjectContextConfig loaded = PathUtils.readTomlOrDefault(configFile, ProjectContextConfig.class,
-                ProjectContextConfig.EMPTY, AiConfig.SHARED_TOML_MAPPER);
-        this.cachedProjectContextConfig = new CachedConfig<>(configFile, stamp, loaded);
-        return loaded;
+        return readCachedProjectToml(PROJECT_CONTEXT_CONFIG_FILE, ProjectContextConfig.class,
+                ProjectContextConfig.EMPTY, this.cachedProjectContextConfig, c -> {
+                    this.cachedProjectContextConfig = c;
+                });
     }
 
     private void writeProjectContextConfig(ProjectContextConfig config) {
-        if (!hasActiveProject()) {
-            throw new IllegalStateException("No active project");
-        }
-        Path configFile = resolveProjectDataPath(PROJECT_CONTEXT_CONFIG_FILE);
-        try {
-            PathUtils.writeToml(configFile, config, AiConfig.SHARED_TOML_MAPPER);
-            this.cachedProjectContextConfig = new CachedConfig<>(configFile, readFileStamp(configFile), config);
-            if (eventPublisher != null) {
-                eventPublisher.publishEvent(new ContextChangedEvent(false));
-            }
-        } catch (IOException e) {
-            log.error("Failed to save project context config {}: {}", configFile, e.getMessage());
-            throw new UncheckedIOException("Failed to save project context config", e);
+        writeCachedProjectToml(PROJECT_CONTEXT_CONFIG_FILE, config, "project context config", c -> {
+            this.cachedProjectContextConfig = c;
+        });
+        if (eventPublisher != null) {
+            eventPublisher.publishEvent(new ContextChangedEvent(false));
         }
     }
 
@@ -677,17 +670,16 @@ public class ProjectService {
         Set<String> usedAliases = new HashSet<>();
         Set<Path> seenRootPaths = new HashSet<>();
 
-        appendScopeMounts(projectFolders, false, projectRoot, mounts, usedAliases, seenRootPaths, true);
+        appendScopeMounts(projectFolders, false, projectRoot, mounts, usedAliases, seenRootPaths);
         if (!deduplicateAcrossScopes) {
             seenRootPaths.clear();
         }
-        appendScopeMounts(globalFolders, true, projectRoot, mounts, usedAliases, seenRootPaths, true);
+        appendScopeMounts(globalFolders, true, projectRoot, mounts, usedAliases, seenRootPaths);
         return List.copyOf(mounts);
     }
 
     private static void appendScopeMounts(List<String> rawFolders, boolean globalScope, Path projectRoot,
-            List<ReferenceFolderMount> targetMounts, Set<String> usedAliases, Set<Path> seenRootPaths,
-            boolean deduplicatePaths) {
+            List<ReferenceFolderMount> targetMounts, Set<String> usedAliases, Set<Path> seenRootPaths) {
         if (rawFolders == null || rawFolders.isEmpty()) {
             return;
         }
@@ -697,10 +689,7 @@ public class ProjectService {
             }
             String configured = rawFolder.trim();
             Path resolved = resolveMountFolderPath(configured, !globalScope, projectRoot);
-            if (resolved == null) {
-                continue;
-            }
-            if (deduplicatePaths && !seenRootPaths.add(resolved)) {
+            if (resolved == null || !seenRootPaths.add(resolved)) {
                 continue;
             }
             String baseAlias = deriveBaseAlias(resolved);
@@ -726,11 +715,7 @@ public class ProjectService {
     }
 
     static String deriveBaseAlias(Path normalizedPath) {
-        String rawName = "";
-        if (normalizedPath != null && normalizedPath.getFileName() != null) {
-            rawName = normalizedPath.getFileName().toString();
-        }
-        return PathUtils.sanitizeSlug(rawName, MAX_PROJECT_NAME_LENGTH, DEFAULT_REF_ALIAS);
+        return sanitizePathFileName(normalizedPath, DEFAULT_REF_ALIAS);
     }
 
     private static String allocateUniqueAlias(String baseAlias, Set<String> usedAliases) {
@@ -1037,10 +1022,14 @@ public class ProjectService {
      * @return the sanitized project name
      */
     public static String sanitizeProjectName(Path projectRoot) {
+        return sanitizePathFileName(projectRoot, "project");
+    }
+
+    private static String sanitizePathFileName(Path path, String fallback) {
         String rawName = "";
-        if (projectRoot != null && projectRoot.getFileName() != null) {
-            rawName = projectRoot.getFileName().toString();
+        if (path != null && path.getFileName() != null) {
+            rawName = path.getFileName().toString();
         }
-        return PathUtils.sanitizeSlug(rawName, MAX_PROJECT_NAME_LENGTH, "project");
+        return PathUtils.sanitizeSlug(rawName, MAX_PROJECT_NAME_LENGTH, fallback);
     }
 }

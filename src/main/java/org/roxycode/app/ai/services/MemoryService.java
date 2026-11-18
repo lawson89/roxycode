@@ -353,7 +353,7 @@ public class MemoryService {
 
     @AgentDoc(value = "Reads an archived implementation plan from <projectDataDir>/archive/plans/<filename>.", examples = "memoryService.readArchivedPlan('20250514-153000-feature-plan.md')")
     public String readArchivedPlan(@AgentDoc("The archived plan filename (with or without .md)") String filename) {
-        return readArchivedFile(resolveProjectSubdir(ARCHIVE_PLANS_SUBDIR), filename, "plan");
+        return readArchivedFile(ARCHIVE_PLANS_SUBDIR, filename, "plan");
     }
 
     @AgentDoc(value = "Lists archived Q&A topic conversations from <projectDataDir>/archive/topics/*.md (most recent first).", examples = "memoryService.listArchivedTopics()")
@@ -363,7 +363,7 @@ public class MemoryService {
 
     @AgentDoc(value = "Reads an archived Q&A topic conversation from <projectDataDir>/archive/topics/<filename>.", examples = "memoryService.readArchivedTopic('20250514-153000-memory-architecture.md')")
     public String readArchivedTopic(@AgentDoc("The archived topic filename (with or without .md)") String filename) {
-        return readArchivedFile(resolveProjectSubdir(ARCHIVE_TOPICS_SUBDIR), filename, TYPE_TOPIC);
+        return readArchivedFile(ARCHIVE_TOPICS_SUBDIR, filename, TYPE_TOPIC);
     }
 
     private void publishMemoryChanged(boolean globalScope) {
@@ -482,14 +482,10 @@ public class MemoryService {
         return StringUtils.containsIgnoreCase(value, query);
     }
 
-    private String readArchivedFile(Path archiveDir, String filename, String label) {
-        String cleanName = sanitizeArchiveFilename(filename);
-        if (archiveDir == null) {
+    private String readArchivedFile(String subdir, String filename, String label) {
+        Path target = resolveArchivedFilePath(subdir, filename, label);
+        if (target == null) {
             return "";
-        }
-        Path target = archiveDir.resolve(cleanName).toAbsolutePath().normalize();
-        if (!target.startsWith(archiveDir)) {
-            throw new IllegalArgumentException("Invalid archived " + label + " filename: " + filename);
         }
         return readFileIfExists(target);
     }
@@ -916,12 +912,7 @@ public class MemoryService {
         if (StringUtils.isBlank(rawTags)) {
             return List.of();
         }
-        String[] parts = rawTags.split(",");
-        List<String> list = new ArrayList<>(parts.length);
-        for (String part : parts) {
-            list.add(part);
-        }
-        return normalizeTags(list);
+        return normalizeTags(Arrays.asList(rawTags.split(",")));
     }
 
     public static String formatTagsDisplay(@Nullable List<String> tags) {

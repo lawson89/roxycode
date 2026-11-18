@@ -53,8 +53,6 @@ public final class SettingsPanel extends JPanel {
     static final String SAVE_SETTINGS_TEXT = "Save Settings";
     static final String SAVE_CHANGES_DIRTY_TEXT = "Save Changes";
     static final String ONBOARDING_API_KEY_NOTICE_TEXT = "Welcome to RoxyCode! Configure your Gemini API Key or Google Cloud Vertex AI credentials below and click 'Save Settings' to get started.";
-    static final String AUTH_PROVIDER_API_KEY = "Gemini API Key (Google AI Studio)";
-    static final String AUTH_PROVIDER_VERTEX_AI = "Google Cloud Vertex AI";
     static final String AUTH_TOGGLE_API_KEY_TEXT = "Google AI Studio (API Key)";
     static final String AUTH_TOGGLE_VERTEX_TEXT = "Google Cloud Vertex AI";
     static final String GET_API_KEY_BUTTON_TEXT = "Get a Gemini API Key";
@@ -102,7 +100,6 @@ public final class SettingsPanel extends JPanel {
     final Map<AgentProfile, UiComponents.AgentProfileCard> profileCards = new EnumMap<>(AgentProfile.class);
     private transient AgentProfile selectedProfile = AgentProfile.DEFAULT;
     final JSpinner maxMessagesSpinner;
-    final JComboBox<String> authProviderCombo;
     final JToggleButton apiKeyProviderToggleBtn;
     final JToggleButton vertexAiProviderToggleBtn;
     final ButtonGroup authProviderToggleGroup;
@@ -178,24 +175,18 @@ public final class SettingsPanel extends JPanel {
 
         loadProfiles();
 
-        authProviderCombo = new JComboBox<>(new String[]{AUTH_PROVIDER_API_KEY, AUTH_PROVIDER_VERTEX_AI});
-        if (settingsService.getSettings().isVertexAiEnabled()) {
-            authProviderCombo.setSelectedItem(AUTH_PROVIDER_VERTEX_AI);
-        } else {
-            authProviderCombo.setSelectedItem(AUTH_PROVIDER_API_KEY);
-        }
-        authProviderCombo.addActionListener(e -> {
-            updateAuthProviderVisibility();
-            updateSaveButtonState();
-        });
-
         apiKeyProviderToggleBtn = new JToggleButton(AUTH_TOGGLE_API_KEY_TEXT);
         vertexAiProviderToggleBtn = new JToggleButton(AUTH_TOGGLE_VERTEX_TEXT);
         authProviderToggleGroup = new ButtonGroup();
         authProviderToggleGroup.add(apiKeyProviderToggleBtn);
         authProviderToggleGroup.add(vertexAiProviderToggleBtn);
-        configureProviderToggleButton(apiKeyProviderToggleBtn, AUTH_PROVIDER_API_KEY);
-        configureProviderToggleButton(vertexAiProviderToggleBtn, AUTH_PROVIDER_VERTEX_AI);
+        if (settingsService.getSettings().isVertexAiEnabled()) {
+            vertexAiProviderToggleBtn.setSelected(true);
+        } else {
+            apiKeyProviderToggleBtn.setSelected(true);
+        }
+        configureProviderToggleButton(apiKeyProviderToggleBtn);
+        configureProviderToggleButton(vertexAiProviderToggleBtn);
 
         segmentedProviderPanel = new JPanel(new MigLayout("insets 3, gapx 4", "[sg seg][sg seg]", ROW_CENTER));
         segmentedProviderPanel.add(apiKeyProviderToggleBtn);
@@ -310,13 +301,12 @@ public final class SettingsPanel extends JPanel {
         updateSaveButtonState();
     }
 
-    private void configureProviderToggleButton(JToggleButton button, String providerOption) {
+    private void configureProviderToggleButton(JToggleButton button) {
         button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         button.setFocusable(false);
         button.addActionListener(e -> {
-            if (!providerOption.equals(authProviderCombo.getSelectedItem())) {
-                authProviderCombo.setSelectedItem(providerOption);
-            }
+            updateAuthProviderVisibility();
+            updateSaveButtonState();
         });
     }
 
@@ -566,17 +556,9 @@ public final class SettingsPanel extends JPanel {
     }
 
     void updateApiKeyStorageBadge() {
-        if (settingsService != null && settingsService.isNativeKeyringAvailable()) {
-            Color green = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
-            apiKeyStorageBadge.setText(KEYRING_READY_BADGE_TEXT);
-            apiKeyStorageBadge.setForeground(green);
-            apiKeyStorageBadge.setIcon(FontIcon.of(Codicons.PASS, 13, green));
-        } else {
-            Color warn = SwingHtmlUtils.getWarningColor();
-            apiKeyStorageBadge.setText(KEYRING_FALLBACK_BADGE_TEXT);
-            apiKeyStorageBadge.setForeground(warn);
-            apiKeyStorageBadge.setIcon(FontIcon.of(Codicons.WARNING, 13, warn));
-        }
+        boolean available = settingsService != null && settingsService.isNativeKeyringAvailable();
+        UiComponents.applyKeyringStatusBadge(apiKeyStorageBadge, available, KEYRING_READY_BADGE_TEXT,
+                KEYRING_FALLBACK_BADGE_TEXT);
     }
 
     private void applyProviderToggleStyling() {
@@ -612,16 +594,12 @@ public final class SettingsPanel extends JPanel {
     }
 
     boolean isVertexAiSelected() {
-        return AUTH_PROVIDER_VERTEX_AI.equals(authProviderCombo.getSelectedItem());
+        return vertexAiProviderToggleBtn != null && vertexAiProviderToggleBtn.isSelected();
     }
 
     void updateAuthProviderVisibility() {
         boolean vertexSelected = isVertexAiSelected();
-        if (apiKeyProviderToggleBtn != null && vertexAiProviderToggleBtn != null) {
-            apiKeyProviderToggleBtn.setSelected(!vertexSelected);
-            vertexAiProviderToggleBtn.setSelected(vertexSelected);
-            applyProviderToggleStyling();
-        }
+        applyProviderToggleStyling();
         apiKeyPanel.setVisible(!vertexSelected);
         vertexAiPanel.setVisible(vertexSelected);
         if (testConnectionStatusLabel != null) {
@@ -745,15 +723,9 @@ public final class SettingsPanel extends JPanel {
             if (theme != null && !theme.equals(themeCombo.getSelectedItem())) {
                 settingsUpdateGuard.run(() -> themeCombo.setSelectedItem(theme));
             }
-            String targetProvider;
-            if (event.settings().isVertexAiEnabled()) {
-                targetProvider = AUTH_PROVIDER_VERTEX_AI;
-            } else {
-                targetProvider = AUTH_PROVIDER_API_KEY;
-            }
-            if (!targetProvider.equals(authProviderCombo.getSelectedItem())) {
-                authProviderCombo.setSelectedItem(targetProvider);
-            }
+            boolean vertexEnabled = event.settings().isVertexAiEnabled();
+            apiKeyProviderToggleBtn.setSelected(!vertexEnabled);
+            vertexAiProviderToggleBtn.setSelected(vertexEnabled);
             updateAuthProviderVisibility();
             String apiKey = event.settings().getGeminiApiKey();
             if (apiKey != null) {

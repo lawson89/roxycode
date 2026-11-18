@@ -1,7 +1,6 @@
 package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
@@ -525,18 +524,8 @@ final class GlobalDatabasesPanel extends JPanel {
     }
 
     private void updateKeyringBadge() {
-        boolean available = credentialStoreService.isNativeKeyringAvailable();
-        if (available) {
-            keyringStatusBadge.setText("OS Keyring Ready");
-            Color green = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
-            keyringStatusBadge.setForeground(green);
-            keyringStatusBadge.setIcon(FontIcon.of(Codicons.PASS, 13, green));
-        } else {
-            keyringStatusBadge.setText("Session-Only Fallback (No OS Keyring)");
-            Color warn = SwingHtmlUtils.getWarningColor();
-            keyringStatusBadge.setForeground(warn);
-            keyringStatusBadge.setIcon(FontIcon.of(Codicons.WARNING, 13, warn));
-        }
+        UiComponents.applyKeyringStatusBadge(keyringStatusBadge, credentialStoreService.isNativeKeyringAvailable(),
+                "OS Keyring Ready", "Session-Only Fallback (No OS Keyring)");
     }
 
     private void chooseDriverJar() {

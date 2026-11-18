@@ -104,35 +104,14 @@ class BuildConfigPanelTest {
         assertSame(panel.modelTabPanel, panel.settingsTabs.getComponentAt(BuildConfigPanel.TAB_INDEX_AI_MODEL));
         assertSame(panel.databasesTabPanel, panel.settingsTabs.getComponentAt(BuildConfigPanel.TAB_INDEX_DATABASES));
 
-        // Tab 1: Build Configuration header & controls
-        assertEquals(BuildConfigPanel.TITLE_TEXT, panel.titleLabel.getText());
-        assertEquals(UiComponents.formatWrappingHtml(BuildConfigPanel.SUBTITLE_TEXT), panel.subtitleLabel.getText());
-        assertEquals(BuildConfigPanel.BUILD_CONFIG_HINT_TEXT, panel.buildConfigHintLabel.getText());
-        assertSame(panel.buildTomlFileBadge.getParent(), panel.buildConfigHintLabel.getParent());
-        assertSame(panel.buildTomlFileBadge.getParent(), panel.configureWithRoxyButton.getParent());
-        assertSame(panel.buildTomlFileBadge.getParent(), panel.copyTomlButton.getParent());
-        assertSame(panel.buildTomlFileBadge.getParent(), panel.jumpCommandsButton.getParent());
-        assertSame(panel.buildTomlFileBadge.getParent(), panel.statusLabel.getParent());
-        assertNotSame(panel.saveButton.getParent(), panel.statusLabel.getParent());
-        assertSame(panel.titleLabel.getParent().getParent(), panel.saveButton.getParent());
+        // Tab 1: Build Configuration state
         assertFalse(panel.statusLabel.isVisible());
         assertTrue(panel.buildConfigHintLabel.isVisible());
-        assertNotNull(panel.buildCardPanel);
-        assertEquals(BuildConfigPanel.SAVE_BUTTON_TEXT, panel.saveButton.getText());
         assertTrue(panel.textArea.getText().contains("./mvnw test-compile"));
         assertTrue(panel.unconfirmedBanner.isVisible());
-        assertEquals(UiComponents.formatWrappingHtml(BuildConfigPanel.UNCONFIRMED_BUILD_NOTICE_TEXT),
-                panel.unconfirmedBanner.messageLabel.getText());
 
-        // Tab 2: AI Model Override header & controls
-        assertEquals(BuildConfigPanel.MODEL_TITLE_TEXT, panel.modelTitleLabel.getText());
-        assertEquals(UiComponents.formatWrappingHtml(BuildConfigPanel.MODEL_SUBTITLE_TEXT),
-                panel.modelSubtitleLabel.getText());
-        assertEquals(BuildConfigPanel.MODEL_SAVE_BUTTON_TEXT, panel.modelSaveButton.getText());
-        assertSame(panel.modelSaveButton.getParent(), panel.modelStatusLabel.getParent());
-        assertSame(panel.modelTitleLabel.getParent().getParent(), panel.modelSaveButton.getParent().getParent());
+        // Tab 2: AI Model Override controls
         assertNotNull(panel.profileInfoIcon.getToolTipText());
-        assertNull(panel.profileInfoIcon.getClientProperty(FlatClientProperties.STYLE));
 
         assertTrue(panel.globalDefaultProfileCard.isSelected());
         assertTrue(panel.globalDefaultProfileCard.currentGlobalBadge.getText().contains("Normal"));

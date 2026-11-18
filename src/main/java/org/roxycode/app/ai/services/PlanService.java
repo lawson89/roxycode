@@ -328,12 +328,7 @@ public class PlanService {
             requirePhase("addTechnicalStep");
             ensureActivePlanLocked();
             List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
-            insertIndex = steps.size();
-            while (insertIndex > 0
-                    && ImplementationPlan.isMandatoryVerificationStep(steps.get(insertIndex - 1).description())) {
-                insertIndex--;
-            }
-            steps.add(insertIndex, new ImplementationPlan.TechStep(trimmed, false));
+            insertIndex = insertStepBeforeVerificationGates(steps, trimmed);
             updated = currentPlan.withTechnicalSteps(steps);
             this.currentPlan = updated;
             snapshot = capturePersistSnapshotLocked();
@@ -632,16 +627,21 @@ public class PlanService {
                 .withVerificationStepCompleted(ImplementationPlan.STEP_CODE_REVIEW, false).withFinalReviewNotes(null);
         if (updated.collectIncompleteSteps(true).isEmpty()) {
             List<ImplementationPlan.TechStep> steps = new ArrayList<>(updated.technicalSteps());
-            int insertIndex = steps.size();
-            while (insertIndex > 0
-                    && ImplementationPlan.isMandatoryVerificationStep(steps.get(insertIndex - 1).description())) {
-                insertIndex--;
-            }
-            steps.add(insertIndex, new ImplementationPlan.TechStep("Address review findings: " + reason.trim(), false));
+            insertStepBeforeVerificationGates(steps, "Address review findings: " + reason.trim());
             updated = updated.withTechnicalSteps(steps);
         }
         this.currentPlan = updated;
         return true;
+    }
+
+    private static int insertStepBeforeVerificationGates(List<ImplementationPlan.TechStep> steps, String description) {
+        int insertIndex = steps.size();
+        while (insertIndex > 0
+                && ImplementationPlan.isMandatoryVerificationStep(steps.get(insertIndex - 1).description())) {
+            insertIndex--;
+        }
+        steps.add(insertIndex, new ImplementationPlan.TechStep(description, false));
+        return insertIndex;
     }
 
     private void verifyStepCompletionGates(WorkflowPhase from, WorkflowPhase to) {

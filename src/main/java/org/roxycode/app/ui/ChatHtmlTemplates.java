@@ -91,10 +91,6 @@ public final class ChatHtmlTemplates {
         return actions.toString();
     }
 
-    public static String renderUserAttachmentsHtml(List<String> thumbnailBase64List) {
-        return renderUserAttachmentsHtml(thumbnailBase64List, List.of());
-    }
-
     public static String renderUserAttachmentsHtml(List<String> thumbnailBase64List, List<String> attachedFileNames) {
         boolean hasThumbs = thumbnailBase64List != null && !thumbnailBase64List.isEmpty();
         boolean hasFiles = attachedFileNames != null && !attachedFileNames.isEmpty();
@@ -141,13 +137,6 @@ public final class ChatHtmlTemplates {
             return trimmed.substring(3, trimmed.length() - 4).trim();
         }
         return trimmed;
-    }
-
-    public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,
-            boolean copied, boolean showMoveAction, boolean movedToFeature, boolean showApplyBuildTomlAction,
-            boolean appliedToBuildToml, List<String> thumbnailBase64List) {
-        return renderChatEntry(role, content, timestamp, messageIndex, copied, showMoveAction, movedToFeature,
-                showApplyBuildTomlAction, appliedToBuildToml, thumbnailBase64List, List.of());
     }
 
     public static String renderChatEntry(String role, String content, String timestamp, int messageIndex,

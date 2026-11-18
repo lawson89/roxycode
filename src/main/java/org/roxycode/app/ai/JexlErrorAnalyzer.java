@@ -90,26 +90,6 @@ public final class JexlErrorAnalyzer {
             }
         }
 
-        /**
-         * Backward-compatible constructor without exception chain and stack frame diagnostics.
-         *
-         * @param errorCategory
-         *            the classified error category name
-         * @param line
-         *            1-based line number from JexlInfo, or null if unavailable
-         * @param column
-         *            1-based column number from JexlInfo, or null if unavailable
-         * @param offendingLine
-         *            trimmed source line at {@code line}, or null if unavailable
-         * @param error
-         *            human-readable error message
-         * @param hint
-         *            actionable JEXL 3 syntax or API hint
-         */
-        public ErrorAnalysis(String errorCategory, @Nullable Integer line, @Nullable Integer column,
-                @Nullable String offendingLine, String error, String hint) {
-            this(errorCategory, line, column, offendingLine, error, hint, false, null, null, List.of(), List.of());
-        }
     }
 
     private JexlErrorAnalyzer() {

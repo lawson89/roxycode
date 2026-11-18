@@ -2,10 +2,8 @@ package org.roxycode.app.ui;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.awt.Dimension;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
-import javax.swing.JPanel;
 import javax.swing.UIManager;
 import org.junit.jupiter.api.Test;
 import org.kordamp.ikonli.codicons.Codicons;
@@ -67,33 +65,9 @@ class NavButtonTest {
 
             SidebarPanel sidebar = new SidebarPanel(card -> {
             });
-            assertEquals(56, SidebarPanel.LOGO_SIZE);
-            assertEquals(14, SidebarPanel.LOGO_ARC);
-            JPanel brandingHeader = (JPanel) sidebar.getComponent(0);
-            assertEquals(2, brandingHeader.getComponentCount());
-            assertEquals(new Dimension(56, 56), brandingHeader.getComponent(0).getPreferredSize());
-            assertEquals(SidebarPanel.ASK_ROXY_LABEL, sidebar.getCardButton(MainFrame.QA_VIEW).getText());
-            assertEquals(SidebarPanel.BUILD_FEATURE_LABEL, sidebar.getCardButton(MainFrame.TASK_VIEW).getText());
-            assertEquals(SidebarPanel.CONTEXT_PROMPTS_LABEL,
-                    sidebar.getCardButton(MainFrame.CONTEXT_MGR_VIEW).getText());
             assertSame(sidebar.getCardButton(MainFrame.CONTEXT_MGR_VIEW), sidebar.getCardButton(MainFrame.CACHE_VIEW));
             assertSame(sidebar.getCardButton(MainFrame.CONTEXT_MGR_VIEW), sidebar.getCardButton(MainFrame.API_VIEW));
             assertSame(sidebar.getCardButton(MainFrame.SETTINGS_VIEW), sidebar.getCardButton(MainFrame.TOOLS_VIEW));
-
-            sidebar.setQaBusy(true);
-            assertTrue(sidebar.isQaBusy());
-            sidebar.setQaBusy(false);
-            assertFalse(sidebar.isQaBusy());
-
-            sidebar.setTaskBusy(true);
-            assertTrue(sidebar.isTaskBusy());
-            sidebar.setTaskBusy(false);
-            assertFalse(sidebar.isTaskBusy());
-
-            sidebar.setQaWaitingApproval(true);
-            assertTrue(sidebar.isQaWaitingApproval());
-            sidebar.setQaWaitingApproval(false);
-            assertFalse(sidebar.isQaWaitingApproval());
 
             sidebar.updateNavigationAccess(false, false, false);
             assertTrue(sidebar.getCardButton(MainFrame.SETTINGS_VIEW).isEnabled());

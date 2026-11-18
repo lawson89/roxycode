@@ -807,8 +807,8 @@ public final class MainFrame extends JPanel {
 
         JMenuItem settingsItem = new JMenuItem("Settings...");
         settingsItem.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_COMMA, shortcutMask));
-        settingsItem.addActionListener(e -> navigateIfAccessible(SidebarPanel.CARD_SETTINGS));
-        registerCardMenuItem(SidebarPanel.CARD_SETTINGS, settingsItem);
+        settingsItem.addActionListener(e -> navigateIfAccessible(SETTINGS_VIEW));
+        registerCardMenuItem(SETTINGS_VIEW, settingsItem);
         fileMenu.add(settingsItem);
 
         if (!SystemUtils.IS_OS_MAC) {
@@ -837,17 +837,17 @@ public final class MainFrame extends JPanel {
                 JTextComponent::selectAll));
 
         JMenu viewMenu = new JMenu("View");
-        addViewCardMenuItem(viewMenu, SidebarPanel.ASK_ROXY_LABEL, SidebarPanel.CARD_QA,
+        addViewCardMenuItem(viewMenu, SidebarPanel.ASK_ROXY_LABEL, QA_VIEW,
                 KeyStroke.getKeyStroke(KeyEvent.VK_1, shortcutMask));
-        addViewCardMenuItem(viewMenu, SidebarPanel.BUILD_FEATURE_LABEL, SidebarPanel.CARD_TASK,
+        addViewCardMenuItem(viewMenu, SidebarPanel.BUILD_FEATURE_LABEL, TASK_VIEW,
                 KeyStroke.getKeyStroke(KeyEvent.VK_2, shortcutMask));
-        addViewCardMenuItem(viewMenu, SidebarPanel.CONTEXT_PROMPTS_LABEL, SidebarPanel.CARD_CONTEXT,
+        addViewCardMenuItem(viewMenu, SidebarPanel.CONTEXT_PROMPTS_LABEL, CONTEXT_MGR_VIEW,
                 KeyStroke.getKeyStroke(KeyEvent.VK_3, shortcutMask));
-        addViewCardMenuItem(viewMenu, SidebarPanel.AGENT_MEMORY_LABEL, SidebarPanel.CARD_MEMORY,
+        addViewCardMenuItem(viewMenu, SidebarPanel.AGENT_MEMORY_LABEL, MEMORY_VIEW,
                 KeyStroke.getKeyStroke(KeyEvent.VK_4, shortcutMask));
-        addViewCardMenuItem(viewMenu, SidebarPanel.PROJECT_SETTINGS_LABEL, SidebarPanel.CARD_BUILD,
+        addViewCardMenuItem(viewMenu, SidebarPanel.PROJECT_SETTINGS_LABEL, BUILD_CONFIG_VIEW,
                 KeyStroke.getKeyStroke(KeyEvent.VK_5, shortcutMask));
-        addViewCardMenuItem(viewMenu, SidebarPanel.SETTINGS_TOOLS_LABEL, SidebarPanel.CARD_SETTINGS,
+        addViewCardMenuItem(viewMenu, SidebarPanel.SETTINGS_TOOLS_LABEL, SETTINGS_VIEW,
                 KeyStroke.getKeyStroke(KeyEvent.VK_6, shortcutMask));
         viewMenu.addSeparator();
         JMenuItem toggleThemeItem = new JMenuItem("Toggle Theme");
@@ -862,13 +862,13 @@ public final class MainFrame extends JPanel {
 
         JMenu helpMenu = new JMenu("Help");
         JMenuItem jexlApiItem = new JMenuItem("JEXL API Reference");
-        jexlApiItem.addActionListener(e -> navigateIfAccessible(SidebarPanel.CARD_JEXL_API));
-        registerCardMenuItem(SidebarPanel.CARD_JEXL_API, jexlApiItem);
+        jexlApiItem.addActionListener(e -> navigateIfAccessible(API_VIEW));
+        registerCardMenuItem(API_VIEW, jexlApiItem);
         helpMenu.add(jexlApiItem);
 
         JMenuItem systemToolsItem = new JMenuItem("System Tools");
-        systemToolsItem.addActionListener(e -> navigateIfAccessible(SidebarPanel.CARD_TOOLS));
-        registerCardMenuItem(SidebarPanel.CARD_TOOLS, systemToolsItem);
+        systemToolsItem.addActionListener(e -> navigateIfAccessible(TOOLS_VIEW));
+        registerCardMenuItem(TOOLS_VIEW, systemToolsItem);
         helpMenu.add(systemToolsItem);
 
         helpMenu.addSeparator();
@@ -1043,7 +1043,7 @@ public final class MainFrame extends JPanel {
         try {
             Desktop desktop = Desktop.getDesktop();
             if (desktop.isSupported(Desktop.Action.APP_PREFERENCES)) {
-                desktop.setPreferencesHandler(e -> Edt.run(() -> navigateIfAccessible(SidebarPanel.CARD_SETTINGS)));
+                desktop.setPreferencesHandler(e -> Edt.run(() -> navigateIfAccessible(SETTINGS_VIEW)));
             }
             if (desktop.isSupported(Desktop.Action.APP_ABOUT)) {
                 desktop.setAboutHandler(e -> Edt.run(this::showAboutDialog));

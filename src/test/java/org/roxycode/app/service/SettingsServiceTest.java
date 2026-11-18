@@ -148,12 +148,6 @@ class SettingsServiceTest {
         assertEquals("global", reloaded.getVertexLocation());
         assertEquals(credsFile.toString(), reloaded.getVertexCredentialsPath());
 
-        AppSettings copied = reloaded.copy();
-        assertTrue(copied.isVertexAiEnabled());
-        assertEquals("my-gcp-project", copied.getVertexProjectId());
-        assertEquals("global", copied.getVertexLocation());
-        assertEquals(credsFile.toString(), copied.getVertexCredentialsPath());
-
         try (GenericApplicationContext ctx = new GenericApplicationContext()) {
             RoxyCode.createSettingsInitializer(reloaded).initialize(ctx);
             assertEquals("true", ctx.getEnvironment().getProperty("spring.ai.google.genai.vertex-ai"));
@@ -199,18 +193,6 @@ class SettingsServiceTest {
         assertEquals(AgentProfile.SPEED, AgentProfile.fromString("SPEED"));
         assertEquals(AgentProfile.SPEED, AgentProfile.fromString("gemini-4-hydrogen"));
         assertEquals(AgentProfile.SPEED, AgentProfile.fromString("gemini-3.8-flash"));
-        assertEquals("gemini-4-carbon", AgentProfile.MAX.resolveModelForPhase(WorkflowPhase.EXPLORE));
-        assertEquals("gemini-4-carbon", AgentProfile.MAX.resolveModelForPhase(WorkflowPhase.PLAN));
-        assertEquals("gemini-4-hydrogen", AgentProfile.MAX.resolveModelForPhase(WorkflowPhase.CODE));
-        assertEquals("gemini-4-hydrogen", AgentProfile.MAX.resolveModelForPhase(WorkflowPhase.REVIEW));
-        assertEquals("gemini-4-argon", AgentProfile.NORMAL.resolveModelForPhase(WorkflowPhase.EXPLORE));
-        assertEquals("gemini-4-argon", AgentProfile.NORMAL.resolveModelForPhase(WorkflowPhase.PLAN));
-        assertEquals("gemini-4-hydrogen", AgentProfile.NORMAL.resolveModelForPhase(WorkflowPhase.CODE));
-        assertEquals("gemini-4-hydrogen", AgentProfile.NORMAL.resolveModelForPhase(WorkflowPhase.REVIEW));
-        assertEquals("gemini-4-hydrogen", AgentProfile.SPEED.resolveModelForPhase(WorkflowPhase.EXPLORE));
-        assertEquals("gemini-4-hydrogen", AgentProfile.SPEED.resolveModelForPhase(WorkflowPhase.PLAN));
-        assertEquals("gemini-4-hydrogen", AgentProfile.SPEED.resolveModelForPhase(WorkflowPhase.CODE));
-        assertEquals("gemini-4-hydrogen", AgentProfile.SPEED.resolveModelForPhase(WorkflowPhase.REVIEW));
 
         assertEquals(ThinkingLevel.DEFAULT, ThinkingLevel.fromString(null));
         assertEquals(ThinkingLevel.DEFAULT, ThinkingLevel.fromString("  "));
@@ -224,11 +206,11 @@ class SettingsServiceTest {
         assertEquals(ThinkingLevel.HIGH, ThinkingLevel.fromString("HIGH"));
 
         assertEquals(ThinkingLevel.MEDIUM, ThinkingLevel.ADAPTIVE
-                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, false, false, false));
-        assertEquals(ThinkingLevel.HIGH,
-                ThinkingLevel.ADAPTIVE.resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, false, true, false));
-        assertEquals(ThinkingLevel.LOW,
-                ThinkingLevel.ADAPTIVE.resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, true, true, false));
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, null, false, false, false));
+        assertEquals(ThinkingLevel.HIGH, ThinkingLevel.ADAPTIVE
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, null, false, true, false));
+        assertEquals(ThinkingLevel.LOW, ThinkingLevel.ADAPTIVE
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, null, true, true, false));
         assertEquals(ThinkingLevel.LOW, ThinkingLevel.ADAPTIVE
                 .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, "gemini-4-carbon", false, false, false));
         assertEquals(ThinkingLevel.MEDIUM, ThinkingLevel.ADAPTIVE
@@ -247,16 +229,16 @@ class SettingsServiceTest {
                 .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, "gemini-4-hydrogen", false, false, false));
         assertEquals(ThinkingLevel.HIGH, ThinkingLevel.ADAPTIVE
                 .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.PLAN, "gemini-4-hydrogen", false, true, false));
-        assertEquals(ThinkingLevel.MEDIUM,
-                ThinkingLevel.ADAPTIVE.resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.CODE, true, true, false));
-        assertEquals(ThinkingLevel.HIGH,
-                ThinkingLevel.ADAPTIVE.resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.CODE, true, true, true));
-        assertEquals(ThinkingLevel.HIGH, ThinkingLevel.ADAPTIVE
-                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.REVIEW, true, false, false));
-        assertEquals(ThinkingLevel.LOW, ThinkingLevel.ADAPTIVE
-                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.EXPLORE, false, false, false));
         assertEquals(ThinkingLevel.MEDIUM, ThinkingLevel.ADAPTIVE
-                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.EXPLORE, false, true, false));
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.CODE, null, true, true, false));
+        assertEquals(ThinkingLevel.HIGH, ThinkingLevel.ADAPTIVE
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.CODE, null, true, true, true));
+        assertEquals(ThinkingLevel.HIGH, ThinkingLevel.ADAPTIVE
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.REVIEW, null, true, false, false));
+        assertEquals(ThinkingLevel.LOW, ThinkingLevel.ADAPTIVE
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.EXPLORE, null, false, false, false));
+        assertEquals(ThinkingLevel.MEDIUM, ThinkingLevel.ADAPTIVE
+                .resolveSubTurnLevel(org.roxycode.app.ai.WorkflowPhase.EXPLORE, null, false, true, false));
 
         GoogleGenAiChatOptions.Builder defaultBuilder = GoogleGenAiChatOptions.builder().model("gemini-3.5-flash");
         ThinkingLevel.DEFAULT.applyTo(defaultBuilder);
@@ -310,17 +292,6 @@ class SettingsServiceTest {
         assertTrue(Files.exists(edtSettingsFile));
         assertEquals("FlatLaf Dark",
                 SettingsService.loadFromDisk(edtSettingsFile, AiConfig.SHARED_TOML_MAPPER).getTheme());
-    }
-
-    @Test
-    void testResolveModelConfig() {
-        SettingsService service = new SettingsService(null, null);
-        service.setSettingsPathOverride(tempDir.resolve("nonexistent-settings.toml"));
-        assertNotNull(service.resolveModelConfig("gemini-3.8-flash"));
-        assertEquals("gemini-4-argon", SettingsService.resolveGlobalGeminiModel(service));
-        assertEquals("gemini-4-hydrogen", SettingsService.resolveGlobalGeminiModel(service, WorkflowPhase.CODE));
-        service.getSettings().setAgentProfile("   ");
-        assertEquals("gemini-4-argon", SettingsService.resolveGlobalGeminiModel(service));
     }
 
     @Test

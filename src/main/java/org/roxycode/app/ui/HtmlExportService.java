@@ -12,7 +12,6 @@ import com.vladsch.flexmark.util.data.MutableDataHolder;
 import com.vladsch.flexmark.util.data.MutableDataSet;
 import java.awt.Component;
 import java.awt.Desktop;
-import java.awt.GraphicsEnvironment;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -25,7 +24,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import javax.swing.JOptionPane;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.model.ImplementationPlan;
@@ -551,18 +549,9 @@ final class HtmlExportService {
                 return tempFile;
             } catch (IOException e) {
                 log.warn("Failed to open HTML export in browser: {}", e.getMessage());
-                if (!GraphicsEnvironment.isHeadless()) {
-                    showBrowserErrorNotice(e.getMessage());
-                }
                 return null;
             }
         }, Edt.VIRTUAL_EXECUTOR);
-    }
-
-    private static void showBrowserErrorNotice(String errorMessage) {
-        org.roxycode.app.util.Edt.run(() -> JOptionPane.showMessageDialog(null,
-                "Could not open HTML export in default browser: " + StringUtils.defaultString(errorMessage),
-                "HTML Export Error", JOptionPane.ERROR_MESSAGE));
     }
 
     static Path saveHtmlWithChooser(Component parent, String suggestedFileName, String htmlContent) {
@@ -590,10 +579,6 @@ final class HtmlExportService {
             return targetPath;
         } catch (IOException e) {
             log.warn("Failed to save HTML export to {}: {}", targetPath, e.getMessage());
-            if (!GraphicsEnvironment.isHeadless()) {
-                JOptionPane.showMessageDialog(parent, "Failed to save HTML file: " + e.getMessage(), "Save HTML Error",
-                        JOptionPane.ERROR_MESSAGE);
-            }
             return null;
         }
     }

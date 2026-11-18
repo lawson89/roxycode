@@ -9,13 +9,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.SystemUtils;
 import org.jspecify.annotations.Nullable;
 import org.roxycode.app.service.ProjectService;
+import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.PathUtils;
 import org.roxycode.app.service.SystemToolService;
 import org.slf4j.Logger;
@@ -35,7 +34,6 @@ import org.testcontainers.utility.DockerImageName;
 public class BuildContainerService {
 
     private static final Logger log = LoggerFactory.getLogger(BuildContainerService.class);
-    private static final ExecutorService DOCKER_EXEC_EXECUTOR = Executors.newVirtualThreadPerTaskExecutor();
 
     static final String DEFAULT_CONTAINER_IMAGE = "ubuntu:24.04";
     static final String DEFAULT_CONTAINER_WORKDIR = "/workspace";
@@ -466,7 +464,7 @@ public class BuildContainerService {
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
-                }, DOCKER_EXEC_EXECUTOR);
+                }, Edt.VIRTUAL_EXECUTOR);
 
                 try {
                     Container.ExecResult r = future.get(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS);

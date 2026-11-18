@@ -85,6 +85,7 @@ final class UiComponents {
     static final String ROXY_LOGO_RESOURCE = "/static/images/roxy.png";
     static final int INFO_TOOLTIP_DISMISS_DELAY_MS = 20_000;
     static final String ACCENT_BUTTON_STYLE = "background: $Component.accentColor; focusedBackground: $Component.accentColor; hoverBackground: darken($Component.accentColor, 8%); pressedBackground: darken($Component.accentColor, 14%); foreground: #ffffff";
+    private static final String ACTIONS_GREEN_KEY = "Actions.Green";
     static final String GREEN_BUTTON_STYLE = "background: $Actions.Green; focusedBackground: $Actions.Green; hoverBackground: darken($Actions.Green, 8%); pressedBackground: darken($Actions.Green, 14%); foreground: #ffffff";
     static final String SUBTLE_GREEN_BUTTON_STYLE = "foreground: $Actions.Green; hoverBackground: fade($Actions.Green, 12%); pressedBackground: fade($Actions.Green, 20%); borderColor: fade($Actions.Green, 45%); focusedBorderColor: $Actions.Green; hoverBorderColor: $Actions.Green";
     static final String RED_BUTTON_STYLE = "background: $Actions.Red; focusedBackground: $Actions.Red; hoverBackground: darken($Actions.Red, 8%); pressedBackground: darken($Actions.Red, 14%); foreground: #ffffff";
@@ -792,7 +793,7 @@ final class UiComponents {
             applySelectableCardTheme(this, radioIconLabel, cardTitleLabel, descriptionArea, selected);
 
             Color accentColor = SwingHtmlUtils.getAccentColor();
-            Color greenColor = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
+            Color greenColor = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), ACTIONS_GREEN_KEY);
             String accentHex = SwingHtmlUtils.toHex(accentColor);
             String borderHex = getCardBorderHex();
             String pillBg = getPillBackgroundDirective();
@@ -887,7 +888,7 @@ final class UiComponents {
         Color statusColor;
         String displayText = message;
         if (success) {
-            statusColor = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
+            statusColor = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), ACTIONS_GREEN_KEY);
             statusLabel.setToolTipText(null);
         } else {
             statusColor = SwingHtmlUtils.getUiColor(new Color(0xdc, 0x35, 0x45), "Actions.Red");
@@ -957,7 +958,7 @@ final class UiComponents {
             return SwingHtmlUtils.getUiColor(new Color(0xdc, 0x35, 0x45), "Actions.Red");
         }
         if (style != null && style.contains("$Actions.Green")) {
-            return SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), "Actions.Green");
+            return SwingHtmlUtils.getUiColor(new Color(0x2e, 0x7d, 0x32), ACTIONS_GREEN_KEY);
         }
         return SwingHtmlUtils.getUiColor(Color.DARK_GRAY, "Button.foreground", UI_LABEL_FOREGROUND);
     }
@@ -1133,34 +1134,46 @@ final class UiComponents {
         }
     }
 
+    static void applyKeyringStatusBadge(JLabel badge, boolean available, String readyText, String fallbackText) {
+        if (available) {
+            Color green = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), ACTIONS_GREEN_KEY);
+            badge.setText(readyText);
+            badge.setForeground(green);
+            badge.setIcon(FontIcon.of(Codicons.PASS, 13, green));
+        } else {
+            Color warn = SwingHtmlUtils.getWarningColor();
+            badge.setText(fallbackText);
+            badge.setForeground(warn);
+            badge.setIcon(FontIcon.of(Codicons.WARNING, 13, warn));
+        }
+    }
+
     @Nullable
     static File chooseDirectory(Component parent, String dialogTitle, @Nullable Path initialDirectory) {
-        if (GraphicsEnvironment.isHeadless()) {
-            return null;
-        }
-        SystemFileChooser chooser = new SystemFileChooser();
-        chooser.setFileSelectionMode(SystemFileChooser.DIRECTORIES_ONLY);
-        if (StringUtils.isNotBlank(dialogTitle)) {
-            chooser.setDialogTitle(dialogTitle);
-        }
-        if (initialDirectory != null) {
-            chooser.setCurrentDirectory(initialDirectory.toFile());
-        }
-        if (chooser.showOpenDialog(parent) == SystemFileChooser.APPROVE_OPTION) {
-            return chooser.getSelectedFile();
-        }
-        return null;
+        return showOpenChooser(parent, dialogTitle, true, initialDirectory, null);
     }
 
     @Nullable
     static File chooseOpenFile(Component parent, String dialogTitle,
             @Nullable SystemFileChooser.FileFilter fileFilter) {
+        return showOpenChooser(parent, dialogTitle, false, null, fileFilter);
+    }
+
+    @Nullable
+    private static File showOpenChooser(Component parent, String dialogTitle, boolean directoriesOnly,
+            @Nullable Path initialDirectory, @Nullable SystemFileChooser.FileFilter fileFilter) {
         if (GraphicsEnvironment.isHeadless()) {
             return null;
         }
         SystemFileChooser chooser = new SystemFileChooser();
+        if (directoriesOnly) {
+            chooser.setFileSelectionMode(SystemFileChooser.DIRECTORIES_ONLY);
+        }
         if (StringUtils.isNotBlank(dialogTitle)) {
             chooser.setDialogTitle(dialogTitle);
+        }
+        if (initialDirectory != null) {
+            chooser.setCurrentDirectory(initialDirectory.toFile());
         }
         if (fileFilter != null) {
             chooser.setFileFilter(fileFilter);

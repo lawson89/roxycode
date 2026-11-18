@@ -557,13 +557,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
             activityStepLabel.setVisible(false);
             return;
         }
-        int completed = 0;
-        for (ImplementationPlan.TechStep step : steps) {
-            if (step.completed()) {
-                completed++;
-            }
-        }
-        activityStepLabel.setText("Step " + completed + "/" + steps.size() + " ·");
+        activityStepLabel.setText("Step " + plan.completedStepCount() + "/" + steps.size() + " ·");
         activityStepLabel.setVisible(true);
     }
 
@@ -878,16 +872,8 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         outputArea.appendMessage(role, content);
     }
 
-    void appendMessage(String role, String content, List<String> thumbnailBase64List) {
-        outputArea.appendMessage(role, content, thumbnailBase64List);
-    }
-
-    void appendMessage(String role, String content, List<String> thumbnailBase64List, List<String> attachedFileNames) {
-        outputArea.appendMessage(role, content, thumbnailBase64List, attachedFileNames);
-    }
-
     void appendPreRenderedMessage(String role, String content, String renderedHtml, String extractedToml) {
-        outputArea.appendPreRenderedMessage(role, content, renderedHtml, extractedToml, List.of());
+        outputArea.appendPreRenderedMessage(role, content, renderedHtml, extractedToml, List.of(), List.of());
     }
 
     void appendPreRenderedMessage(String role, String content, String renderedHtml, String extractedToml,
@@ -1097,6 +1083,11 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         wrapper.setOpaque(false);
         wrapper.add(thumbLabel, BorderLayout.CENTER);
 
+        wrapper.add(createAttachmentRemoveButton(attachment, wrapper), BorderLayout.NORTH);
+        return wrapper;
+    }
+
+    private JButton createAttachmentRemoveButton(PendingAttachment attachment, JPanel wrapper) {
         JButton removeBtn = new JButton(FontIcon.of(Codicons.CLOSE, 12));
         removeBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
         removeBtn.setMargin(new Insets(0, 0, 0, 0));
@@ -1107,8 +1098,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
             attachmentPanel.revalidate();
             attachmentPanel.repaint();
         });
-        wrapper.add(removeBtn, BorderLayout.NORTH);
-        return wrapper;
+        return removeBtn;
     }
 
     private JPanel createFileAttachmentChip(PendingAttachment attachment) {
@@ -1130,20 +1120,9 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         JLabel nameLabel = new JLabel(attachment.fileName());
         nameLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
 
-        JButton removeBtn = new JButton(FontIcon.of(Codicons.CLOSE, 12));
-        removeBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
-        removeBtn.setMargin(new Insets(0, 0, 0, 0));
-        removeBtn.addActionListener(ae -> {
-            model.removePendingAttachment(attachment);
-            attachmentPanel.remove(wrapper);
-            attachmentPanel.setVisible(model.hasPendingAttachments());
-            attachmentPanel.revalidate();
-            attachmentPanel.repaint();
-        });
-
         wrapper.add(iconLabel);
         wrapper.add(nameLabel);
-        wrapper.add(removeBtn);
+        wrapper.add(createAttachmentRemoveButton(attachment, wrapper));
         return wrapper;
     }
 

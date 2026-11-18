@@ -208,11 +208,6 @@ final class MarkdownPane extends JTextPane {
     }
 
     public void appendPreRenderedMessage(String role, String content, String renderedHtml, String extractedToml,
-            List<String> thumbnailBase64List) {
-        appendPreRenderedMessage(role, content, renderedHtml, extractedToml, thumbnailBase64List, List.of());
-    }
-
-    public void appendPreRenderedMessage(String role, String content, String renderedHtml, String extractedToml,
             List<String> thumbnailBase64List, List<String> attachedFileNames) {
         String safeContent = StringUtils.defaultString(content);
         String timestamp = LocalDateTime.now().format(TIME_FORMATTER);

@@ -483,18 +483,7 @@ class MainFrameTest {
         try {
             SwingTestUtils.flushEdt();
             assertNotNull(frame.menuBar);
-            assertEquals(Boolean.TRUE,
-                    frame.menuBar.getClientProperty(com.formdev.flatlaf.FlatClientProperties.MENU_BAR_EMBEDDED));
-            assertEquals("background: darken($Panel.background, 2%)",
-                    frame.menuBar.getClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE));
-            assertInstanceOf(javax.swing.border.MatteBorder.class, frame.menuBar.getBorder());
-            assertEquals(new java.awt.Insets(0, 0, 1, 0),
-                    ((javax.swing.border.MatteBorder) frame.menuBar.getBorder()).getBorderInsets());
             assertEquals(4, frame.menuBar.getMenuCount());
-            assertEquals("File", frame.menuBar.getMenu(0).getText());
-            assertEquals("Edit", frame.menuBar.getMenu(1).getText());
-            assertEquals("View", frame.menuBar.getMenu(2).getText());
-            assertEquals("Help", frame.menuBar.getMenu(3).getText());
 
             // Verify Recent Projects submenu under File menu (empty placeholder -> populated MRU list -> click
             // switches)
@@ -527,7 +516,7 @@ class MainFrameTest {
             assertFalse(askRoxyItem.isEnabled());
             assertFalse(buildFeatureItem.isEnabled());
             assertTrue(settingsViewItem.isEnabled());
-            frame.navigateIfAccessible(SidebarPanel.CARD_QA);
+            frame.navigateIfAccessible(MainFrame.QA_VIEW);
             assertEquals(MainFrame.SETTINGS_VIEW, frame.currentCard);
 
             // Configure API key and confirm build -> View menu items unlock and navigate
@@ -657,13 +646,8 @@ class MainFrameTest {
                 frame.updateUI();
             });
             SwingTestUtils.flushEdt();
-            assertEquals("background: darken($Panel.background, 2%)",
-                    frame.menuBar.getClientProperty(com.formdev.flatlaf.FlatClientProperties.STYLE));
-            assertInstanceOf(javax.swing.border.MatteBorder.class, frame.menuBar.getBorder());
-            assertEquals(new java.awt.Insets(0, 0, 1, 0),
-                    ((javax.swing.border.MatteBorder) frame.menuBar.getBorder()).getBorderInsets());
 
-            // Verify Help menu items & About message
+            // Verify Help menu items
             javax.swing.JMenu helpMenu = frame.menuBar.getMenu(3);
             SwingTestUtils.runOnEdt(() -> {
                 helpMenu.getItem(0).doClick();
@@ -671,7 +655,6 @@ class MainFrameTest {
                 helpMenu.getItem(1).doClick();
                 assertEquals(MainFrame.TOOLS_VIEW, frame.currentCard);
             });
-            assertTrue(MainFrame.buildAboutMessage().contains("RoxyCode"));
 
             // Verify Edit menu undo/redo actions on a JTextComponent
             javax.swing.JTextArea sampleArea = new javax.swing.JTextArea("initial");

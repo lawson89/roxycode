@@ -90,10 +90,6 @@ class SettingsPanelTest {
         assertFalse(settingsPanel.onboardingBanner.isVisible());
         assertEquals(1, initialCallbackCount.get());
 
-        AppSettings copied = settings.copy();
-        assertEquals("new-secret-key", copied.getGeminiApiKey());
-        assertEquals("MAX", copied.getAgentProfile());
-        assertEquals(85, copied.getMaxAgentToolTurns());
         assertFalse(settingsPanel.hasUnsavedChanges());
         assertEquals(SettingsPanel.SAVE_SETTINGS_TEXT, settingsPanel.saveButton.getText());
         assertEquals(SettingsPanel.SAVED_APPLIED_TEXT, settingsPanel.statusLabel.getText());
@@ -179,24 +175,22 @@ class SettingsPanelTest {
         SwingTestUtils.runOnEdt(() -> settingsPanel.updateApiKeyStorageBadge());
         assertEquals(SettingsPanel.KEYRING_READY_BADGE_TEXT, settingsPanel.apiKeyStorageBadge.getText());
 
-        assertEquals(SettingsPanel.AUTH_PROVIDER_API_KEY, settingsPanel.authProviderCombo.getSelectedItem());
         assertTrue(settingsPanel.apiKeyProviderToggleBtn.isSelected());
         assertFalse(settingsPanel.vertexAiProviderToggleBtn.isSelected());
         assertTrue(settingsPanel.apiKeyPanel.isVisible());
         assertFalse(settingsPanel.vertexAiPanel.isVisible());
 
         SwingTestUtils.clickOnEdt(settingsPanel.vertexAiProviderToggleBtn);
-        assertEquals(SettingsPanel.AUTH_PROVIDER_VERTEX_AI, settingsPanel.authProviderCombo.getSelectedItem());
+        assertTrue(settingsPanel.vertexAiProviderToggleBtn.isSelected());
         assertFalse(settingsPanel.apiKeyPanel.isVisible());
         assertTrue(settingsPanel.vertexAiPanel.isVisible());
 
         SwingTestUtils.clickOnEdt(settingsPanel.apiKeyProviderToggleBtn);
-        assertEquals(SettingsPanel.AUTH_PROVIDER_API_KEY, settingsPanel.authProviderCombo.getSelectedItem());
+        assertTrue(settingsPanel.apiKeyProviderToggleBtn.isSelected());
         assertTrue(settingsPanel.apiKeyPanel.isVisible());
         assertFalse(settingsPanel.vertexAiPanel.isVisible());
 
-        SwingTestUtils
-                .runOnEdt(() -> settingsPanel.authProviderCombo.setSelectedItem(SettingsPanel.AUTH_PROVIDER_VERTEX_AI));
+        SwingTestUtils.clickOnEdt(settingsPanel.vertexAiProviderToggleBtn);
         assertTrue(settingsPanel.vertexAiProviderToggleBtn.isSelected());
         assertFalse(settingsPanel.apiKeyPanel.isVisible());
         assertTrue(settingsPanel.vertexAiPanel.isVisible());
@@ -245,7 +239,7 @@ class SettingsPanelTest {
         eventSettings.setGeminiApiKey("switched-back-key");
         settingsPanel.onSettingsChanged(new SettingsChangedEvent(eventSettings));
         SwingTestUtils.flushEdt();
-        assertEquals(SettingsPanel.AUTH_PROVIDER_API_KEY, settingsPanel.authProviderCombo.getSelectedItem());
+        assertTrue(settingsPanel.apiKeyProviderToggleBtn.isSelected());
         assertTrue(settingsPanel.apiKeyPanel.isVisible());
         assertFalse(settingsPanel.vertexAiPanel.isVisible());
 
