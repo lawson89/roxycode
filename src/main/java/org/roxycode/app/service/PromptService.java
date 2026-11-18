@@ -27,6 +27,7 @@ import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.DatabaseConfigService.ResolvedDatabaseConnection;
 import org.roxycode.app.service.ProjectService.ReferenceFolderMount;
+import org.roxycode.app.util.FrontmatterUtils;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,7 +62,21 @@ public class PromptService {
     private static final String HEADER_GIT_STATUS = "## GIT STATUS\n";
     private static final String HEADER_CURRENT_PLAN_PROGRESS = "## CURRENT PLAN PROGRESS\n";
 
-    public record ContextFileItem(String folderPath, String fileName, Path filePath) {
+    public record ContextFileItem(String folderPath, String fileName, Path filePath, Map<String, String> frontmatter,
+            String searchPath) {
+        public ContextFileItem {
+            frontmatter = Map.copyOf(Objects.requireNonNullElse(frontmatter, Map.of()));
+            searchPath = StringUtils.trimToEmpty(searchPath);
+        }
+
+        public ContextFileItem(String folderPath, String fileName, Path filePath) {
+            this(folderPath, fileName, filePath, Map.of(), fileName);
+        }
+
+        public boolean hasFrontmatter() {
+            return !frontmatter.isEmpty();
+        }
+
         @Override
         public String toString() {
             return fileName;
@@ -338,59 +353,68 @@ public class PromptService {
     }
 
     public List<ContextFileItem> listGlobalContextFiles() {
-        return listContextFilesInFolders(projectService.getGlobalContextFolders(), false);
+        if (projectService == null) {
+            return List.of();
+        }
+        return listContextFilesInDir(projectService.getGlobalContextDir(),
+                "@" + ProjectService.GLOBAL_CONTEXT_ALIAS + "/");
     }
 
     public List<ContextFileItem> listProjectContextFiles() {
         if (projectService == null || !projectService.hasActiveProject()) {
             return List.of();
         }
-        return listContextFilesInFolders(projectService.getProjectContextFolders(), true);
+        return listContextFilesInDir(projectService.getProjectContextDir(),
+                ProjectService.CONVENTION_CONTEXT_DIR + "/");
     }
 
-    List<ContextFileItem> listContextFilesInFolders(List<String> folders, boolean resolveRelativeToProject) {
-        if (folders == null || folders.isEmpty()) {
+    List<ContextFileItem> listContextFilesInDir(Path dir, String searchPathPrefix) {
+        if (dir == null || !Files.isDirectory(dir)) {
             return List.of();
         }
         Map<Path, ContextFileItem> discovered = new LinkedHashMap<>();
-        for (String rawFolder : folders) {
-            if (rawFolder == null || rawFolder.isBlank()) {
-                continue;
-            }
-            String folderStr = rawFolder.trim();
-            Path dir = ProjectService.resolveMountFolderPath(folderStr, resolveRelativeToProject,
-                    projectService.getCurrentProjectRoot());
-            if (dir == null || !Files.isDirectory(dir)) {
-                continue;
-            }
-            try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
-                List<Path> folderFiles = new ArrayList<>();
-                for (Path entry : stream) {
-                    if (!Files.isRegularFile(entry) || !Files.isReadable(entry)
-                            || entry.getFileName().toString().startsWith(".")) {
-                        continue;
-                    }
-                    try {
-                        if (!FileReadService.isBinaryFile(entry)) {
-                            folderFiles.add(entry);
-                        }
-                    } catch (IOException e) {
-                        log.debug("Skipping unreadable context file {}: {}", entry, e.getMessage());
-                    }
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir)) {
+            List<Path> folderFiles = new ArrayList<>();
+            for (Path entry : stream) {
+                if (!Files.isRegularFile(entry) || !Files.isReadable(entry)
+                        || entry.getFileName().toString().startsWith(".")) {
+                    continue;
                 }
-                folderFiles.sort(Comparator.comparing(p -> p.getFileName().toString(), String.CASE_INSENSITIVE_ORDER));
-                for (Path entry : folderFiles) {
-                    Path norm = entry.toAbsolutePath().normalize();
-                    discovered.putIfAbsent(norm, new ContextFileItem(folderStr, entry.getFileName().toString(), norm));
+                try {
+                    if (!FileReadService.isBinaryFile(entry)) {
+                        folderFiles.add(entry);
+                    }
+                } catch (IOException e) {
+                    log.debug("Skipping unreadable context file {}: {}", entry, e.getMessage());
                 }
-            } catch (IOException e) {
-                log.warn("Failed to list context files in folder {}: {}", dir, e.getMessage());
             }
+            folderFiles.sort(Comparator.comparing(p -> p.getFileName().toString(), String.CASE_INSENSITIVE_ORDER));
+            for (Path entry : folderFiles) {
+                Path norm = entry.toAbsolutePath().normalize();
+                String fileName = entry.getFileName().toString();
+                Map<String, String> frontmatter = parseMarkdownFrontmatter(norm, fileName);
+                String searchPath = searchPathPrefix + fileName;
+                discovered.putIfAbsent(norm,
+                        new ContextFileItem(dir.toString(), fileName, norm, frontmatter, searchPath));
+            }
+        } catch (IOException e) {
+            log.warn("Failed to list context files in folder {}: {}", dir, e.getMessage());
         }
-        List<ContextFileItem> result = new ArrayList<>(discovered.values());
-        result.sort(Comparator.comparing(ContextFileItem::fileName, String.CASE_INSENSITIVE_ORDER)
-                .thenComparing(item -> item.filePath().toString()));
-        return List.copyOf(result);
+        return List.copyOf(discovered.values());
+    }
+
+    private Map<String, String> parseMarkdownFrontmatter(Path filePath, String fileName) {
+        String ext = PathUtils.getLowerExtension(fileName, false);
+        if (!"md".equals(ext) && !"markdown".equals(ext)) {
+            return Map.of();
+        }
+        try {
+            String raw = Files.readString(filePath, StandardCharsets.UTF_8);
+            return FrontmatterUtils.parseFrontmatter(raw);
+        } catch (IOException e) {
+            log.debug("Failed to read markdown frontmatter from {}: {}", filePath, e.getMessage());
+            return Map.of();
+        }
     }
 
     private String readContextFile(Path filePath) {
@@ -427,13 +451,52 @@ public class PromptService {
         if (files.isEmpty()) {
             return "";
         }
-        StringBuilder sb = new StringBuilder();
+        List<ContextFileItem> fullFiles = new ArrayList<>();
+        List<ContextFileItem> indexedFiles = new ArrayList<>();
         for (ContextFileItem item : files) {
+            if (item.hasFrontmatter()) {
+                indexedFiles.add(item);
+            } else {
+                fullFiles.add(item);
+            }
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append(NEWLINE_DOUBLE).append("## ").append(headerTitle).append('\n');
+        if (!fullFiles.isEmpty()) {
+            sb.append("Full-Injected Files: ");
+            for (int i = 0; i < fullFiles.size(); i++) {
+                if (i > 0) {
+                    sb.append(", ");
+                }
+                sb.append('`').append(fullFiles.get(i).searchPath()).append('`');
+            }
+            sb.append('\n');
+        }
+        if (!indexedFiles.isEmpty()) {
+            sb.append(
+                    "Frontmatter-Indexed Files (search or read body on demand via `grepService` / `fileReadService`):\n");
+            for (ContextFileItem item : indexedFiles) {
+                sb.append("- `").append(item.searchPath()).append('`');
+                if (!item.frontmatter().isEmpty()) {
+                    sb.append(": ");
+                    boolean first = true;
+                    for (Map.Entry<String, String> entry : item.frontmatter().entrySet()) {
+                        if (!first) {
+                            sb.append(", ");
+                        }
+                        sb.append(entry.getKey()).append("=\"").append(entry.getValue()).append('"');
+                        first = false;
+                    }
+                }
+                sb.append('\n');
+            }
+        }
+        for (ContextFileItem item : fullFiles) {
             try {
                 String content = readContextFile(item.filePath());
                 if (!content.isBlank()) {
                     sb.append(NEWLINE_DOUBLE).append("## ").append(headerTitle).append(": ").append(item.fileName())
-                            .append("\n").append(content);
+                            .append('\n').append(content);
                 }
             } catch (Exception e) {
                 log.warn("Failed to read {} context file {}: {}", logScope, item.filePath(), e.getMessage());

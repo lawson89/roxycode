@@ -47,10 +47,18 @@ Instead of issuing one tool call per file read or search, the agent executes scr
 
 Only methods explicitly annotated with `@AgentService` and `@AgentDoc` and permitted for the active workflow phase are accessible from JEXL.
 
-### 4. Repository Map, Context Folders & Read-Only Reference Folders (`@alias`)
+### 4. Repository Map, Zero-Config Context Docs & Read-Only `@alias` Mounts
 - **Repository Map**: Generates a compact structural map of the repository (file paths and method/type signatures with line numbers extracted via Universal Ctags) so the model can perform targeted symbol-first reads without reading every file upfront.
-- **Context Folders (Auto-Injected Docs)**: Attach global context folders (shared across all projects) and project-specific context folders (such as coding guidelines or architecture notes) whose top-level text/Markdown files are automatically injected into the stable system prompt.
-- **Read-Only Reference Folders (`@alias` Source Code)**: Mount external repositories or directories as read-only `@<alias>` prefixes (e.g., `@billing-service`) addressable on demand across `fileReadService`, `grepService`, and `symbolService` without bloating the system prompt or permitting writes.
+- **Zero-Config Context Docs (`<project>/context/` & `~/.roxycode/context/`)**: Drop text or Markdown files directly into `<project>/context/` or `~/.roxycode/context/` with no configuration files needed:
+  - Files **without** YAML frontmatter are injected in full into the stable system prompt.
+  - Markdown files **with** closed `---` YAML frontmatter inject only their frontmatter metadata and searchable path (`context/<file>` or `@global-context/<file>`), allowing Roxy to search and read the body on demand via RipGrep (`grepService`) and `fileReadService`:
+    ```markdown
+    ---
+    title: API Design Guidelines
+    tags: rest, openapi, versioning
+    ---
+    ```
+- **Read-Only `@alias` Reference Mounts (`<project>/.roxy/refs/<alias>` & `~/.roxycode/refs/<alias>`)**: Drop folders or symlinks into `<project>/.roxy/refs/<alias>` or `~/.roxycode/refs/<alias>` to mount external repositories or docs as read-only `@<alias>` prefixes (e.g., `@billing-service`) addressable on demand across `fileReadService`, `grepService`, `symbolService`, and `pdfService`.
 - **File Mentions & Image Attachments**: Reference project files in chat with `@filename` autocomplete or attach images (screenshots, diagrams) directly to a prompt.
 
 ### 5. Two-Tier Agent Memory & Session Archives
@@ -141,7 +149,9 @@ RoxyCode stores user settings, caches, memory, and per-project metadata under `~
 
 ```text
 ~/.roxycode/
-├── settings.toml                # Theme, agentProfile / Gemini model, API key / Vertex AI credentials, turn/memory limits, global context folders
+├── settings.toml                # Theme, agentProfile / Gemini model, API key / Vertex AI credentials, turn/memory limits
+├── context/                     # Optional global context docs (*.md, *.txt)
+├── refs/                        # Optional global read-only @alias folders or symlinks
 ├── system-tools.toml            # Cached CLI tool detection results
 ├── logs/
 │   ├── roxy.log                 # Application log
@@ -153,7 +163,6 @@ RoxyCode stores user settings, caches, memory, and per-project metadata under `~
     └── <project-name>-<hash>/
         ├── project.toml             # Per-project agentProfile / model, thinking level, and build confirmation state
         ├── build.toml               # Project build/test/lint/format commands and sandbox settings
-        ├── context.toml             # Project-scoped context and reference folder paths
         ├── active-workflow.json     # Persisted active implementation plan and workflow phase state
         ├── active-chat-*.json       # Persisted active chat transcripts, memory, and token telemetry
         ├── tmp/build.log            # Latest build/test command output log for error extraction

@@ -20,7 +20,6 @@ import org.roxycode.app.ai.services.GitService;
 import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
-import org.roxycode.app.events.ContextChangedEvent;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.PromptService.ContextFileItem;
@@ -81,6 +80,7 @@ class PromptServiceTest {
     @BeforeEach
     void setUp() {
         lenient().when(settingsService.getSettings()).thenReturn(new AppSettings());
+        lenient().when(settingsService.getRoxyHomeDir()).thenReturn(tempDir.resolve("roxy-home"));
         projectService = spy(new ProjectService(settingsService, eventPublisher));
         lenient().when(jexlServiceRegistry.isGitAvailable()).thenReturn(true);
         promptService = new PromptService(projectService, settingsService, planService, jexlServiceRegistry, gitService,
@@ -89,18 +89,13 @@ class PromptServiceTest {
 
     @Test
     void testGlobalAndProjectContextFoldersAndTopLevelTextDiscovery() throws IOException {
-        Path projectDataDir = tempDir.resolve("project-data");
         Path projectRoot = Files.createDirectories(tempDir.resolve("project-root"));
-        when(projectService.hasActiveProject()).thenReturn(true);
-        lenient().when(projectService.getCurrentProjectRoot()).thenReturn(projectRoot);
-        when(projectService.resolveProjectDataPath(anyString()))
-                .thenAnswer(inv -> projectDataDir.resolve(inv.getArgument(0, String.class)));
-        when(settingsService.getSettings()).thenReturn(new AppSettings());
+        projectService.setCurrentProjectRoot(projectRoot);
 
         assertEquals("", promptService.loadGlobalContext());
         assertEquals("", promptService.loadProjectContext());
 
-        Path globalDir = Files.createDirectories(tempDir.resolve("global-context"));
+        Path globalDir = Files.createDirectories(projectService.getGlobalContextDir());
         Files.writeString(globalDir.resolve("b_global.txt"), "Global B text");
         Files.writeString(globalDir.resolve("a_global.md"), "Global A markdown");
         Files.writeString(globalDir.resolve(".hidden.md"), "Hidden file");
@@ -108,77 +103,59 @@ class PromptServiceTest {
         Files.writeString(Files.createDirectories(globalDir.resolve("nested")).resolve("sub.md"),
                 "Nested should be ignored");
 
-        projectService.setGlobalContextFolders(List.of("  " + globalDir + "  ", globalDir.toString()));
-        verify(settingsService).saveSettings();
-        verify(eventPublisher).publishEvent(new ContextChangedEvent(true));
-        assertEquals(List.of(globalDir.toString()), projectService.getGlobalContextFolders());
-
         List<ContextFileItem> globalFiles = promptService.listGlobalContextFiles();
         assertEquals(List.of("a_global.md", "b_global.txt"),
                 globalFiles.stream().map(ContextFileItem::fileName).toList());
 
-        Path projDocsDir = Files.createDirectories(projectRoot.resolve("docs"));
-        Files.writeString(projDocsDir.resolve("z_spec.json"), "{spec: true}");
-        Files.writeString(projDocsDir.resolve("a_architecture.md"), "Architecture guidelines");
-        Files.write(projDocsDir.resolve("image.png"), new byte[]{(byte) 0x89, 0x50, 0x00, 0x47});
-
-        projectService.setProjectContextFolders(List.of("docs", "docs"));
-        verify(eventPublisher).publishEvent(new ContextChangedEvent(false));
-        assertEquals(List.of("docs"), projectService.getProjectContextFolders());
+        Path projContextDir = Files.createDirectories(projectService.getProjectContextDir());
+        Files.writeString(projContextDir.resolve("z_spec.json"), "{spec: true}");
+        Files.writeString(projContextDir.resolve("a_architecture.md"), "Architecture guidelines");
+        Files.writeString(projContextDir.resolve("b_billing.md"),
+                "---\ntitle: Billing Spec\ntags: billing, stripe\n---\n# Secret Body\nDo not inject full body.");
+        Files.write(projContextDir.resolve("image.png"), new byte[]{(byte) 0x89, 0x50, 0x00, 0x47});
 
         String globalContext = promptService.loadGlobalContext();
-        SwingTestUtils.assertContainsAll(globalContext, "## Global Context: a_global.md\nGlobal A markdown",
-                "## Global Context: b_global.txt\nGlobal B text");
+        SwingTestUtils.assertContainsAll(globalContext, "## Global Context",
+                "Full-Injected Files: `@global-context/a_global.md`, `@global-context/b_global.txt`",
+                "## Global Context: a_global.md\nGlobal A markdown", "## Global Context: b_global.txt\nGlobal B text");
         SwingTestUtils.assertContainsNone(globalContext, "Hidden file", "Nested should be ignored");
 
         String projectContext = promptService.loadProjectContext();
-        SwingTestUtils.assertContainsAll(projectContext,
+        SwingTestUtils.assertContainsAll(projectContext, "## Project Context",
+                "Full-Injected Files: `context/a_architecture.md`, `context/z_spec.json`", "Frontmatter-Indexed Files",
+                "`context/b_billing.md`:", "title=\"Billing Spec\"", "tags=\"billing, stripe\"",
                 "## Project Context: a_architecture.md\nArchitecture guidelines",
                 "## Project Context: z_spec.json\n{spec: true}");
+        SwingTestUtils.assertContainsNone(projectContext, "Do not inject full body.");
         assertTrue(projectContext.indexOf("a_architecture.md") < projectContext.indexOf("z_spec.json"));
 
-        assertEquals("", promptService.loadReferenceFoldersContext());
-        Path projRef = Files.createDirectories(tempDir.resolve("proj-billing-service"));
-        Path globalRef = Files.createDirectories(tempDir.resolve("global-auth-lib"));
-        clearInvocations(eventPublisher, settingsService);
+        Path projRef = Files.createDirectories(projectService.getProjectRefsDir().resolve("proj-billing-service"));
+        Path globalRef = Files.createDirectories(projectService.getGlobalRefsDir().resolve("global-auth-lib"));
 
-        projectService.setGlobalReferenceFolders(List.of("  " + globalRef + "  ", globalRef.toString()));
-        verify(settingsService).saveSettings();
-        verify(eventPublisher).publishEvent(new ContextChangedEvent(true));
-        assertEquals(List.of(globalRef.toString()), projectService.getGlobalReferenceFolders());
-
-        projectService.setProjectReferenceFolders(List.of(projRef.toString()));
-        verify(eventPublisher).publishEvent(new ContextChangedEvent(false));
-        assertEquals(List.of(projRef.toString()), projectService.getProjectReferenceFolders());
-        assertEquals(List.of("docs"), projectService.getProjectContextFolders());
-
-        assertEquals(1, projectService.listGlobalReferenceFolderMounts().size());
+        assertEquals(2, projectService.listGlobalReferenceFolderMounts().size());
         assertEquals("global-auth-lib", projectService.listGlobalReferenceFolderMounts().get(0).alias());
+        assertEquals("global-context", projectService.listGlobalReferenceFolderMounts().get(1).alias());
         assertEquals(1, projectService.listProjectReferenceFolderMounts().size());
         assertEquals("proj-billing-service", projectService.listProjectReferenceFolderMounts().get(0).alias());
 
         String refCatalog = promptService.loadReferenceFoldersContext();
         SwingTestUtils.assertContainsAll(refCatalog, "## READ-ONLY REFERENCE FOLDERS", "@proj-billing-service",
                 projRef.toAbsolutePath().normalize().toString(), "@global-auth-lib",
-                globalRef.toAbsolutePath().normalize().toString());
+                globalRef.toAbsolutePath().normalize().toString(), "@global-context");
         assertTrue(promptService.getStableContext().contains(refCatalog));
     }
 
     @Test
     void testGetStableSessionAndSystemPrompt() throws IOException {
-        Path projectDataDir = tempDir.resolve("project-data");
-        Path globalDir = Files.createDirectories(tempDir.resolve("global-rules"));
-        Path projectRulesDir = Files.createDirectories(tempDir.resolve("project-rules"));
+        Path projectRoot = Files.createDirectories(tempDir.resolve("project-root-2"));
+        projectService.setCurrentProjectRoot(projectRoot);
+        Path globalDir = Files.createDirectories(projectService.getGlobalContextDir());
+        Path projectRulesDir = Files.createDirectories(projectService.getProjectContextDir());
         Files.writeString(globalDir.resolve("global.md"), "GLOBAL RULES");
         Files.writeString(projectRulesDir.resolve("rules.md"), "CUSTOM RULES");
 
         AppSettings settings = new AppSettings();
-        settings.setGlobalContextFolders(List.of(globalDir.toString()));
         when(settingsService.getSettings()).thenReturn(settings);
-        when(projectService.hasActiveProject()).thenReturn(true);
-        doAnswer(inv -> projectDataDir.resolve(inv.getArgument(0, String.class))).when(projectService)
-                .resolveProjectDataPath(anyString());
-        projectService.setProjectContextFolders(List.of(projectRulesDir.toString()));
 
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.CODE);
         when(jexlServiceRegistry.getDocumentation(WorkflowPhase.CODE)).thenReturn("JEXL DOCS");

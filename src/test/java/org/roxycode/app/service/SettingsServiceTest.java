@@ -62,7 +62,7 @@ class SettingsServiceTest {
         settings.setTheme("Darcula");
         settings.setGeminiApiKey("test-api-key");
         settings.setAgentProfile("max");
-        settings.setGlobalContextFolders(List.of("/tmp/global-a", "/tmp/global-b"));
+        settings.setRecentProjectPaths(List.of("/tmp/proj-a", "/tmp/proj-b"));
         service.saveSettings();
 
         assertTrue(listenerCalled.get(), "SettingsChangedEvent should be published when settings are saved");
@@ -79,7 +79,7 @@ class SettingsServiceTest {
         assertEquals("MAX", service2.getSettings().getAgentProfile());
         assertEquals(AgentProfile.MAX, SettingsService.resolveGlobalAgentProfile(service2));
 
-        assertEquals(List.of("/tmp/global-a", "/tmp/global-b"), service2.getSettings().getGlobalContextFolders());
+        assertEquals(List.of("/tmp/proj-a", "/tmp/proj-b"), service2.getSettings().getRecentProjectPaths());
         assertTrue(Files.exists(settingsFile));
         if (FileSystems.getDefault().supportedFileAttributeViews().contains("posix")) {
             try {
@@ -327,7 +327,7 @@ class SettingsServiceTest {
         javax.swing.SwingUtilities.invokeAndWait(() -> {
             AppSettings live = service.getSettings();
             live.setTheme("Theme-1");
-            live.setGlobalContextFolders(List.of("/folder/1"));
+            live.setRecentProjectPaths(List.of("/folder/1"));
             service.saveSettings();
         });
 
@@ -336,16 +336,16 @@ class SettingsServiceTest {
         javax.swing.SwingUtilities.invokeAndWait(() -> {
             AppSettings live = service.getSettings();
             live.setTheme("Theme-2");
-            live.setGlobalContextFolders(List.of("/folder/1", "/folder/2"));
+            live.setRecentProjectPaths(List.of("/folder/1", "/folder/2"));
             service.saveSettings();
 
             live.setTheme("Theme-3");
-            live.setGlobalContextFolders(List.of("/folder/1", "/folder/2", "/folder/3"));
+            live.setRecentProjectPaths(List.of("/folder/1", "/folder/2", "/folder/3"));
             service.saveSettings();
 
             // Mutate live settings after saveSettings() without saving to verify defensive snapshot isolation
             live.setTheme("Unsaved-Mutation");
-            live.setGlobalContextFolders(List.of("/unsaved"));
+            live.setRecentProjectPaths(List.of("/unsaved"));
         });
 
         releaseFirstWrite.countDown();
@@ -354,7 +354,7 @@ class SettingsServiceTest {
         assertEquals(List.of("Theme-1", "Theme-2", "Theme-3"), writtenThemes);
         AppSettings diskSettings = SettingsService.loadFromDisk(settingsFile, AiConfig.SHARED_TOML_MAPPER);
         assertEquals("Theme-3", diskSettings.getTheme());
-        assertEquals(List.of("/folder/1", "/folder/2", "/folder/3"), diskSettings.getGlobalContextFolders());
+        assertEquals(List.of("/folder/1", "/folder/2", "/folder/3"), diskSettings.getRecentProjectPaths());
     }
 
     @Test

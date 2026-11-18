@@ -40,8 +40,9 @@ class PdfServiceTest {
         lenient().when(settingsService.getSettings()).thenReturn(new org.roxycode.app.model.AppSettings());
         projectService = spy(new ProjectService(settingsService, null));
         lenient().when(projectService.getCurrentProjectRoot()).thenReturn(tempDir);
-        lenient().when(projectService.getProjectReferenceFolders()).thenReturn(List.of(refDir.toString()));
-        lenient().when(projectService.getGlobalReferenceFolders()).thenReturn(List.of());
+        lenient().when(projectService.getReferenceFolderMounts())
+                .thenReturn(List.of(new ProjectService.ReferenceFolderMount(refDir.getFileName().toString(),
+                        refDir.toString(), refDir, false)));
         grepService = mock(GrepService.class);
         aiService = mock(AiService.class);
         pdfService = new PdfService(projectService, grepService, aiService);

@@ -33,16 +33,24 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
 
 ## 2. Context & Prompts Hub & Agent Memory
 
-### Context Folders (Context & Prompts -> Context Folders Tab)
-- **Context Folders (Auto-Injected Docs)**: Manages external read-only folders whose top-level text/markdown files are automatically injected into Roxy's stable system prompt:
-  - **Global Context Folders**: Applied across all projects (~/.roxycode/settings.toml).
-  - **Project Context Folders**: Specific to the active repository (<projectDataDir>/context.toml), supporting project-relative or absolute paths.
-- **Reference Folders (Read-Only `@alias` Source Code)**: Mounts external source repositories or directories as read-only `@<alias>` prefixes (e.g., `@billing-service`) without bloating the system prompt with full file contents:
+### Zero-Config Context & Reference Conventions (Context & Prompts -> Repo Map & Prompt Tab)
+- **Context Docs (Convention Directories)**: Drop text or Markdown files into `<project>/context/` (project-scoped) or `~/.roxycode/context/` (global across all projects):
+  - **No Frontmatter (Full Injection)**: Files without YAML frontmatter are injected in full into the stable system prompt.
+  - **YAML Frontmatter (Metadata-Indexed)**: `.md` / `.markdown` files starting with a closed `---` YAML frontmatter block inject only their frontmatter metadata and searchable path (`context/<file>` or `@global-context/<file>`) into the stable system prompt so Roxy can search and read the body on demand via `grepService` and `fileReadService`:
+    ```markdown
+    ---
+    title: Payment Gateway Architecture
+    tags: billing, stripe, webhooks
+    ---
+    # Detailed Notes
+    ...
+    ```
+- **Read-Only Reference Mounts (`@alias` Source Code)**: Drop subdirectories or directory symlinks into `<project>/.roxy/refs/<alias>` or `~/.roxycode/refs/<alias>` (plus `~/.roxycode/context/` is automatically mounted as `@global-context` when present):
   - Listed concisely under `## READ-ONLY REFERENCE FOLDERS` in the stable system prompt.
-  - Addressable on demand via `@<alias>` or `@<alias>/subpath` in `fileReadService`, `grepService`, `symbolService`, and `pdfService`, while strictly blocked from any writes or deletions in `fileEditorService`.
+  - Addressable on demand via `@<alias>` or `@<alias>/subpath` in `fileReadService`, `grepService`, `symbolService`, and `pdfService`, while strictly blocked from writes in `fileEditorService` (and `<project>/.roxy/refs/` itself is protected from writes).
 
 ### Repo Map & Prompt (Context & Prompts -> Repo Map & Prompt Tab)
-- Displays the Universal Ctags structural skeleton (RepoMapPackerService) of source files with class/method line numbers, plus live token estimates for the Repo Map, Stable Prompt & Memory, and Session Context to maximize Gemini prefix cache hits.
+- Displays the Universal Ctags structural skeleton (RepoMapPackerService) of source files with class/method line numbers, live token estimates for the Repo Map, Stable Prompt & Memory, and Session Context, and a summary strip of the zero-config convention directories. The **Stable Prompt & Memory** tab also lists all discovered full-injected and frontmatter-indexed context files and mounted `@<alias>` folders.
 
 ### JEXL API (Context & Prompts -> JEXL API Tab)
 - Interactive reference of all `@AgentService` methods exposed inside `executeJexl`.

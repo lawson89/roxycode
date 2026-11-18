@@ -10,7 +10,9 @@ import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
+import javax.swing.JSeparator;
 import javax.swing.JTabbedPane;
+import javax.swing.SwingConstants;
 import javax.swing.Timer;
 import net.miginfocom.swing.MigLayout;
 import org.apache.commons.lang3.StringUtils;
@@ -22,7 +24,6 @@ import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService.RepoMapSnapshot;
-import org.roxycode.app.events.ContextChangedEvent;
 import org.roxycode.app.events.DatabaseConfigChangedEvent;
 import org.roxycode.app.events.MemoryChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
@@ -55,16 +56,21 @@ final class CodebaseCachePanel extends JPanel {
     static final String TAB_REPO_MAP = "Repo Map";
     static final String TAB_STABLE_PROMPT = "Stable Prompt & Memory";
     static final String TAB_SESSION_CONTEXT = "Session Context";
-    static final String PROMPT_LAYERS_TOOLTIP_HTML = "<html><body style='width: 310px; padding: 4px;'>"
+    static final String PROMPT_LAYERS_TOOLTIP_HTML = "<html><body style='width: 340px; padding: 4px;'>"
             + "<b>Repo Map &amp; Prompt Layers</b><br>"
             + "Roxy organizes context into three layers to maximize Gemini prefix cache hits:<br><br>"
             + "• <b>Repo Map</b>: Universal Ctags structural skeleton of source files with class/method line numbers.<br>"
-            + "• <b>Stable Prompt &amp; Memory</b>: System rules, Context Folders, Reference Folder catalog, and Agent Memory.<br>"
+            + "• <b>Stable Prompt &amp; Memory</b>: System rules, zero-config Context Docs (<code>&lt;project&gt;/context/</code> &amp; "
+            + "<code>~/.roxycode/context/</code>; files without frontmatter are injected in full, while <code>.md</code> files with "
+            + "YAML <code>---</code> frontmatter inject metadata only and are searched via RipGrep), Read-Only <code>@alias</code> "
+            + "Mounts (<code>.roxy/refs/*</code> &amp; <code>~/.roxycode/refs/*</code>), and Agent Memory.<br>"
             + "• <b>Session Context</b>: Active workflow phase, JEXL API docs, git status, and implementation plan progress.<br><br>"
             + "Click <b>Refresh Repo Map</b> to force a full symbol re-scan." + "</body></html>";
     private static final int TAB_INDEX_STABLE_PROMPT = 1;
     private static final int TAB_INDEX_SESSION_CONTEXT = 2;
     private static final String GROWX = "growx";
+    private static final String COL_GROW_FILL = "[grow, fill]";
+    private static final String STYLE_SMALL_FONT = "font: -1";
     private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final transient RepoMapPackerService packerService;
@@ -74,13 +80,26 @@ final class CodebaseCachePanel extends JPanel {
     final JLabel titleLabel = new JLabel(PAGE_TITLE);
     final JLabel subtitleLabel = new JLabel(PAGE_SUBTITLE);
     final JPanel summaryCardPanel = new JPanel(
-            new MigLayout("fillx, insets 12 16 12 16, wrap 1, gapy 6", "[grow, fill]", ""));
+            new MigLayout("fillx, insets 12 16 12 16, wrap 1, gapy 6", COL_GROW_FILL, ""));
     final JLabel statusLabel = new JLabel("Status: Unknown");
     final JLabel promptLayersInfoIcon = UiComponents.createInfoIcon(PROMPT_LAYERS_TOOLTIP_HTML);
     final JLabel repoMapTokensLabel = new JLabel();
     final JLabel stableTokensLabel = new JLabel();
     final JLabel sessionTokensLabel = new JLabel();
     final JLabel totalTokensLabel = new JLabel();
+    final JPanel contextConventionsCard = new JPanel(
+            new MigLayout("insets 8 10 8 10, wrap 1, gapy 2", COL_GROW_FILL, ""));
+    final JPanel referenceConventionsCard = new JPanel(
+            new MigLayout("insets 8 10 8 10, wrap 1, gapy 2", COL_GROW_FILL, ""));
+    private final JLabel conventionsHeaderLabel = new JLabel("Zero-Config Context & Reference Conventions:");
+    private final JLabel contextCardTitleLabel = new JLabel("Context Files (context/*.md, ~/.roxycode/context/*.md)");
+    private final JLabel contextBullet1 = new JLabel("• No frontmatter: full file injected into Stable Prompt");
+    private final JLabel contextBullet2 = new JLabel("• YAML frontmatter (---): metadata in prompt, body via RipGrep");
+    private final JLabel referenceCardTitleLabel = new JLabel(
+            "Read-Only @alias Mounts (.roxy/refs/*, ~/.roxycode/refs/*)");
+    private final JLabel referenceBullet1 = new JLabel("• Drop folders or symlinks to mount as @<folder-name>");
+    private final JLabel referenceBullet2 = new JLabel(
+            "• Searchable on demand via grepService, fileReadService, symbolService");
     private final JProgressBar progressBar = new JProgressBar(0, 100);
     final JButton packButton = new JButton(REFRESH_BUTTON_TEXT, FontIcon.of(Codicons.REFRESH, 14));
     final JButton copyButton;
@@ -115,11 +134,6 @@ final class CodebaseCachePanel extends JPanel {
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
         Edt.run(this::runPack);
-    }
-
-    @EventListener
-    public void onContextChanged(ContextChangedEvent event) {
-        Edt.run(this::refreshStatus);
     }
 
     @EventListener
@@ -167,7 +181,7 @@ final class CodebaseCachePanel extends JPanel {
     }
 
     private void initComponents() {
-        setLayout(new MigLayout("fill, insets 20, hidemode 3", "[grow, fill]", "[]12[]12[grow, fill]"));
+        setLayout(new MigLayout("fill, insets 20, hidemode 3", COL_GROW_FILL, "[]12[]12[grow, fill]"));
 
         JPanel actionPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
         actionPanel.setOpaque(false);
@@ -178,9 +192,9 @@ final class CodebaseCachePanel extends JPanel {
         UiComponents.styleCardPanel(summaryCardPanel);
         statusLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold");
         totalTokensLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold");
-        repoMapTokensLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
-        stableTokensLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
-        sessionTokensLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
+        repoMapTokensLabel.putClientProperty(FlatClientProperties.STYLE, STYLE_SMALL_FONT);
+        stableTokensLabel.putClientProperty(FlatClientProperties.STYLE, STYLE_SMALL_FONT);
+        sessionTokensLabel.putClientProperty(FlatClientProperties.STYLE, STYLE_SMALL_FONT);
 
         JPanel topSummaryRow = new JPanel(new MigLayout("insets 0, fillx", "[]6[grow, fill][]", "center"));
         topSummaryRow.setOpaque(false);
@@ -199,6 +213,32 @@ final class CodebaseCachePanel extends JPanel {
         progressBar.setStringPainted(true);
         progressBar.setVisible(false);
         summaryCardPanel.add(progressBar, "growx, hidemode 3");
+
+        summaryCardPanel.add(new JSeparator(SwingConstants.HORIZONTAL), "growx, gaptop 2, gapbottom 2");
+        conventionsHeaderLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
+        summaryCardPanel.add(conventionsHeaderLabel, GROWX);
+
+        contextCardTitleLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
+        contextBullet1.putClientProperty(FlatClientProperties.STYLE, STYLE_SMALL_FONT);
+        contextBullet2.putClientProperty(FlatClientProperties.STYLE, STYLE_SMALL_FONT);
+        contextConventionsCard.add(contextCardTitleLabel, GROWX);
+        contextConventionsCard.add(contextBullet1, GROWX);
+        contextConventionsCard.add(contextBullet2, GROWX);
+
+        referenceCardTitleLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold -1");
+        referenceBullet1.putClientProperty(FlatClientProperties.STYLE, STYLE_SMALL_FONT);
+        referenceBullet2.putClientProperty(FlatClientProperties.STYLE, STYLE_SMALL_FONT);
+        referenceConventionsCard.add(referenceCardTitleLabel, GROWX);
+        referenceConventionsCard.add(referenceBullet1, GROWX);
+        referenceConventionsCard.add(referenceBullet2, GROWX);
+
+        JPanel conventionsGrid = new JPanel(
+                new MigLayout("insets 0, fillx, gapx 12", "[grow, fill][grow, fill]", "fill"));
+        conventionsGrid.setOpaque(false);
+        conventionsGrid.add(contextConventionsCard, "grow");
+        conventionsGrid.add(referenceConventionsCard, "grow");
+        summaryCardPanel.add(conventionsGrid, GROWX);
+
         add(summaryCardPanel, "growx, wrap");
 
         UiComponents.configureSyntaxTextArea(repoMapArea, SyntaxConstants.SYNTAX_STYLE_NONE, false, true);
@@ -217,11 +257,20 @@ final class CodebaseCachePanel extends JPanel {
 
     void updateTheme() {
         UiComponents.styleCardPanel(summaryCardPanel);
+        UiComponents.styleCardPanel(contextConventionsCard);
+        UiComponents.styleCardPanel(referenceConventionsCard);
         UiComponents.updateInfoIconTheme(promptLayersInfoIcon);
         UiComponents.refreshActionButtonIcons(this);
         repoMapTokensLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
         stableTokensLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
         sessionTokensLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
+        contextCardTitleLabel.setForeground(SwingHtmlUtils.getAccentColor());
+        referenceCardTitleLabel
+                .setForeground(SwingHtmlUtils.getUiColor(SwingHtmlUtils.getAccentColor(), "Actions.Green"));
+        contextBullet1.setForeground(SwingHtmlUtils.getMutedForegroundColor());
+        contextBullet2.setForeground(SwingHtmlUtils.getMutedForegroundColor());
+        referenceBullet1.setForeground(SwingHtmlUtils.getMutedForegroundColor());
+        referenceBullet2.setForeground(SwingHtmlUtils.getMutedForegroundColor());
         SwingHtmlUtils.applyRSyntaxTheme(repoMapArea, settingsService);
         SwingHtmlUtils.applyRSyntaxTheme(stableContextArea, settingsService);
         SwingHtmlUtils.applyRSyntaxTheme(sessionContextArea, settingsService);

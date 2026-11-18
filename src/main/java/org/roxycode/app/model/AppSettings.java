@@ -38,8 +38,6 @@ public class AppSettings {
     private int maxAgentToolTurns = DEFAULT_MAX_AGENT_TOOL_TURNS;
     private int maxChatMemoryMessages = 50;
     private boolean googleGroundingEnabled = false;
-    private List<String> globalContextFolders = new ArrayList<>();
-    private List<String> globalReferenceFolders = new ArrayList<>();
     private Integer windowX;
     private Integer windowY;
     private int windowWidth = DEFAULT_WINDOW_WIDTH;
@@ -65,10 +63,6 @@ public class AppSettings {
             this.maxAgentToolTurns = other.maxAgentToolTurns;
             this.maxChatMemoryMessages = other.maxChatMemoryMessages;
             this.googleGroundingEnabled = other.googleGroundingEnabled;
-            this.globalContextFolders = new ArrayList<>(
-                    Objects.requireNonNullElse(other.globalContextFolders, List.of()));
-            this.globalReferenceFolders = new ArrayList<>(
-                    Objects.requireNonNullElse(other.globalReferenceFolders, List.of()));
             this.windowX = other.windowX;
             this.windowY = other.windowY;
             this.windowWidth = other.windowWidth;
@@ -354,44 +348,6 @@ public class AppSettings {
      */
     public void setGoogleGroundingEnabled(boolean googleGroundingEnabled) {
         this.googleGroundingEnabled = googleGroundingEnabled;
-    }
-
-    /**
-     * Gets the list of global context folders.
-     *
-     * @return the list of global context folders
-     */
-    public List<String> getGlobalContextFolders() {
-        return List.copyOf(Objects.requireNonNullElse(globalContextFolders, List.of()));
-    }
-
-    /**
-     * Sets the list of global context folders.
-     *
-     * @param globalContextFolders
-     *            the list of global context folders to set
-     */
-    public void setGlobalContextFolders(List<String> globalContextFolders) {
-        this.globalContextFolders = new ArrayList<>(Objects.requireNonNullElse(globalContextFolders, List.of()));
-    }
-
-    /**
-     * Gets the list of global reference folders.
-     *
-     * @return the list of global reference folders
-     */
-    public List<String> getGlobalReferenceFolders() {
-        return List.copyOf(Objects.requireNonNullElse(globalReferenceFolders, List.of()));
-    }
-
-    /**
-     * Sets the list of global reference folders.
-     *
-     * @param globalReferenceFolders
-     *            the list of global reference folders to set
-     */
-    public void setGlobalReferenceFolders(List<String> globalReferenceFolders) {
-        this.globalReferenceFolders = new ArrayList<>(Objects.requireNonNullElse(globalReferenceFolders, List.of()));
     }
 
     /**

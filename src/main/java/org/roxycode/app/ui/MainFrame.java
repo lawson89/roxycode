@@ -139,19 +139,19 @@ public final class MainFrame extends JPanel {
     public MainFrame(SettingsService settingsService, ProjectService projectService, HeaderPanel header,
             StatusPanel statusBar, QaWorkspacePanel qaWorkspacePanel, TaskWorkspacePanel taskWorkspacePanel,
             CodebaseCachePanel codebaseCachePanel, JexlApiPanel jexlApiPanel, SystemToolsPanel systemToolsPanel,
-            SettingsPanel settingsPanel, BuildConfigPanel buildConfigPanel, ContextManagerPanel contextManagerPanel,
+            SettingsPanel settingsPanel, BuildConfigPanel buildConfigPanel,
             @Nullable AgentMemoryPanel agentMemoryPanel) {
         this(settingsService, projectService, header, statusBar, qaWorkspacePanel, taskWorkspacePanel,
-                codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel,
-                contextManagerPanel, agentMemoryPanel, null);
+                codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel, agentMemoryPanel,
+                null);
     }
 
     @Autowired
     public MainFrame(SettingsService settingsService, ProjectService projectService, HeaderPanel header,
             StatusPanel statusBar, QaWorkspacePanel qaWorkspacePanel, TaskWorkspacePanel taskWorkspacePanel,
             CodebaseCachePanel codebaseCachePanel, JexlApiPanel jexlApiPanel, SystemToolsPanel systemToolsPanel,
-            SettingsPanel settingsPanel, BuildConfigPanel buildConfigPanel, ContextManagerPanel contextManagerPanel,
-            @Nullable AgentMemoryPanel agentMemoryPanel, @Nullable GlobalDatabasesPanel globalDatabasesPanel) {
+            SettingsPanel settingsPanel, BuildConfigPanel buildConfigPanel, @Nullable AgentMemoryPanel agentMemoryPanel,
+            @Nullable GlobalDatabasesPanel globalDatabasesPanel) {
         this.settingsService = settingsService;
         this.projectService = projectService;
         this.header = header;
@@ -175,7 +175,7 @@ public final class MainFrame extends JPanel {
         setupLaf();
         setupWindow();
         initComponents(statusBar, codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel,
-                contextManagerPanel, agentMemoryPanel, globalDatabasesPanel);
+                agentMemoryPanel, globalDatabasesPanel);
         setupMenuBar();
         registerDesktopHandlers();
         if (settingsPanel != null) {
@@ -641,8 +641,7 @@ public final class MainFrame extends JPanel {
 
     private void initComponents(StatusPanel statusBar, CodebaseCachePanel codebaseCachePanel, JexlApiPanel jexlApiPanel,
             SystemToolsPanel systemToolsPanel, SettingsPanel settingsPanel, BuildConfigPanel buildConfigPanel,
-            ContextManagerPanel contextManagerPanel, @Nullable AgentMemoryPanel memoryPanel,
-            @Nullable GlobalDatabasesPanel databasesPanel) {
+            @Nullable AgentMemoryPanel memoryPanel, @Nullable GlobalDatabasesPanel databasesPanel) {
         setLayout(new MigLayout("fill, insets 0", "[210!, fill]0[fill, grow]", "[fill, grow]"));
 
         sidebar = new SidebarPanel(this::showCard);
@@ -674,21 +673,17 @@ public final class MainFrame extends JPanel {
         JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));
 
         contextHubTabs = UiComponents.createUnderlinedTabbedPane(null);
-        if (contextManagerPanel != null) {
-            contextHubTabs.addTab("Context Folders", FontIcon.of(Codicons.FILE, 15, SwingHtmlUtils.getAccentColor()),
-                    contextManagerPanel);
-        }
         if (codebaseCachePanel != null) {
             contextHubTabs.addTab("Repo Map & Prompt",
-                    FontIcon.of(Codicons.DATABASE, 15, SwingHtmlUtils.getMutedForegroundColor()), codebaseCachePanel);
+                    FontIcon.of(Codicons.DATABASE, 15, SwingHtmlUtils.getAccentColor()), codebaseCachePanel);
         }
         if (jexlApiPanel != null) {
             contextHubTabs.addTab("Agent Tools API",
                     FontIcon.of(Codicons.CODE, 15, SwingHtmlUtils.getMutedForegroundColor()), jexlApiPanel);
         }
         registerRoute(CONTEXT_MGR_VIEW, CONTEXT_MGR_VIEW, contextHubTabs, TAB_INDEX_FIRST);
-        registerRoute(CACHE_VIEW, CONTEXT_MGR_VIEW, contextHubTabs, TAB_INDEX_SECOND);
-        registerRoute(API_VIEW, CONTEXT_MGR_VIEW, contextHubTabs, TAB_INDEX_THIRD);
+        registerRoute(CACHE_VIEW, CONTEXT_MGR_VIEW, contextHubTabs, TAB_INDEX_FIRST);
+        registerRoute(API_VIEW, CONTEXT_MGR_VIEW, contextHubTabs, TAB_INDEX_SECOND);
         bindHubTabRoutes(contextHubTabs);
 
         aiConnectionReadinessBadge = new JLabel();
@@ -1235,7 +1230,7 @@ public final class MainFrame extends JPanel {
             qaWorkspacePanel.focusChatInput();
         } else if (TASK_VIEW.equals(cardName) && taskWorkspacePanel != null) {
             taskWorkspacePanel.onViewShown();
-        } else if (CACHE_VIEW.equals(cardName) && codebaseCachePanel != null) {
+        } else if ((CACHE_VIEW.equals(cardName) || CONTEXT_MGR_VIEW.equals(cardName)) && codebaseCachePanel != null) {
             codebaseCachePanel.refreshStatus();
         } else if (MEMORY_VIEW.equals(cardName) && agentMemoryPanel != null) {
             agentMemoryPanel.refresh();

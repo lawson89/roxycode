@@ -94,13 +94,12 @@ class MainFrameTest {
         when(buildToolService.getConfigContent()).thenReturn("");
         when(buildToolService.buildInteractiveConfigurationPrompt(any(), anyString())).thenReturn("Interactive prompt");
         buildConfigPanel = new BuildConfigPanel(buildToolService, settingsService, projectService);
-        ContextManagerPanel contextManagerPanel = new ContextManagerPanel(mock(PromptService.class), projectService);
         AgentMemoryPanel agentMemoryPanel = new AgentMemoryPanel(mock(MemoryService.class), projectService,
                 settingsService);
 
         return new MainFrame(settingsService, projectService, headerPanel, statusPanel, qaWorkspacePanel,
                 taskWorkspacePanel, codebaseCachePanel, jexlApiPanel, systemToolsPanel, settingsPanel, buildConfigPanel,
-                contextManagerPanel, agentMemoryPanel);
+                agentMemoryPanel);
     }
 
     @Test
@@ -307,11 +306,16 @@ class MainFrameTest {
             assertFalse(frame.sidebar.isTaskWaitingApproval());
 
             clearInvocations(repoMapPackerService);
-            frame.showCard(MainFrame.CACHE_VIEW);
-            assertEquals(1, frame.contextHubTabs.getSelectedIndex());
+            frame.showCard(MainFrame.CONTEXT_MGR_VIEW);
+            assertEquals(0, frame.contextHubTabs.getSelectedIndex());
+            assertEquals(2, frame.contextHubTabs.getTabCount());
             verify(repoMapPackerService, timeout(2000).atLeastOnce()).getCachedSnapshot();
+
+            frame.showCard(MainFrame.CACHE_VIEW);
+            assertEquals(0, frame.contextHubTabs.getSelectedIndex());
+
             frame.showCard(MainFrame.API_VIEW);
-            assertEquals(2, frame.contextHubTabs.getSelectedIndex());
+            assertEquals(1, frame.contextHubTabs.getSelectedIndex());
 
             when(jexlServiceRegistry.getDocumentation(null)).thenReturn("// updated git doc");
             jexlApiPanel.onSystemToolsUpdated(new SystemToolsUpdatedEvent(allDetectedTools, false));

@@ -13,7 +13,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService;
 import org.roxycode.app.ai.services.cache.RepoMapPackerService.RepoMapSnapshot;
-import org.roxycode.app.events.ContextChangedEvent;
 import org.roxycode.app.events.MemoryChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.service.PromptService;
@@ -37,6 +36,9 @@ class CodebaseCachePanelTest {
         assertEquals("Repo Map & Prompt", panel.titleLabel.getText());
         assertEquals("Refresh Repo Map", panel.packButton.getText());
         assertNotNull(panel.promptLayersInfoIcon.getToolTipText());
+        assertTrue(panel.promptLayersInfoIcon.getToolTipText().contains("context/"));
+        assertTrue(panel.contextConventionsCard.isVisible());
+        assertTrue(panel.referenceConventionsCard.isVisible());
         verify(packerService, times(1)).forceRegenerateRepoMap();
 
         RepoMapSnapshot snapshot = new RepoMapSnapshot("roxycode", "cached repo map",
@@ -75,7 +77,6 @@ class CodebaseCachePanelTest {
         verify(packerService, atLeast(2)).forceRegenerateRepoMap();
 
         when(promptService.getSessionContext()).thenReturn("updated session context after memory change");
-        panel.onContextChanged(new ContextChangedEvent(true));
         panel.onMemoryChanged(new MemoryChangedEvent(true));
         SwingTestUtils.awaitCondition(
                 () -> "updated session context after memory change".equals(panel.sessionContextArea.getText()));

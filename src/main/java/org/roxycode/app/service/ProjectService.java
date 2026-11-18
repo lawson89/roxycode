@@ -3,23 +3,21 @@ package org.roxycode.app.service;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.util.Objects;
 import java.util.Set;
-import java.util.function.BiConsumer;
-import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AiConfig;
-import org.roxycode.app.events.ContextChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.ai.WorkflowPhase;
@@ -44,7 +42,10 @@ public class ProjectService {
     private static final String CONTEXT_SEPARATOR = "--";
     private static final Pattern RG_LINE_PREFIX_PATTERN = Pattern.compile("^(.+?)([:-][0-9]+[:-].*)$", Pattern.DOTALL);
     static final String PROJECT_CONFIG_FILE = "project.toml";
-    static final String PROJECT_CONTEXT_CONFIG_FILE = "context.toml";
+    public static final String CONVENTION_CONTEXT_DIR = "context";
+    public static final String PROJECT_REFS_REL_DIR = ".roxy/refs";
+    public static final String GLOBAL_REFS_SUBDIR = "refs";
+    public static final String GLOBAL_CONTEXT_ALIAS = "global-context";
     static final String ROXYCODE_TMP_DIR = ".roxycode/tmp";
     private static final String ROXYCODE_TMP_PREFIX = ".roxycode/tmp/";
     private static final String DATA_TMP_DIR = "tmp";
@@ -68,16 +69,6 @@ public class ProjectService {
 
         public ProjectConfig(String agentProfile, boolean buildConfirmed) {
             this(agentProfile, "", "", buildConfirmed);
-        }
-    }
-
-    @JsonIgnoreProperties(ignoreUnknown = true)
-    public record ProjectContextConfig(List<String> folders, List<String> referenceFolders) {
-        public static final ProjectContextConfig EMPTY = new ProjectContextConfig(List.of(), List.of());
-
-        public ProjectContextConfig {
-            folders = List.copyOf(Objects.requireNonNullElse(folders, List.of()));
-            referenceFolders = List.copyOf(Objects.requireNonNullElse(referenceFolders, List.of()));
         }
     }
 
@@ -170,7 +161,6 @@ public class ProjectService {
     private final ApplicationEventPublisher eventPublisher;
     private volatile Path currentProjectRoot;
     private volatile CachedConfig<ProjectConfig> cachedProjectConfig;
-    private volatile CachedConfig<ProjectContextConfig> cachedProjectContextConfig;
 
     public ProjectService(SettingsService settingsService, ApplicationEventPublisher eventPublisher) {
         this.settingsService = settingsService;
@@ -478,157 +468,84 @@ public class ProjectService {
         return projectService.getCurrentProjectRoot().toAbsolutePath().normalize().toString();
     }
 
-    static List<String> normalizeFolderList(List<String> folders) {
-        if (folders == null) {
-            return List.of();
-        }
-        return folders.stream().filter(f -> f != null && !f.isBlank()).map(String::trim).distinct().toList();
-    }
-
-    static List<String> getGlobalFolderList(SettingsService settingsService,
-            Function<AppSettings, List<String>> getter) {
-        if (settingsService == null || settingsService.getSettings() == null) {
-            return List.of();
-        }
-        return normalizeFolderList(getter.apply(settingsService.getSettings()));
-    }
-
-    static void setGlobalFolderList(SettingsService settingsService, ApplicationEventPublisher eventPublisher,
-            List<String> folders, BiConsumer<AppSettings, List<String>> setter) {
+    /**
+     * Returns the convention-based global context directory ({@code ~/.roxycode/context}).
+     *
+     * @return the global context directory path, or {@code null} if settings are unavailable
+     */
+    public Path getGlobalContextDir() {
         if (settingsService == null) {
-            return;
+            return null;
         }
-        AppSettings settings = settingsService.getSettings();
-        if (settings != null) {
-            setter.accept(settings, normalizeFolderList(folders));
-            settingsService.saveSettings();
-            if (eventPublisher != null) {
-                eventPublisher.publishEvent(new ContextChangedEvent(true));
-            }
+        Path homeDir = settingsService.getRoxyHomeDir();
+        if (homeDir == null) {
+            return null;
         }
+        return homeDir.resolve(CONVENTION_CONTEXT_DIR).toAbsolutePath().normalize();
     }
 
-    private ProjectContextConfig readProjectContextConfig() {
-        return readCachedProjectToml(PROJECT_CONTEXT_CONFIG_FILE, ProjectContextConfig.class,
-                ProjectContextConfig.EMPTY, this.cachedProjectContextConfig, c -> {
-                    this.cachedProjectContextConfig = c;
-                });
-    }
-
-    private void writeProjectContextConfig(ProjectContextConfig config) {
-        writeCachedProjectToml(PROJECT_CONTEXT_CONFIG_FILE, config, "project context config", c -> {
-            this.cachedProjectContextConfig = c;
-        });
-        if (eventPublisher != null) {
-            eventPublisher.publishEvent(new ContextChangedEvent(false));
+    /**
+     * Returns the convention-based project context directory ({@code <project>/context}).
+     *
+     * @return the project context directory path, or {@code null} if no project is active
+     */
+    public Path getProjectContextDir() {
+        if (currentProjectRoot == null) {
+            return null;
         }
+        return currentProjectRoot.resolve(CONVENTION_CONTEXT_DIR).toAbsolutePath().normalize();
     }
 
     /**
-     * Gets the list of global context folders.
+     * Returns the convention-based global reference mounts directory ({@code ~/.roxycode/refs}).
      *
-     * @return the list of global context folders
+     * @return the global refs directory path, or {@code null} if settings are unavailable
      */
-    public List<String> getGlobalContextFolders() {
-        return getGlobalFolderList(settingsService, AppSettings::getGlobalContextFolders);
+    public Path getGlobalRefsDir() {
+        if (settingsService == null) {
+            return null;
+        }
+        Path homeDir = settingsService.getRoxyHomeDir();
+        if (homeDir == null) {
+            return null;
+        }
+        return homeDir.resolve(GLOBAL_REFS_SUBDIR).toAbsolutePath().normalize();
     }
 
     /**
-     * Sets the list of global context folders.
+     * Returns the convention-based project reference mounts directory ({@code <project>/.roxy/refs}).
      *
-     * @param folders
-     *            the list of global context folders to set
+     * @return the project refs directory path, or {@code null} if no project is active
      */
-    public void setGlobalContextFolders(List<String> folders) {
-        setGlobalFolderList(settingsService, eventPublisher, folders, AppSettings::setGlobalContextFolders);
+    public Path getProjectRefsDir() {
+        if (currentProjectRoot == null) {
+            return null;
+        }
+        return currentProjectRoot.resolve(PROJECT_REFS_REL_DIR).toAbsolutePath().normalize();
     }
 
     /**
-     * Gets the list of project context folders.
-     *
-     * @return the list of project context folders
-     */
-    public List<String> getProjectContextFolders() {
-        return normalizeFolderList(readProjectContextConfig().folders());
-    }
-
-    /**
-     * Sets the list of project context folders.
-     *
-     * @param folders
-     *            the list of project context folders to set
-     */
-    public void setProjectContextFolders(List<String> folders) {
-        ProjectContextConfig existing = readProjectContextConfig();
-        writeProjectContextConfig(new ProjectContextConfig(normalizeFolderList(folders), existing.referenceFolders()));
-    }
-
-    /**
-     * Gets the list of global reference folders.
-     *
-     * @return the list of global reference folders
-     */
-    public List<String> getGlobalReferenceFolders() {
-        return getGlobalFolderList(settingsService, AppSettings::getGlobalReferenceFolders);
-    }
-
-    /**
-     * Sets the list of global reference folders.
-     *
-     * @param folders
-     *            the list of global reference folders to set
-     */
-    public void setGlobalReferenceFolders(List<String> folders) {
-        setGlobalFolderList(settingsService, eventPublisher, folders, AppSettings::setGlobalReferenceFolders);
-    }
-
-    /**
-     * Gets the list of project reference folders.
-     *
-     * @return the list of project reference folders
-     */
-    public List<String> getProjectReferenceFolders() {
-        return normalizeFolderList(readProjectContextConfig().referenceFolders());
-    }
-
-    /**
-     * Sets the list of project reference folders.
-     *
-     * @param folders
-     *            the list of project reference folders to set
-     */
-    public void setProjectReferenceFolders(List<String> folders) {
-        ProjectContextConfig existing = readProjectContextConfig();
-        writeProjectContextConfig(new ProjectContextConfig(existing.folders(), normalizeFolderList(folders)));
-    }
-
-    /**
-     * Gets the list of reference folder mounts.
+     * Gets the list of discovered convention-based reference folder mounts.
      *
      * @return the list of reference folder mounts
      */
     public List<ReferenceFolderMount> getReferenceFolderMounts() {
-        return resolveReferenceFolderMounts(getProjectReferenceFolders(), getGlobalReferenceFolders(),
-                getCurrentProjectRoot());
+        return resolveConventionReferenceMounts(getProjectRefsDir(), getGlobalRefsDir(), getGlobalContextDir(), true);
     }
 
     /**
-     * Lists the global reference folder mounts.
+     * Lists the global reference folder mounts (from {@code ~/.roxycode/refs/*} and {@code @global-context}).
      *
      * @return the list of global reference folder mounts
      */
     public List<ReferenceFolderMount> listGlobalReferenceFolderMounts() {
-        Path activeRoot = null;
-        if (hasActiveProject()) {
-            activeRoot = getCurrentProjectRoot();
-        }
-        List<ReferenceFolderMount> allMounts = resolveReferenceFolderMountsInternal(getProjectReferenceFolders(),
-                getGlobalReferenceFolders(), activeRoot, false);
+        List<ReferenceFolderMount> allMounts = resolveConventionReferenceMounts(getProjectRefsDir(), getGlobalRefsDir(),
+                getGlobalContextDir(), false);
         return allMounts.stream().filter(ReferenceFolderMount::globalScope).toList();
     }
 
     /**
-     * Lists the project reference folder mounts.
+     * Lists the project reference folder mounts (from {@code <project>/.roxy/refs/*}).
      *
      * @return the list of project reference folder mounts
      */
@@ -636,7 +553,7 @@ public class ProjectService {
         if (!hasActiveProject()) {
             return List.of();
         }
-        return resolveReferenceFolderMounts(getProjectReferenceFolders(), List.of(), getCurrentProjectRoot());
+        return resolveConventionReferenceMounts(getProjectRefsDir(), null, null, true);
     }
 
     /**
@@ -659,58 +576,60 @@ public class ProjectService {
         return null;
     }
 
-    static List<ReferenceFolderMount> resolveReferenceFolderMounts(List<String> projectFolders,
-            List<String> globalFolders, Path projectRoot) {
-        return resolveReferenceFolderMountsInternal(projectFolders, globalFolders, projectRoot, true);
-    }
-
-    static List<ReferenceFolderMount> resolveReferenceFolderMountsInternal(List<String> projectFolders,
-            List<String> globalFolders, Path projectRoot, boolean deduplicateAcrossScopes) {
+    static List<ReferenceFolderMount> resolveConventionReferenceMounts(Path projectRefsDir, Path globalRefsDir,
+            Path globalContextDir, boolean deduplicateAcrossScopes) {
         List<ReferenceFolderMount> mounts = new ArrayList<>();
         Set<String> usedAliases = new HashSet<>();
         Set<Path> seenRootPaths = new HashSet<>();
 
-        appendScopeMounts(projectFolders, false, projectRoot, mounts, usedAliases, seenRootPaths);
+        appendConventionRefDirectoryMounts(projectRefsDir, false, mounts, usedAliases, seenRootPaths);
         if (!deduplicateAcrossScopes) {
             seenRootPaths.clear();
         }
-        appendScopeMounts(globalFolders, true, projectRoot, mounts, usedAliases, seenRootPaths);
+        appendConventionRefDirectoryMounts(globalRefsDir, true, mounts, usedAliases, seenRootPaths);
+
+        if (globalContextDir != null && Files.isDirectory(globalContextDir)) {
+            Path targetRealPath = resolveRealDirectoryPath(globalContextDir);
+            if (seenRootPaths.add(targetRealPath)) {
+                String uniqueAlias = allocateUniqueAlias(GLOBAL_CONTEXT_ALIAS, usedAliases);
+                mounts.add(new ReferenceFolderMount(uniqueAlias,
+                        globalContextDir.toAbsolutePath().normalize().toString(), targetRealPath, true));
+            }
+        }
         return List.copyOf(mounts);
     }
 
-    private static void appendScopeMounts(List<String> rawFolders, boolean globalScope, Path projectRoot,
+    private static void appendConventionRefDirectoryMounts(Path refsDir, boolean globalScope,
             List<ReferenceFolderMount> targetMounts, Set<String> usedAliases, Set<Path> seenRootPaths) {
-        if (rawFolders == null || rawFolders.isEmpty()) {
+        if (refsDir == null || !Files.isDirectory(refsDir)) {
             return;
         }
-        for (String rawFolder : rawFolders) {
-            if (rawFolder == null || rawFolder.isBlank()) {
+        List<Path> entries;
+        try (Stream<Path> stream = Files.list(refsDir)) {
+            entries = stream.filter(Files::isDirectory)
+                    .sorted(Comparator.comparing(p -> p.getFileName().toString(), String.CASE_INSENSITIVE_ORDER))
+                    .toList();
+        } catch (IOException e) {
+            log.warn("Failed to scan reference directory '{}': {}", refsDir, e.getMessage());
+            return;
+        }
+        for (Path entry : entries) {
+            Path targetRealPath = resolveRealDirectoryPath(entry);
+            if (!seenRootPaths.add(targetRealPath)) {
                 continue;
             }
-            String configured = rawFolder.trim();
-            Path resolved = resolveMountFolderPath(configured, !globalScope, projectRoot);
-            if (resolved == null || !seenRootPaths.add(resolved)) {
-                continue;
-            }
-            String baseAlias = deriveBaseAlias(resolved);
+            String baseAlias = deriveBaseAlias(entry);
             String uniqueAlias = allocateUniqueAlias(baseAlias, usedAliases);
-            targetMounts.add(new ReferenceFolderMount(uniqueAlias, configured, resolved, globalScope));
+            targetMounts
+                    .add(new ReferenceFolderMount(uniqueAlias, targetRealPath.toString(), targetRealPath, globalScope));
         }
     }
 
-    static Path resolveMountFolderPath(String folderStr, boolean resolveRelativeToProject, Path projectRoot) {
+    private static Path resolveRealDirectoryPath(Path dir) {
         try {
-            Path path = Path.of(folderStr);
-            if (!path.isAbsolute()) {
-                if (!resolveRelativeToProject || projectRoot == null) {
-                    return null;
-                }
-                path = projectRoot.resolve(path);
-            }
-            return path.toAbsolutePath().normalize();
-        } catch (InvalidPathException e) {
-            log.warn("Invalid reference folder path '{}': {}", folderStr, e.getMessage());
-            return null;
+            return dir.toRealPath().normalize();
+        } catch (IOException e) {
+            return dir.toAbsolutePath().normalize();
         }
     }
 
@@ -834,7 +753,12 @@ public class ProjectService {
                 return virtualTmp;
             }
         }
-        return resolveWithinSandbox(projectRoot, relativePath);
+        Path resolved = resolveWithinSandbox(projectRoot, relativePath);
+        Path refsRoot = projectRoot.resolve(PROJECT_REFS_REL_DIR).toAbsolutePath().normalize();
+        if (resolved.equals(refsRoot) || resolved.startsWith(refsRoot)) {
+            throw new SecurityException("Reference folder directory is strictly read-only: " + relativePath);
+        }
+        return resolved;
     }
 
     private Path resolveVirtualTmpPath(String unixPath) {

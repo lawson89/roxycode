@@ -192,52 +192,74 @@ class ProjectServiceTest {
     }
 
     @Test
-    void testReferenceFolderMountsCollisionDisambiguationAndReadWriteSandboxing() {
+    void testReferenceFolderMountsCollisionDisambiguationAndReadWriteSandboxing() throws Exception {
         SettingsService settingsService = createSettingsService();
         ProjectService projectService = new ProjectService(settingsService, null);
-        Path projectRoot = tempDir.resolve("active-project");
+        Path projectRoot = Files.createDirectories(tempDir.resolve("active-project"));
         projectService.setCurrentProjectRoot(projectRoot);
 
-        Path projBilling = tempDir.resolve("proj-repos").resolve("Billing Service!");
-        Path globalBilling = tempDir.resolve("global-repos").resolve("billing-service");
-        Path globalShared = tempDir.resolve("global-repos").resolve("shared-commons");
+        Path projectRefsDir = projectService.getProjectRefsDir();
+        Path globalRefsDir = projectService.getGlobalRefsDir();
+        Path globalContextDir = Files.createDirectories(projectService.getGlobalContextDir());
+        assertEquals(projectRoot.resolve(".roxy/refs").toAbsolutePath().normalize(), projectRefsDir);
+        assertEquals(tempDir.resolve("refs").toAbsolutePath().normalize(), globalRefsDir);
+        assertEquals(tempDir.resolve("context").toAbsolutePath().normalize(), globalContextDir);
+        assertEquals(projectRoot.resolve("context").toAbsolutePath().normalize(),
+                projectService.getProjectContextDir());
 
-        projectService.setProjectReferenceFolders(List.of(projBilling.toString(), "rel-ref"));
-        projectService.setGlobalReferenceFolders(List.of(globalBilling.toString(), globalShared.toString()));
+        Files.createDirectories(projectRefsDir);
+        Files.createDirectories(globalRefsDir);
+        Path projBillingTarget = Files.createDirectories(tempDir.resolve("external-repos").resolve("actual-billing"));
+        Path projBilling = projectRefsDir.resolve("Billing Service!");
+        try {
+            Files.createSymbolicLink(projBilling, projBillingTarget);
+        } catch (UnsupportedOperationException | java.io.IOException e) {
+            projBilling = Files.createDirectories(projBilling);
+            projBillingTarget = projBilling;
+        }
+        Path projRelRef = Files.createDirectories(projectRefsDir.resolve("rel-ref"));
+        Files.writeString(projectRefsDir.resolve("ignored-file.txt"), "not a directory");
+        Path globalBilling = Files.createDirectories(globalRefsDir.resolve("billing-service"));
+        Path globalShared = Files.createDirectories(globalRefsDir.resolve("shared-commons"));
 
         List<ProjectService.ReferenceFolderMount> mounts = projectService.getReferenceFolderMounts();
-        assertEquals(4, mounts.size());
+        assertEquals(5, mounts.size());
 
         assertEquals("billing-service", mounts.get(0).alias());
         assertEquals("@billing-service", mounts.get(0).aliasPrefix());
-        assertEquals(projBilling.toAbsolutePath().normalize(), mounts.get(0).rootPath());
+        assertEquals(projBillingTarget.toRealPath().normalize(), mounts.get(0).rootPath());
         assertFalse(mounts.get(0).globalScope());
 
         assertEquals("rel-ref", mounts.get(1).alias());
-        assertEquals(projectRoot.resolve("rel-ref").toAbsolutePath().normalize(), mounts.get(1).rootPath());
+        assertEquals(projRelRef.toRealPath().normalize(), mounts.get(1).rootPath());
         assertFalse(mounts.get(1).globalScope());
 
         assertEquals("billing-service-2", mounts.get(2).alias());
         assertEquals("@billing-service-2", mounts.get(2).aliasPrefix());
-        assertEquals(globalBilling.toAbsolutePath().normalize(), mounts.get(2).rootPath());
+        assertEquals(globalBilling.toRealPath().normalize(), mounts.get(2).rootPath());
         assertTrue(mounts.get(2).globalScope());
 
         assertEquals("shared-commons", mounts.get(3).alias());
-        assertEquals(globalShared.toAbsolutePath().normalize(), mounts.get(3).rootPath());
+        assertEquals(globalShared.toRealPath().normalize(), mounts.get(3).rootPath());
         assertTrue(mounts.get(3).globalScope());
+
+        assertEquals("global-context", mounts.get(4).alias());
+        assertTrue(mounts.get(4).globalScope());
 
         SecurityException writeEx = assertThrows(SecurityException.class,
                 () -> projectService.resolvePath("@billing-service/src/Invoice.java"));
         assertTrue(writeEx.getMessage().contains("Reference folder path is strictly read-only:"));
         assertThrows(SecurityException.class, () -> projectService.resolvePath("./@billing-service"));
+        assertThrows(SecurityException.class, () -> projectService.resolvePath(".roxy/refs"));
+        assertThrows(SecurityException.class, () -> projectService.resolvePath(".roxy/refs/rel-ref/File.java"));
 
-        assertEquals(projBilling.toAbsolutePath().normalize(), projectService.resolveReadPath("@billing-service"));
+        assertEquals(projBillingTarget.toRealPath().normalize(), projectService.resolveReadPath("@billing-service"));
         Path resolvedInvoice = projectService.resolveReadPath("@billing-service/src/main/Invoice.java");
-        assertEquals(projBilling.resolve("src/main/Invoice.java").toAbsolutePath().normalize(), resolvedInvoice);
+        assertEquals(projBillingTarget.toRealPath().normalize().resolve("src/main/Invoice.java"), resolvedInvoice);
         assertEquals("@billing-service/src/main/Invoice.java",
                 projectService.formatReadDisplayPath(resolvedInvoice, "fallback"));
 
-        assertEquals(globalBilling.resolve("api/Client.java").toAbsolutePath().normalize(),
+        assertEquals(globalBilling.toRealPath().normalize().resolve("api/Client.java"),
                 projectService.resolveReadPath("@billing-service-2/api/Client.java"));
 
         assertTrue(ProjectService.isReferencePath("@billing-service/../pom.xml"));
@@ -252,7 +274,7 @@ class ProjectServiceTest {
         assertThrows(IllegalArgumentException.class, () -> projectService.resolveReadPath("@../pom.xml"));
 
         ProjectService.ResolvedSearchTarget rootTarget = projectService.resolveSearchTarget("@billing-service");
-        assertEquals(projBilling.toAbsolutePath().normalize(), rootTarget.workingDir());
+        assertEquals(projBillingTarget.toRealPath().normalize(), rootTarget.workingDir());
         assertEquals(".", rootTarget.relativeTarget());
         assertEquals("@billing-service", rootTarget.prefixAlias());
         assertTrue(rootTarget.isReferenceMount());
@@ -266,7 +288,7 @@ class ProjectServiceTest {
                         .formatMatchLine("./src" + bs + "Invoice.java-11-    // https://a.com/../b " + bs + "n"));
 
         ProjectService.ResolvedSearchTarget subTarget = projectService.resolveSearchTarget("@billing-service/src/main");
-        assertEquals(projBilling.toAbsolutePath().normalize(), subTarget.workingDir());
+        assertEquals(projBillingTarget.toRealPath().normalize(), subTarget.workingDir());
         assertEquals("src/main", subTarget.relativeTarget());
         assertThrows(SecurityException.class, () -> projectService.resolveSearchTarget("@billing-service/.."));
         assertThrows(SecurityException.class,
