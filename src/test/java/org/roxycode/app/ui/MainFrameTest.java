@@ -701,4 +701,51 @@ class MainFrameTest {
             frame.dispose();
         }
     }
+
+    @Test
+    void testOnNavigateToViewHandlesNullTomlAndPromptPayloads() throws Exception {
+        SettingsService settingsService = new SettingsService(null, event -> {
+        });
+        settingsService.setSettingsPathOverride(tempDir.resolve("nav-roxy").resolve("settings.toml"));
+        settingsService.getSettings().setGeminiApiKey("valid-api-key");
+
+        List<SystemTool> allDetectedTools = List.of(SystemTool.ofKnownTool("Ripgrep", "14.1.0", "Detected"),
+                SystemTool.ofKnownTool("Git", "2.43.0", "Detected"),
+                SystemTool.ofKnownTool("Universal Ctags", "6.0.0", "Detected"));
+
+        MainFrame frame = createMainFrame(settingsService, CompletableFuture.completedFuture(allDetectedTools));
+        try {
+            SwingTestUtils.flushEdt();
+            String initialCard = frame.currentCard;
+
+            frame.onNavigateToView(null);
+            frame.onNavigateToView(new org.roxycode.app.events.NavigateToViewEvent(null, null, null));
+            SwingTestUtils.flushEdt();
+            assertEquals(initialCard, frame.currentCard);
+
+            String generatedToml = "[commands]\ncompile = './mvnw compile'\n";
+            frame.onNavigateToView(
+                    new org.roxycode.app.events.NavigateToViewEvent(MainFrame.BUILD_CONFIG_VIEW, null, generatedToml));
+            SwingTestUtils.flushEdt();
+            assertEquals(MainFrame.BUILD_CONFIG_VIEW, frame.currentCard);
+            assertEquals(generatedToml, buildConfigPanel.textArea.getText());
+
+            when(projectService.hasActiveProject()).thenReturn(false);
+            frame.taskChatPanel().setProjectService(projectService);
+            frame.qaChatPanel().setProjectService(projectService);
+            frame.onNavigateToView(
+                    new org.roxycode.app.events.NavigateToViewEvent(MainFrame.TASK_VIEW, "Implement feature X", null));
+            SwingTestUtils.flushEdt();
+            assertEquals(MainFrame.TASK_VIEW, frame.currentCard);
+            assertEquals("Implement feature X", frame.taskChatPanel().inputArea.getText());
+
+            frame.onNavigateToView(
+                    new org.roxycode.app.events.NavigateToViewEvent(MainFrame.QA_VIEW, "Explain architecture", null));
+            SwingTestUtils.flushEdt();
+            assertEquals(MainFrame.QA_VIEW, frame.currentCard);
+            assertEquals("Explain architecture", frame.qaChatPanel().inputArea.getText());
+        } finally {
+            frame.dispose();
+        }
+    }
 }

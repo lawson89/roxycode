@@ -6,7 +6,6 @@ import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
@@ -197,7 +196,7 @@ final class AgentMemoryPanel extends JPanel {
         private final CardLayout cardLayout = new CardLayout();
         private final JPanel cardContainer = new JPanel(cardLayout);
 
-        final JTextField searchField = new JTextField();
+        final JTextField searchField = UiComponents.createSearchField("Search id, summary, tags...", null);
         final JButton newButton;
         final DefaultListModel<MemoryEntry> listModel = new DefaultListModel<>();
         final JList<MemoryEntry> entryList = new JList<>(listModel);
@@ -289,8 +288,6 @@ final class AgentMemoryPanel extends JPanel {
             JPanel panel = new JPanel(new MigLayout("insets 8 4 8 8, fill, wrap 1", "[grow, fill]", "[][grow, fill]"));
             panel.setMinimumSize(new Dimension(250, 200));
 
-            searchField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Search id, summary, tags...");
-            searchField.putClientProperty(FlatClientProperties.TEXT_FIELD_SHOW_CLEAR_BUTTON, true);
             JPanel searchRow = new JPanel(new MigLayout("insets 0, fillx", "[grow, fill][]", "[]"));
             searchRow.setOpaque(false);
             searchRow.add(searchField, CONSTRAINTS_GROWX);
@@ -482,20 +479,12 @@ final class AgentMemoryPanel extends JPanel {
         }
 
         private void applyFilter() {
-            String query = StringUtils.trimToEmpty(searchField.getText());
-            List<MemoryEntry> filtered = new ArrayList<>();
-            for (MemoryEntry entry : allEntries) {
-                if (matchesFilter(entry, query)) {
-                    filtered.add(entry);
-                }
-            }
             String previouslySelectedId = null;
             if (selectedEntry != null) {
                 previouslySelectedId = selectedEntry.id();
             }
-            final String targetId = previouslySelectedId;
-            editorSyncGuard.run(() -> UiComponents.replaceListItemsPreservingSelection(listModel, entryList, filtered,
-                    MemoryEntry::id, targetId, false));
+            UiComponents.filterAndPreserveSelection(listModel, entryList, allEntries, searchField.getText(),
+                    MemoryScopeView::matchesFilter, MemoryEntry::id, previouslySelectedId, editorSyncGuard, false);
         }
 
         private static boolean matchesFilter(MemoryEntry entry, String query) {
@@ -686,16 +675,11 @@ final class AgentMemoryPanel extends JPanel {
 
         void updateTheme() {
             Color accent = SwingHtmlUtils.getAccentColor();
-            Color mutedColor = SwingHtmlUtils.getMutedForegroundColor();
-            searchField.putClientProperty(FlatClientProperties.TEXT_FIELD_LEADING_ICON,
-                    FontIcon.of(Codicons.SEARCH, 14, mutedColor));
             summaryTitleLabel.setForeground(accent);
             Color tintedBg = SwingHtmlUtils.getTintedBackground(accent, 0.08);
             summaryArea.setBackground(tintedBg);
             summaryScrollPane
                     .setBorder(BorderFactory.createLineBorder(SwingHtmlUtils.blendColor(accent, tintedBg, 0.5)));
-            UiComponents.updateInfoIconTheme(memoryInfoIcon);
-            UiComponents.refreshActionButtonIcons(this);
             SwingHtmlUtils.applyRSyntaxTheme(detailsEditor, settingsService);
             entryList.repaint();
         }

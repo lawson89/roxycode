@@ -2,30 +2,22 @@ package org.roxycode.app.ui;
 
 import org.apache.commons.lang3.StringUtils;
 import com.formdev.flatlaf.FlatClientProperties;
-import com.formdev.flatlaf.util.SystemFileChooser;
 import java.awt.*;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
-import java.awt.dnd.DnDConstants;
-import java.awt.dnd.DropTarget;
-import java.awt.dnd.DropTargetAdapter;
-import java.awt.dnd.DropTargetDragEvent;
 import java.awt.dnd.DropTargetDropEvent;
 import java.awt.event.ActionEvent;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.awt.event.KeyEvent;
-import java.awt.image.BufferedImage;
 import java.io.File;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import javax.swing.*;
 import javax.swing.text.DefaultEditorKit;
@@ -41,14 +33,11 @@ import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.UserInputService;
 import org.roxycode.app.events.UserInputRequestEvent;
 import org.roxycode.app.model.ChatTranscriptEntry;
-import org.roxycode.app.model.ImplementationPlan;
-import org.roxycode.app.ui.ChatModel.AttachmentType;
 import org.roxycode.app.ui.ChatModel.PendingAttachment;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.ProjectService;
 import org.roxycode.app.service.SettingsService;
-import org.roxycode.app.util.Edt;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -79,9 +68,6 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     static final int COMPOSER_PREFERRED_HEIGHT = 140;
     static final double SPLIT_PANE_RESIZE_WEIGHT = 0.85;
     private static final int AUTO_SCROLL_BOTTOM_THRESHOLD_PX = 80;
-    private static final int ACTIVITY_ANIMATION_DELAY_MS = 500;
-    private static final int ACTIVITY_ELAPSED_DELAY_MS = 1000;
-    private static final Codicons[] HOURGLASS_FRAMES = {Codicons.CIRCLE_FILLED, Codicons.CIRCLE_OUTLINE};
 
     final transient ChatModel model;
     final transient ChatController controller;
@@ -103,29 +89,23 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     JCheckBox autoApprovePlanCheckBox;
     final JPanel inlineActionPanel;
     final ChatPromptBanner userInputPromptPanel;
-    final JPanel activityStripPanel;
-    JLabel activityStatusLabel;
-    JLabel activityStepLabel;
-    JLabel activityElapsedLabel;
-    transient FontIcon activityIcon;
-    Timer activityAnimationTimer;
-    Timer activityElapsedTimer;
-    private int activityIconFrameIndex;
-    private long turnStartMillis;
+    final ChatActivityStrip activityStripPanel;
+    final JLabel activityStepLabel;
+    final transient FontIcon activityIcon;
+    final Timer activityAnimationTimer;
+    final Timer activityElapsedTimer;
     JLabel transitionLabel;
     JLabel transitionSubtitleLabel;
     final transient ChatTelemetryBar telemetryBar;
     private JScrollPane outputScrollPane;
-    private JPanel attachmentPanel;
+    private ChatAttachmentBar attachmentPanel;
     transient FileMentionPopup fileMentionPopup;
     private transient ProjectService projectService;
     private transient Runnable onViewPlanAction;
     private String defaultPlaceholderText = DEFAULT_PLACEHOLDER_TEXT;
     private String lastAppliedPlaceholderText;
-    private Boolean lastActivityWarningAccent;
     private boolean loading = false;
     private final List<Consumer<Boolean>> loadingListeners = new ArrayList<>();
-    private final AtomicLong attachmentLoadEpoch = new AtomicLong();
 
     @Configuration
     static class ChatPanelBeans {
@@ -190,7 +170,11 @@ final class ChatPanel extends JPanel implements AutoCloseable {
 
         this.inlineActionPanel = createInlineActionPanel();
         this.userInputPromptPanel = new ChatPromptBanner();
-        this.activityStripPanel = createActivityStripPanel();
+        this.activityStripPanel = new ChatActivityStrip(this.model, this.planService, () -> this.loading);
+        this.activityStepLabel = this.activityStripPanel.activityStepLabel;
+        this.activityIcon = this.activityStripPanel.activityIcon;
+        this.activityAnimationTimer = this.activityStripPanel.activityAnimationTimer;
+        this.activityElapsedTimer = this.activityStripPanel.activityElapsedTimer;
         this.telemetryBar = new ChatTelemetryBar(getFont());
         Component topComponent = createOutputSection(isTaskMode);
         JPanel inputSection = createInputSection(isTaskMode);
@@ -203,7 +187,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         SwingHtmlUtils.installTextContextMenu(inputArea);
         setupUndoRedo();
         setupKeyboardShortcuts();
-        installDragAndDrop();
+        attachmentPanel.installDragAndDrop(this, outputArea, outputScrollPane, inputArea);
         updateProjectComposerState();
     }
 
@@ -286,9 +270,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     private JPanel createInputSection(boolean isTaskMode) {
-        attachmentPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 5));
-        attachmentPanel.setOpaque(false);
-        attachmentPanel.setVisible(false);
+        attachmentPanel = new ChatAttachmentBar(model, this::isProjectReady);
 
         JPanel inputSection = new JPanel(new MigLayout("fill, insets 6 12 4 12", GROW_FILL_COL, GROW_FILL_COL));
         inputSection.setMinimumSize(new Dimension(0, COMPOSER_MIN_HEIGHT));
@@ -428,170 +410,37 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         }
     }
 
-    private JPanel createActivityStripPanel() {
-        JPanel panel = new JPanel(new MigLayout("insets 0, fillx, hidemode 3", "[grow, fill]12[]6[]", LAYOUT_CENTER));
-        panel.setVisible(false);
-
-        activityIcon = FontIcon.of(HOURGLASS_FRAMES[0], 13, SwingHtmlUtils.getAccentColor());
-        activityStatusLabel = new JLabel("");
-        activityStatusLabel.setIcon(activityIcon);
-        activityStatusLabel.setIconTextGap(8);
-        activityStatusLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
-
-        activityStepLabel = new JLabel("");
-        activityStepLabel.putClientProperty(FlatClientProperties.STYLE,
-                "font: -1 bold; foreground: $Component.accentColor");
-        activityStepLabel.setVisible(false);
-
-        activityElapsedLabel = new JLabel("0:00");
-        Font baseElapsedFont = activityElapsedLabel.getFont();
-        activityElapsedLabel
-                .setFont(new Font(Font.MONOSPACED, Font.PLAIN, Math.max(11, baseElapsedFont.getSize() - 1)));
-        activityElapsedLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Label.disabledForeground");
-
-        panel.add(activityStatusLabel, "growx, wmin 0");
-        panel.add(activityStepLabel, HIDEMODE_3);
-        panel.add(activityElapsedLabel, "alignx right");
-
-        int stripHeight = Math.max(26, activityStatusLabel.getPreferredSize().height + 12);
-        panel.setMinimumSize(new Dimension(0, stripHeight));
-        panel.setPreferredSize(new Dimension(0, stripHeight));
-
-        activityAnimationTimer = new Timer(ACTIVITY_ANIMATION_DELAY_MS, e -> advanceActivityIconFrame());
-        activityElapsedTimer = new Timer(ACTIVITY_ELAPSED_DELAY_MS, e -> updateElapsedTimeLabel());
-        applyActivityStripStyling(panel);
-        return panel;
-    }
-
     static boolean isRateLimitOrRetryStatus(String statusText) {
-        if (statusText == null || statusText.isEmpty()) {
-            return false;
-        }
-        String lower = statusText.toLowerCase(java.util.Locale.ROOT);
-        return lower.contains("rate limit") || lower.contains("retrying");
-    }
-
-    private void applyActivityStripStyling(JPanel panel) {
-        String currentText = "";
-        if (activityStatusLabel != null) {
-            currentText = activityStatusLabel.getText();
-        }
-        Color accent;
-        if (isRateLimitOrRetryStatus(currentText)) {
-            accent = SwingHtmlUtils.getWarningColor();
-        } else {
-            accent = SwingHtmlUtils.getAccentColor();
-        }
-        SwingHtmlUtils.applyTintedBannerStyle(panel, accent, 5, 12, 12);
-        if (activityIcon != null) {
-            activityIcon.setIconColor(accent);
-        }
-        lastActivityWarningAccent = isRateLimitOrRetryStatus(currentText);
-    }
-
-    void advanceActivityIconFrame() {
-        if (!loading || activityIcon == null) {
-            stopActivityTimers();
-            return;
-        }
-        activityIconFrameIndex = (activityIconFrameIndex + 1) % HOURGLASS_FRAMES.length;
-        activityIcon.setIkon(HOURGLASS_FRAMES[activityIconFrameIndex]);
-        activityStripPanel.repaint();
-    }
-
-    void updateElapsedTimeLabel() {
-        if (!loading) {
-            return;
-        }
-        long elapsedSeconds = Math.max(0L, (System.currentTimeMillis() - turnStartMillis) / 1000L);
-        activityElapsedLabel.setText(formatElapsedSeconds(elapsedSeconds));
+        return ChatActivityStrip.isRateLimitOrRetryStatus(statusText);
     }
 
     static String formatElapsedSeconds(long elapsedSeconds) {
-        long safeSeconds = Math.max(0L, elapsedSeconds);
-        long minutes = safeSeconds / 60L;
-        long seconds = safeSeconds % 60L;
-        return String.format("%d:%02d", minutes, seconds);
+        return ChatActivityStrip.formatElapsedSeconds(elapsedSeconds);
     }
 
-    private void startActivityTimers() {
-        turnStartMillis = System.currentTimeMillis();
-        activityIconFrameIndex = 0;
-        if (activityIcon != null) {
-            activityIcon.setIkon(HOURGLASS_FRAMES[0]);
-        }
-        activityElapsedLabel.setText("0:00");
-        updateActivityStepLabel();
-        applyActivityStripStyling(activityStripPanel);
-        activityStripPanel.setVisible(true);
-        if (activityAnimationTimer != null && !activityAnimationTimer.isRunning()) {
-            activityAnimationTimer.start();
-        }
-        if (activityElapsedTimer != null && !activityElapsedTimer.isRunning()) {
-            activityElapsedTimer.start();
-        }
+    void advanceActivityIconFrame() {
+        activityStripPanel.advanceActivityIconFrame();
     }
 
-    private void stopActivityTimers() {
-        if (activityAnimationTimer != null && activityAnimationTimer.isRunning()) {
-            activityAnimationTimer.stop();
-        }
-        if (activityElapsedTimer != null && activityElapsedTimer.isRunning()) {
-            activityElapsedTimer.stop();
-        }
+    void updateElapsedTimeLabel() {
+        activityStripPanel.updateElapsedTimeLabel();
     }
 
     void updateActivityStepLabel() {
-        if (activityStepLabel == null) {
-            return;
-        }
-        if (!model.isTaskMode() || planService == null || planService.getCurrentPlan() == null) {
-            activityStepLabel.setText("");
-            activityStepLabel.setVisible(false);
-            return;
-        }
-        ImplementationPlan plan = planService.getCurrentPlan();
-        List<ImplementationPlan.TechStep> steps = plan.technicalSteps();
-        if (steps == null || steps.isEmpty()) {
-            activityStepLabel.setText("");
-            activityStepLabel.setVisible(false);
-            return;
-        }
-        activityStepLabel.setText("Step " + plan.completedStepCount() + "/" + steps.size() + " ·");
-        activityStepLabel.setVisible(true);
+        activityStripPanel.updateStepLabel();
     }
 
     void updateActivityStatus(String statusText) {
-        String text = Objects.requireNonNullElse(statusText, "").trim();
-        boolean stripWasVisible = activityStripPanel.isVisible();
-        boolean stepWasVisible = activityStepLabel.isVisible();
-        activityStatusLabel.setText(text);
-        if (text.isEmpty()) {
-            activityStatusLabel.setToolTipText(null);
-        } else {
-            activityStatusLabel.setToolTipText(text);
-        }
-        updateActivityStepLabel();
-        boolean warningAccent = isRateLimitOrRetryStatus(text);
-        if (lastActivityWarningAccent == null || lastActivityWarningAccent.booleanValue() != warningAccent) {
-            applyActivityStripStyling(activityStripPanel);
-        }
-        if (loading && !text.isEmpty() && !activityStripPanel.isVisible()) {
-            activityStripPanel.setVisible(true);
-        }
-        if (stripWasVisible != activityStripPanel.isVisible() || stepWasVisible != activityStepLabel.isVisible()) {
-            activityStripPanel.revalidate();
-        }
-        activityStripPanel.repaint();
+        activityStripPanel.updateStatus(statusText);
     }
 
     String getActivityStatusText() {
-        return activityStatusLabel.getText();
+        return activityStripPanel.getStatusText();
     }
 
     @Override
     public void removeNotify() {
-        stopActivityTimers();
+        activityStripPanel.stopTimers();
         if (controller != null) {
             controller.closeOwnedExecutor();
         }
@@ -628,7 +477,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         UiComponents.refreshActionButtonIcons(this);
         userInputPromptPanel.applyThemeStyling();
         if (activityStripPanel != null) {
-            applyActivityStripStyling(activityStripPanel);
+            activityStripPanel.applyStyling();
         }
     }
 
@@ -897,9 +746,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     void clearAttachments() {
-        attachmentLoadEpoch.incrementAndGet();
-        attachmentPanel.removeAll();
-        attachmentPanel.setVisible(false);
+        attachmentPanel.clearAttachments();
     }
 
     private void copyPendingCommitMessage() {
@@ -996,230 +843,31 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     }
 
     void chooseAttachment() {
-        SystemFileChooser.FileNameExtensionFilter supportedFilter = new SystemFileChooser.FileNameExtensionFilter(
-                "Images, PDFs, and Text/Log Files", "png", "jpg", "jpeg", "gif", "bmp", "pdf", "log", "jsonl", "txt",
-                "md", "json", "toml", "xml", "csv", "yaml", "yml", "java", "kt", "py", "js", "ts", "sh");
-        File selectedFile = UiComponents.chooseOpenFile(this, "Attach File", supportedFilter);
-        if (selectedFile != null) {
-            loadAttachmentAsync(selectedFile);
-        }
+        attachmentPanel.chooseAttachment(this);
     }
 
     CompletableFuture<PendingAttachment> loadAttachmentAsync(File file) {
-        if (file == null) {
-            return CompletableFuture.completedFuture(null);
-        }
-        long expectedEpoch = attachmentLoadEpoch.get();
-        return Edt.supplyAsync(() -> ChatModel.loadFileAttachment(file.toPath()), attachment -> {
-            if (attachmentLoadEpoch.get() != expectedEpoch) {
-                return;
-            }
-            if (attachment != null) {
-                addPendingAttachment(attachment);
-            }
-        });
+        return attachmentPanel.loadAttachmentAsync(file);
     }
 
     CompletableFuture<List<PendingAttachment>> loadAttachmentsAsync(List<File> files) {
-        if (files == null || files.isEmpty()) {
-            return CompletableFuture.completedFuture(List.of());
-        }
-        long expectedEpoch = attachmentLoadEpoch.get();
-        List<File> snapshot = List.copyOf(files);
-        return Edt.supplyAsync(() -> {
-            List<PendingAttachment> loaded = new ArrayList<>();
-            for (File file : snapshot) {
-                if (file != null) {
-                    PendingAttachment att = ChatModel.loadFileAttachment(file.toPath());
-                    if (att != null) {
-                        loaded.add(att);
-                    }
-                }
-            }
-            return List.copyOf(loaded);
-        }, loaded -> {
-            if (attachmentLoadEpoch.get() != expectedEpoch) {
-                return;
-            }
-            for (PendingAttachment att : loaded) {
-                addPendingAttachment(att);
-            }
-        });
+        return attachmentPanel.loadAttachmentsAsync(files);
     }
 
     void addPendingImage(Image img) {
-        if (img == null) {
-            return;
-        }
-        PendingAttachment attachment = model.addPendingImage(img);
-        appendAttachmentChip(attachment);
+        attachmentPanel.addPendingImage(img);
     }
 
     void addPendingAttachment(PendingAttachment attachment) {
-        if (attachment == null) {
-            return;
-        }
-        model.addPendingAttachment(attachment);
-        appendAttachmentChip(attachment);
-    }
-
-    private void appendAttachmentChip(PendingAttachment attachment) {
-        if (attachment.type() == AttachmentType.IMAGE && attachment.image() != null) {
-            attachmentPanel.add(createImageAttachmentChip(attachment, attachment.image()));
-        } else {
-            attachmentPanel.add(createFileAttachmentChip(attachment));
-        }
-        attachmentPanel.setVisible(true);
-        attachmentPanel.revalidate();
-        attachmentPanel.repaint();
-    }
-
-    private JPanel createImageAttachmentChip(PendingAttachment attachment, BufferedImage bimage) {
-        JLabel thumbLabel = new JLabel(new ImageIcon(UiComponents.createThumbnail(bimage, THUMBNAIL_SIZE)));
-        thumbLabel.setBorder(
-                BorderFactory.createLineBorder(SwingHtmlUtils.getUiColor(Color.GRAY, "Component.borderColor")));
-
-        JPanel wrapper = new JPanel(new BorderLayout());
-        wrapper.setOpaque(false);
-        wrapper.add(thumbLabel, BorderLayout.CENTER);
-
-        wrapper.add(createAttachmentRemoveButton(attachment, wrapper), BorderLayout.NORTH);
-        return wrapper;
-    }
-
-    private JButton createAttachmentRemoveButton(PendingAttachment attachment, JPanel wrapper) {
-        JButton removeBtn = new JButton(FontIcon.of(Codicons.CLOSE, 12));
-        removeBtn.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_BORDERLESS);
-        removeBtn.setMargin(new Insets(0, 0, 0, 0));
-        removeBtn.addActionListener(ae -> {
-            model.removePendingAttachment(attachment);
-            attachmentPanel.remove(wrapper);
-            attachmentPanel.setVisible(model.hasPendingAttachments());
-            attachmentPanel.revalidate();
-            attachmentPanel.repaint();
-        });
-        return removeBtn;
-    }
-
-    private JPanel createFileAttachmentChip(PendingAttachment attachment) {
-        Codicons icon;
-        if (attachment.type() == AttachmentType.PDF) {
-            icon = Codicons.FILE_PDF;
-        } else {
-            icon = Codicons.FILE_CODE;
-        }
-        JPanel wrapper = new JPanel(new MigLayout("insets 3 6 3 4", "[]4[]4[]", LAYOUT_CENTER));
-        wrapper.setOpaque(false);
-        wrapper.setBorder(
-                BorderFactory.createLineBorder(SwingHtmlUtils.getUiColor(Color.GRAY, "Component.borderColor")));
-        if (StringUtils.isNotBlank(attachment.filePath())) {
-            wrapper.setToolTipText(attachment.filePath());
-        }
-
-        JLabel iconLabel = new JLabel(FontIcon.of(icon, 14));
-        JLabel nameLabel = new JLabel(attachment.fileName());
-        nameLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
-
-        wrapper.add(iconLabel);
-        wrapper.add(nameLabel);
-        wrapper.add(createAttachmentRemoveButton(attachment, wrapper));
-        return wrapper;
-    }
-
-    private void installDragAndDrop() {
-        if (GraphicsEnvironment.isHeadless()) {
-            return;
-        }
-        installDropTarget(this);
-        installDropTarget(outputArea);
-        installDropTarget(outputScrollPane);
-        installDropTarget(inputArea);
-    }
-
-    private void installDropTarget(Component component) {
-        if (component == null) {
-            return;
-        }
-        new DropTarget(component, DnDConstants.ACTION_COPY, new DropTargetAdapter() {
-            @Override
-            public void dragEnter(DropTargetDragEvent dtde) {
-                updateDragStatus(dtde);
-            }
-
-            @Override
-            public void dragOver(DropTargetDragEvent dtde) {
-                updateDragStatus(dtde);
-            }
-
-            @Override
-            public void drop(DropTargetDropEvent dtde) {
-                handleDrop(dtde);
-            }
-        });
-    }
-
-    private void updateDragStatus(DropTargetDragEvent dtde) {
-        if (!isProjectReady()) {
-            dtde.rejectDrag();
-            return;
-        }
-        if (dtde.isDataFlavorSupported(DataFlavor.javaFileListFlavor)
-                || dtde.isDataFlavorSupported(DataFlavor.imageFlavor)) {
-            dtde.acceptDrag(DnDConstants.ACTION_COPY);
-        } else {
-            dtde.rejectDrag();
-        }
+        attachmentPanel.addPendingAttachment(attachment);
     }
 
     void handleDrop(DropTargetDropEvent dtde) {
-        if (dtde == null || !isProjectReady()) {
-            if (dtde != null) {
-                dtde.rejectDrop();
-            }
-            return;
-        }
-        if (!dtde.isDataFlavorSupported(DataFlavor.javaFileListFlavor)
-                && !dtde.isDataFlavorSupported(DataFlavor.imageFlavor)) {
-            dtde.rejectDrop();
-            return;
-        }
-        dtde.acceptDrop(DnDConstants.ACTION_COPY);
-        boolean success = ingestTransferable(dtde.getTransferable());
-        dtde.dropComplete(success);
+        attachmentPanel.handleDrop(dtde);
     }
 
     boolean ingestTransferable(Transferable transferable) {
-        if (transferable == null) {
-            return false;
-        }
-        try {
-            if (transferable.isDataFlavorSupported(DataFlavor.javaFileListFlavor)) {
-                Object data = transferable.getTransferData(DataFlavor.javaFileListFlavor);
-                if (data instanceof List<?> rawList) {
-                    List<File> files = new ArrayList<>();
-                    for (Object item : rawList) {
-                        if (item instanceof File file) {
-                            files.add(file);
-                        } else if (item instanceof Path path) {
-                            files.add(path.toFile());
-                        }
-                    }
-                    if (!files.isEmpty()) {
-                        loadAttachmentsAsync(files);
-                        return true;
-                    }
-                }
-            } else if (transferable.isDataFlavorSupported(DataFlavor.imageFlavor)) {
-                Object data = transferable.getTransferData(DataFlavor.imageFlavor);
-                if (data instanceof Image img) {
-                    addPendingImage(img);
-                    return true;
-                }
-            }
-        } catch (Exception ex) {
-            log.error("Failed to ingest dropped attachment", ex);
-        }
-        return false;
+        return attachmentPanel.ingestTransferable(transferable);
     }
 
     void setLoading(boolean loading) {
@@ -1235,15 +883,9 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         }
         if (loading) {
             sendButton.setText("Sending...");
-            startActivityTimers();
+            activityStripPanel.startTimers();
         } else {
-            stopActivityTimers();
-            activityStripPanel.setVisible(false);
-            activityStatusLabel.setText("");
-            activityStatusLabel.setToolTipText(null);
-            activityStepLabel.setText("");
-            activityStepLabel.setVisible(false);
-            activityElapsedLabel.setText("0:00");
+            activityStripPanel.reset();
             SwingUtilities.invokeLater(inputArea::requestFocusInWindow);
             sendButton.setText("Send");
         }

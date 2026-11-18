@@ -108,8 +108,6 @@ final class TaskWorkspacePanel extends JPanel {
 
         updateActivePhase(planService.getCurrentPhase());
         taskTabs.addChangeListener(e -> {
-            UiComponents.updateSelectedTabIcons(taskTabs,
-                    List.of(Codicons.COMMENT_DISCUSSION, Codicons.LIST_ORDERED, Codicons.HISTORY));
             if (taskChatPanel != null && taskChatPanel.equals(taskTabs.getSelectedComponent())) {
                 SwingUtilities.invokeLater(taskChatPanel::focusInput);
             } else if (planPanel != null && planPanel.equals(taskTabs.getSelectedComponent())) {
@@ -169,8 +167,26 @@ final class TaskWorkspacePanel extends JPanel {
         planLabel.setIcon(null);
         planLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
         planLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
-        UiComponents.updateSelectedTabIcons(taskTabs,
-                List.of(Codicons.COMMENT_DISCUSSION, Codicons.LIST_ORDERED, Codicons.HISTORY));
+    }
+
+    void addWorkspaceStateListener(Runnable listener) {
+        if (listener == null) {
+            return;
+        }
+        if (taskTabs != null) {
+            taskTabs.addChangeListener(e -> listener.run());
+        }
+        if (taskChatPanel != null) {
+            taskChatPanel.addLoadingListener(loading -> listener.run());
+            taskChatPanel.addUserInputListener(waiting -> listener.run());
+            taskChatPanel.addExportStateListener(listener);
+        }
+        if (planPanel != null) {
+            planPanel.addExportStateListener(listener);
+        }
+        if (pastPlansPanel != null) {
+            pastPlansPanel.addExportStateListener(listener);
+        }
     }
 
     @EventListener

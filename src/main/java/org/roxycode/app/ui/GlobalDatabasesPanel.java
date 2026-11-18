@@ -29,7 +29,6 @@ import javax.swing.Timer;
 import javax.swing.border.EmptyBorder;
 import com.formdev.flatlaf.util.SystemFileChooser;
 import net.miginfocom.swing.MigLayout;
-import org.apache.commons.lang3.StringUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.DbService;
@@ -133,9 +132,7 @@ final class GlobalDatabasesPanel extends JPanel {
         JPanel headerPanel = UiComponents.createPageHeader(titleLabel, subtitleLabel, null);
         add(headerPanel, "growx, wmin 0, wrap");
 
-        filterField = new JTextField();
-        filterField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Filter connections...");
-        filterField.putClientProperty(FlatClientProperties.TEXT_FIELD_SHOW_CLEAR_BUTTON, Boolean.TRUE);
+        filterField = UiComponents.createSearchField("Filter connections...", this::applyFilter);
         newButton = UiComponents.createActionButton("New Connection", Codicons.ADD, new Insets(5, 10, 5, 10), false,
                 "arc: 8; font: bold", e -> startNewConnection());
 
@@ -297,7 +294,6 @@ final class GlobalDatabasesPanel extends JPanel {
     }
 
     private void setupListeners() {
-        SwingHtmlUtils.addChangeListener(filterField, this::applyFilter);
         connectionList.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting() && !formGuard.isActive()) {
                 onConnectionSelected(connectionList.getSelectedValue());
@@ -365,7 +361,6 @@ final class GlobalDatabasesPanel extends JPanel {
         UiComponents.styleCardPanel(masterCard);
         UiComponents.styleCardPanel(detailCard);
         updateKeyringBadge();
-        UiComponents.refreshActionButtonIcons(this);
     }
 
     /**
@@ -474,23 +469,18 @@ final class GlobalDatabasesPanel extends JPanel {
     }
 
     private void applyFilter() {
-        String query = StringUtils.defaultString(filterField.getText()).trim().toLowerCase(Locale.ROOT);
-        List<DatabaseConnectionConfig> filtered = new ArrayList<>();
-        for (DatabaseConnectionConfig cfg : allConnections) {
-            if (query.isEmpty() || cfg.displayName().toLowerCase(Locale.ROOT).contains(query)
-                    || cfg.id().toLowerCase(Locale.ROOT).contains(query)
-                    || cfg.description().toLowerCase(Locale.ROOT).contains(query)
-                    || cfg.type().toLowerCase(Locale.ROOT).contains(query)) {
-                filtered.add(cfg);
-            }
-        }
         String selectedId = null;
         if (selectedConnection != null) {
             selectedId = selectedConnection.id();
         }
-        String targetId = selectedId;
-        formGuard.run(() -> UiComponents.replaceListItemsPreservingSelection(listModel, connectionList, filtered,
-                DatabaseConnectionConfig::id, targetId, false));
+        UiComponents.filterAndPreserveSelection(listModel, connectionList, allConnections, filterField.getText(),
+                (cfg, query) -> {
+                    String q = query.toLowerCase(Locale.ROOT);
+                    return cfg.displayName().toLowerCase(Locale.ROOT).contains(q)
+                            || cfg.id().toLowerCase(Locale.ROOT).contains(q)
+                            || cfg.description().toLowerCase(Locale.ROOT).contains(q)
+                            || cfg.type().toLowerCase(Locale.ROOT).contains(q);
+                }, DatabaseConnectionConfig::id, selectedId, formGuard, false);
     }
 
     private void updateTypeHints() {

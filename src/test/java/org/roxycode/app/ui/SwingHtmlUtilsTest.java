@@ -341,4 +341,69 @@ class SwingHtmlUtilsTest {
         }
         return null;
     }
+
+    @Test
+    void testUiComponentsDynamicIconTabbedPaneAndFilterPreservingSelection() {
+        java.util.concurrent.atomic.AtomicReference<java.awt.Color> colorRef = new java.util.concurrent.atomic.AtomicReference<>(
+                java.awt.Color.BLUE);
+        org.kordamp.ikonli.swing.FontIcon dynamicIcon = UiComponents
+                .createThemeIcon(org.kordamp.ikonli.codicons.Codicons.SEARCH, 14, colorRef::get);
+        assertEquals(java.awt.Color.BLUE, dynamicIcon.getIconColor());
+
+        colorRef.set(java.awt.Color.RED);
+        assertEquals(java.awt.Color.RED, dynamicIcon.getIconColor());
+        java.awt.image.BufferedImage canvas = new java.awt.image.BufferedImage(24, 24,
+                java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        java.awt.Graphics2D g2 = canvas.createGraphics();
+        try {
+            dynamicIcon.paintIcon(new javax.swing.JLabel(), g2, 0, 0);
+        } finally {
+            g2.dispose();
+        }
+        assertEquals(java.awt.Color.RED, dynamicIcon.getIconColor());
+
+        SwingTestUtils.runOnEdt(() -> {
+            javax.swing.JTabbedPane tabs = UiComponents.createUnderlinedTabbedPane(null);
+            tabs.addTab("First", org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.codicons.Codicons.PACKAGE, 15,
+                    java.awt.Color.GRAY), new javax.swing.JPanel());
+            tabs.addTab("Second", org.kordamp.ikonli.swing.FontIcon.of(org.kordamp.ikonli.codicons.Codicons.HUBOT, 15,
+                    java.awt.Color.GRAY), new javax.swing.JPanel());
+
+            java.awt.Color accent = SwingHtmlUtils.getAccentColor();
+            java.awt.Color muted = SwingHtmlUtils.getMutedForegroundColor();
+            assertEquals(accent, ((org.kordamp.ikonli.swing.FontIcon) tabs.getIconAt(0)).getIconColor());
+            assertEquals(muted, ((org.kordamp.ikonli.swing.FontIcon) tabs.getIconAt(1)).getIconColor());
+
+            tabs.setSelectedIndex(1);
+            assertEquals(muted, ((org.kordamp.ikonli.swing.FontIcon) tabs.getIconAt(0)).getIconColor());
+            assertEquals(accent, ((org.kordamp.ikonli.swing.FontIcon) tabs.getIconAt(1)).getIconColor());
+
+            tabs.updateUI();
+            assertEquals(muted, ((org.kordamp.ikonli.swing.FontIcon) tabs.getIconAt(0)).getIconColor());
+            assertEquals(accent, ((org.kordamp.ikonli.swing.FontIcon) tabs.getIconAt(1)).getIconColor());
+
+            javax.swing.DefaultListModel<String> model = new javax.swing.DefaultListModel<>();
+            javax.swing.JList<String> list = new javax.swing.JList<>(model);
+            java.util.List<String> allItems = java.util.List.of("alpha", "echo", "gamma");
+            UiComponents.UiGuard guard = new UiComponents.UiGuard();
+
+            int selected = UiComponents.filterAndPreserveSelection(model, list, allItems, "a",
+                    (item, query) -> item.contains(query), item -> item, "gamma", guard, false);
+            assertEquals(1, selected);
+            assertEquals(2, model.getSize());
+            assertEquals("gamma", list.getSelectedValue());
+            assertFalse(guard.isActive());
+
+            int fallbackSelected = UiComponents.filterAndPreserveSelection(model, list, allItems, "echo",
+                    (item, query) -> item.contains(query), item -> item, "gamma", guard, true);
+            assertEquals(0, fallbackSelected);
+            assertEquals(1, model.getSize());
+            assertEquals("echo", list.getSelectedValue());
+
+            UiComponents.filterAndPreserveSelection(model, list, allItems, "", (item, query) -> item.contains(query),
+                    item -> item, "alpha", null, false);
+            assertEquals(3, model.getSize());
+            assertEquals("alpha", list.getSelectedValue());
+        });
+    }
 }

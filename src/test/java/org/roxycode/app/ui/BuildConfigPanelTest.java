@@ -190,7 +190,7 @@ class BuildConfigPanelTest {
         when(projectService.getProjectAgentProfile()).thenReturn("SPEED");
         SwingTestUtils.runOnEdt(() -> panel.onProjectChanged(new ProjectChangedEvent(null)));
         SwingTestUtils.awaitFuture(panel.lastAsyncFuture);
-        assertEquals("SPEED", panel.selectedProfileId);
+        assertEquals("SPEED", panel.modelTabPanel.selectedProfileId);
         assertTrue(panel.profileCards.get(AgentProfile.SPEED).isSelected());
         assertEquals("Override: Speed", panel.modelOverrideStatusPill.getText());
 

@@ -107,7 +107,6 @@ final class ArchiveBrowserPanel extends JPanel {
     final JButton cancelRenameButton;
     final UiComponents.InlineConfirmBar deleteConfirmBar;
     final JEditorPane displayArea;
-    private final Timer searchDebounceTimer;
 
     private Timer copyFeedbackTimer;
     private final transient UiComponents.HtmlExportSupport exportSupport = new UiComponents.HtmlExportSupport();
@@ -125,10 +124,7 @@ final class ArchiveBrowserPanel extends JPanel {
         JPanel topBar = new JPanel(new MigLayout("insets 8 12 8 12, fillx", "[grow, fill]12[]8[]", "center"));
         topBar.setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));
 
-        searchField = new JTextField();
-        searchField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, mode.getPlaceholder());
-        searchField.putClientProperty(FlatClientProperties.TEXT_FIELD_LEADING_ICON, FontIcon.of(Codicons.SEARCH, 14));
-        searchField.putClientProperty(FlatClientProperties.TEXT_FIELD_SHOW_CLEAR_BUTTON, true);
+        searchField = UiComponents.createSearchField(mode.getPlaceholder(), this::executeSearchAsync);
 
         countLabel = new JLabel(formatCountText(0));
         countLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1");
@@ -215,16 +211,8 @@ final class ArchiveBrowserPanel extends JPanel {
         splitPane.setBorder(null);
         add(splitPane, BorderLayout.CENTER);
 
-        searchDebounceTimer = new Timer(SEARCH_DEBOUNCE_MS, e -> executeSearchAsync());
-        searchDebounceTimer.setRepeats(false);
-        SwingHtmlUtils.addChangeListener(searchField, this::scheduleDebouncedSearch);
-
         updateTheme();
         renderEmptyState(false);
-    }
-
-    private void scheduleDebouncedSearch() {
-        searchDebounceTimer.restart();
     }
 
     void setOnTotalCountChanged(IntConsumer listener) {
@@ -232,9 +220,6 @@ final class ArchiveBrowserPanel extends JPanel {
     }
 
     public CompletableFuture<?> refresh() {
-        if (searchDebounceTimer != null && searchDebounceTimer.isRunning()) {
-            searchDebounceTimer.stop();
-        }
         return executeSearchAsync();
     }
 
@@ -554,7 +539,6 @@ final class ArchiveBrowserPanel extends JPanel {
 
     private void updateTheme() {
         SwingHtmlUtils.applyTheme(displayArea, 16);
-        UiComponents.refreshActionButtonIcons(this);
         if (countLabel != null) {
             countLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
         }

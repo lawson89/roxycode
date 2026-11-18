@@ -6,7 +6,6 @@ import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.util.List;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
@@ -75,7 +74,6 @@ final class QaWorkspacePanel extends JPanel {
             this.pastTopicsPanel.refresh();
         }
         qaTabs.addChangeListener(e -> {
-            UiComponents.updateSelectedTabIcons(qaTabs, List.of(Codicons.COMMENT_DISCUSSION, Codicons.HISTORY));
             if (qaChatPanel != null && qaChatPanel.equals(qaTabs.getSelectedComponent())) {
                 SwingUtilities.invokeLater(qaChatPanel::focusInput);
             } else if (pastTopicsPanel.equals(qaTabs.getSelectedComponent())) {
@@ -125,7 +123,23 @@ final class QaWorkspacePanel extends JPanel {
         mentorModeLabel.setForeground(accent);
         mentorModeLabel.putClientProperty(FlatClientProperties.STYLE,
                 "font: bold -1; background: " + bgHex + "; arc: 999; border: 4,12,4,12");
-        UiComponents.updateSelectedTabIcons(qaTabs, List.of(Codicons.COMMENT_DISCUSSION, Codicons.HISTORY));
+    }
+
+    void addWorkspaceStateListener(Runnable listener) {
+        if (listener == null) {
+            return;
+        }
+        if (qaTabs != null) {
+            qaTabs.addChangeListener(e -> listener.run());
+        }
+        if (qaChatPanel != null) {
+            qaChatPanel.addLoadingListener(loading -> listener.run());
+            qaChatPanel.addUserInputListener(waiting -> listener.run());
+            qaChatPanel.addExportStateListener(listener);
+        }
+        if (pastTopicsPanel != null) {
+            pastTopicsPanel.addExportStateListener(listener);
+        }
     }
 
     public void setOnMoveToFeatureListener(java.util.function.Consumer<String> listener) {

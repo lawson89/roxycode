@@ -14,6 +14,7 @@ import java.awt.event.ActionListener;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -48,6 +49,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
+import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JEditorPane;
@@ -58,6 +60,7 @@ import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
+import javax.swing.JTextField;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.Scrollable;
 import javax.swing.Timer;
@@ -65,6 +68,7 @@ import javax.swing.ToolTipManager;
 import javax.swing.UIManager;
 import net.miginfocom.swing.MigLayout;
 import org.apache.commons.lang3.StringUtils;
+import org.kordamp.ikonli.Ikon;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.model.AgentProfile;
@@ -79,6 +83,7 @@ import net.coobird.thumbnailator.Thumbnails;
  */
 final class UiComponents {
     private static final Logger log = LoggerFactory.getLogger(UiComponents.class);
+    private static final String GROW_FILL = "[grow, fill]";
     private static final String GROWX_WMIN_0 = "growx, wmin 0";
     private static final String ROW_CENTER = "[center]";
     private static final String UI_LABEL_FOREGROUND = "Label.foreground";
@@ -423,8 +428,39 @@ final class UiComponents {
         return SwingHtmlUtils.getUiColor(new Color(0x33, 0x33, 0x33), UI_LABEL_FOREGROUND);
     }
 
+    static FontIcon createThemeIcon(Ikon ikon, int iconSize, Supplier<Color> colorSupplier) {
+        return new DynamicFontIcon(ikon, iconSize, colorSupplier);
+    }
+
+    static final class DynamicFontIcon extends FontIcon {
+        private final Supplier<Color> colorSupplier;
+
+        DynamicFontIcon(Ikon ikon, int iconSize, Supplier<Color> colorSupplier) {
+            this.colorSupplier = colorSupplier;
+            setIkon(ikon);
+            setIconSize(iconSize);
+            setIconColor(colorSupplier.get());
+        }
+
+        @Override
+        public Color getIconColor() {
+            if (colorSupplier != null) {
+                return colorSupplier.get();
+            }
+            return super.getIconColor();
+        }
+
+        @Override
+        public void paintIcon(Component c, Graphics g, int x, int y) {
+            if (colorSupplier != null) {
+                setIconColor(colorSupplier.get());
+            }
+            super.paintIcon(c, g, x, y);
+        }
+    }
+
     static JButton createIconButton(Codicons icon, String tooltip, java.awt.event.ActionListener listener) {
-        JButton button = new JButton(FontIcon.of(icon, 16, resolveForegroundColor()));
+        JButton button = new JButton(createThemeIcon(icon, 16, UiComponents::resolveForegroundColor));
         button.setToolTipText(tooltip);
         button.setFocusable(false);
         button.putClientProperty(FlatClientProperties.BUTTON_TYPE, FlatClientProperties.BUTTON_TYPE_TOOLBAR_BUTTON);
@@ -504,7 +540,7 @@ final class UiComponents {
         subtitleLabel.setText(formatWrappingHtml(subtitleLabel.getText()));
         subtitleLabel.putClientProperty(FlatClientProperties.STYLE, "foreground: $Label.disabledForeground");
 
-        JPanel titleBlock = new JPanel(new MigLayout("insets 0, wrap 1, gapy 2", "[grow, fill]", "[]"));
+        JPanel titleBlock = new JPanel(new MigLayout("insets 0, wrap 1, gapy 2", GROW_FILL, "[]"));
         titleBlock.setOpaque(false);
         titleBlock.add(titleLabel, GROWX_WMIN_0);
         titleBlock.add(subtitleLabel, GROWX_WMIN_0);
@@ -548,7 +584,7 @@ final class UiComponents {
         JLabel label = new JLabel(title);
         label.putClientProperty(FlatClientProperties.STYLE, fontStyle);
         label.setIconTextGap(8);
-        label.setIcon(FontIcon.of(icon, 18, SwingHtmlUtils.getAccentColor()));
+        label.setIcon(createThemeIcon(icon, 18, SwingHtmlUtils::getAccentColor));
         return label;
     }
 
@@ -600,8 +636,7 @@ final class UiComponents {
         if (iconLabel == null) {
             return;
         }
-        Color infoColor = resolveInfoIconColor();
-        iconLabel.setIcon(FontIcon.of(Codicons.INFO, 16, infoColor));
+        iconLabel.setIcon(createThemeIcon(Codicons.INFO, 16, UiComponents::resolveInfoIconColor));
         iconLabel.putClientProperty(FlatClientProperties.STYLE, null);
         iconLabel.setOpaque(false);
     }
@@ -624,7 +659,7 @@ final class UiComponents {
      * Builds the bold title + optional badge + muted description block.
      */
     static JPanel createFieldTextBlock(String title, String description, @Nullable JLabel badge) {
-        JPanel block = new JPanel(new MigLayout("insets 0, wrap 1, gapy 2", "[grow, fill]", ""));
+        JPanel block = new JPanel(new MigLayout("insets 0, wrap 1, gapy 2", GROW_FILL, ""));
         block.setOpaque(false);
 
         JLabel titleLbl = new JLabel(title);
@@ -733,7 +768,7 @@ final class UiComponents {
 
         AgentProfileCard(AgentProfile profile, Consumer<AgentProfile> onSelect) {
             this.profile = profile;
-            setLayout(new MigLayout("fillx, wrap 1, insets 12 14 12 14, gapy 6, hidemode 3", "[grow, fill]", ""));
+            setLayout(new MigLayout("fillx, wrap 1, insets 12 14 12 14, gapy 6, hidemode 3", GROW_FILL, ""));
             setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             setOpaque(true);
 
@@ -849,12 +884,67 @@ final class UiComponents {
         }
     }
 
-    static JTabbedPane createUnderlinedTabbedPane(JComponent trailingComponent) {
-        JTabbedPane tabs = new JTabbedPane();
+    static JPanel createAgentProfileGrid(Map<AgentProfile, AgentProfileCard> cardMap, Consumer<AgentProfile> onSelect) {
+        JPanel grid = new JPanel(new MigLayout("fillx, insets 2 0 0 0, gapx 12",
+                "[grow, fill, sg profile]12[grow, fill, sg profile]12[grow, fill, sg profile]", GROW_FILL));
+        grid.setOpaque(false);
+        cardMap.clear();
+        for (AgentProfile profile : AgentProfile.values()) {
+            AgentProfileCard card = new AgentProfileCard(profile, onSelect);
+            cardMap.put(profile, card);
+            grid.add(card, "grow, wmin 0");
+        }
+        return grid;
+    }
+
+    static JTabbedPane createUnderlinedTabbedPane(@Nullable JComponent trailingComponent) {
+        JTabbedPane tabs = new JTabbedPane() {
+            private static final long serialVersionUID = 1L;
+
+            @Override
+            public void insertTab(String title, @Nullable Icon icon, @Nullable Component component,
+                    @Nullable String tip, int index) {
+                super.insertTab(title, icon, component, tip, index);
+                refreshUnderlinedTabIcons(this);
+            }
+
+            @Override
+            public void updateUI() {
+                super.updateUI();
+                refreshUnderlinedTabIcons(this);
+            }
+        };
         tabs.putClientProperty(FlatClientProperties.TABBED_PANE_TAB_TYPE,
                 FlatClientProperties.TABBED_PANE_TAB_TYPE_UNDERLINED);
-        tabs.putClientProperty(FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT, trailingComponent);
+        if (trailingComponent != null) {
+            tabs.putClientProperty(FlatClientProperties.TABBED_PANE_TRAILING_COMPONENT, trailingComponent);
+        }
+        tabs.addChangeListener(e -> refreshUnderlinedTabIcons(tabs));
         return tabs;
+    }
+
+    static void refreshUnderlinedTabIcons(@Nullable JTabbedPane tabbedPane) {
+        if (tabbedPane == null) {
+            return;
+        }
+        Color accent = SwingHtmlUtils.getAccentColor();
+        Color muted = SwingHtmlUtils.getMutedForegroundColor();
+        int selectedIndex = tabbedPane.getSelectedIndex();
+        int tabCount = tabbedPane.getTabCount();
+        for (int i = 0; i < tabCount; i++) {
+            Icon icon = tabbedPane.getIconAt(i);
+            if (icon instanceof FontIcon fontIcon) {
+                Color targetColor;
+                if (i == selectedIndex) {
+                    targetColor = accent;
+                } else {
+                    targetColor = muted;
+                }
+                if (!targetColor.equals(fontIcon.getIconColor())) {
+                    tabbedPane.setIconAt(i, FontIcon.of(fontIcon.getIkon(), fontIcon.getIconSize(), targetColor));
+                }
+            }
+        }
     }
 
     static void configureSyntaxTextArea(RSyntaxTextArea area, String syntaxStyle, boolean editable, boolean lineWrap) {
@@ -970,7 +1060,7 @@ final class UiComponents {
             if (borderless) {
                 fontIcon = FontIcon.of(icon, 16);
             } else {
-                fontIcon = FontIcon.of(icon, 16, resolveActionButtonIconColor(style));
+                fontIcon = createThemeIcon(icon, 16, () -> resolveActionButtonIconColor(style));
             }
         }
         JButton btn = new JButton(text, fontIcon);
@@ -1010,24 +1100,6 @@ final class UiComponents {
             } else if (child instanceof JComponent childContainer) {
                 refreshActionButtonIcons(childContainer);
             }
-        }
-    }
-
-    static void updateSelectedTabIcons(JTabbedPane tabbedPane, List<Codicons> icons) {
-        if (tabbedPane == null || icons == null || tabbedPane.getTabCount() != icons.size()) {
-            return;
-        }
-        Color accent = SwingHtmlUtils.getAccentColor();
-        Color muted = SwingHtmlUtils.getMutedForegroundColor();
-        int selectedIndex = tabbedPane.getSelectedIndex();
-        for (int i = 0; i < icons.size(); i++) {
-            Color color;
-            if (i == selectedIndex) {
-                color = accent;
-            } else {
-                color = muted;
-            }
-            tabbedPane.setIconAt(i, FontIcon.of(icons.get(i), 15, color));
         }
     }
 
@@ -1213,6 +1285,40 @@ final class UiComponents {
             revalidate();
             repaint();
         }
+    }
+
+    static JTextField createSearchField(String placeholder, @Nullable Runnable onDebouncedSearch) {
+        JTextField field = new JTextField();
+        field.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, placeholder);
+        field.putClientProperty(FlatClientProperties.TEXT_FIELD_LEADING_ICON,
+                createThemeIcon(Codicons.SEARCH, 14, SwingHtmlUtils::getMutedForegroundColor));
+        field.putClientProperty(FlatClientProperties.TEXT_FIELD_SHOW_CLEAR_BUTTON, Boolean.TRUE);
+        if (onDebouncedSearch != null) {
+            Timer debounceTimer = new Timer(150, e -> onDebouncedSearch.run());
+            debounceTimer.setRepeats(false);
+            SwingHtmlUtils.addChangeListener(field, debounceTimer::restart);
+        }
+        return field;
+    }
+
+    static <T, K> int filterAndPreserveSelection(DefaultListModel<T> model, JList<T> list, @Nullable List<T> allItems,
+            @Nullable String rawQuery, BiPredicate<T, String> matcher, Function<T, K> keyExtractor,
+            @Nullable K keyToSelect, @Nullable UiGuard guard, boolean selectFirstIfUnmatched) {
+        String query = StringUtils.trimToEmpty(rawQuery);
+        List<T> filtered = new ArrayList<>();
+        if (allItems != null) {
+            for (T item : allItems) {
+                if (query.isEmpty() || matcher.test(item, query)) {
+                    filtered.add(item);
+                }
+            }
+        }
+        if (guard != null) {
+            return guard.supply(() -> replaceListItemsPreservingSelection(model, list, filtered, keyExtractor,
+                    keyToSelect, selectFirstIfUnmatched));
+        }
+        return replaceListItemsPreservingSelection(model, list, filtered, keyExtractor, keyToSelect,
+                selectFirstIfUnmatched);
     }
 
     static <T> void replaceListItems(DefaultListModel<T> model, @Nullable List<T> items) {

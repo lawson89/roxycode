@@ -45,6 +45,7 @@ import org.apache.commons.lang3.SystemUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.PlanService;
+import org.roxycode.app.events.NavigateToViewEvent;
 import org.roxycode.app.events.PhaseChangedEvent;
 import org.roxycode.app.events.PlanUpdatedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
@@ -104,8 +105,12 @@ public final class MainFrame extends JPanel {
     private final AgentMemoryPanel agentMemoryPanel;
     private final @Nullable GlobalDatabasesPanel globalDatabasesPanel;
     private final transient PlanService planService;
+    private record RouteTarget(String layoutCard, @Nullable JTabbedPane tabbedPane, int tabIndex) {
+    }
+
     private final transient UiComponents.UiGuard hubTabGuard = new UiComponents.UiGuard();
     private final Map<String, List<JMenuItem>> cardMenuItems = new LinkedHashMap<>();
+    private final Map<String, RouteTarget> routeMap = new LinkedHashMap<>();
     enum ExportKind {
         NONE, QA_CHAT, QA_PAST_TOPICS, TASK_CHAT, TASK_PLAN, TASK_PAST_PLANS
     }
@@ -204,33 +209,61 @@ public final class MainFrame extends JPanel {
             });
         }
         if (qaWorkspacePanel != null) {
-            if (qaWorkspacePanel.qaTabs != null) {
-                qaWorkspacePanel.qaTabs.addChangeListener(e -> updateExportMenuItemsState());
-            }
-            if (qaWorkspacePanel.qaChatPanel != null) {
-                qaWorkspacePanel.qaChatPanel.addExportStateListener(this::updateExportMenuItemsState);
-            }
-            if (qaWorkspacePanel.pastTopicsPanel != null) {
-                qaWorkspacePanel.pastTopicsPanel.addExportStateListener(this::updateExportMenuItemsState);
-            }
+            qaWorkspacePanel.addWorkspaceStateListener(() -> Edt.run(() -> {
+                if (sidebar != null && qaChatPanel() != null) {
+                    sidebar.setQaBusy(qaChatPanel().isLoading());
+                }
+                syncSidebarWaitingState();
+                updateWorkspaceState();
+                updateExportMenuItemsState();
+            }));
         }
         if (taskWorkspacePanel != null) {
-            if (taskWorkspacePanel.taskTabs != null) {
-                taskWorkspacePanel.taskTabs.addChangeListener(e -> updateExportMenuItemsState());
-            }
-            if (taskWorkspacePanel.taskChatPanel != null) {
-                taskWorkspacePanel.taskChatPanel.addExportStateListener(this::updateExportMenuItemsState);
-            }
-            if (taskWorkspacePanel.planPanel != null) {
-                taskWorkspacePanel.planPanel.addExportStateListener(this::updateExportMenuItemsState);
-            }
-            if (taskWorkspacePanel.pastPlansPanel != null) {
-                taskWorkspacePanel.pastPlansPanel.addExportStateListener(this::updateExportMenuItemsState);
-            }
+            taskWorkspacePanel.addWorkspaceStateListener(() -> Edt.run(() -> {
+                if (sidebar != null && taskChatPanel() != null) {
+                    sidebar.setTaskBusy(taskChatPanel().isLoading());
+                }
+                syncSidebarWaitingState();
+                updateWorkspaceState();
+                updateExportMenuItemsState();
+            }));
         }
         updateExportMenuItemsState();
         handleStartupSettingsCheck();
         checkRequiredSystemToolsOnStartup(systemToolsPanel);
+    }
+
+    @EventListener
+    public void onNavigateToView(NavigateToViewEvent event) {
+        if (event == null || event.viewId() == null) {
+            return;
+        }
+        Edt.run(() -> {
+            showCard(event.viewId());
+            if (event.generatedToml() != null && buildConfigPanel != null) {
+                buildConfigPanel.applyGeneratedBuildToml(event.generatedToml());
+            }
+            if (event.initialPrompt() != null) {
+                if (TASK_VIEW.equals(event.viewId())) {
+                    ChatPanel taskChat = taskChatPanel();
+                    if (taskChat != null) {
+                        boolean autoSubmitted = taskChat.submitMovedFeatureRequest(event.initialPrompt());
+                        ChatPanel qaChat = qaChatPanel();
+                        if (qaChat != null) {
+                            qaChat.notifyFeatureRequestSent(autoSubmitted);
+                        }
+                    }
+                } else if (QA_VIEW.equals(event.viewId())) {
+                    if (qaWorkspacePanel != null) {
+                        qaWorkspacePanel.focusChatInput();
+                    }
+                    ChatPanel qaChat = qaChatPanel();
+                    if (qaChat != null) {
+                        qaChat.submitPrompt(event.initialPrompt());
+                    }
+                }
+            }
+        });
     }
 
     @EventListener
@@ -635,28 +668,8 @@ public final class MainFrame extends JPanel {
                 buildConfigPanel.applyGeneratedBuildToml(toml);
             }
         });
-        ChatPanel qaChat = qaChatPanel();
-        if (qaChat != null) {
-            qaChat.addLoadingListener(loading -> Edt.run(() -> {
-                sidebar.setQaBusy(loading);
-                updateWorkspaceState();
-            }));
-            qaChat.addUserInputListener(waiting -> Edt.run(() -> {
-                syncSidebarWaitingState();
-                updateWorkspaceState();
-            }));
-        }
-        ChatPanel taskChat = taskChatPanel();
-        if (taskChat != null) {
-            taskChat.addLoadingListener(loading -> Edt.run(() -> {
-                sidebar.setTaskBusy(loading);
-                updateWorkspaceState();
-            }));
-            taskChat.addUserInputListener(waiting -> Edt.run(() -> {
-                syncSidebarWaitingState();
-                updateWorkspaceState();
-            }));
-        }
+        // Workspace state listeners (busy, waiting, tab/export updates) are wired in constructor via
+        // addWorkspaceStateListener
 
         JPanel workspace = new JPanel(new MigLayout("fill, insets 0", "[fill, grow]", "[]0[fill, grow]0[]"));
 
@@ -673,21 +686,10 @@ public final class MainFrame extends JPanel {
             contextHubTabs.addTab("Agent Tools API",
                     FontIcon.of(Codicons.CODE, 15, SwingHtmlUtils.getMutedForegroundColor()), jexlApiPanel);
         }
-        contextHubTabs.addChangeListener(e -> {
-            if (hubTabGuard.isActive()) {
-                return;
-            }
-            java.awt.Component selected = contextHubTabs.getSelectedComponent();
-            if (codebaseCachePanel != null && codebaseCachePanel.equals(selected)) {
-                currentCard = CACHE_VIEW;
-                codebaseCachePanel.refreshStatus();
-            } else if (jexlApiPanel != null && jexlApiPanel.equals(selected)) {
-                currentCard = API_VIEW;
-            } else {
-                currentCard = CONTEXT_MGR_VIEW;
-            }
-            refreshHubTabIcons();
-        });
+        registerRoute(CONTEXT_MGR_VIEW, CONTEXT_MGR_VIEW, contextHubTabs, TAB_INDEX_FIRST);
+        registerRoute(CACHE_VIEW, CONTEXT_MGR_VIEW, contextHubTabs, TAB_INDEX_SECOND);
+        registerRoute(API_VIEW, CONTEXT_MGR_VIEW, contextHubTabs, TAB_INDEX_THIRD);
+        bindHubTabRoutes(contextHubTabs);
 
         aiConnectionReadinessBadge = new JLabel();
         aiConnectionReadinessBadge.setIconTextGap(6);
@@ -709,36 +711,18 @@ public final class MainFrame extends JPanel {
                     FontIcon.of(Codicons.DATABASE, 15, SwingHtmlUtils.getMutedForegroundColor()), databasesPanel);
         }
         updateSettingsHubReadiness(lastStartupTools);
-        settingsHubTabs.addChangeListener(e -> {
-            if (hubTabGuard.isActive()) {
-                return;
-            }
-            java.awt.Component selected = settingsHubTabs.getSelectedComponent();
-            if (systemToolsPanel != null && systemToolsPanel.equals(selected)) {
-                currentCard = TOOLS_VIEW;
-            } else if (databasesPanel != null && databasesPanel.equals(selected)) {
-                currentCard = DATABASES_VIEW;
-                databasesPanel.refresh();
-            } else {
-                currentCard = SETTINGS_VIEW;
-            }
-            refreshHubTabIcons();
-        });
+        registerRoute(SETTINGS_VIEW, SETTINGS_VIEW, settingsHubTabs, TAB_INDEX_FIRST);
+        registerRoute(TOOLS_VIEW, SETTINGS_VIEW, settingsHubTabs, TAB_INDEX_SECOND);
+        registerRoute(DATABASES_VIEW, SETTINGS_VIEW, settingsHubTabs, TAB_INDEX_THIRD);
+        bindHubTabRoutes(settingsHubTabs);
 
         if (buildConfigPanel != null && buildConfigPanel.settingsTabs != null) {
-            buildConfigPanel.settingsTabs.addChangeListener(e -> {
-                if (hubTabGuard.isActive()) {
-                    return;
-                }
-                int idx = buildConfigPanel.settingsTabs.getSelectedIndex();
-                if (idx == BuildConfigPanel.TAB_INDEX_AI_MODEL) {
-                    currentCard = PROJECT_MODEL_VIEW;
-                } else if (idx == BuildConfigPanel.TAB_INDEX_DATABASES) {
-                    currentCard = PROJECT_DATABASES_VIEW;
-                } else {
-                    currentCard = BUILD_CONFIG_VIEW;
-                }
-            });
+            registerRoute(BUILD_CONFIG_VIEW, BUILD_CONFIG_VIEW, buildConfigPanel.settingsTabs, TAB_INDEX_FIRST);
+            registerRoute(PROJECT_MODEL_VIEW, BUILD_CONFIG_VIEW, buildConfigPanel.settingsTabs,
+                    BuildConfigPanel.TAB_INDEX_AI_MODEL);
+            registerRoute(PROJECT_DATABASES_VIEW, BUILD_CONFIG_VIEW, buildConfigPanel.settingsTabs,
+                    BuildConfigPanel.TAB_INDEX_DATABASES);
+            bindHubTabRoutes(buildConfigPanel.settingsTabs);
         }
 
         contentArea.add(qaWorkspacePanel, QA_VIEW);
@@ -1144,7 +1128,6 @@ public final class MainFrame extends JPanel {
     public void updateUI() {
         super.updateUI();
         applyMenuBarStyling();
-        refreshHubTabIcons();
         updateSettingsHubReadiness(lastStartupTools);
     }
 
@@ -1205,13 +1188,25 @@ public final class MainFrame extends JPanel {
         menuBar.setBorder(SwingHtmlUtils.createThemeMatteBorder(0, 0, 1, 0));
     }
 
-    private void refreshHubTabIcons() {
-        UiComponents.updateSelectedTabIcons(contextHubTabs, List.of(Codicons.FILE, Codicons.DATABASE, Codicons.CODE));
-        UiComponents.updateSelectedTabIcons(settingsHubTabs,
-                List.of(Codicons.SETTINGS_GEAR, Codicons.TOOLS, Codicons.DATABASE));
-        if (buildConfigPanel != null) {
-            buildConfigPanel.updateTabIcons();
-        }
+    private void registerRoute(String viewId, String layoutCard, JTabbedPane tabbedPane, int tabIndex) {
+        routeMap.put(viewId, new RouteTarget(layoutCard, tabbedPane, tabIndex));
+    }
+
+    private void bindHubTabRoutes(JTabbedPane tabbedPane) {
+        tabbedPane.addChangeListener(e -> {
+            if (hubTabGuard.isActive()) {
+                return;
+            }
+            int selectedIndex = tabbedPane.getSelectedIndex();
+            for (Map.Entry<String, RouteTarget> entry : routeMap.entrySet()) {
+                RouteTarget target = entry.getValue();
+                if (tabbedPane.equals(target.tabbedPane()) && target.tabIndex() == selectedIndex) {
+                    currentCard = entry.getKey();
+                    onViewActivated(currentCard);
+                    break;
+                }
+            }
+        });
     }
 
     void showCard(String cardName) {
@@ -1219,10 +1214,23 @@ public final class MainFrame extends JPanel {
         if (sidebar != null) {
             sidebar.selectCard(cardName);
         }
-        String layoutCard = resolveHubLayoutCard(cardName);
-        selectHubSubTab(cardName);
+        RouteTarget route = routeMap.get(cardName);
+        String layoutCard;
+        if (route != null) {
+            layoutCard = route.layoutCard();
+            if (route.tabbedPane() != null) {
+                hubTabGuard.run(() -> UiComponents.selectTabSafely(route.tabbedPane(), route.tabIndex()));
+            }
+        } else {
+            layoutCard = cardName;
+        }
         cardLayout.show(contentArea, layoutCard);
         updateTitle();
+        onViewActivated(cardName);
+        updateExportMenuItemsState();
+    }
+
+    private void onViewActivated(String cardName) {
         if (QA_VIEW.equals(cardName) && qaWorkspacePanel != null) {
             qaWorkspacePanel.focusChatInput();
         } else if (TASK_VIEW.equals(cardName) && taskWorkspacePanel != null) {
@@ -1234,53 +1242,6 @@ public final class MainFrame extends JPanel {
         } else if (DATABASES_VIEW.equals(cardName) && globalDatabasesPanel != null) {
             globalDatabasesPanel.refresh();
         }
-        updateExportMenuItemsState();
-    }
-
-    private static String resolveHubLayoutCard(String cardName) {
-        if (cardName == null) {
-            return null;
-        }
-        return switch (cardName) {
-            case CONTEXT_MGR_VIEW, CACHE_VIEW, API_VIEW -> CONTEXT_MGR_VIEW;
-            case SETTINGS_VIEW, TOOLS_VIEW, DATABASES_VIEW -> SETTINGS_VIEW;
-            case BUILD_CONFIG_VIEW, PROJECT_MODEL_VIEW, PROJECT_DATABASES_VIEW -> BUILD_CONFIG_VIEW;
-            default -> cardName;
-        };
-    }
-
-    private void selectHubSubTab(String cardName) {
-        if (cardName == null) {
-            return;
-        }
-        hubTabGuard.run(() -> {
-            switch (cardName) {
-                case CONTEXT_MGR_VIEW -> UiComponents.selectTabSafely(contextHubTabs, TAB_INDEX_FIRST);
-                case CACHE_VIEW -> UiComponents.selectTabSafely(contextHubTabs, TAB_INDEX_SECOND);
-                case API_VIEW -> UiComponents.selectTabSafely(contextHubTabs, TAB_INDEX_THIRD);
-                case SETTINGS_VIEW -> UiComponents.selectTabSafely(settingsHubTabs, TAB_INDEX_FIRST);
-                case TOOLS_VIEW -> UiComponents.selectTabSafely(settingsHubTabs, TAB_INDEX_SECOND);
-                case DATABASES_VIEW -> UiComponents.selectTabSafely(settingsHubTabs, TAB_INDEX_THIRD);
-                case BUILD_CONFIG_VIEW -> {
-                    if (buildConfigPanel != null) {
-                        buildConfigPanel.selectBuildConfigTab();
-                    }
-                }
-                case PROJECT_MODEL_VIEW -> {
-                    if (buildConfigPanel != null) {
-                        buildConfigPanel.selectAiModelTab();
-                    }
-                }
-                case PROJECT_DATABASES_VIEW -> {
-                    if (buildConfigPanel != null) {
-                        buildConfigPanel.selectDatabasesTab();
-                    }
-                }
-                default -> {
-                }
-            }
-        });
-        refreshHubTabIcons();
     }
 
     private void syncSidebarWaitingState() {

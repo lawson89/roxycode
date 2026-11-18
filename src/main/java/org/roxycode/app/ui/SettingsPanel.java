@@ -393,16 +393,9 @@ public final class SettingsPanel extends JPanel {
         headerRow.add(profileInfoIcon);
         card.add(headerRow, HEADER_CONSTRAINTS);
 
-        JPanel grid = new JPanel(new MigLayout("fillx, insets 2 0 0 0, gapx 12",
-                "[grow, fill, sg profile]12[grow, fill, sg profile]12[grow, fill, sg profile]", "[grow, fill]"));
-        grid.setOpaque(false);
-        profileCards.clear();
-        for (AgentProfile profile : AgentProfile.values()) {
-            UiComponents.AgentProfileCard profileCard = new UiComponents.AgentProfileCard(profile,
-                    this::selectProfileFromCard);
-            profileCard.setSelected(profile == selectedProfile);
-            profileCards.put(profile, profileCard);
-            grid.add(profileCard, GROW_WMIN_0);
+        JPanel grid = UiComponents.createAgentProfileGrid(profileCards, this::selectProfileFromCard);
+        for (Map.Entry<AgentProfile, UiComponents.AgentProfileCard> entry : profileCards.entrySet()) {
+            entry.getValue().setSelected(entry.getKey() == selectedProfile);
         }
         card.add(grid, GROWX_WMIN_0);
         return card;

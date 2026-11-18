@@ -2,13 +2,10 @@ package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.awt.geom.Rectangle2D;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -30,7 +27,6 @@ import org.roxycode.app.events.DatabaseConfigChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
 import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.model.AgentProfile;
-import org.roxycode.app.model.DatabaseConnectionConfig;
 import org.roxycode.app.model.ProjectDatabaseGrant;
 import org.roxycode.app.service.DatabaseConfigService;
 import org.roxycode.app.service.ProjectService;
@@ -105,16 +101,12 @@ final class BuildConfigPanel extends JPanel {
     private final transient @Nullable DatabaseConfigService databaseConfigService;
     final JTabbedPane settingsTabs;
     final JPanel buildTabPanel;
-    final JPanel modelTabPanel;
-    final JPanel databasesTabPanel;
-    final JPanel databasesCardPanel;
+    final ProjectModelOverridePanel modelTabPanel;
+    final ProjectDatabaseGrantsPanel databasesTabPanel;
     final JPanel grantRowsContainer;
-    final JButton manageGlobalDatabasesButton;
     final JButton saveGrantsButton;
     final JLabel grantsStatusLabel;
-    final Timer grantsStatusTimer;
-    final List<GrantRowControls> grantRowControls = new ArrayList<>();
-    private transient Runnable onManageGlobalDatabasesCallback;
+    final List<ProjectDatabaseGrantsPanel.GrantRowControls> grantRowControls;
     final JLabel titleLabel;
     final JLabel subtitleLabel;
     final JPanel summaryStripPanel;
@@ -122,19 +114,13 @@ final class BuildConfigPanel extends JPanel {
     final SummaryCard sandboxSummaryCard;
     final SummaryCard parserSummaryCard;
     final SummaryCard syntaxSummaryCard;
-    final JLabel modelTitleLabel;
-    final JLabel modelSubtitleLabel;
-    final JPanel modelCardPanel;
     final JPanel buildCardPanel;
-    final JLabel modelSectionHeaderLabel;
-    final JLabel modelOverrideStatusPill;
-    final JLabel profileInfoIcon;
-    final GlobalDefaultCard globalDefaultProfileCard;
-    final JLabel overrideSubheaderLabel;
-    final Map<AgentProfile, UiComponents.AgentProfileCard> profileCards = new EnumMap<>(AgentProfile.class);
+    final ProjectModelOverridePanel.GlobalDefaultCard globalDefaultProfileCard;
+    final Map<AgentProfile, UiComponents.AgentProfileCard> profileCards;
     final JButton modelSaveButton;
     final JLabel modelStatusLabel;
-    final Timer modelStatusTimer;
+    final JLabel modelOverrideStatusPill;
+    final JLabel profileInfoIcon;
     final Timer modelSaveFeedbackTimer;
     final JLabel buildTomlFileBadge;
     final JLabel buildConfigInfoIcon;
@@ -159,8 +145,6 @@ final class BuildConfigPanel extends JPanel {
     private boolean textEditedByUser = false;
     private boolean lastStatusSuccess = true;
     private String savedTomlContent = "";
-    private String savedProfileId = "";
-    String selectedProfileId = "";
     String detectedTemplateId = DEFAULT_TEMPLATE_ID;
     private transient Runnable onConfirmSavedCallback;
     private transient Consumer<String> onConfigureWithRoxyCallback;
@@ -275,117 +259,36 @@ final class BuildConfigPanel extends JPanel {
         buildCardPanel.add(new RTextScrollPane(textArea), "grow, push");
         buildTabPanel.add(buildCardPanel, "grow, push, wmin 0");
 
+        settingsTabs = UiComponents.createUnderlinedTabbedPane(null);
+
         // --- Tab 2: AI Model Override ---
-        modelTabPanel = new JPanel(new MigLayout("fill, insets 20, hidemode 3", GROW_FILL, "[]14" + GROW_FILL));
-        modelTabPanel.setOpaque(true);
-
-        modelTitleLabel = new JLabel(MODEL_TITLE_TEXT);
-        modelSubtitleLabel = new JLabel(MODEL_SUBTITLE_TEXT);
-        modelOverrideStatusPill = new JLabel();
-        modelStatusLabel = new JLabel("");
-        modelStatusLabel.setFont(modelStatusLabel.getFont().deriveFont(Font.BOLD, 11.5f));
-
-        modelSaveButton = UiComponents.createActionButton(MODEL_SAVE_BUTTON_TEXT, Codicons.SAVE,
-                new Insets(6, 14, 6, 14), false, SAVE_BUTTON_BASE_STYLE + UiComponents.ACCENT_BUTTON_STYLE,
-                e -> saveModelConfig());
-        modelSaveButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        modelSaveButton.setIconTextGap(6);
-
-        modelSaveFeedbackTimer = createFeedbackTimer(this::updateModelSaveButtonState);
-
-        JPanel modelHeaderActions = new JPanel(new MigLayout("insets 0, gapx 10", "[][][]", ROW_CENTER));
-        modelHeaderActions.setOpaque(false);
-        modelHeaderActions.add(modelOverrideStatusPill);
-        modelHeaderActions.add(modelStatusLabel);
-        modelHeaderActions.add(modelSaveButton);
-
-        modelTabPanel.add(UiComponents.createPageHeader(modelTitleLabel, modelSubtitleLabel, modelHeaderActions),
-                "growx, wmin 0, wrap");
-
-        modelCardPanel = new JPanel(new MigLayout("fillx, wrap 1, insets 16 18 16 18, gapy 10", GROW_FILL, ""));
-        UiComponents.styleCardPanel(modelCardPanel);
-
-        modelSectionHeaderLabel = UiComponents.createSectionHeader(SECTION_AI_MODEL_TITLE, Codicons.HUBOT,
-                HEADER_FONT_STYLE);
-        profileInfoIcon = UiComponents.createInfoIcon(UiComponents.AGENT_PROFILE_TOOLTIP_HTML);
-        JPanel modelSectionRow = new JPanel(new MigLayout("insets 0, gapx 6", "[][]", ROW_CENTER));
-        modelSectionRow.setOpaque(false);
-        modelSectionRow.add(modelSectionHeaderLabel);
-        modelSectionRow.add(profileInfoIcon);
-        modelCardPanel.add(modelSectionRow, "growx, wmin 0, gapbottom 2");
-
-        globalDefaultProfileCard = new GlobalDefaultCard();
-        modelCardPanel.add(globalDefaultProfileCard, GROWX_WMIN_0);
-
-        overrideSubheaderLabel = new JLabel("OR OVERRIDE SPECIFICALLY FOR THIS PROJECT:");
-        overrideSubheaderLabel.putClientProperty(FlatClientProperties.STYLE,
-                "font: bold -2; foreground: $Label.disabledForeground");
-        modelCardPanel.add(overrideSubheaderLabel, "growx, wmin 0, gaptop 4");
-
-        JPanel profileGrid = new JPanel(new MigLayout("insets 0, fillx, gap 12",
-                "[grow, fill, sg profile][grow, fill, sg profile][grow, fill, sg profile]", "[grow, fill]"));
-        profileGrid.setOpaque(false);
-        for (AgentProfile profile : AgentProfile.values()) {
-            UiComponents.AgentProfileCard card = new UiComponents.AgentProfileCard(profile,
-                    selected -> selectProfileOverride(selected.getId()));
-            profileCards.put(profile, card);
-            profileGrid.add(card);
-        }
-        modelCardPanel.add(profileGrid, GROWX_WMIN_0);
-
-        JPanel modelCardsContainer = UiComponents
-                .createScrollableCardsPanel(new MigLayout("fillx, wrap 1, insets 4 2 16 6, gapy 14", GROW_FILL, ""));
-        modelCardsContainer.add(modelCardPanel, GROWX_WMIN_0);
-        modelTabPanel.add(UiComponents.createBorderlessScrollPane(modelCardsContainer), "grow, wmin 0");
+        modelTabPanel = new ProjectModelOverridePanel(settingsService, projectService, title -> {
+            if (settingsTabs.getTabCount() > TAB_INDEX_AI_MODEL) {
+                settingsTabs.setTitleAt(TAB_INDEX_AI_MODEL, title);
+            }
+        }, this::setLastAsyncFuture);
+        this.globalDefaultProfileCard = modelTabPanel.globalDefaultProfileCard;
+        this.profileCards = modelTabPanel.profileCards;
+        this.modelSaveButton = modelTabPanel.modelSaveButton;
+        this.modelStatusLabel = modelTabPanel.modelStatusLabel;
+        this.modelOverrideStatusPill = modelTabPanel.modelOverrideStatusPill;
+        this.profileInfoIcon = modelTabPanel.profileInfoIcon;
+        this.modelSaveFeedbackTimer = modelTabPanel.modelSaveFeedbackTimer;
 
         // --- Tab 3: Databases (Per-Project Grants) ---
-        databasesTabPanel = new JPanel(new MigLayout("fill, insets 20, hidemode 3", GROW_FILL, "[][]" + GROW_FILL));
-        databasesTabPanel.setOpaque(true);
+        databasesTabPanel = new ProjectDatabaseGrantsPanel(databaseConfigService, this::updateDatabasesTabTitle,
+                this::setLastAsyncFuture);
+        this.grantRowsContainer = databasesTabPanel.grantRowsContainer;
+        this.saveGrantsButton = databasesTabPanel.saveGrantsButton;
+        this.grantsStatusLabel = databasesTabPanel.grantsStatusLabel;
+        this.grantRowControls = databasesTabPanel.grantRowControls;
 
-        JLabel dbTitleLabel = new JLabel("Project Database Grants");
-        JLabel dbSubtitleLabel = new JLabel(
-                "Select global read-only databases to expose to RoxyCode (dbService) for the active project.");
-        manageGlobalDatabasesButton = UiComponents.createActionButton("Manage Global Databases...",
-                Codicons.SETTINGS_GEAR, new Insets(6, 12, 6, 12), false, "arc: 8", e -> {
-                    if (onManageGlobalDatabasesCallback != null) {
-                        onManageGlobalDatabasesCallback.run();
-                    }
-                });
-        saveGrantsButton = UiComponents.createActionButton("Save Database Grants", Codicons.SAVE,
-                new Insets(6, 14, 6, 14), false, SAVE_BUTTON_BASE_STYLE + UiComponents.ACCENT_BUTTON_STYLE,
-                e -> saveDatabaseGrants());
-        grantsStatusLabel = new JLabel("");
-        grantsStatusLabel.setFont(grantsStatusLabel.getFont().deriveFont(Font.BOLD, 11.5f));
-        grantsStatusLabel.setVisible(false);
-        grantsStatusTimer = UiComponents.createStatusTimer(grantsStatusLabel, 3500);
-
-        JPanel dbActionPanel = new JPanel(new MigLayout("insets 0", "[]8[]", "[center]"));
-        dbActionPanel.setOpaque(false);
-        dbActionPanel.add(manageGlobalDatabasesButton);
-        dbActionPanel.add(saveGrantsButton);
-        databasesTabPanel.add(UiComponents.createPageHeader(dbTitleLabel, dbSubtitleLabel, dbActionPanel),
-                GROWX_WMIN_0 + ", wrap");
-        databasesTabPanel.add(grantsStatusLabel, "growx, wmin 0, hidemode 3, wrap");
-
-        databasesCardPanel = new JPanel(new MigLayout("fillx, wrap 1, insets 16, gapy 10", GROW_FILL, ""));
-        UiComponents.styleCardPanel(databasesCardPanel);
-        grantRowsContainer = new JPanel(new MigLayout("fillx, wrap 1, insets 0, gapy 8", GROW_FILL, ""));
-        grantRowsContainer.setOpaque(false);
-        databasesCardPanel.add(grantRowsContainer, GROWX_WMIN_0);
-
-        JPanel dbCardsScroller = UiComponents
-                .createScrollableCardsPanel(new MigLayout("fillx, wrap 1, insets 4 2 16 6, gapy 14", GROW_FILL, ""));
-        dbCardsScroller.add(databasesCardPanel, GROWX_WMIN_0);
-        databasesTabPanel.add(UiComponents.createBorderlessScrollPane(dbCardsScroller), "grow, wmin 0");
-
-        settingsTabs = UiComponents.createUnderlinedTabbedPane(null);
         settingsTabs.addTab(TAB_BUILD_CONFIG_TITLE, FontIcon.of(Codicons.PACKAGE, 15, SwingHtmlUtils.getAccentColor()),
                 buildTabPanel);
         settingsTabs.addTab(TAB_AI_MODEL_TITLE,
                 FontIcon.of(Codicons.HUBOT, 15, SwingHtmlUtils.getMutedForegroundColor()), modelTabPanel);
         settingsTabs.addTab(TAB_DATABASES_TITLE,
                 FontIcon.of(Codicons.DATABASE, 15, SwingHtmlUtils.getMutedForegroundColor()), databasesTabPanel);
-        settingsTabs.addChangeListener(e -> updateTabIcons());
 
         loadProfileOptions();
 
@@ -393,12 +296,10 @@ final class BuildConfigPanel extends JPanel {
 
         statusTimer = new Timer(3000, e -> clearBuildStatus());
         statusTimer.setRepeats(false);
-        modelStatusTimer = UiComponents.createStatusTimer(modelStatusLabel, 3000);
 
         applySectionStyling();
         updateSummaryCards();
-        lastAsyncFuture = loadConfig();
-        loadDatabaseGrants();
+        lastAsyncFuture = CompletableFuture.allOf(loadConfig(), loadDatabaseGrants());
         updateBannerState();
     }
 
@@ -462,10 +363,6 @@ final class BuildConfigPanel extends JPanel {
         loadDatabaseGrants();
     }
 
-    void updateTabIcons() {
-        UiComponents.updateSelectedTabIcons(settingsTabs, List.of(Codicons.PACKAGE, Codicons.HUBOT, Codicons.DATABASE));
-    }
-
     void refreshDetectedTemplate() {
         if (buildToolService != null) {
             detectedTemplateId = StringUtils.defaultIfBlank(buildToolService.detectTemplate(), DEFAULT_TEMPLATE_ID);
@@ -505,11 +402,11 @@ final class BuildConfigPanel extends JPanel {
     }
 
     void showModelStatus(String message, boolean success) {
-        UiComponents.showStatusMessage(modelStatusLabel, modelStatusTimer, message, success);
+        modelTabPanel.showModelStatus(message, success);
     }
 
     void clearModelStatus() {
-        UiComponents.clearStatusMessage(modelStatusLabel, modelStatusTimer, false);
+        modelTabPanel.clearModelStatus();
     }
 
     void configureWithRoxy() {
@@ -537,80 +434,11 @@ final class BuildConfigPanel extends JPanel {
     }
 
     void loadProfileOptions() {
-        AgentProfile globalProfile = SettingsService.resolveGlobalAgentProfile(settingsService);
-        String projectProfile = "";
-        if (projectService != null && projectService.hasActiveProject()) {
-            projectProfile = StringUtils.defaultString(projectService.getProjectAgentProfile());
-        }
-        final String targetProfile = normalizeProfileId(projectProfile);
-        textUpdateGuard.run(() -> {
-            selectProfileOverride(targetProfile);
-            savedProfileId = selectedProfileId;
-        });
-        globalDefaultProfileCard.updateGlobalProfileDisplay(globalProfile);
-        updateModelSaveButtonState();
+        modelTabPanel.loadProfileOptions();
     }
 
     void selectProfileOverride(@Nullable String profileId) {
-        String normalized = normalizeProfileId(profileId);
-        selectedProfileId = normalized;
-        globalDefaultProfileCard.setSelected(normalized.isEmpty());
-        for (Map.Entry<AgentProfile, UiComponents.AgentProfileCard> entry : profileCards.entrySet()) {
-            boolean matches = entry.getKey().getId().equalsIgnoreCase(normalized);
-            entry.getValue().setSelected(matches);
-        }
-        updateModelOverrideIndicators();
-        if (!textUpdateGuard.isActive()) {
-            UiComponents.stopTimer(modelSaveFeedbackTimer);
-            clearModelStatus();
-            updateModelSaveButtonState();
-        }
-    }
-
-    private static String normalizeProfileId(@Nullable String profileId) {
-        String trimmed = StringUtils.trimToEmpty(profileId);
-        if (trimmed.isEmpty()) {
-            return "";
-        }
-        return AgentProfile.fromString(trimmed).getId();
-    }
-
-    private void updateModelOverrideIndicators() {
-        AgentProfile globalProfile = SettingsService.resolveGlobalAgentProfile(settingsService);
-        String pillText;
-        String tabTitle;
-        boolean overridden = StringUtils.isNotBlank(selectedProfileId);
-        if (overridden) {
-            AgentProfile overrideProfile = AgentProfile.fromString(selectedProfileId);
-            pillText = "Override: " + overrideProfile.getDisplayName();
-            tabTitle = TAB_AI_MODEL_TITLE + " (" + overrideProfile.getDisplayName() + ")";
-        } else {
-            pillText = "Global (" + globalProfile.getDisplayName() + ")";
-            tabTitle = TAB_AI_MODEL_TITLE + " (Global)";
-        }
-        if (modelOverrideStatusPill != null) {
-            modelOverrideStatusPill.setText(pillText);
-            Color accentColor = SwingHtmlUtils.getAccentColor();
-            Color mutedColor = SwingHtmlUtils.getMutedForegroundColor();
-            String borderHex = UiComponents.getCardBorderHex();
-            String pillBg = UiComponents.getPillBackgroundDirective();
-            if (overridden) {
-                String accentHex = SwingHtmlUtils.toHex(accentColor);
-                modelOverrideStatusPill.setForeground(accentColor);
-                modelOverrideStatusPill.setIcon(FontIcon.of(Codicons.HUBOT, 13, accentColor));
-                modelOverrideStatusPill.putClientProperty(FlatClientProperties.STYLE,
-                        "font: bold -1; arc: 10; border: 3,9,3,9," + accentHex + BORDER_BG_STYLE + "fade(" + accentHex
-                                + ", 10%)");
-            } else {
-                modelOverrideStatusPill.setForeground(mutedColor);
-                modelOverrideStatusPill.setIcon(FontIcon.of(Codicons.GLOBE, 13, mutedColor));
-                modelOverrideStatusPill.putClientProperty(FlatClientProperties.STYLE,
-                        "font: bold -1; arc: 10; border: 3,9,3,9," + borderHex + BORDER_BG_STYLE + pillBg);
-            }
-        }
-        if (settingsTabs != null && settingsTabs.getTabCount() > TAB_INDEX_AI_MODEL) {
-            settingsTabs.setTitleAt(TAB_INDEX_AI_MODEL, tabTitle);
-        }
+        modelTabPanel.selectProfileOverride(profileId);
     }
 
     boolean hasUnsavedChanges() {
@@ -622,7 +450,7 @@ final class BuildConfigPanel extends JPanel {
     }
 
     boolean hasUnsavedModelChanges() {
-        return !Objects.equals(selectedProfileId, savedProfileId);
+        return modelTabPanel.hasUnsavedModelChanges();
     }
 
     private static Timer createFeedbackTimer(Runnable onExpire) {
@@ -660,20 +488,7 @@ final class BuildConfigPanel extends JPanel {
         }
     }
 
-    void updateModelSaveButtonState() {
-        if (modelSaveButton == null) {
-            return;
-        }
-        if (modelSaveFeedbackTimer != null && modelSaveFeedbackTimer.isRunning()) {
-            applyButtonPresentation(modelSaveButton, MODEL_SAVED_FEEDBACK_BUTTON_TEXT, Codicons.CHECK,
-                    SAVE_BUTTON_BASE_STYLE + UiComponents.GREEN_BUTTON_STYLE);
-        } else {
-            applyButtonPresentation(modelSaveButton, MODEL_SAVE_BUTTON_TEXT, Codicons.SAVE,
-                    SAVE_BUTTON_BASE_STYLE + UiComponents.ACCENT_BUTTON_STYLE);
-        }
-    }
-
-    private static void applyButtonPresentation(JButton button, String text, Codicons icon, String style) {
+    static void applyButtonPresentation(JButton button, String text, Codicons icon, String style) {
         button.setText(text);
         button.putClientProperty(FlatClientProperties.STYLE, style);
         button.setIcon(FontIcon.of(icon, 16, UiComponents.resolveActionButtonIconColor(style)));
@@ -852,23 +667,13 @@ final class BuildConfigPanel extends JPanel {
     }
 
     private void applySectionStyling() {
-        Color accentColor = SwingHtmlUtils.getAccentColor();
-
-        UiComponents.styleCardPanel(modelCardPanel);
         UiComponents.styleCardPanel(buildCardPanel);
-        if (databasesCardPanel != null) {
-            UiComponents.styleCardPanel(databasesCardPanel);
-        }
         UiComponents.styleCodePillBadge(buildTomlFileBadge);
-        modelSectionHeaderLabel.setIcon(FontIcon.of(Codicons.HUBOT, 18, accentColor));
-        UiComponents.updateInfoIconTheme(profileInfoIcon);
-        UiComponents.updateInfoIconTheme(buildConfigInfoIcon);
-        UiComponents.refreshActionButtonIcons(this);
         applyConfigureWithRoxyButtonStyling();
-        updateTabIcons();
         updateSaveButtonState();
-        updateModelSaveButtonState();
-        updateModelOverrideIndicators();
+        if (modelTabPanel != null) {
+            modelTabPanel.applyThemeStyling();
+        }
         updateSummaryCards();
 
         if (lastStatusSuccess) {
@@ -892,7 +697,7 @@ final class BuildConfigPanel extends JPanel {
     public void onProjectChanged(ProjectChangedEvent event) {
         Edt.run(() -> {
             UiComponents.stopTimer(saveFeedbackTimer);
-            UiComponents.stopTimer(modelSaveFeedbackTimer);
+            UiComponents.stopTimer(modelTabPanel.modelSaveFeedbackTimer);
             UiComponents.stopTimer(summaryDebounceTimer);
             clearBuildStatus();
             clearModelStatus();
@@ -928,7 +733,7 @@ final class BuildConfigPanel extends JPanel {
     @Override
     public void updateUI() {
         super.updateUI();
-        if (modelCardPanel != null && buildCardPanel != null) {
+        if (buildCardPanel != null) {
             applySectionStyling();
         }
         if (unconfirmedBanner != null) {
@@ -1006,33 +811,13 @@ final class BuildConfigPanel extends JPanel {
     }
 
     CompletableFuture<Void> saveModelConfig() {
-        UiComponents.stopTimer(modelSaveFeedbackTimer);
-        if (projectService == null) {
-            CompletableFuture<Void> done = CompletableFuture.completedFuture(null);
-            lastAsyncFuture = done;
-            return done;
-        }
-        final String profileOverrideToSave = selectedProfileId;
-        modelSaveButton.setEnabled(false);
-        CompletableFuture<Void> future = Edt.runAsync(() -> {
-            if (projectService.hasActiveProject()) {
-                projectService.setProjectAgentProfile(profileOverrideToSave);
-            }
-        }, () -> {
-            modelSaveButton.setEnabled(true);
-            savedProfileId = profileOverrideToSave;
-            modelSaveFeedbackTimer.restart();
-            updateModelSaveButtonState();
-            showModelStatus(MODEL_SAVED_STATUS_TEXT, true);
-        }, ex -> {
-            modelSaveButton.setEnabled(true);
-            updateModelSaveButtonState();
-            Throwable cause = ExceptionUtils.getRootCause(ex);
-            log.error("Failed to save project model override: {}", cause.getMessage());
-            showModelStatus("Error saving model settings: " + cause.getMessage(), false);
-        });
+        CompletableFuture<Void> future = modelTabPanel.saveModelConfig();
         lastAsyncFuture = future;
         return future;
+    }
+
+    private void setLastAsyncFuture(CompletableFuture<?> future) {
+        this.lastAsyncFuture = future;
     }
 
     void setOnConfirmSavedCallback(Runnable callback) {
@@ -1044,145 +829,17 @@ final class BuildConfigPanel extends JPanel {
     }
 
     void setOnManageGlobalDatabasesCallback(Runnable callback) {
-        this.onManageGlobalDatabasesCallback = callback;
+        databasesTabPanel.setOnManageGlobalDatabasesCallback(callback);
     }
 
-    record GrantDataSnapshot(List<DatabaseConnectionConfig> globals, List<ProjectDatabaseGrant> grants) {
-    }
-
-    static final class GrantRowControls {
-        final DatabaseConnectionConfig config;
-        final javax.swing.JCheckBox grantCheckBox;
-        final javax.swing.JTextField schemaOverrideField;
-        final javax.swing.JTextField notesField;
-
-        GrantRowControls(DatabaseConnectionConfig config, javax.swing.JCheckBox grantCheckBox,
-                javax.swing.JTextField schemaOverrideField, javax.swing.JTextField notesField) {
-            this.config = config;
-            this.grantCheckBox = grantCheckBox;
-            this.schemaOverrideField = schemaOverrideField;
-            this.notesField = notesField;
-        }
-    }
-
-    CompletableFuture<GrantDataSnapshot> loadDatabaseGrants() {
-        if (databaseConfigService == null) {
-            updateDatabasesTabTitle(0);
-            return CompletableFuture.completedFuture(new GrantDataSnapshot(List.of(), List.of()));
-        }
-        CompletableFuture<GrantDataSnapshot> future = Edt
-                .supplyAsync(() -> new GrantDataSnapshot(databaseConfigService.listGlobalConnections(),
-                        databaseConfigService.listProjectGrants()), this::applyDatabaseGrantSnapshot);
+    CompletableFuture<ProjectDatabaseGrantsPanel.GrantDataSnapshot> loadDatabaseGrants() {
+        CompletableFuture<ProjectDatabaseGrantsPanel.GrantDataSnapshot> future = databasesTabPanel.loadDatabaseGrants();
         lastAsyncFuture = future;
         return future;
     }
 
-    private void applyDatabaseGrantSnapshot(GrantDataSnapshot snapshot) {
-        grantRowsContainer.removeAll();
-        grantRowControls.clear();
-        if (snapshot.globals().isEmpty()) {
-            JLabel emptyLabel = new JLabel(
-                    "No global read-only databases configured yet. Click 'Manage Global Databases...' to add one.");
-            emptyLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
-            grantRowsContainer.add(emptyLabel, GROWX_WMIN_0);
-            updateDatabasesTabTitle(0);
-            grantRowsContainer.revalidate();
-            grantRowsContainer.repaint();
-            return;
-        }
-        java.util.Map<String, ProjectDatabaseGrant> grantById = new java.util.LinkedHashMap<>();
-        for (ProjectDatabaseGrant grant : snapshot.grants()) {
-            grantById.put(grant.connectionId(), grant);
-        }
-        int grantedCount = 0;
-        for (DatabaseConnectionConfig cfg : snapshot.globals()) {
-            ProjectDatabaseGrant existing = grantById.get(cfg.id());
-            boolean granted = existing != null;
-            if (granted) {
-                grantedCount++;
-            }
-            JPanel rowCard = new JPanel(
-                    new MigLayout("fillx, insets 10 12 10 12, wrap 2", "[140!, right]10[grow, fill]", ""));
-            UiComponents.styleCardPanel(rowCard);
-
-            javax.swing.JCheckBox checkBox = new javax.swing.JCheckBox(cfg.displayName(), granted);
-            checkBox.setFont(checkBox.getFont().deriveFont(Font.BOLD, 12.5f));
-            JLabel metaBadge = new JLabel(cfg.id() + "  •  " + cfg.resolveType().getDisplayName());
-            UiComponents.styleCodePillBadge(metaBadge);
-
-            JPanel topRow = new JPanel(new MigLayout("insets 0, fillx", "[grow, fill]push[]", "[center]"));
-            topRow.setOpaque(false);
-            topRow.add(checkBox);
-            topRow.add(metaBadge);
-            rowCard.add(topRow, "span 2, growx, wrap");
-            if (!cfg.description().isBlank()) {
-                JLabel descriptionLabel = new JLabel(UiComponents.formatWrappingHtml(cfg.description()));
-                descriptionLabel.setFont(descriptionLabel.getFont().deriveFont(Font.PLAIN, 11.5f));
-                descriptionLabel.setForeground(SwingHtmlUtils.getMutedForegroundColor());
-                rowCard.add(descriptionLabel, "span 2, growx, gapbottom 4, wrap");
-            }
-
-            javax.swing.JTextField schemaField = new javax.swing.JTextField();
-            if (existing != null) {
-                schemaField.setText(existing.defaultSchema());
-            }
-            String schemaPlaceholder = "Optional schema override";
-            if (!cfg.defaultSchema().isBlank()) {
-                schemaPlaceholder = "Default: " + cfg.defaultSchema();
-            }
-            schemaField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, schemaPlaceholder);
-
-            javax.swing.JTextField notesField = new javax.swing.JTextField();
-            if (existing != null) {
-                notesField.setText(existing.notes());
-            }
-            notesField.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT,
-                    "Optional project domain notes (injected into ## CONFIGURED DATABASES)");
-
-            rowCard.add(new JLabel("Schema Override:"));
-            rowCard.add(schemaField, GROWX_WMIN_0);
-            rowCard.add(new JLabel("Context Notes:"));
-            rowCard.add(notesField, GROWX_WMIN_0);
-
-            schemaField.setEnabled(granted);
-            notesField.setEnabled(granted);
-            checkBox.addActionListener(e -> {
-                boolean selected = checkBox.isSelected();
-                schemaField.setEnabled(selected);
-                notesField.setEnabled(selected);
-            });
-
-            grantRowControls.add(new GrantRowControls(cfg, checkBox, schemaField, notesField));
-            grantRowsContainer.add(rowCard, GROWX_WMIN_0);
-        }
-        updateDatabasesTabTitle(grantedCount);
-        grantRowsContainer.revalidate();
-        grantRowsContainer.repaint();
-    }
-
     CompletableFuture<List<ProjectDatabaseGrant>> saveDatabaseGrants() {
-        if (databaseConfigService == null) {
-            return CompletableFuture.completedFuture(List.of());
-        }
-        List<ProjectDatabaseGrant> selectedGrants = new ArrayList<>();
-        for (GrantRowControls row : grantRowControls) {
-            if (row.grantCheckBox.isSelected()) {
-                selectedGrants.add(new ProjectDatabaseGrant(row.config.id(), row.schemaOverrideField.getText(),
-                        row.notesField.getText()));
-            }
-        }
-        saveGrantsButton.setEnabled(false);
-        CompletableFuture<List<ProjectDatabaseGrant>> future = Edt
-                .supplyAsync(() -> databaseConfigService.saveProjectGrants(selectedGrants), saved -> {
-                    saveGrantsButton.setEnabled(true);
-                    updateDatabasesTabTitle(saved.size());
-                    UiComponents.showStatusMessage(grantsStatusLabel, grantsStatusTimer,
-                            "Saved " + saved.size() + " database grant(s) for active project.", true);
-                }, error -> {
-                    saveGrantsButton.setEnabled(true);
-                    UiComponents.showStatusMessage(grantsStatusLabel, grantsStatusTimer,
-                            "Failed to save database grants: " + error.getMessage(), false);
-                });
+        CompletableFuture<List<ProjectDatabaseGrant>> future = databasesTabPanel.saveDatabaseGrants();
         lastAsyncFuture = future;
         return future;
     }
@@ -1262,84 +919,4 @@ final class BuildConfigPanel extends JPanel {
         }
     }
 
-    final class GlobalDefaultCard extends JPanel {
-        private static final long serialVersionUID = 1L;
-
-        final JLabel radioIconLabel;
-        final JLabel cardTitleLabel;
-        final JLabel currentGlobalBadge;
-        final JLabel descriptionLabel;
-        private boolean selected;
-
-        GlobalDefaultCard() {
-            super(new MigLayout("fillx, wrap 1, insets 12 14 12 14, gapy 4", GROW_FILL, ""));
-            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-            setOpaque(true);
-
-            JPanel headerRow = new JPanel(
-                    new MigLayout("fillx, insets 0, gapx 6", "[][grow, fill][right]", ROW_CENTER));
-            headerRow.setOpaque(false);
-
-            radioIconLabel = new JLabel();
-            headerRow.add(radioIconLabel);
-
-            cardTitleLabel = new JLabel("Use Global Default Profile");
-            cardTitleLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +1");
-            headerRow.add(cardTitleLabel, WMIN_0);
-
-            currentGlobalBadge = new JLabel();
-            headerRow.add(currentGlobalBadge, "right");
-            add(headerRow, GROWX_WMIN_0);
-
-            descriptionLabel = new JLabel(
-                    "Inherits the Agent Profile configured in Global Settings (Settings & Tools).");
-            add(descriptionLabel, GROWX_WMIN_0);
-
-            MouseAdapter clickListener = new MouseAdapter() {
-                @Override
-                public void mousePressed(MouseEvent e) {
-                    selectProfileOverride("");
-                }
-            };
-            addMouseListener(clickListener);
-            headerRow.addMouseListener(clickListener);
-            descriptionLabel.addMouseListener(clickListener);
-
-            applyCardTheme();
-        }
-
-        void updateGlobalProfileDisplay(AgentProfile globalProfile) {
-            currentGlobalBadge.setText(
-                    "Currently: " + globalProfile.getDisplayName() + " (" + globalProfile.getBadgeSummary() + ")");
-        }
-
-        void setSelected(boolean selected) {
-            this.selected = selected;
-            applyCardTheme();
-        }
-
-        boolean isSelected() {
-            return selected;
-        }
-
-        void applyCardTheme() {
-            if (cardTitleLabel == null) {
-                return;
-            }
-            UiComponents.applySelectableCardTheme(this, radioIconLabel, cardTitleLabel, descriptionLabel, selected);
-
-            Color mutedColor = SwingHtmlUtils.getMutedForegroundColor();
-            String borderHex = UiComponents.getCardBorderHex();
-            String pillBg = UiComponents.getPillBackgroundDirective();
-            currentGlobalBadge.setForeground(mutedColor);
-            currentGlobalBadge.putClientProperty(FlatClientProperties.STYLE,
-                    "font: $monospaced.font -1; arc: 6; border: 3,8,3,8," + borderHex + ",1,6; background: " + pillBg);
-        }
-
-        @Override
-        public void updateUI() {
-            super.updateUI();
-            applyCardTheme();
-        }
-    }
 }
