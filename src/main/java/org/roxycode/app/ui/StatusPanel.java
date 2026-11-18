@@ -78,12 +78,9 @@ final class StatusPanel extends JPanel {
                 TokenUtils.formatTokenCount(sessionUsage.totalTokens()),
                 TokenUtils.formatCostUsd(sessionUsage.estimatedCostUsd())));
         tokenCostLabel.setToolTipText(String.format(Locale.US,
-                "Calls: %d | Total: %,d tok | Uncached In: %,d (%s) | Cached In: %,d (%d%%, %s) | Out+Think: %,d (%s) | Total Cost: %s",
-                sessionUsage.modelCalls(), sessionUsage.totalTokens(), sessionUsage.uncachedInputTokens(),
-                TokenUtils.formatCostUsd(sessionUsage.uncachedInputCostUsd()), sessionUsage.cachedInputTokens(),
-                sessionUsage.cacheHitPercent(), TokenUtils.formatCostUsd(sessionUsage.cachedInputCostUsd()),
-                sessionUsage.outputAndThinkingTokens(),
-                TokenUtils.formatCostUsd(sessionUsage.outputAndThinkingCostUsd()),
+                "Calls: %d | Total: %,d tok | In: %,d (Cached: %,d, %d%%) | Out+Think: %,d | Total Cost: %s",
+                sessionUsage.modelCalls(), sessionUsage.totalTokens(), sessionUsage.promptTokens(),
+                sessionUsage.cachedInputTokens(), sessionUsage.cacheHitPercent(), sessionUsage.outputTokens(),
                 TokenUtils.formatCostUsd(sessionUsage.estimatedCostUsd())));
     }
 

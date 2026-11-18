@@ -216,15 +216,11 @@ public class PlanService {
         ImplementationPlan updatedPlan = null;
         PersistSnapshot snapshot;
         synchronized (stateLock) {
-            WorkflowPhase effectivePhase = event.phase();
-            if (effectivePhase == null) {
-                effectivePhase = currentPhase;
-            }
             if (currentPlan != null) {
-                updatedPlan = currentPlan.withRecordedTokenUsage(event, effectivePhase);
+                updatedPlan = currentPlan.withRecordedTokenUsage(event);
                 this.currentPlan = updatedPlan;
             } else {
-                unassignedTaskUsage = unassignedTaskUsage.addEvent(event, effectivePhase);
+                unassignedTaskUsage = unassignedTaskUsage.addEvent(event);
             }
             snapshot = capturePersistSnapshotLocked();
         }
@@ -540,10 +536,11 @@ public class PlanService {
                 }
             }
             if (currentPhase == WorkflowPhase.REVIEW && nextPhase == WorkflowPhase.PLAN && currentPlan != null) {
-                ImplementationPlan updated = currentPlan.withFinalReviewNotes(reason);
+                String nextCommitMsg = currentPlan.commitMessage();
                 if (StringUtils.isNotBlank(commitMessage)) {
-                    updated = updated.withCommitMessage(commitMessage);
+                    nextCommitMsg = commitMessage;
                 }
+                ImplementationPlan updated = currentPlan.withReviewOutcome(reason, nextCommitMsg);
                 this.currentPlan = updated;
                 updatedPlan = updated;
                 planChanged = true;
@@ -595,7 +592,8 @@ public class PlanService {
             return false;
         }
         ImplementationPlan updated = currentPlan
-                .withVerificationStepCompleted(ImplementationPlan.STEP_CODE_REVIEW, false).withFinalReviewNotes(null);
+                .withVerificationStepCompleted(ImplementationPlan.STEP_CODE_REVIEW, false)
+                .withReviewOutcome(null, currentPlan.commitMessage());
         if (updated.collectIncompleteSteps(true).isEmpty()) {
             List<ImplementationPlan.TechStep> steps = new ArrayList<>(updated.technicalSteps());
             insertStepBeforeVerificationGates(steps, "Address review findings: " + reason.trim());

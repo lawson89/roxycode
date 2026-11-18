@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.apache.commons.lang3.StringUtils;
-import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.events.FileChangedEvent;
 import org.roxycode.app.events.TokenUsageEvent;
 import org.roxycode.app.util.FrontmatterUtils;
@@ -19,37 +18,7 @@ import org.roxycode.app.util.TokenUtils;
 
 /**
  * Represents a structured implementation plan for a feature or task.
- *
- * @param title
- *            the title of the plan
- * @param goal
- *            the high-level goal of the plan
- * @param requirements
- *            the list of requirements to be met
- * @param technicalSteps
- *            the list of technical implementation steps
- * @param userApproved
- *            whether the plan has been approved by the user
- * @param approvalTimestamp
- *            the timestamp when the plan was approved
- * @param approvedBy
- *            the user who approved the plan
- * @param completedBy
- *            the user who completed the plan
- * @param completedOn
- *            the timestamp when the plan was completed
- * @param handoffLog
- *            the log of handoff entries
- * @param fileChanges
- *            the list of files modified during implementation
- * @param usageSummary
- *            the summary of token usage and cost
- * @param commitMessage
- *            the proposed git commit message
- * @param finalReviewNotes
- *            the structured final review audit notes
  */
-@SuppressWarnings("PMD.AvoidDuplicateLiterals")
 public record ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
         boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
         List<LogEntry> handoffLog, List<FileChange> fileChanges, UsageSummary usageSummary, String commitMessage,
@@ -63,22 +32,12 @@ public record ImplementationPlan(String title, String goal, List<String> require
 
     /**
      * Represents a single technical implementation step.
-     *
-     * @param description
-     *            the description of the step
-     * @param completed
-     *            whether the step has been completed
      */
     public record TechStep(String description, boolean completed) {
     }
 
     /**
      * Represents a file change recorded during implementation.
-     *
-     * @param path
-     *            the path to the changed file relative to the project root
-     * @param changeType
-     *            the type of change (CREATED, MODIFIED, DELETED)
      */
     public record FileChange(String path, FileChangedEvent.ChangeType changeType) {
         public FileChange {
@@ -89,13 +48,6 @@ public record ImplementationPlan(String title, String goal, List<String> require
 
     /**
      * Represents an entry in the plan's handoff log.
-     *
-     * @param timestamp
-     *            the ISO-8601 timestamp of the entry
-     * @param user
-     *            the user who created the entry
-     * @param message
-     *            the log message
      */
     public record LogEntry(String timestamp, String user, String message) {
         private static final int TIMESTAMP_LENGTH = 19;
@@ -106,120 +58,24 @@ public record ImplementationPlan(String title, String goal, List<String> require
     }
 
     /**
-     * Represents AI usage statistics for a specific workflow phase.
-     *
-     * @param modelCalls
-     *            the number of model calls made during the phase
-     * @param totalTokens
-     *            the total number of tokens consumed during the phase
-     * @param estimatedCostUsd
-     *            the estimated cost of the phase in USD
+     * Concise summary of AI token usage and estimated cost.
      */
-    public record PhaseUsage(int modelCalls, long totalTokens, double estimatedCostUsd) {
+    public record UsageSummary(int modelCalls, long promptTokens, long cachedInputTokens, long outputTokens,
+            long totalTokens, double estimatedCostUsd) {
 
-        public static final PhaseUsage EMPTY = new PhaseUsage(0, 0L, 0.0);
-
-        public PhaseUsage {
-            modelCalls = Math.max(0, modelCalls);
-            totalTokens = Math.max(0L, totalTokens);
-            estimatedCostUsd = Math.max(0.0, estimatedCostUsd);
-        }
-
-        public boolean hasUsage() {
-            return modelCalls > 0 || totalTokens > 0L || estimatedCostUsd > 0.0;
-        }
-
-        public PhaseUsage add(long tokens, double costUsd) {
-            return new PhaseUsage(modelCalls + 1, totalTokens + Math.max(0L, tokens),
-                    estimatedCostUsd + Math.max(0.0, costUsd));
-        }
-
-        public PhaseUsage merge(PhaseUsage other) {
-            if (other == null || !other.hasUsage()) {
-                return this;
-            }
-            if (!this.hasUsage()) {
-                return other;
-            }
-            return new PhaseUsage(modelCalls + other.modelCalls, totalTokens + other.totalTokens,
-                    estimatedCostUsd + other.estimatedCostUsd);
-        }
-    }
-
-    /**
-     * Represents a comprehensive summary of AI token usage and costs across all phases.
-     *
-     * @param modelCalls
-     *            total number of model calls
-     * @param promptTokens
-     *            total prompt tokens
-     * @param cachedInputTokens
-     *            total cached input tokens
-     * @param uncachedInputTokens
-     *            total uncached input tokens
-     * @param outputTokens
-     *            total output tokens
-     * @param thoughtsTokens
-     *            total thinking tokens
-     * @param totalTokens
-     *            overall total tokens
-     * @param uncachedInputCostUsd
-     *            total cost for uncached input
-     * @param cachedInputCostUsd
-     *            total cost for cached input
-     * @param outputCostUsd
-     *            total cost for output
-     * @param thoughtsCostUsd
-     *            total cost for thinking
-     * @param estimatedCostUsd
-     *            overall estimated cost in USD
-     * @param planPhaseUsage
-     *            usage statistics for the PLAN phase
-     * @param codePhaseUsage
-     *            usage statistics for the CODE phase
-     * @param reviewPhaseUsage
-     *            usage statistics for the REVIEW phase
-     */
-    public record UsageSummary(int modelCalls, long promptTokens, long cachedInputTokens, long uncachedInputTokens,
-            long outputTokens, long thoughtsTokens, long totalTokens, double uncachedInputCostUsd,
-            double cachedInputCostUsd, double outputCostUsd, double thoughtsCostUsd, double estimatedCostUsd,
-            PhaseUsage planPhaseUsage, PhaseUsage codePhaseUsage, PhaseUsage reviewPhaseUsage) {
-
-        public static final UsageSummary EMPTY = new UsageSummary(0, 0L, 0L, 0L, 0L, 0L, 0L, 0.0, 0.0, 0.0, 0.0, 0.0,
-                PhaseUsage.EMPTY, PhaseUsage.EMPTY, PhaseUsage.EMPTY);
+        public static final UsageSummary EMPTY = new UsageSummary(0, 0L, 0L, 0L, 0L, 0.0);
 
         public UsageSummary {
             modelCalls = Math.max(0, modelCalls);
             promptTokens = Math.max(0L, promptTokens);
             cachedInputTokens = Math.max(0L, cachedInputTokens);
-            uncachedInputTokens = Math.max(0L, uncachedInputTokens);
             outputTokens = Math.max(0L, outputTokens);
-            thoughtsTokens = Math.max(0L, thoughtsTokens);
             totalTokens = Math.max(0L, totalTokens);
-            uncachedInputCostUsd = Math.max(0.0, uncachedInputCostUsd);
-            cachedInputCostUsd = Math.max(0.0, cachedInputCostUsd);
-            outputCostUsd = Math.max(0.0, outputCostUsd);
-            thoughtsCostUsd = Math.max(0.0, thoughtsCostUsd);
             estimatedCostUsd = Math.max(0.0, estimatedCostUsd);
-            planPhaseUsage = Objects.requireNonNullElse(planPhaseUsage, PhaseUsage.EMPTY);
-            codePhaseUsage = Objects.requireNonNullElse(codePhaseUsage, PhaseUsage.EMPTY);
-            reviewPhaseUsage = Objects.requireNonNullElse(reviewPhaseUsage, PhaseUsage.EMPTY);
         }
 
         public boolean hasUsage() {
             return modelCalls > 0 || totalTokens > 0L;
-        }
-
-        public long outputAndThinkingTokens() {
-            return outputTokens + thoughtsTokens;
-        }
-
-        public double inputCostUsd() {
-            return uncachedInputCostUsd + cachedInputCostUsd;
-        }
-
-        public double outputAndThinkingCostUsd() {
-            return outputCostUsd + thoughtsCostUsd;
         }
 
         public int cacheHitPercent() {
@@ -230,39 +86,11 @@ public record ImplementationPlan(String title, String goal, List<String> require
             if (event == null) {
                 return this;
             }
-            return addEvent(event, event.phase());
-        }
-
-        public UsageSummary addEvent(TokenUsageEvent event, WorkflowPhase fallbackPhase) {
-            if (event == null) {
-                return this;
-            }
-            WorkflowPhase effectivePhase = event.phase();
-            if (effectivePhase == null) {
-                effectivePhase = fallbackPhase;
-            }
-            long eventTokens = Math.max(0, event.totalTokens());
-            double eventCost = Math.max(0.0, event.estimatedCostUsd());
-            PhaseUsage nextPlan = planPhaseUsage;
-            PhaseUsage nextCode = codePhaseUsage;
-            PhaseUsage nextReview = reviewPhaseUsage;
-            if (effectivePhase == WorkflowPhase.CODE) {
-                nextCode = codePhaseUsage.add(eventTokens, eventCost);
-            } else if (effectivePhase == WorkflowPhase.REVIEW) {
-                nextReview = reviewPhaseUsage.add(eventTokens, eventCost);
-            } else if (effectivePhase == WorkflowPhase.PLAN) {
-                nextPlan = planPhaseUsage.add(eventTokens, eventCost);
-            }
+            long combinedOutput = Math.max(0L, event.candidatesTokens()) + Math.max(0L, event.thoughtsTokens());
             return new UsageSummary(modelCalls + 1, promptTokens + Math.max(0, event.promptTokens()),
-                    cachedInputTokens + Math.max(0, event.cachedInputTokens()),
-                    uncachedInputTokens + Math.max(0, event.uncachedInputTokens()),
-                    outputTokens + Math.max(0, event.candidatesTokens()),
-                    thoughtsTokens + Math.max(0, event.thoughtsTokens()), totalTokens + eventTokens,
-                    uncachedInputCostUsd + Math.max(0.0, event.uncachedInputCostUsd()),
-                    cachedInputCostUsd + Math.max(0.0, event.cachedInputCostUsd()),
-                    outputCostUsd + Math.max(0.0, event.outputCostUsd()),
-                    thoughtsCostUsd + Math.max(0.0, event.thoughtsCostUsd()), estimatedCostUsd + eventCost, nextPlan,
-                    nextCode, nextReview);
+                    cachedInputTokens + Math.max(0, event.cachedInputTokens()), outputTokens + combinedOutput,
+                    totalTokens + Math.max(0, event.totalTokens()),
+                    estimatedCostUsd + Math.max(0.0, event.estimatedCostUsd()));
         }
 
         public UsageSummary merge(UsageSummary other) {
@@ -273,13 +101,8 @@ public record ImplementationPlan(String title, String goal, List<String> require
                 return other;
             }
             return new UsageSummary(modelCalls + other.modelCalls, promptTokens + other.promptTokens,
-                    cachedInputTokens + other.cachedInputTokens, uncachedInputTokens + other.uncachedInputTokens,
-                    outputTokens + other.outputTokens, thoughtsTokens + other.thoughtsTokens,
-                    totalTokens + other.totalTokens, uncachedInputCostUsd + other.uncachedInputCostUsd,
-                    cachedInputCostUsd + other.cachedInputCostUsd, outputCostUsd + other.outputCostUsd,
-                    thoughtsCostUsd + other.thoughtsCostUsd, estimatedCostUsd + other.estimatedCostUsd,
-                    planPhaseUsage.merge(other.planPhaseUsage), codePhaseUsage.merge(other.codePhaseUsage),
-                    reviewPhaseUsage.merge(other.reviewPhaseUsage));
+                    cachedInputTokens + other.cachedInputTokens, outputTokens + other.outputTokens,
+                    totalTokens + other.totalTokens, estimatedCostUsd + other.estimatedCostUsd);
         }
     }
 
@@ -338,21 +161,29 @@ public record ImplementationPlan(String title, String goal, List<String> require
     }
 
     public ImplementationPlan withNormalizedStepsFrom(ImplementationPlan previousPlan) {
-        Set<String> previouslyCompletedSteps = Set.of();
-        if (previousPlan != null) {
-            previouslyCompletedSteps = previousPlan.collectCompletedNonVerificationSteps();
-        }
+        Set<String> previouslyCompleted = Set.of();
         List<LogEntry> preservedLog = handoffLog;
-        if (handoffLog.isEmpty() && previousPlan != null) {
-            preservedLog = previousPlan.handoffLog();
-        }
         List<FileChange> preservedChanges = fileChanges;
-        if (fileChanges.isEmpty() && previousPlan != null) {
-            preservedChanges = previousPlan.fileChanges();
-        }
         UsageSummary preservedUsage = usageSummary;
-        if (previousPlan != null && previousPlan.usageSummary().hasUsage()) {
-            preservedUsage = previousPlan.usageSummary().merge(usageSummary);
+        String preservedCommitMsg = commitMessage;
+        String preservedReviewNotes = finalReviewNotes;
+        if (previousPlan != null) {
+            previouslyCompleted = previousPlan.collectCompletedNonVerificationSteps();
+            if (preservedLog.isEmpty()) {
+                preservedLog = previousPlan.handoffLog();
+            }
+            if (preservedChanges.isEmpty()) {
+                preservedChanges = previousPlan.fileChanges();
+            }
+            if (previousPlan.usageSummary().hasUsage()) {
+                preservedUsage = previousPlan.usageSummary().merge(usageSummary);
+            }
+            if (preservedCommitMsg == null) {
+                preservedCommitMsg = previousPlan.commitMessage();
+            }
+            if (preservedReviewNotes == null) {
+                preservedReviewNotes = previousPlan.finalReviewNotes();
+            }
         }
 
         List<TechStep> steps = new ArrayList<>();
@@ -362,13 +193,12 @@ public record ImplementationPlan(String title, String goal, List<String> require
         for (TechStep s : technicalSteps) {
             String desc = s.description();
             boolean preservedCompleted = s.completed() || (!isMandatoryVerificationStep(desc)
-                    && previouslyCompletedSteps.contains(normalizeStepDescription(desc)));
+                    && previouslyCompleted.contains(normalizeStepDescription(desc)));
             steps.add(new TechStep(desc, preservedCompleted));
             hasCompile |= isCompileStep(desc);
             hasTests |= isUnitTestStep(desc);
             hasReview |= isCodeReviewStep(desc);
         }
-
         if (!hasCompile) {
             steps.add(new TechStep(STEP_COMPILE, false));
         }
@@ -379,17 +209,9 @@ public record ImplementationPlan(String title, String goal, List<String> require
             steps.add(new TechStep(STEP_CODE_REVIEW, false));
         }
 
-        String preservedCommitMsg = commitMessage;
-        if (preservedCommitMsg == null && previousPlan != null) {
-            preservedCommitMsg = previousPlan.commitMessage();
-        }
-        String preservedReviewNotes = finalReviewNotes;
-        if (preservedReviewNotes == null && previousPlan != null) {
-            preservedReviewNotes = previousPlan.finalReviewNotes();
-        }
-        return withTechnicalSteps(steps).withHandoffLog(preservedLog).withFileChanges(preservedChanges)
-                .withUsageSummary(preservedUsage).withCommitMessage(preservedCommitMsg)
-                .withFinalReviewNotes(preservedReviewNotes);
+        return new ImplementationPlan(title, goal, requirements, steps, userApproved, approvalTimestamp, approvedBy,
+                completedBy, completedOn, preservedLog, preservedChanges, preservedUsage, preservedCommitMsg,
+                preservedReviewNotes);
     }
 
     public List<String> collectIncompleteSteps(boolean excludeCodeReviewStep) {
@@ -424,13 +246,10 @@ public record ImplementationPlan(String title, String goal, List<String> require
         List<TechStep> updatedSteps = new ArrayList<>(technicalSteps.size());
         boolean modified = false;
         for (TechStep step : technicalSteps) {
-            if (normalizeStepDescription(step.description()).equals(normalizedTarget)) {
-                if (step.completed() != completed) {
-                    updatedSteps.add(new TechStep(step.description(), completed));
-                    modified = true;
-                } else {
-                    updatedSteps.add(step);
-                }
+            if (normalizeStepDescription(step.description()).equals(normalizedTarget)
+                    && step.completed() != completed) {
+                updatedSteps.add(new TechStep(step.description(), completed));
+                modified = true;
             } else {
                 updatedSteps.add(step);
             }
@@ -451,21 +270,11 @@ public record ImplementationPlan(String title, String goal, List<String> require
                 approvedBy, user, timestamp, handoffLog, fileChanges, usageSummary, commitMessage, finalReviewNotes);
     }
 
-    public ImplementationPlan withHandoffLog(List<LogEntry> newLog) {
-        return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
-                approvedBy, completedBy, completedOn, newLog, fileChanges, usageSummary, commitMessage,
-                finalReviewNotes);
-    }
-
     public ImplementationPlan withAddedHandoffLogEntry(String timestamp, String user, String message) {
         List<LogEntry> updatedLog = new ArrayList<>(handoffLog);
         updatedLog.add(new LogEntry(timestamp, user, message));
-        return withHandoffLog(updatedLog);
-    }
-
-    public ImplementationPlan withFileChanges(List<FileChange> newChanges) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
-                approvedBy, completedBy, completedOn, handoffLog, newChanges, usageSummary, commitMessage,
+                approvedBy, completedBy, completedOn, updatedLog, fileChanges, usageSummary, commitMessage,
                 finalReviewNotes);
     }
 
@@ -475,23 +284,17 @@ public record ImplementationPlan(String title, String goal, List<String> require
                 finalReviewNotes);
     }
 
-    public ImplementationPlan withCommitMessage(String newCommitMessage) {
+    public ImplementationPlan withReviewOutcome(String newFinalReviewNotes, String newCommitMessage) {
         return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
                 approvedBy, completedBy, completedOn, handoffLog, fileChanges, usageSummary, newCommitMessage,
-                finalReviewNotes);
-    }
-
-    public ImplementationPlan withFinalReviewNotes(String newFinalReviewNotes) {
-        return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
-                approvedBy, completedBy, completedOn, handoffLog, fileChanges, usageSummary, commitMessage,
                 newFinalReviewNotes);
     }
 
-    public ImplementationPlan withRecordedTokenUsage(TokenUsageEvent event, WorkflowPhase fallbackPhase) {
+    public ImplementationPlan withRecordedTokenUsage(TokenUsageEvent event) {
         if (event == null) {
             return this;
         }
-        return withUsageSummary(usageSummary.addEvent(event, fallbackPhase));
+        return withUsageSummary(usageSummary.addEvent(event));
     }
 
     public ImplementationPlan withRecordedFileChange(String rawPath, FileChangedEvent.ChangeType changeType) {
@@ -520,59 +323,44 @@ public record ImplementationPlan(String title, String goal, List<String> require
             }
             updated.set(existingIndex, new FileChange(normalizedPath, nextType));
         }
-        return withFileChanges(updated);
-    }
-
-    public boolean hasMoveToCodeApproval() {
-        return userApproved || StringUtils.isNotBlank(approvedBy) || StringUtils.isNotBlank(approvalTimestamp);
-    }
-
-    public boolean hasFinalAcceptance() {
-        return StringUtils.isNotBlank(completedBy) || StringUtils.isNotBlank(completedOn);
-    }
-
-    public boolean hasApprovals() {
-        return hasMoveToCodeApproval() || hasFinalAcceptance();
+        return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
+                approvedBy, completedBy, completedOn, handoffLog, updated, usageSummary, commitMessage,
+                finalReviewNotes);
     }
 
     public String toMarkdown(boolean includeHandoffLog) {
         StringBuilder md = new StringBuilder("# Implementation Plan: ").append(StringUtils.defaultString(title))
                 .append("\n\n**Goal:** ").append(StringUtils.defaultString(goal)).append('\n');
 
-        if (hasApprovals()) {
+        boolean hasMoveApproval = userApproved || StringUtils.isNotBlank(approvedBy)
+                || StringUtils.isNotBlank(approvalTimestamp);
+        boolean hasFinalAcceptance = StringUtils.isNotBlank(completedBy) || StringUtils.isNotBlank(completedOn);
+        if (hasMoveApproval || hasFinalAcceptance) {
             md.append("\n## Approvals\n");
-            if (hasMoveToCodeApproval()) {
+            if (hasMoveApproval) {
                 md.append("- **Move to Code:** Approved by ").append(StringUtils.defaultIfBlank(approvedBy, "User"))
                         .append(" on ").append(StringUtils.defaultIfBlank(approvalTimestamp, "N/A")).append('\n');
             }
-            if (hasFinalAcceptance()) {
+            if (hasFinalAcceptance) {
                 md.append("- **Final Acceptance:** Accepted by ")
                         .append(StringUtils.defaultIfBlank(completedBy, "User")).append(" on ")
                         .append(StringUtils.defaultIfBlank(completedOn, "N/A")).append('\n');
             }
         }
 
-        md.append("\n## Requirements\n");
-        for (String req : requirements) {
-            md.append("- ").append(req).append('\n');
-        }
+        appendBulletList(md, "## Requirements", requirements);
         md.append("\n## Technical Steps\n").append(formatStepsMarkdown());
 
         if (StringUtils.isNotBlank(finalReviewNotes)) {
-            md.append(StringUtils.LF).append("## Final Review Notes").append(StringUtils.LF).append(finalReviewNotes)
-                    .append(StringUtils.LF);
+            md.append("\n## Final Review Notes\n").append(finalReviewNotes).append('\n');
         }
-
         if (StringUtils.isNotBlank(commitMessage)) {
-            md.append(StringUtils.LF).append("## Proposed Commit Message").append(StringUtils.LF).append(CODE_FENCE)
-                    .append("text").append(StringUtils.LF).append(commitMessage).append(StringUtils.LF)
-                    .append(CODE_FENCE).append(StringUtils.LF);
+            md.append("\n## Proposed Commit Message\n").append(CODE_FENCE).append("text\n").append(commitMessage)
+                    .append('\n').append(CODE_FENCE).append('\n');
         }
-
         if (usageSummary.hasUsage()) {
             appendUsageMarkdown(md);
         }
-
         if (includeHandoffLog && !handoffLog.isEmpty()) {
             md.append("\n## Handoff Log\n| Timestamp | User | Message |\n| :--- | :--- | :--- |\n");
             for (LogEntry entry : handoffLog) {
@@ -585,63 +373,18 @@ public record ImplementationPlan(String title, String goal, List<String> require
     }
 
     private void appendUsageMarkdown(StringBuilder md) {
-        int cacheHitPct = usageSummary.cacheHitPercent();
-        int uncachedInPct = 0;
-        if (usageSummary.promptTokens() > 0) {
-            uncachedInPct = Math.max(0, 100 - cacheHitPct);
-        }
-        long outAndThinkTokens = usageSummary.outputAndThinkingTokens();
-        int outputPct = TokenUtils.computeCacheHitPercent(usageSummary.outputTokens(), outAndThinkTokens);
-        int thinkingPct = 0;
-        if (outAndThinkTokens > 0) {
-            thinkingPct = Math.max(0, 100 - outputPct);
-        }
-
-        md.append("\n## Token Usage & Cost\n\n### Cost by Token Category\n");
-        md.append("| Category | Tokens | Share / Cache Hit | Cost (USD) |\n");
-        md.append("| :--- | ---: | ---: | ---: |\n");
-        md.append("| Uncached Input | ").append(TokenUtils.formatTokenCount(usageSummary.uncachedInputTokens()))
-                .append(" | ").append(uncachedInPct).append("% | ")
-                .append(TokenUtils.formatCostUsd(usageSummary.uncachedInputCostUsd())).append(" |\n");
-        md.append("| Cached Input | ").append(TokenUtils.formatTokenCount(usageSummary.cachedInputTokens()))
-                .append(" | ").append(cacheHitPct).append("% hit | ")
-                .append(TokenUtils.formatCostUsd(usageSummary.cachedInputCostUsd())).append(" |\n");
-        md.append("| **Input Subtotal** | **").append(TokenUtils.formatTokenCount(usageSummary.promptTokens()))
-                .append("** | **100% in** | **").append(TokenUtils.formatCostUsd(usageSummary.inputCostUsd()))
+        long uncachedInput = Math.max(0L, usageSummary.promptTokens() - usageSummary.cachedInputTokens());
+        md.append("\n## Token Usage & Cost\n\n| Metric | Value |\n| :--- | ---: |\n");
+        md.append("| Model Calls | ").append(usageSummary.modelCalls()).append(" |\n");
+        md.append("| Input Tokens (Uncached / Cached) | ").append(TokenUtils.formatTokenCount(uncachedInput))
+                .append(" / ").append(TokenUtils.formatTokenCount(usageSummary.cachedInputTokens())).append(" (")
+                .append(usageSummary.cacheHitPercent()).append("% hit) |\n");
+        md.append("| Output + Thinking Tokens | ").append(TokenUtils.formatTokenCount(usageSummary.outputTokens()))
+                .append(" |\n");
+        md.append("| **Total Tokens** | **").append(TokenUtils.formatTokenCount(usageSummary.totalTokens()))
+                .append(" (").append(usageSummary.totalTokens()).append(")** |\n");
+        md.append("| **Estimated Cost (USD)** | **").append(TokenUtils.formatCostUsd(usageSummary.estimatedCostUsd()))
                 .append("** |\n");
-        md.append("| Output | ").append(TokenUtils.formatTokenCount(usageSummary.outputTokens())).append(" | ")
-                .append(outputPct).append("% | ").append(TokenUtils.formatCostUsd(usageSummary.outputCostUsd()))
-                .append(" |\n");
-        md.append("| Thinking | ").append(TokenUtils.formatTokenCount(usageSummary.thoughtsTokens())).append(" | ")
-                .append(thinkingPct).append("% | ").append(TokenUtils.formatCostUsd(usageSummary.thoughtsCostUsd()))
-                .append(" |\n");
-        md.append("| **Output + Thinking Subtotal** | **").append(TokenUtils.formatTokenCount(outAndThinkTokens))
-                .append("** | **100% out** | **")
-                .append(TokenUtils.formatCostUsd(usageSummary.outputAndThinkingCostUsd())).append("** |\n");
-        md.append("| **Total (").append(usageSummary.modelCalls()).append(" calls)** | **")
-                .append(TokenUtils.formatTokenCount(usageSummary.totalTokens())).append(" (")
-                .append(usageSummary.totalTokens()).append(")** | — | **")
-                .append(TokenUtils.formatCostUsd(usageSummary.estimatedCostUsd())).append("** |\n");
-
-        md.append("\n### Cost by Workflow Phase\n");
-        md.append("| Phase | Calls | Tokens | Cost (USD) |\n");
-        md.append("| :--- | ---: | ---: | ---: |\n");
-        appendPhaseUsageRow(md, "Plan", usageSummary.planPhaseUsage());
-        appendPhaseUsageRow(md, "Code", usageSummary.codePhaseUsage());
-        appendPhaseUsageRow(md, "Review", usageSummary.reviewPhaseUsage());
-        md.append("| **Total** | **").append(usageSummary.modelCalls()).append("** | **")
-                .append(TokenUtils.formatTokenCount(usageSummary.totalTokens())).append("** | **")
-                .append(TokenUtils.formatCostUsd(usageSummary.estimatedCostUsd())).append("** |\n");
-    }
-
-    private static void appendPhaseUsageRow(StringBuilder md, String phaseLabel, PhaseUsage phaseUsage) {
-        md.append("| ").append(phaseLabel).append(" | ").append(phaseUsage.modelCalls()).append(" | ")
-                .append(TokenUtils.formatTokenCount(phaseUsage.totalTokens())).append(" | ")
-                .append(TokenUtils.formatCostUsd(phaseUsage.estimatedCostUsd())).append(" |\n");
-    }
-
-    private static String formatFrontmatterCost(double costUsd) {
-        return String.format(Locale.US, "%.4f", costUsd);
     }
 
     public String toArchivedMarkdown(String id, String projectName, String projectPath) {
@@ -658,14 +401,7 @@ public record ImplementationPlan(String title, String goal, List<String> require
         frontmatter.put("totalTokens", usageSummary.totalTokens());
         frontmatter.put("cachedTokens", usageSummary.cachedInputTokens());
         frontmatter.put("cacheHitPercent", usageSummary.cacheHitPercent());
-        frontmatter.put("uncachedInputCostUsd", formatFrontmatterCost(usageSummary.uncachedInputCostUsd()));
-        frontmatter.put("cachedInputCostUsd", formatFrontmatterCost(usageSummary.cachedInputCostUsd()));
-        frontmatter.put("outputCostUsd", formatFrontmatterCost(usageSummary.outputCostUsd()));
-        frontmatter.put("thoughtsCostUsd", formatFrontmatterCost(usageSummary.thoughtsCostUsd()));
-        frontmatter.put("planCostUsd", formatFrontmatterCost(usageSummary.planPhaseUsage().estimatedCostUsd()));
-        frontmatter.put("codeCostUsd", formatFrontmatterCost(usageSummary.codePhaseUsage().estimatedCostUsd()));
-        frontmatter.put("reviewCostUsd", formatFrontmatterCost(usageSummary.reviewPhaseUsage().estimatedCostUsd()));
-        frontmatter.put("estimatedCostUsd", formatFrontmatterCost(usageSummary.estimatedCostUsd()));
+        frontmatter.put("estimatedCostUsd", String.format(Locale.US, "%.4f", usageSummary.estimatedCostUsd()));
         return FrontmatterUtils.formatFrontmatter(frontmatter) + toFullMarkdown();
     }
 
@@ -722,31 +458,18 @@ public record ImplementationPlan(String title, String goal, List<String> require
             sb.append("**Goal:** ").append(goal).append('\n');
         }
         if (!requirements.isEmpty()) {
-            if (!sb.isEmpty()) {
-                sb.append('\n');
-            }
-            sb.append("### Requirements\n");
-            for (String req : requirements) {
-                sb.append("- ").append(req).append('\n');
-            }
+            appendBulletList(sb, "### Requirements", requirements);
         }
         if (!technicalSteps.isEmpty()) {
-            if (!sb.isEmpty()) {
-                sb.append('\n');
-            }
-            sb.append("### Technical Steps\n").append(formatStepsMarkdown());
+            appendSectionHeader(sb, "### Technical Steps");
+            sb.append(formatStepsMarkdown());
         }
         if (!fileChanges.isEmpty()) {
-            if (!sb.isEmpty()) {
-                sb.append('\n');
-            }
-            sb.append("### Changes\n").append(formatChangesText()).append('\n');
+            appendSectionHeader(sb, "### Changes");
+            sb.append(formatChangesText()).append('\n');
         }
         if (!handoffLog.isEmpty()) {
-            if (!sb.isEmpty()) {
-                sb.append('\n');
-            }
-            sb.append("### Handoff Log\n");
+            appendSectionHeader(sb, "### Handoff Log");
             for (LogEntry entry : handoffLog) {
                 sb.append("- [").append(entry.formattedTimestamp()).append("] ")
                         .append(StringUtils.defaultString(entry.user())).append(": ")
@@ -754,6 +477,20 @@ public record ImplementationPlan(String title, String goal, List<String> require
             }
         }
         return sb.toString();
+    }
+
+    private static void appendSectionHeader(StringBuilder sb, String heading) {
+        if (!sb.isEmpty()) {
+            sb.append('\n');
+        }
+        sb.append(heading).append('\n');
+    }
+
+    private static void appendBulletList(StringBuilder sb, String heading, List<String> items) {
+        appendSectionHeader(sb, heading);
+        for (String item : items) {
+            sb.append("- ").append(item).append('\n');
+        }
     }
 
     private static String escapeMarkdownTableCell(String value) {

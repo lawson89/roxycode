@@ -242,11 +242,11 @@ class FileEditorServiceTest {
                 "Use replaceBlock or replaceLines", "L10-14 public void parse(String s) {",
                 "L16-22 public void parse(String s, int radix) {");
 
-        // 4. Nearest-line snippet in buildTargetNotFoundHint when replaceBlock fails
+        // 4. Concise line-count hint in buildTargetNotFoundHint when replaceBlock fails
         EditorResult nearMiss = fileEditorService.replaceBlock("Service.java",
                 "    public int helper() {\n        return 999;\n    }", "    public int helper() { return 0; }");
-        assertEditFails(nearMiss, "TargetBlock not found in file: Service.java",
-                "Nearest matching lines in Service.java", "public int helper()", "return 42;");
+        assertEditFails(nearMiss, "TargetBlock not found in file: Service.java (file has ");
+        assertFalse(nearMiss.errorHint().contains("Nearest matching lines"));
 
         // 5. revertFile: untracked file deleted vs tracked file restored from HEAD
         Path untrackedFile = Files.writeString(tempDir.resolve("Untracked.java"), "class Untracked {}");

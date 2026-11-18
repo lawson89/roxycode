@@ -7,12 +7,9 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.commons.lang3.StringUtils;
@@ -40,14 +37,6 @@ public class FileEditorService {
     private static final Logger log = LoggerFactory.getLogger(FileEditorService.class);
     private static final int SINGLE_MATCH_COUNT = 1;
     private static final int MAX_OUTLINE_HINT_SYMBOLS = 25;
-    private static final int NEAREST_CONTEXT_PADDING = 5;
-    private static final int MAX_NEAREST_SNIPPET_LINES = 15;
-    private static final int MIN_TOKEN_LENGTH = 3;
-    private static final int EXACT_LINE_MATCH_WEIGHT = 10;
-    private static final int CONTAINED_LINE_MATCH_WEIGHT = 5;
-    private static final int TOKEN_MATCH_WEIGHT = 2;
-    private static final int MIN_ANCHOR_SCORE = 2;
-    private static final Pattern IDENTIFIER_TOKEN_PATTERN = Pattern.compile("[A-Za-z_][A-Za-z0-9_]{2,}");
     private static final char LF = '\n';
     private static final String NL = "\n";
     private static final String CRLF = "\r\n";
@@ -641,129 +630,11 @@ public class FileEditorService {
     }
 
     static String buildTargetNotFoundHint(String relativePath, String content, String targetBlock) {
-        List<String> fileLines = List.of();
+        long lineCount = 0;
         if (!content.isEmpty()) {
-            fileLines = content.lines().toList();
+            lineCount = content.lines().count();
         }
-        long lineCount = fileLines.size();
-        String baseHint = "TargetBlock not found in file: " + relativePath + " (file has " + lineCount + " lines)";
-        if (fileLines.isEmpty() || targetBlock == null || targetBlock.isBlank()) {
-            return baseHint;
-        }
-
-        List<String> targetLines = new ArrayList<>();
-        for (String line : targetBlock.lines().toList()) {
-            String trimmed = line.trim();
-            if (!trimmed.isEmpty()) {
-                targetLines.add(trimmed);
-            }
-        }
-        Set<String> targetTokens = extractIdentifierTokens(targetBlock);
-        int bestLine = findBestMatchAnchorLine(fileLines, targetLines, targetTokens);
-        if (bestLine <= 0) {
-            return baseHint;
-        }
-
-        int snippetStart = Math.max(1, bestLine - NEAREST_CONTEXT_PADDING);
-        int targetSpan = Math.max(0, targetLines.size() - 1);
-        int rawEnd = Math.min(fileLines.size(), bestLine + targetSpan + NEAREST_CONTEXT_PADDING);
-        int snippetEnd = Math.min(rawEnd, snippetStart + MAX_NEAREST_SNIPPET_LINES - 1);
-        String snippet = FileReadService.formatNumberedLines(fileLines, snippetStart, snippetEnd);
-        return baseHint + "\nNearest matching lines in " + relativePath + " (lines " + snippetStart + "-" + snippetEnd
-                + "):\n" + snippet;
-    }
-
-    private static Set<String> extractIdentifierTokens(String text) {
-        Set<String> tokens = new LinkedHashSet<>();
-        Matcher matcher = IDENTIFIER_TOKEN_PATTERN.matcher(text);
-        while (matcher.find()) {
-            String token = matcher.group();
-            if (token.length() >= MIN_TOKEN_LENGTH) {
-                tokens.add(token.toLowerCase(Locale.ROOT));
-            }
-        }
-        return tokens;
-    }
-
-    /**
-     * Finds the best starting line in the file that matches the target block based on weighted anchor scoring.
-     * 
-     * @param fileLines
-     *            the lines of the file to search
-     * @param targetLines
-     *            the lines of the block being searched for
-     * @param targetTokens
-     *            the identifier tokens extracted from the target block
-     * @return the 1-based line number of the best match, or -1 if no match reaches MIN_ANCHOR_SCORE
-     */
-    private static int findBestMatchAnchorLine(List<String> fileLines, List<String> targetLines,
-            Set<String> targetTokens) {
-        if (targetLines.isEmpty() && targetTokens.isEmpty()) {
-            return -1;
-        }
-        int windowSize = Math.max(1, Math.min(targetLines.size(), MAX_NEAREST_SNIPPET_LINES));
-        int bestScore = 0;
-        int bestLineNumber = -1;
-
-        for (int i = 0; i < fileLines.size(); i++) {
-            int score = scoreCandidateWindow(fileLines, i, windowSize, targetLines, targetTokens);
-            if (score > bestScore) {
-                bestScore = score;
-                bestLineNumber = i + 1;
-            }
-        }
-
-        if (bestScore < MIN_ANCHOR_SCORE) {
-            return -1;
-        }
-        return bestLineNumber;
-    }
-
-    /**
-     * Scores a candidate window in the file against the target lines and tokens. Heuristics: - Exact line matches are
-     * heavily weighted (EXACT_LINE_MATCH_WEIGHT). - Contained line matches (partial matches) are moderately weighted
-     * (CONTAINED_LINE_MATCH_WEIGHT). - Unique identifier token matches provide a baseline score (TOKEN_MATCH_WEIGHT).
-     * 
-     * @param fileLines
-     *            the lines of the file
-     * @param startIndex
-     *            the starting index (0-based) of the window
-     * @param windowSize
-     *            the size of the window to check
-     * @param targetLines
-     *            the lines to match against
-     * @param targetTokens
-     *            the tokens to match against
-     * @return the total score for this window
-     */
-    private static int scoreCandidateWindow(List<String> fileLines, int startIndex, int windowSize,
-            List<String> targetLines, Set<String> targetTokens) {
-        int endIndex = Math.min(fileLines.size(), startIndex + windowSize);
-        int score = 0;
-        Set<String> matchedTokens = new LinkedHashSet<>();
-
-        for (int j = startIndex; j < endIndex; j++) {
-            String fileLineTrimmed = fileLines.get(j).trim();
-            if (fileLineTrimmed.isEmpty()) {
-                continue;
-            }
-            for (String targetLine : targetLines) {
-                if (fileLineTrimmed.equals(targetLine) && targetLine.length() >= MIN_TOKEN_LENGTH) {
-                    score += EXACT_LINE_MATCH_WEIGHT;
-                } else if (targetLine.length() >= MIN_TOKEN_LENGTH
-                        && (fileLineTrimmed.contains(targetLine) || targetLine.contains(fileLineTrimmed))) {
-                    score += CONTAINED_LINE_MATCH_WEIGHT;
-                }
-            }
-            String lowerLine = fileLineTrimmed.toLowerCase(Locale.ROOT);
-            for (String token : targetTokens) {
-                if (lowerLine.contains(token)) {
-                    matchedTokens.add(token);
-                }
-            }
-        }
-        score += matchedTokens.size() * TOKEN_MATCH_WEIGHT;
-        return score;
+        return "TargetBlock not found in file: " + relativePath + " (file has " + lineCount + " lines)";
     }
 
     private static String normalizeLineEndings(String text, String lineSeparator) {

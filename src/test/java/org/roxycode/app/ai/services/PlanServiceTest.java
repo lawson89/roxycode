@@ -129,8 +129,8 @@ class PlanServiceTest {
         assertEquals(2, archivingService.getCurrentPlan().usageSummary().modelCalls());
         assertEquals(52_500L, archivingService.getCurrentPlan().usageSummary().totalTokens());
         assertEquals(80, archivingService.getCurrentPlan().usageSummary().cacheHitPercent());
-        assertEquals(1, archivingService.getCurrentPlan().usageSummary().planPhaseUsage().modelCalls());
-        assertEquals(1, archivingService.getCurrentPlan().usageSummary().codePhaseUsage().modelCalls());
+        assertEquals(2_500L, archivingService.getCurrentPlan().usageSummary().outputTokens());
+        assertEquals(0.0122, archivingService.getCurrentPlan().usageSummary().estimatedCostUsd(), 1e-6);
         assertThrows(IllegalStateException.class, () -> archivingService.markStepCompleted(0));
         assertThrows(IllegalStateException.class, () -> archivingService.requestReview("done"));
 
@@ -238,10 +238,10 @@ class PlanServiceTest {
         assertEquals(1, archivedFiles.size());
         String content = Files.readString(archivedFiles.get(0));
         assertContainsAll(content, "project: ", "my-project", "approvedBy: ", "alice", "completedBy: ", "bob",
-                "totalTokens: 52500", "cachedTokens: 40000", "cacheHitPercent: 80", "planCostUsd: ", "0.0051",
-                "codeCostUsd: ", "0.0071", "estimatedCostUsd: ", "0.0122", "## Token Usage & Cost",
-                "### Cost by Token Category", "| **Total (2 calls)** | **52.5k (52500)** | — | **$0.01** |",
-                "### Cost by Workflow Phase", "| Plan | 1 | 21.0k | $0.0051 |", "| Code | 1 | 31.5k | $0.0071 |",
+                "totalTokens: 52500", "cachedTokens: 40000", "cacheHitPercent: 80", "estimatedCostUsd: ", "0.0122",
+                "## Token Usage & Cost", "| Model Calls | 2 |",
+                "| Input Tokens (Uncached / Cached) | 10.0k / 40.0k (80% hit) |", "| Output + Thinking Tokens | 2.5k |",
+                "| **Total Tokens** | **52.5k (52500)** |", "| **Estimated Cost (USD)** | **$0.01** |",
                 "## Final Review Notes", "All checks passed", "## Proposed Commit Message", "feat: archive plans",
                 "MODIFIED src/Main.java");
         verify(eventPublisher).publishEvent(argThat((Object ev) -> ev instanceof ArchiveUpdatedEvent));
@@ -298,8 +298,8 @@ class PlanServiceTest {
                 true, null, null, null, null, List.of());
         assertEquals("Add Fast Tests\n\nRun only related unit tests\n\n- Implement runRelatedTests",
                 PlanService.formatCommitMessage(fallbackPlan));
-        assertEquals("feat: custom commit",
-                PlanService.formatCommitMessage(fallbackPlan.withCommitMessage("  feat: custom commit  ")));
+        assertEquals("feat: custom commit", PlanService.formatCommitMessage(
+                fallbackPlan.withReviewOutcome(fallbackPlan.finalReviewNotes(), "  feat: custom commit  ")));
 
         archivingService.submitPlan("Reject Completion Plan", "Goal", new String[]{"Req"}, new String[]{"Step 1"});
         archivingService.requestDevelopment("Start");
