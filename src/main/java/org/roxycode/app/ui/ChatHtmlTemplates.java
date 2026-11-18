@@ -365,14 +365,11 @@ public final class ChatHtmlTemplates {
                             <span class="kbd-pill">&nbsp;@ Mention&nbsp;</span>&nbsp;&nbsp;Reference project files
                         </td>
                         <td class="welcome-footer-cell" width="50%" valign="middle" style="padding: 3px 0px 3px 8px;">
-                            <span class="kbd-pill">&nbsp;/ Commands&nbsp;</span>&nbsp;&nbsp;Run slash commands (<code>/reset</code>, <code>/clear</code>, <code>/help</code>)
+                            <span class="kbd-pill">&nbsp;Attach&nbsp;</span>&nbsp;&nbsp;Drag &amp; drop or <span class="kbd-pill">&nbsp;Ctrl+V&nbsp;</span> text, PDFs &amp; images
                         </td>
                     </tr>
                     <tr>
-                        <td class="welcome-footer-cell" width="50%" valign="middle" style="padding: 3px 8px 0px 0px;">
-                            <span class="kbd-pill">&nbsp;Attach&nbsp;</span>&nbsp;&nbsp;Drag &amp; drop or <span class="kbd-pill">&nbsp;Ctrl+V&nbsp;</span> text, PDFs &amp; images
-                        </td>
-                        <td class="welcome-footer-cell" width="50%" valign="middle" style="padding: 3px 0px 0px 8px;">
+                        <td class="welcome-footer-cell" colspan="2" valign="middle" style="padding: 3px 0px 0px 0px;">
                             <span class="kbd-pill">&nbsp;Enter&nbsp;</span>&nbsp;&nbsp;to send &bull; <span class="kbd-pill">&nbsp;Shift+Enter&nbsp;</span> for newline
                         </td>
                     </tr>

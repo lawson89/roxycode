@@ -68,12 +68,8 @@ final class ChatController implements AutoCloseable {
     static final String ROLE_SYSTEM = ChatHtmlTemplates.ROLE_SYSTEM;
     static final String ROLE_USER = ChatHtmlTemplates.ROLE_USER;
     static final String ROLE_AI = ChatHtmlTemplates.ROLE_AI;
-    private static final String CMD_RESET = "/reset";
-    private static final String CMD_CLEAR = "/clear";
-    private static final String CMD_HELP = "/help";
     static final String IMAGE_REQUIRES_TEXT_MESSAGE = "Please enter a prompt message to accompany the attached image.";
     static final String INITIAL_ACTIVITY_STATUS = "Preparing prompt Context & Repo Map...";
-    private static final String BT = "`";
     public record PersistedMemoryMessage(String type, String text) {
     }
 
@@ -203,11 +199,7 @@ final class ChatController implements AutoCloseable {
             }
             return;
         }
-        if (text.startsWith("/")) {
-            view.clearInputText();
-            handleSlashCommand(text);
-            return;
-        }
+
         if (model.isTaskMode() && planService != null && planService.getPendingPhase() != null) {
             WorkflowPhase currentPhase = planService.getCurrentPhase();
             WorkflowPhase pendingPhase = planService.getPendingPhase();
@@ -229,30 +221,6 @@ final class ChatController implements AutoCloseable {
         view.clearInputText();
         triggerTurn(() -> text, pendingAttachments,
                 new UserMessageRenderData(text, thumbnailBase64List, attachedFileNames));
-    }
-
-    private void handleSlashCommand(String text) {
-        String command = StringUtils.substringBefore(text, " ");
-        String argument = StringUtils.substringAfter(text, " ").trim();
-        if (argument.isEmpty() && CMD_RESET.equals(command)) {
-            resetSession();
-            return;
-        }
-        if (argument.isEmpty() && CMD_CLEAR.equals(command)) {
-            view.clearOutput();
-            persistActiveChatSession();
-            return;
-        }
-        if (argument.isEmpty() && CMD_HELP.equals(command)) {
-            String helpItem = "*   ";
-            String helpText = "### Available Commands\n" + helpItem + BT + CMD_RESET + BT
-                    + ": Reset the current session or topic.\n" + helpItem + BT + CMD_CLEAR + BT
-                    + ": Clear the chat output area.\n" + helpItem + BT + CMD_HELP + BT + ": Show this help message.";
-            view.appendMessage(ROLE_SYSTEM, helpText);
-            return;
-        }
-        view.appendMessage(ROLE_SYSTEM,
-                "Unknown command: " + text + ". Type " + BT + CMD_HELP + BT + " for available commands.");
     }
 
     private boolean cancelActiveTurnState(boolean markCancelled) {
@@ -399,8 +367,8 @@ final class ChatController implements AutoCloseable {
         Edt.run(() -> {
             String message;
             if (filename != null && !filename.isBlank()) {
-                message = "Archived previous topic as **" + finalTitle + "** (" + BT + filename + BT
-                        + ") and started a new topic.";
+                message = "Archived previous topic as **" + finalTitle + "** (`" + filename
+                        + "`) and started a new topic.";
             } else {
                 message = "Started a new topic.";
             }

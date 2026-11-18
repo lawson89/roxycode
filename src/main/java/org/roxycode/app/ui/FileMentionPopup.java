@@ -60,63 +60,16 @@ public final class FileMentionPopup {
     static final int TIER_PATH_SUBSTRING = 3;
     static final int TIER_NO_MATCH = 0;
     private static final char MENTION_TRIGGER_CHAR = '@';
-    private static final char COMMAND_TRIGGER_CHAR = '/';
 
     private static final Set<String> CODE_EXTENSIONS = Set.of(
             "java,kt,kts,groovy,scala,py,js,ts,tsx,jsx,c,cpp,h,hpp,rs,go,rb,php,cs,swift,sql,sh,bash,zsh,xml,json,yaml,yml,toml,properties,html,css,scss,md"
                     .split(","));
 
-    public sealed interface MentionItem permits FileCandidate, CommandCandidate {
-        String label();
-
-        String subLabel();
-
-        String replacement();
-
-        Codicons icon();
-
-        String key();
-    }
-
-    public record CommandCandidate(String label, String subLabel, String replacement,
-            Codicons icon) implements MentionItem {
-        @Override
-        public String key() {
-            return replacement;
-        }
-    }
-
-    private static final List<CommandCandidate> COMMANDS = List.of(
-            new CommandCandidate("Reset Session", "Reset the current session or topic", "/reset", Codicons.REFRESH),
-            new CommandCandidate("Clear Output", "Clear the chat output area", "/clear", Codicons.CLEAR_ALL),
-            new CommandCandidate("Help", "Show available commands", "/help", Codicons.QUESTION));
-
     public record FileCandidate(String relativePath, String fileName, String parentDir, String fileNameLower,
-            String pathLower) implements MentionItem {
+            String pathLower) {
 
-        @Override
-        public String label() {
-            return fileName;
-        }
-
-        @Override
-        public String subLabel() {
-            return parentDir;
-        }
-
-        @Override
         public String replacement() {
             return "@" + relativePath + " ";
-        }
-
-        @Override
-        public Codicons icon() {
-            return resolveFileIcon(fileNameLower);
-        }
-
-        @Override
-        public String key() {
-            return relativePath;
         }
 
         public static FileCandidate fromPath(String rawPath) {
@@ -129,14 +82,14 @@ public final class FileMentionPopup {
         }
     }
 
-    public record MentionToken(int startOffset, int endOffset, String query, char trigger) {
+    public record MentionToken(int startOffset, int endOffset, String query) {
     }
 
     private final JTextArea inputArea;
     private final JScrollPane inputScrollPane;
     final JPopupMenu popupMenu;
-    final DefaultListModel<MentionItem> listModel;
-    final JList<MentionItem> candidateList;
+    final DefaultListModel<FileCandidate> listModel;
+    final JList<FileCandidate> candidateList;
     private final JScrollPane popupScrollPane;
 
     private volatile GrepService grepService;
@@ -237,15 +190,13 @@ public final class FileMentionPopup {
             if (Character.isWhitespace(c)) {
                 return null;
             }
-            if (c == MENTION_TRIGGER_CHAR || c == COMMAND_TRIGGER_CHAR) {
+            if (c == MENTION_TRIGGER_CHAR) {
                 int docIndex = windowStart + i;
                 if (docIndex == 0 || (i > 0 && Character.isWhitespace(segment.array[segment.offset + i - 1]))) {
                     String query = new String(segment.array, segment.offset + i + 1, segment.count - i - 1);
-                    return new MentionToken(docIndex, caretOffset, query, c);
+                    return new MentionToken(docIndex, caretOffset, query);
                 }
-                if (c == MENTION_TRIGGER_CHAR) {
-                    return null;
-                }
+                return null;
             }
         }
         if (windowStart > 0) {
@@ -267,14 +218,11 @@ public final class FileMentionPopup {
             if (Character.isWhitespace(c)) {
                 return null;
             }
-            if (c == MENTION_TRIGGER_CHAR || c == COMMAND_TRIGGER_CHAR) {
+            if (c == MENTION_TRIGGER_CHAR) {
                 if (i == 0 || Character.isWhitespace(text.charAt(i - 1))) {
-                    return new MentionToken(i, caretOffset, text.substring(i + 1, caretOffset), c);
+                    return new MentionToken(i, caretOffset, text.substring(i + 1, caretOffset));
                 }
-                if (c == MENTION_TRIGGER_CHAR) {
-                    return null;
-                }
-                // For COMMAND_TRIGGER_CHAR ('/'), continue searching backwards as it might be part of a path
+                return null;
             }
         }
         return null;
@@ -296,30 +244,18 @@ public final class FileMentionPopup {
         };
     }
 
-    public static List<MentionItem> rankCandidates(List<FileCandidate> candidates, MentionToken token) {
-        String query = token.query();
-        char trigger = token.trigger();
-        String queryLower = StringUtils.trimToEmpty(query).toLowerCase(Locale.ROOT);
-        List<MentionItem> matches = new ArrayList<>();
-
-        if (trigger == COMMAND_TRIGGER_CHAR) {
-            for (CommandCandidate cmd : COMMANDS) {
-                if (queryLower.isEmpty() || cmd.label().toLowerCase(Locale.ROOT).contains(queryLower)
-                        || cmd.replacement().toLowerCase(Locale.ROOT).contains(queryLower)) {
-                    matches.add(cmd);
-                }
-            }
-        } else if (trigger == MENTION_TRIGGER_CHAR && candidates != null) {
-            List<FileCandidate> fileMatches = new ArrayList<>();
-            for (FileCandidate candidate : candidates) {
-                if (computeMatchTier(candidate, queryLower) != TIER_NO_MATCH) {
-                    fileMatches.add(candidate);
-                }
-            }
-            fileMatches.sort(fileCandidateComparator(queryLower));
-            matches.addAll(fileMatches);
+    public static List<FileCandidate> rankCandidates(List<FileCandidate> candidates, MentionToken token) {
+        if (candidates == null || token == null) {
+            return List.of();
         }
-
+        String queryLower = StringUtils.trimToEmpty(token.query()).toLowerCase(Locale.ROOT);
+        List<FileCandidate> matches = new ArrayList<>();
+        for (FileCandidate candidate : candidates) {
+            if (computeMatchTier(candidate, queryLower) != TIER_NO_MATCH) {
+                matches.add(candidate);
+            }
+        }
+        matches.sort(fileCandidateComparator(queryLower));
         return List.copyOf(matches.subList(0, Math.min(MAX_RESULTS, matches.size())));
     }
 
@@ -403,7 +339,7 @@ public final class FileMentionPopup {
         lastEvaluatedCaret = caretOffset;
         this.activeToken = token;
 
-        if (token.trigger() == MENTION_TRIGGER_CHAR && cachedCandidates.isEmpty() && grepService != null) {
+        if (cachedCandidates.isEmpty() && grepService != null) {
             CompletableFuture<List<FileCandidate>> future = refreshIndexAsync();
             if (!future.isDone()) {
                 future.thenRunAsync(() -> {
@@ -422,7 +358,7 @@ public final class FileMentionPopup {
                 .thenAcceptAsync(matches -> applyRankedMatches(matches, token, caretOffset, generation), Edt.EXECUTOR);
     }
 
-    private void applyRankedMatches(List<MentionItem> matches, MentionToken expectedToken, int expectedCaret,
+    private void applyRankedMatches(List<FileCandidate> matches, MentionToken expectedToken, int expectedCaret,
             long generation) {
         if (generation != evaluationGeneration.get() || inputTextUpdateGuard.isActive() || !inputArea.isEnabled()
                 || !inputArea.isEditable()) {
@@ -455,14 +391,14 @@ public final class FileMentionPopup {
         }
     }
 
-    private void updateCandidateListModel(List<MentionItem> matches) {
-        MentionItem previousSelection = candidateList.getSelectedValue();
+    private void updateCandidateListModel(List<FileCandidate> matches) {
+        FileCandidate previousSelection = candidateList.getSelectedValue();
         String previousKey = null;
         if (previousSelection != null) {
-            previousKey = previousSelection.key();
+            previousKey = previousSelection.relativePath();
         }
         int selectedIndex = UiComponents.replaceListItemsPreservingSelection(listModel, candidateList, matches,
-                MentionItem::key, previousKey, true);
+                FileCandidate::relativePath, previousKey, true);
         if (selectedIndex >= 0) {
             candidateList.ensureIndexIsVisible(selectedIndex);
         }
@@ -608,7 +544,7 @@ public final class FileMentionPopup {
         if (!isPopupVisible()) {
             return false;
         }
-        MentionItem selected = candidateList.getSelectedValue();
+        FileCandidate selected = candidateList.getSelectedValue();
         MentionToken token = this.activeToken;
         if (selected == null || token == null) {
             hidePopup();
@@ -647,7 +583,7 @@ public final class FileMentionPopup {
         return Codicons.FILE;
     }
 
-    private static final class MentionItemCellRenderer extends JPanel implements ListCellRenderer<MentionItem> {
+    private static final class MentionItemCellRenderer extends JPanel implements ListCellRenderer<FileCandidate> {
         private static final long serialVersionUID = 1L;
 
         private final JLabel nameLabel = new JLabel();
@@ -665,21 +601,17 @@ public final class FileMentionPopup {
         }
 
         @Override
-        public Component getListCellRendererComponent(JList<? extends MentionItem> list, MentionItem value, int index,
-                boolean isSelected, boolean cellHasFocus) {
+        public Component getListCellRendererComponent(JList<? extends FileCandidate> list, FileCandidate value,
+                int index, boolean isSelected, boolean cellHasFocus) {
             UiComponents.ListCellColors colors = UiComponents.resolveListCellColors(list, isSelected);
             setBackground(colors.background());
             if (value != null) {
-                nameLabel.setText(value.label());
+                nameLabel.setText(value.fileName());
                 nameLabel.setForeground(colors.foreground());
-                nameLabel.setIcon(FontIcon.of(value.icon(), 14, colors.iconColor()));
-                dirLabel.setText(value.subLabel());
+                nameLabel.setIcon(FontIcon.of(resolveFileIcon(value.fileNameLower()), 14, colors.iconColor()));
+                dirLabel.setText(value.parentDir());
                 dirLabel.setForeground(colors.muted());
-                if (value instanceof FileCandidate fc) {
-                    setToolTipText(fc.relativePath());
-                } else {
-                    setToolTipText(null);
-                }
+                setToolTipText(value.relativePath());
             }
             return this;
         }

@@ -9,7 +9,6 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
 - **Capabilities**: Uses fileReadService, grepService, symbolService, pdfService, gitService, buildToolService (read/test commands), memoryService, userInputService, and webSearchService via executeJexl. File mutation (fileEditorService) is disabled.
 - **Composer & Action Features**:
   - Type '@' or click **@ Mention** to fuzzy-search and attach project file paths.
-  - Type '/' or click **/ Commands** to run slash commands: `/reset` (reset session), `/clear` (clear chat view), and `/help` (list commands).
   - Press **Enter** to send, **Shift+Enter** for a newline, and **Ctrl+V** (or the image button) to attach screenshots/images.
   - Click **[Move to Feature Request]** on any Roxy response to copy that architectural finding or prompt directly into the **Build Feature** workspace.
   - Renders fenced `plantuml`, `ditaa`, and `svg` code blocks as inline theme-aware diagrams and UI wireframes in chat and plans.

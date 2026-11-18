@@ -51,7 +51,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     static final String NEW_TOPIC_BUTTON_TEXT = "New Topic";
     static final String RESET_SESSION_BUTTON_TEXT = "Reset Session";
     static final String NEW_TOPIC_TOOLTIP = "Archive current conversation and start a new Q&A topic";
-    static final String DEFAULT_PLACEHOLDER_TEXT = "Type a message... (Enter to send, Shift+Enter for newline, @ to mention files, / for commands, drag & drop or Ctrl+V to attach text, PDFs & images)";
+    static final String DEFAULT_PLACEHOLDER_TEXT = "Type a message... (Enter to send, Shift+Enter for newline, @ to mention files, drag & drop or Ctrl+V to attach text, PDFs & images)";
     static final String NO_PROJECT_PLACEHOLDER_TEXT = "Select a project folder in the top bar (Change Project...) to start chatting...";
     static final String BUSY_PLACEHOLDER_TEXT = "Roxy is working... Press Esc or click Stop to interrupt.";
     private static final String TOOLBAR_BUTTON_STYLE = "font: -1; foreground: $Label.disabledForeground; focusWidth: 0; innerFocusWidth: 0";
@@ -72,7 +72,6 @@ final class ChatPanel extends JPanel implements AutoCloseable {
     JButton stopButton;
     JButton attachImageButton;
     JButton mentionButton;
-    JButton commandsButton;
     JButton viewPlanButton;
     JButton copyCommitMsgButton;
     JButton approveButton;
@@ -332,24 +331,19 @@ final class ChatPanel extends JPanel implements AutoCloseable {
                 TOOLBAR_BUTTON_STYLE, e -> triggerMentionPopup());
         mentionButton.setToolTipText("Insert @ to search and mention project files");
 
-        commandsButton = UiComponents.createActionButton("Commands", Codicons.TERMINAL, new Insets(4, 8, 4, 8), true,
-                TOOLBAR_BUTTON_STYLE, e -> triggerCommandsPopup());
-        commandsButton.setToolTipText("Insert / to run slash commands");
-
         updateTurnLabel();
 
         JSeparator toolbarSep = new JSeparator(SwingConstants.VERTICAL);
         String toolbarCols;
         if (isTaskMode) {
-            toolbarCols = "[]4[]4[]6[]6[]8[]push[]push[right]";
+            toolbarCols = "[]4[]6[]6[]8[]push[]push[right]";
         } else {
-            toolbarCols = "[]4[]4[]6[]6[]push[]push[right]";
+            toolbarCols = "[]4[]6[]6[]push[]push[right]";
         }
         JPanel actionToolbar = new JPanel(new MigLayout("insets 4 8 6 8, fillx", toolbarCols, LAYOUT_CENTER));
         actionToolbar.setOpaque(false);
         actionToolbar.add(attachImageButton);
         actionToolbar.add(mentionButton);
-        actionToolbar.add(commandsButton);
         actionToolbar.add(toolbarSep, "h 16!");
         actionToolbar.add(resetSessionButton);
         if (isTaskMode) {
@@ -497,9 +491,6 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         attachImageButton.setEnabled(enableComposer);
         resetSessionButton.setEnabled(enableComposer);
         mentionButton.setEnabled(enableComposer);
-        if (commandsButton != null) {
-            commandsButton.setEnabled(enableComposer);
-        }
         if (autoApprovePlanCheckBox != null) {
             autoApprovePlanCheckBox.setEnabled(projectReady);
         }
@@ -628,15 +619,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         updateInputPlaceholderText();
     }
 
-    void triggerCommandsPopup() {
-        triggerPopup('/');
-    }
-
     void triggerMentionPopup() {
-        triggerPopup('@');
-    }
-
-    void triggerPopup(char triggerChar) {
         if (!inputArea.isEnabled()) {
             return;
         }
@@ -644,12 +627,12 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         String text = inputArea.getText();
         int caret = inputArea.getCaretPosition();
         FileMentionPopup.MentionToken activeToken = FileMentionPopup.extractMentionToken(text, caret);
-        if (activeToken == null || activeToken.trigger() != triggerChar) {
+        if (activeToken == null) {
             String insertion;
             if (caret > 0 && !Character.isWhitespace(text.charAt(caret - 1))) {
-                insertion = " " + triggerChar;
+                insertion = " @";
             } else {
-                insertion = String.valueOf(triggerChar);
+                insertion = "@";
             }
             inputArea.insert(insertion, caret);
             inputArea.setCaretPosition(caret + insertion.length());
