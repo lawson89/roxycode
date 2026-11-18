@@ -365,7 +365,7 @@ public final class ChatHtmlTemplates {
                             <span class="kbd-pill">&nbsp;@ Mention&nbsp;</span>&nbsp;&nbsp;Reference project files
                         </td>
                         <td class="welcome-footer-cell" width="50%" valign="middle" style="padding: 3px 0px 3px 8px;">
-                            <span class="kbd-pill">&nbsp;/ Commands&nbsp;</span>&nbsp;&nbsp;Run slash commands (<code>/reset</code>, <code>/clear</code>, <code>/mem-*</code>)
+                            <span class="kbd-pill">&nbsp;/ Commands&nbsp;</span>&nbsp;&nbsp;Run slash commands (<code>/reset</code>, <code>/clear</code>, <code>/help</code>)
                         </td>
                     </tr>
                     <tr>

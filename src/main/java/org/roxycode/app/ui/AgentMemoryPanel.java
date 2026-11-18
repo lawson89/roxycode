@@ -66,7 +66,7 @@ final class AgentMemoryPanel extends JPanel {
             + "<b>Unified Symmetrical Agent Memory</b><br>"
             + "• <b>Summary</b>: Concise rule or takeaway always injected into Gemini's stable system prompt.<br>"
             + "• <b>Extended Details</b>: Optional Markdown body read on demand via <code>memoryService.read(scope, id)</code> when relevant.<br><br>"
-            + "Chat quick commands: <code>/mem-p-put</code>, <code>/mem-p-view</code>, <code>/mem-p-find</code>, <code>/mem-p-del</code> (and <code>/mem-g-*</code> for Global)."
+            + "Mention memories in chat by name or natural language—Roxy reads and updates them automatically via <code>memoryService</code>."
             + "</body></html>";
     private static final int TIMESTAMP_DISPLAY_LEN = 16;
     private static final int PROJECT_TAB_INDEX = 0;

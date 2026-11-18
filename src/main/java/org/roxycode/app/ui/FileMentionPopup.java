@@ -40,8 +40,6 @@ import org.apache.commons.lang3.StringUtils;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
 import org.roxycode.app.ai.services.GrepService;
-import org.roxycode.app.ai.services.MemoryService;
-import org.roxycode.app.ai.services.MemoryService.MemoryMetadata;
 import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
@@ -63,13 +61,12 @@ public final class FileMentionPopup {
     static final int TIER_NO_MATCH = 0;
     private static final char MENTION_TRIGGER_CHAR = '@';
     private static final char COMMAND_TRIGGER_CHAR = '/';
-    private static final String COMMAND_TRIGGER_PREFIX = "/";
 
     private static final Set<String> CODE_EXTENSIONS = Set.of(
             "java,kt,kts,groovy,scala,py,js,ts,tsx,jsx,c,cpp,h,hpp,rs,go,rb,php,cs,swift,sql,sh,bash,zsh,xml,json,yaml,yml,toml,properties,html,css,scss,md"
                     .split(","));
 
-    public sealed interface MentionItem permits FileCandidate, CommandCandidate, MemoryCandidate {
+    public sealed interface MentionItem permits FileCandidate, CommandCandidate {
         String label();
 
         String subLabel();
@@ -89,58 +86,10 @@ public final class FileMentionPopup {
         }
     }
 
-    public record MemoryCandidate(String scope, String id, String summary, String commandPrefix,
-            Codicons icon) implements MentionItem {
-        @Override
-        public String label() {
-            return id;
-        }
-
-        @Override
-        public String subLabel() {
-            return summary;
-        }
-
-        @Override
-        public String replacement() {
-            return commandPrefix + id;
-        }
-
-        @Override
-        public String key() {
-            return commandPrefix + id;
-        }
-    }
-
-    private record MemoryCommandSpec(String commandPrefix, String scope, Codicons icon) {
-    }
-
-    private static final List<MemoryCommandSpec> MEMORY_ID_COMMANDS = List.of(
-            new MemoryCommandSpec("/mem-p-view ", "project", Codicons.PROJECT),
-            new MemoryCommandSpec("/mem-p-del ", "project", Codicons.PROJECT),
-            new MemoryCommandSpec("/mem-g-view ", "global", Codicons.GLOBE),
-            new MemoryCommandSpec("/mem-g-del ", "global", Codicons.GLOBE));
-
     private static final List<CommandCandidate> COMMANDS = List.of(
             new CommandCandidate("Reset Session", "Reset the current session or topic", "/reset", Codicons.REFRESH),
             new CommandCandidate("Clear Output", "Clear the chat output area", "/clear", Codicons.CLEAR_ALL),
-            new CommandCandidate("Help", "Show available commands", "/help", Codicons.QUESTION),
-            new CommandCandidate("Project Memory: View", "List project memories or view <id>", "/mem-p-view ",
-                    Codicons.PROJECT),
-            new CommandCandidate("Project Memory: Put", "Save project memory ([id:] summary)", "/mem-p-put ",
-                    Codicons.PROJECT),
-            new CommandCandidate("Project Memory: Find", "Search project memories (<query>)", "/mem-p-find ",
-                    Codicons.PROJECT),
-            new CommandCandidate("Project Memory: Delete", "Delete project memory (<id>)", "/mem-p-del ",
-                    Codicons.PROJECT),
-            new CommandCandidate("Global Memory: View", "List global memories or view <id>", "/mem-g-view ",
-                    Codicons.GLOBE),
-            new CommandCandidate("Global Memory: Put", "Save global memory ([id:] summary)", "/mem-g-put ",
-                    Codicons.GLOBE),
-            new CommandCandidate("Global Memory: Find", "Search global memories (<query>)", "/mem-g-find ",
-                    Codicons.GLOBE),
-            new CommandCandidate("Global Memory: Delete", "Delete global memory (<id>)", "/mem-g-del ",
-                    Codicons.GLOBE));
+            new CommandCandidate("Help", "Show available commands", "/help", Codicons.QUESTION));
 
     public record FileCandidate(String relativePath, String fileName, String parentDir, String fileNameLower,
             String pathLower) implements MentionItem {
@@ -191,7 +140,6 @@ public final class FileMentionPopup {
     private final JScrollPane popupScrollPane;
 
     private volatile GrepService grepService;
-    private volatile MemoryService memoryService;
     private volatile List<FileCandidate> cachedCandidates = List.of();
 
     private boolean popupActive = false;
@@ -277,16 +225,6 @@ public final class FileMentionPopup {
         if (doc == null || caretOffset < 1 || caretOffset > doc.getLength()) {
             return null;
         }
-        try {
-            if (COMMAND_TRIGGER_PREFIX.equals(doc.getText(0, 1))) {
-                MentionToken memoryToken = extractMemoryCommandToken(doc.getText(0, caretOffset), caretOffset);
-                if (memoryToken != null) {
-                    return memoryToken;
-                }
-            }
-        } catch (BadLocationException ex) {
-            return null;
-        }
         int windowStart = Math.max(0, caretOffset - 256);
         Segment segment = new Segment();
         try {
@@ -324,12 +262,6 @@ public final class FileMentionPopup {
         if (text == null || caretOffset < 1 || caretOffset > text.length()) {
             return null;
         }
-        if (text.charAt(0) == COMMAND_TRIGGER_CHAR) {
-            MentionToken memoryToken = extractMemoryCommandToken(text.substring(0, caretOffset), caretOffset);
-            if (memoryToken != null) {
-                return memoryToken;
-            }
-        }
         for (int i = caretOffset - 1; i >= 0; i--) {
             char c = text.charAt(i);
             if (Character.isWhitespace(c)) {
@@ -364,88 +296,17 @@ public final class FileMentionPopup {
         };
     }
 
-    private static MentionToken extractMemoryCommandToken(String prefixText, int caretOffset) {
-        for (MemoryCommandSpec spec : MEMORY_ID_COMMANDS) {
-            String prefix = spec.commandPrefix();
-            if (prefixText.startsWith(prefix)) {
-                String arg = prefixText.substring(prefix.length(), caretOffset);
-                if (!containsWhitespace(arg)) {
-                    return new MentionToken(0, caretOffset, prefixText.substring(1, caretOffset), COMMAND_TRIGGER_CHAR);
-                }
-                return null;
-            }
-        }
-        return null;
-    }
-
-    private static boolean containsWhitespace(String text) {
-        for (int i = 0; i < text.length(); i++) {
-            if (Character.isWhitespace(text.charAt(i))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static MemoryCommandSpec findMemoryCommandSpec(String textWithLeadingSlash) {
-        for (MemoryCommandSpec spec : MEMORY_ID_COMMANDS) {
-            if (textWithLeadingSlash.startsWith(spec.commandPrefix())) {
-                return spec;
-            }
-        }
-        return null;
-    }
-
     public static List<MentionItem> rankCandidates(List<FileCandidate> candidates, MentionToken token) {
-        return rankCandidates(candidates, token, null);
-    }
-
-    public static List<MentionItem> rankCandidates(List<FileCandidate> candidates, MentionToken token,
-            MemoryService memoryService) {
         String query = token.query();
         char trigger = token.trigger();
         String queryLower = StringUtils.trimToEmpty(query).toLowerCase(Locale.ROOT);
         List<MentionItem> matches = new ArrayList<>();
 
         if (trigger == COMMAND_TRIGGER_CHAR) {
-            MemoryCommandSpec memorySpec = findMemoryCommandSpec("/" + StringUtils.defaultString(query));
-            if (memorySpec != null) {
-                if (memoryService != null) {
-                    String idQueryLower = StringUtils.defaultString(query)
-                            .substring(memorySpec.commandPrefix().length() - 1).toLowerCase(Locale.ROOT);
-                    List<MemoryMetadata> entries = memoryService.list(memorySpec.scope());
-                    if (entries != null) {
-                        List<MemoryCandidate> prefixMatches = new ArrayList<>();
-                        List<MemoryCandidate> idSubstringMatches = new ArrayList<>();
-                        List<MemoryCandidate> summaryMatches = new ArrayList<>();
-                        for (MemoryMetadata entry : entries) {
-                            if (entry == null || StringUtils.isBlank(entry.id())) {
-                                continue;
-                            }
-                            String idLower = entry.id().toLowerCase(Locale.ROOT);
-                            String summaryText = StringUtils.defaultString(entry.summary());
-                            String summaryLower = summaryText.toLowerCase(Locale.ROOT);
-                            MemoryCandidate candidate = new MemoryCandidate(memorySpec.scope(), entry.id(), summaryText,
-                                    memorySpec.commandPrefix(), memorySpec.icon());
-                            if (idQueryLower.isEmpty() || idLower.startsWith(idQueryLower)) {
-                                prefixMatches.add(candidate);
-                            } else if (idLower.contains(idQueryLower)) {
-                                idSubstringMatches.add(candidate);
-                            } else if (summaryLower.contains(idQueryLower)) {
-                                summaryMatches.add(candidate);
-                            }
-                        }
-                        matches.addAll(prefixMatches);
-                        matches.addAll(idSubstringMatches);
-                        matches.addAll(summaryMatches);
-                    }
-                }
-            } else {
-                for (CommandCandidate cmd : COMMANDS) {
-                    if (queryLower.isEmpty() || cmd.label().toLowerCase(Locale.ROOT).contains(queryLower)
-                            || cmd.replacement().toLowerCase(Locale.ROOT).contains(queryLower)) {
-                        matches.add(cmd);
-                    }
+            for (CommandCandidate cmd : COMMANDS) {
+                if (queryLower.isEmpty() || cmd.label().toLowerCase(Locale.ROOT).contains(queryLower)
+                        || cmd.replacement().toLowerCase(Locale.ROOT).contains(queryLower)) {
+                    matches.add(cmd);
                 }
             }
         } else if (trigger == MENTION_TRIGGER_CHAR && candidates != null) {
@@ -479,11 +340,6 @@ public final class FileMentionPopup {
     public synchronized void setGrepService(GrepService grepService) {
         this.grepService = grepService;
         refreshIndexAsync();
-    }
-
-    public synchronized void setMemoryService(MemoryService memoryService) {
-        this.memoryService = memoryService;
-        clearEvaluationCache();
     }
 
     public void invalidateCache() {
@@ -561,11 +417,8 @@ public final class FileMentionPopup {
         }
 
         List<FileCandidate> candidatesSnapshot = cachedCandidates;
-        MemoryService memoryServiceSnapshot = memoryService;
         long generation = evaluationGeneration.incrementAndGet();
-        CompletableFuture
-                .supplyAsync(() -> rankCandidates(candidatesSnapshot, token, memoryServiceSnapshot),
-                        Edt.VIRTUAL_EXECUTOR)
+        CompletableFuture.supplyAsync(() -> rankCandidates(candidatesSnapshot, token), Edt.VIRTUAL_EXECUTOR)
                 .thenAcceptAsync(matches -> applyRankedMatches(matches, token, caretOffset, generation), Edt.EXECUTOR);
     }
 
@@ -776,9 +629,6 @@ public final class FileMentionPopup {
         if (inputArea.isShowing()) {
             inputArea.requestFocusInWindow();
         }
-        if (selected instanceof CommandCandidate && replacement.endsWith(" ")) {
-            onInputChanged();
-        }
         return true;
     }
 
@@ -827,8 +677,6 @@ public final class FileMentionPopup {
                 dirLabel.setForeground(colors.muted());
                 if (value instanceof FileCandidate fc) {
                     setToolTipText(fc.relativePath());
-                } else if (value instanceof MemoryCandidate mc) {
-                    setToolTipText(mc.summary());
                 } else {
                     setToolTipText(null);
                 }

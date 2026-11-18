@@ -16,7 +16,7 @@ The `ChatController` serves as the orchestrator for the conversation, managing t
 
 *   **Class:** `ChatController`
 *   **Method:** `sendMessage(String rawText)`
-    *   Handles slash commands (`/clear`, `/reset`, `/help`, `/rem-p <text>`, `/rem-g <text>`) or drains any attached images (`model.drainPendingImages()`).
+    *   Handles slash commands (`/clear`, `/reset`, `/help`) or drains any attached images (`model.drainPendingImages()`).
     *   Cancels any currently active turn.
     *   Updates the UI to display the user's message and image thumbnails immediately, and persists the active chat session.
     *   Calls `triggerTurn(text, pendingImages)` to start the AI processing asynchronously.

@@ -9,7 +9,7 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
 - **Capabilities**: Uses fileReadService, grepService, symbolService, pdfService, gitService, buildToolService (read/test commands), memoryService, userInputService, and webSearchService via executeJexl. File mutation (fileEditorService) is disabled.
 - **Composer & Action Features**:
   - Type '@' or click **@ Mention** to fuzzy-search and attach project file paths.
-  - Type '/' or click **/ Commands** to run slash commands: `/reset` (reset session), `/clear` (clear chat view), `/help` (list commands), and symmetrical memory commands `/mem-p-view`, `/mem-p-put`, `/mem-p-find`, `/mem-p-del` (Project) and `/mem-g-view`, `/mem-g-put`, `/mem-g-find`, `/mem-g-del` (Global).
+  - Type '/' or click **/ Commands** to run slash commands: `/reset` (reset session), `/clear` (clear chat view), and `/help` (list commands).
   - Press **Enter** to send, **Shift+Enter** for a newline, and **Ctrl+V** (or the image button) to attach screenshots/images.
   - Click **[Move to Feature Request]** on any Roxy response to copy that architectural finding or prompt directly into the **Build Feature** workspace.
   - Renders fenced `plantuml`, `ditaa`, and `svg` code blocks as inline theme-aware diagrams and UI wireframes in chat and plans.
@@ -56,8 +56,8 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
 
 ### Agent Memory (Agent Memory Sidebar View)
 - Symmetrical Unified Agent Memory (memoryService) shared across all phases with a 2-column Master-Detail editor:
-  - **Global Memory (~/.roxycode/memory/memories.json)**: User-wide preferences and coding style (quick commands: `/mem-g-view`, `/mem-g-put`, `/mem-g-find`, `/mem-g-del`).
-  - **Project Memory (<projectDataDir>/memory/memories.json)**: Project architecture decisions and build/test gotchas (quick commands: `/mem-p-view`, `/mem-p-put`, `/mem-p-find`, `/mem-p-del`).
+  - **Global Memory (~/.roxycode/memory/memories.json)**: User-wide preferences and coding style.
+  - **Project Memory (<projectDataDir>/memory/memories.json)**: Project architecture decisions and build/test gotchas.
 - Concise memory summaries are always injected into the stable prompt; entries with extended Markdown details (`+details`) are read on demand via `memoryService.read(scope, id)` or `memoryService.readAll(scope)`, and memories + archives are searchable via `memoryService.find(query)` and `memoryService.search(pattern)`.
 
 ## 3. Configuration & Settings & Tools Hub
