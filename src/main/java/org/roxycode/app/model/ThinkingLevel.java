@@ -7,16 +7,11 @@ import org.springframework.ai.google.genai.GoogleGenAiChatOptions;
 import org.springframework.ai.google.genai.common.GoogleGenAiThinkingLevel;
 import org.springframework.lang.Nullable;
 
-/**
- * Represents configurable Gemini thinking levels, including phase- and sub-turn-aware adaptive thinking.
- */
+/** Configurable Gemini thinking levels, including phase- and sub-turn-aware adaptive thinking. */
 public enum ThinkingLevel {
     DEFAULT("DEFAULT", "Model Default", null), ADAPTIVE("ADAPTIVE", "Adaptive (Phase-Aware)", null),
     LOW("LOW", "Low", GoogleGenAiThinkingLevel.LOW), MEDIUM("MEDIUM", "Medium", GoogleGenAiThinkingLevel.MEDIUM),
     HIGH("HIGH", "High", GoogleGenAiThinkingLevel.HIGH);
-
-    private static final String ALIAS_NONE = "NONE";
-    private static final String ALIAS_MINIMAL = "MINIMAL";
 
     private final String id;
     private final String displayName;
@@ -43,42 +38,12 @@ public enum ThinkingLevel {
     }
 
     public void applyTo(GoogleGenAiChatOptions.Builder builder) {
-        if (builder == null) {
-            return;
-        }
-        if (genAiThinkingLevel != null) {
+        if (builder != null && genAiThinkingLevel != null) {
             builder.thinkingLevel(genAiThinkingLevel);
         }
     }
 
-    /**
-     * Resolves the concrete sub-turn thinking level for a model call. When this level is {@link #ADAPTIVE}, the
-     * thinking budget is chosen dynamically based on the active workflow phase, target model, and sub-turn state:
-     * <ul>
-     * <li>{@code PLAN} (Carbon models): {@link #LOW} on initial discovery, rising to {@link #MEDIUM} after successful
-     * tool responses, escalating to {@link #HIGH} only if the previous tool call failed, and dropping to {@link #LOW}
-     * after a plan is submitted.</li>
-     * <li>{@code PLAN} (non-Carbon models): {@link #MEDIUM} on initial discovery, rising to {@link #HIGH} while
-     * designing the blueprint with codebase context, and dropping to {@link #LOW} after a plan is submitted.</li>
-     * <li>{@code CODE}: {@link #MEDIUM} by default for fast, accurate execution, escalating to {@link #HIGH} when the
-     * previous tool execution reported a failure.</li>
-     * <li>{@code REVIEW}: {@link #HIGH}.</li>
-     * <li>{@code EXPLORE}: {@link #LOW} on initial tool discovery, rising to {@link #MEDIUM} after tool outputs are
-     * returned for synthesis.</li>
-     * </ul>
-     *
-     * @param phase
-     *            the current workflow phase
-     * @param modelName
-     *            the target Gemini model identifier, or {@code null}
-     * @param planSubmitted
-     *            whether an implementation plan is currently submitted
-     * @param hasToolResponses
-     *            whether the prompt already contains tool execution responses
-     * @param lastToolCallFailed
-     *            whether the most recent tool execution response contains a failure or error
-     * @return the concrete {@link ThinkingLevel} to apply to the model call
-     */
+    /** Resolves the concrete sub-turn thinking level for a model call when {@link #ADAPTIVE} is active. */
     public ThinkingLevel resolveSubTurnLevel(@Nullable WorkflowPhase phase, @Nullable String modelName,
             boolean planSubmitted, boolean hasToolResponses, boolean lastToolCallFailed) {
         if (this != ADAPTIVE) {
@@ -88,24 +53,7 @@ public enum ThinkingLevel {
             return MEDIUM;
         }
         return switch (phase) {
-            case PLAN -> {
-                if (planSubmitted) {
-                    yield LOW;
-                }
-                if (isCarbonModel(modelName)) {
-                    if (lastToolCallFailed) {
-                        yield HIGH;
-                    }
-                    if (hasToolResponses) {
-                        yield MEDIUM;
-                    }
-                    yield LOW;
-                }
-                if (hasToolResponses) {
-                    yield HIGH;
-                }
-                yield MEDIUM;
-            }
+            case PLAN -> resolvePlanLevel(modelName, planSubmitted, hasToolResponses, lastToolCallFailed);
             case CODE -> {
                 if (lastToolCallFailed) {
                     yield HIGH;
@@ -122,6 +70,26 @@ public enum ThinkingLevel {
         };
     }
 
+    private static ThinkingLevel resolvePlanLevel(@Nullable String modelName, boolean planSubmitted,
+            boolean hasToolResponses, boolean lastToolCallFailed) {
+        if (planSubmitted) {
+            return LOW;
+        }
+        if (isCarbonModel(modelName)) {
+            if (lastToolCallFailed) {
+                return HIGH;
+            }
+            if (hasToolResponses) {
+                return MEDIUM;
+            }
+            return LOW;
+        }
+        if (hasToolResponses) {
+            return HIGH;
+        }
+        return MEDIUM;
+    }
+
     static boolean isCarbonModel(@Nullable String modelName) {
         return modelName != null && modelName.toLowerCase(Locale.ROOT).contains("carbon");
     }
@@ -131,7 +99,7 @@ public enum ThinkingLevel {
             return DEFAULT;
         }
         String normalized = raw.trim().toUpperCase(Locale.ROOT);
-        if (ALIAS_NONE.equals(normalized) || ALIAS_MINIMAL.equals(normalized)) {
+        if ("NONE".equals(normalized) || "MINIMAL".equals(normalized)) {
             return LOW;
         }
         for (ThinkingLevel level : values()) {
@@ -142,13 +110,7 @@ public enum ThinkingLevel {
         return DEFAULT;
     }
 
-    /**
-     * Resolves a {@link ThinkingLevel} from a Spring AI {@link GoogleGenAiThinkingLevel}.
-     *
-     * @param genAiLevel
-     *            the Spring AI thinking level, or {@code null}
-     * @return the matching {@link ThinkingLevel}, or {@link #DEFAULT} when {@code null} or unmatched
-     */
+    /** Resolves a {@link ThinkingLevel} from a Spring AI {@link GoogleGenAiThinkingLevel}. */
     public static ThinkingLevel fromGenAiThinkingLevel(@Nullable GoogleGenAiThinkingLevel genAiLevel) {
         if (genAiLevel == null) {
             return DEFAULT;

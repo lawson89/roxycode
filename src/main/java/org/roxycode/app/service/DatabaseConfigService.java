@@ -2,12 +2,14 @@ package org.roxycode.app.service;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 import org.jspecify.annotations.Nullable;
@@ -20,48 +22,30 @@ import org.roxycode.app.util.PathUtils;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
-import com.fasterxml.jackson.dataformat.toml.TomlMapper;
 
-/**
- * Persists and resolves global read-only database connections ({@code ~/.roxycode/databases.toml}) and per-project
- * database grants ({@code <projectDataDir>/databases.toml}).
- */
+/** Persists and resolves global database connections and per-project database grants. */
 @Service
 public class DatabaseConfigService {
 
     static final String DATABASES_TOML_FILENAME = "databases.toml";
 
-    /**
-     * TOML root wrapper for global database connections.
-     */
+    /** TOML root wrapper for global database connections. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record GlobalDatabasesFile(@JsonProperty("connections") List<DatabaseConnectionConfig> connections) {
         public GlobalDatabasesFile {
-            if (connections == null) {
-                connections = List.of();
-            } else {
-                connections = List.copyOf(connections);
-            }
+            connections = List.copyOf(Objects.requireNonNullElse(connections, List.of()));
         }
     }
 
-    /**
-     * TOML root wrapper for per-project database grants.
-     */
+    /** TOML root wrapper for per-project database grants. */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record ProjectDatabasesFile(@JsonProperty("grants") List<ProjectDatabaseGrant> grants) {
         public ProjectDatabasesFile {
-            if (grants == null) {
-                grants = List.of();
-            } else {
-                grants = List.copyOf(grants);
-            }
+            grants = List.copyOf(Objects.requireNonNullElse(grants, List.of()));
         }
     }
 
-    /**
-     * Effective granted database connection for the active project.
-     */
+    /** Effective granted database connection for the active project. */
     public record ResolvedDatabaseConnection(DatabaseConnectionConfig config, ProjectDatabaseGrant grant,
             String effectiveDefaultSchema, String notes) {
     }
@@ -88,9 +72,6 @@ public class DatabaseConfigService {
         this.eventPublisher = eventPublisher;
     }
 
-    /**
-     * Clears cached per-project grants when the active project changes.
-     */
     @SuppressWarnings("PMD.NullAssignment")
     @EventListener
     public void onProjectChanged(ProjectChangedEvent event) {
@@ -100,9 +81,7 @@ public class DatabaseConfigService {
         }
     }
 
-    /**
-     * Returns all globally configured database connections.
-     */
+    /** Returns all globally configured database connections. */
     public List<DatabaseConnectionConfig> listGlobalConnections() {
         synchronized (lock) {
             Path globalPath = resolveGlobalDatabasesPath();
@@ -118,26 +97,21 @@ public class DatabaseConfigService {
         }
     }
 
-    /**
-     * Looks up a global database connection by id.
-     */
+    /** Looks up a global database connection by id. */
     public Optional<DatabaseConnectionConfig> findGlobalConnection(String connectionId) {
         return findById(listGlobalConnections(), connectionId, DatabaseConnectionConfig::id);
     }
 
-    /**
-     * Saves (inserts or updates) a global database connection and optionally updates its stored password.
-     */
+    /** Saves (inserts or updates) a global database connection and optionally stores its password. */
     public DatabaseConnectionConfig saveGlobalConnection(DatabaseConnectionConfig config, @Nullable String newPassword)
             throws IOException {
         if (config == null) {
             throw new IllegalArgumentException("Database connection config must not be null.");
         }
         synchronized (lock) {
-            List<DatabaseConnectionConfig> current = new ArrayList<>(listGlobalConnections());
-            List<DatabaseConnectionConfig> updated = new ArrayList<>(current.size() + 1);
+            List<DatabaseConnectionConfig> updated = new ArrayList<>();
             boolean replaced = false;
-            for (DatabaseConnectionConfig existing : current) {
+            for (DatabaseConnectionConfig existing : listGlobalConnections()) {
                 if (existing.id().equals(config.id())) {
                     updated.add(config);
                     replaced = true;
@@ -148,13 +122,11 @@ public class DatabaseConfigService {
             if (!replaced) {
                 updated.add(config);
             }
-
             Path globalPath = resolveGlobalDatabasesPath();
             PathUtils.writeToml(globalPath, new GlobalDatabasesFile(updated), tomlMapper);
             PathUtils.setOwnerOnlyPermissionsIfPosix(globalPath);
             cachedGlobalPath = globalPath;
             cachedGlobalConnections = List.copyOf(updated);
-
             if (newPassword != null && !newPassword.isEmpty()
                     && config.resolveCredentialSource() == CredentialSource.KEYRING) {
                 credentialStoreService.savePassword(config.id(), newPassword);
@@ -164,42 +136,30 @@ public class DatabaseConfigService {
         return config;
     }
 
-    /**
-     * Deletes a global database connection and removes any stored keyring password.
-     */
+    /** Deletes a global database connection and removes any stored keyring password. */
     public boolean deleteGlobalConnection(String connectionId) throws IOException {
         if (connectionId == null || connectionId.isBlank()) {
             return false;
         }
         String target = connectionId.trim();
-        boolean removed = false;
         synchronized (lock) {
             List<DatabaseConnectionConfig> current = listGlobalConnections();
-            List<DatabaseConnectionConfig> updated = new ArrayList<>(current.size());
-            for (DatabaseConnectionConfig existing : current) {
-                if (existing.id().equals(target)) {
-                    removed = true;
-                } else {
-                    updated.add(existing);
-                }
-            }
-            if (!removed) {
+            List<DatabaseConnectionConfig> updated = current.stream().filter(c -> !c.id().equals(target)).toList();
+            if (updated.size() == current.size()) {
                 return false;
             }
             Path globalPath = resolveGlobalDatabasesPath();
             PathUtils.writeToml(globalPath, new GlobalDatabasesFile(updated), tomlMapper);
             PathUtils.setOwnerOnlyPermissionsIfPosix(globalPath);
             cachedGlobalPath = globalPath;
-            cachedGlobalConnections = List.copyOf(updated);
+            cachedGlobalConnections = updated;
             credentialStoreService.deletePassword(target);
         }
         publishConfigChanged(true);
         return true;
     }
 
-    /**
-     * Returns all raw grants configured for the active project (or an empty list when no project is open).
-     */
+    /** Returns all raw grants configured for the active project (or empty if no project is open). */
     public List<ProjectDatabaseGrant> listProjectGrants() {
         synchronized (lock) {
             Path projectPath = ProjectService.resolveProjectDataPathSafely(projectService, DATABASES_TOML_FILENAME);
@@ -218,9 +178,7 @@ public class DatabaseConfigService {
         }
     }
 
-    /**
-     * Replaces the active project's database grants in {@code <projectDataDir>/databases.toml}.
-     */
+    /** Replaces the active project's database grants in {@code <projectDataDir>/databases.toml}. */
     public List<ProjectDatabaseGrant> saveProjectGrants(List<ProjectDatabaseGrant> grants) throws IOException {
         Path projectPath = ProjectService.resolveProjectDataPathSafely(projectService, DATABASES_TOML_FILENAME);
         if (projectPath == null) {
@@ -245,9 +203,7 @@ public class DatabaseConfigService {
         return normalized;
     }
 
-    /**
-     * Resolves all active granted database connections for the current project, filtering out dangling grants.
-     */
+    /** Resolves all active granted database connections for the current project. */
     public List<ResolvedDatabaseConnection> listActiveProjectConnections() {
         List<ProjectDatabaseGrant> grants = listProjectGrants();
         if (grants.isEmpty()) {
@@ -271,9 +227,7 @@ public class DatabaseConfigService {
         return List.copyOf(resolved);
     }
 
-    /**
-     * Finds an active granted connection for the current project by connection id.
-     */
+    /** Finds an active granted connection for the current project by connection id. */
     public Optional<ResolvedDatabaseConnection> findActiveProjectConnection(String connectionId) {
         return findById(listActiveProjectConnections(), connectionId, resolved -> resolved.config().id());
     }

@@ -21,7 +21,6 @@ import java.util.function.Supplier;
 import javax.swing.SwingUtilities;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.SystemUtils;
-import org.apache.commons.lang3.reflect.FieldUtils;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.SystemToolsUpdatedEvent;
 import org.roxycode.app.model.SystemTool;
@@ -35,9 +34,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.testcontainers.DockerClientFactory;
 
-/**
- * Probes and manages system tools required by RoxyCode.
- */
+/** Probes and manages system tools required by RoxyCode. */
 @Service
 public class SystemToolService {
     private static final Logger log = LoggerFactory.getLogger(SystemToolService.class);
@@ -63,22 +60,7 @@ public class SystemToolService {
     record DockerVersionInfo(String version, String apiVersion) {
     }
 
-    public static class SystemToolsCache {
-        private List<SystemTool> tools;
-        public SystemToolsCache() {
-        }
-
-        public SystemToolsCache(List<SystemTool> tools) {
-            this.tools = tools;
-        }
-
-        public List<SystemTool> getTools() {
-            return tools;
-        }
-
-        public void setTools(List<SystemTool> tools) {
-            this.tools = tools;
-        }
+    public record SystemToolsCache(List<SystemTool> tools) {
     }
 
     @FunctionalInterface
@@ -138,55 +120,21 @@ public class SystemToolService {
         this.toolProber = Objects.requireNonNullElse(toolProber, this::probeAllTools);
     }
 
-    @SuppressWarnings({"PMD.CloseResource", "PMD.AvoidCatchingThrowable"})
+    @SuppressWarnings("PMD.CloseResource")
     static DockerVersionInfo probeWithTestcontainers() {
-        resetTestcontainersFailureCache();
-        try {
-            DockerClient client = DockerClientFactory.instance().client();
-            Version version = client.versionCmd().exec();
-            if (version == null) {
-                return new DockerVersionInfo(null, null);
-            }
-            return new DockerVersionInfo(version.getVersion(), version.getApiVersion());
-        } catch (Throwable t) {
-            resetTestcontainersClientAndFailureCache();
-            throw t;
+        DockerClient client = DockerClientFactory.instance().client();
+        Version version = client.versionCmd().exec();
+        if (version == null) {
+            return new DockerVersionInfo(null, null);
         }
-    }
-
-    static void resetTestcontainersFailureCache() {
-        clearDockerClientFactoryField(DockerClientFactory.instance(), "cachedClientFailure");
-    }
-
-    static void resetTestcontainersClientAndFailureCache() {
-        DockerClientFactory factory = DockerClientFactory.instance();
-        clearDockerClientFactoryField(factory, "cachedClientFailure");
-        clearDockerClientFactoryField(factory, "client");
-        clearDockerClientFactoryField(factory, "strategy");
-    }
-
-    static void clearDockerClientFactoryField(DockerClientFactory factory, String fieldName) {
-        try {
-            if (FieldUtils.getDeclaredField(DockerClientFactory.class, fieldName, true) == null) {
-                log.warn("DockerClientFactory field '{}' not found; Testcontainers internals may have changed",
-                        fieldName);
-                return;
-            }
-            FieldUtils.writeDeclaredField(factory, fieldName, null, true);
-        } catch (ReflectiveOperationException | IllegalArgumentException | SecurityException e) {
-            log.debug("Could not reset DockerClientFactory.{}: {}", fieldName, e.getMessage());
-        }
+        return new DockerVersionInfo(version.getVersion(), version.getApiVersion());
     }
 
     static boolean isDockerCliInstalled() {
         return ProcessRunner.run(List.of("docker", ARG_VERSION)).isSuccess();
     }
 
-    /**
-     * Returns the cached list of detected system tools.
-     * 
-     * @return the list of system tools
-     */
+    /** Returns the cached list of detected system tools. */
     public List<SystemTool> getCachedTools() {
         CompletableFuture<List<SystemTool>> future = toolsCache.getIfPresent(CACHE_KEY_ALL);
         if (future != null && future.isDone()) {
@@ -203,11 +151,7 @@ public class SystemToolService {
         return List.of();
     }
 
-    /**
-     * Detects system tools asynchronously.
-     * 
-     * @return a future containing the list of detected tools
-     */
+    /** Detects system tools asynchronously. */
     public CompletableFuture<List<SystemTool>> detectTools() {
         List<SystemTool> cached = getCachedTools();
         if (!cached.isEmpty()) {
@@ -219,11 +163,7 @@ public class SystemToolService {
     public CompletableFuture<List<SystemTool>> refreshTools() {
         Path path = getCacheFilePath();
         if (path != null) {
-            try {
-                Files.deleteIfExists(path);
-            } catch (IOException e) {
-                log.debug("Failed to delete cache file for refresh", e);
-            }
+            PathUtils.deleteIfExistsQuietly(path);
         }
         return toolsCache.synchronous().refresh(CACHE_KEY_ALL).thenApply(tools -> {
             toolsCache.put(CACHE_KEY_ALL, CompletableFuture.completedFuture(tools));
@@ -258,19 +198,8 @@ public class SystemToolService {
     }
 
     public static boolean isNativeSandboxDetected(List<SystemTool> tools) {
-        if (tools == null) {
-            return false;
-        }
-        for (SystemTool tool : tools) {
-            if (tool == null) {
-                continue;
-            }
-            if ((BUBBLEWRAP.equals(tool.name()) || SEATBELT.equals(tool.name()))
-                    && STATUS_DETECTED.equals(tool.status())) {
-                return true;
-            }
-        }
-        return false;
+        return tools != null && tools.stream().anyMatch(t -> t != null
+                && (BUBBLEWRAP.equals(t.name()) || SEATBELT.equals(t.name())) && STATUS_DETECTED.equals(t.status()));
     }
 
     public boolean checkGitAvailable() {
@@ -287,10 +216,7 @@ public class SystemToolService {
     }
 
     public static boolean areAllRequiredToolsDetected(List<SystemTool> tools) {
-        if (tools == null || tools.isEmpty()) {
-            return false;
-        }
-        return getMissingRequiredToolNames(tools).isEmpty();
+        return tools != null && !tools.isEmpty() && getMissingRequiredToolNames(tools).isEmpty();
     }
 
     public static List<String> getMissingRequiredToolNames(List<SystemTool> tools) {
@@ -372,8 +298,8 @@ public class SystemToolService {
 
     private List<SystemTool> loadFromDisk() {
         SystemToolsCache cache = PathUtils.readTomlOrDefault(getCacheFilePath(), SystemToolsCache.class, null, mapper);
-        if (cache != null && cache.getTools() != null) {
-            return List.copyOf(cache.getTools());
+        if (cache != null && cache.tools() != null) {
+            return List.copyOf(cache.tools());
         }
         return List.of();
     }
@@ -399,11 +325,9 @@ public class SystemToolService {
                 rawVersion = StringUtils.trim(info.version());
                 rawApiVersion = StringUtils.trim(info.apiVersion());
             }
-            String serverVersion = StringUtils.defaultIfBlank(rawVersion, VERSION_UNKNOWN);
-            String apiVersion = StringUtils.defaultIfBlank(rawApiVersion, "");
-            String versionDisplay = "Docker " + serverVersion;
-            if (!apiVersion.isEmpty()) {
-                versionDisplay = versionDisplay + " (API " + apiVersion + ")";
+            String versionDisplay = "Docker " + StringUtils.defaultIfBlank(rawVersion, VERSION_UNKNOWN);
+            if (StringUtils.isNotBlank(rawApiVersion)) {
+                versionDisplay = versionDisplay + " (API " + rawApiVersion + ")";
             }
             return SystemTool.ofKnownTool(DOCKER, versionDisplay, STATUS_DETECTED);
         } catch (Throwable t) {

@@ -2,14 +2,11 @@ package org.roxycode.app.model;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import java.util.ArrayList;
 import java.util.List;
 import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.util.PathUtils;
 
-/**
- * Global read-only database connection configuration persisted in {@code ~/.roxycode/databases.toml}.
- */
+/** Global read-only database connection configuration persisted in {@code ~/.roxycode/databases.toml}. */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record DatabaseConnectionConfig(@JsonProperty("id") String id, @JsonProperty("display_name") String displayName,
         @JsonProperty("description") String description, @JsonProperty("type") String type,
@@ -25,7 +22,8 @@ public record DatabaseConnectionConfig(@JsonProperty("id") String id, @JsonPrope
     public static final int MAX_ROWS_LIMIT = 2000;
 
     public DatabaseConnectionConfig {
-        id = normalizeId(id, displayName);
+        String slugSource = StringUtils.defaultIfBlank(id, displayName);
+        id = PathUtils.sanitizeSlug(StringUtils.defaultString(slugSource), 48, "database");
         displayName = StringUtils.defaultIfBlank(StringUtils.trimToEmpty(displayName), id);
         description = StringUtils.trimToEmpty(description);
         type = DatabaseType.fromString(type).getId();
@@ -40,9 +38,7 @@ public record DatabaseConnectionConfig(@JsonProperty("id") String id, @JsonPrope
         maxRows = clampInt(maxRows, DEFAULT_MAX_ROWS, 1, MAX_ROWS_LIMIT);
     }
 
-    /**
-     * Backward-compatible constructor without an explicit global description.
-     */
+    /** Backward-compatible constructor without an explicit global description. */
     public DatabaseConnectionConfig(String id, String displayName, String type, String url, String username,
             String credentialSource, String passwordEnv, List<String> driverPaths, String driverClass,
             String defaultSchema, int queryTimeoutSeconds, int maxRows) {
@@ -50,44 +46,19 @@ public record DatabaseConnectionConfig(@JsonProperty("id") String id, @JsonPrope
                 defaultSchema, queryTimeoutSeconds, maxRows);
     }
 
-    /**
-     * Resolves the {@link DatabaseType} enum for this connection.
-     */
     public DatabaseType resolveType() {
         return DatabaseType.fromString(type);
     }
 
-    /**
-     * Resolves the {@link CredentialSource} enum for this connection.
-     */
     public CredentialSource resolveCredentialSource() {
         return CredentialSource.fromString(credentialSource);
-    }
-
-    private static String normalizeId(String rawId, String rawDisplayName) {
-        if (rawId != null && !rawId.isBlank()) {
-            return PathUtils.sanitizeSlug(rawId, 48, "database");
-        }
-        if (rawDisplayName != null && !rawDisplayName.isBlank()) {
-            return PathUtils.sanitizeSlug(rawDisplayName, 48, "database");
-        }
-        return "database";
     }
 
     private static List<String> normalizeDriverPaths(List<String> rawPaths) {
         if (rawPaths == null || rawPaths.isEmpty()) {
             return List.of();
         }
-        List<String> cleaned = new ArrayList<>();
-        for (String path : rawPaths) {
-            if (path != null && !path.isBlank()) {
-                String trimmed = path.trim();
-                if (!cleaned.contains(trimmed)) {
-                    cleaned.add(trimmed);
-                }
-            }
-        }
-        return List.copyOf(cleaned);
+        return rawPaths.stream().filter(StringUtils::isNotBlank).map(String::trim).distinct().toList();
     }
 
     private static int clampInt(int value, int defaultValue, int min, int max) {

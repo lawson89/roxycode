@@ -2,9 +2,7 @@ package org.roxycode.app.model;
 
 import java.util.Locale;
 
-/**
- * Defines how a database connection password is supplied.
- */
+/** Defines how a database connection password is supplied. */
 public enum CredentialSource {
     KEYRING("keyring", "OS Keyring"), ENV("env", "Environment Variable"), NONE("none", "None");
 
@@ -16,23 +14,15 @@ public enum CredentialSource {
         this.displayName = displayName;
     }
 
-    /**
-     * Returns the stable TOML identifier.
-     */
     public String getId() {
         return id;
     }
 
-    /**
-     * Returns the human-readable label.
-     */
     public String getDisplayName() {
         return displayName;
     }
 
-    /**
-     * Parses a credential source identifier or display name, defaulting to {@link #KEYRING}.
-     */
+    /** Parses a credential source identifier or display name, defaulting to {@link #KEYRING}. */
     public static CredentialSource fromString(String raw) {
         if (raw == null || raw.isBlank()) {
             return KEYRING;

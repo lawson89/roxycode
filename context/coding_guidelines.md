@@ -22,6 +22,6 @@
 *   **Prohibit ternary operators:** Avoid the ternary operator (`? :`) entirely. Always use explicit `if/else` blocks to ensure conditional logic is immediately obvious at a glance.
 
 ### Architecture and Data
-*   **Use Records with Jexl compliance:** Utilize Java 21 `record` structures for data-carrying classes to eliminate the clutter of manual constructors, `equals()`, and `hashCode()` methods. **However, if the data model will be evaluated by or exposed to the Jexl engine, it must conform to JavaBean conventions.** For these specific records, explicitly define standard getters and setters (e.g., `getProperty()`, `setProperty()`) inside the record body, or fall back to a standard POJO.
+*   **Use Records natively with Jexl:** Utilize Java 21 `record` structures for data-carrying classes to eliminate manual constructors, getters, `equals()`, and `hashCode()` methods. `JsPolyfillUberspect` natively resolves `record.component` property access on any Java `record` exposed to the JEXL engine, so no manual JavaBean `get*()`/`is*()` methods are needed.
 *   **Prefer composition over inheritance:** Avoid using the `extends` keyword and deep abstract class hierarchies. Favor flat class structures and build complex types through composition.
 *   **Avoid generics wildcards:** Avoid complex bounded generics (such as `<? super T>` or `<? extends T>`) unless strictly mandated by a specific Java API. Keep type parameters simple and concrete.

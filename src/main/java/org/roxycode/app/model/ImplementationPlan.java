@@ -16,9 +16,7 @@ import org.roxycode.app.util.FrontmatterUtils;
 import org.roxycode.app.util.PathUtils;
 import org.roxycode.app.util.TokenUtils;
 
-/**
- * Represents a structured implementation plan for a feature or task.
- */
+/** Represents a structured implementation plan for a feature or task. */
 public record ImplementationPlan(String title, String goal, List<String> requirements, List<TechStep> technicalSteps,
         boolean userApproved, String approvalTimestamp, String approvedBy, String completedBy, String completedOn,
         List<LogEntry> handoffLog, List<FileChange> fileChanges, UsageSummary usageSummary, String commitMessage,
@@ -30,15 +28,11 @@ public record ImplementationPlan(String title, String goal, List<String> require
     public static final String STEP_CODE_REVIEW = "Automated code review passes";
     private static final String CODE_FENCE = "```";
 
-    /**
-     * Represents a single technical implementation step.
-     */
+    /** Represents a single technical implementation step. */
     public record TechStep(String description, boolean completed) {
     }
 
-    /**
-     * Represents a file change recorded during implementation.
-     */
+    /** Represents a file change recorded during implementation. */
     public record FileChange(String path, FileChangedEvent.ChangeType changeType) {
         public FileChange {
             path = PathUtils.normalizeRelativePath(path);
@@ -46,9 +40,7 @@ public record ImplementationPlan(String title, String goal, List<String> require
         }
     }
 
-    /**
-     * Represents an entry in the plan's handoff log.
-     */
+    /** Represents an entry in the plan's handoff log. */
     public record LogEntry(String timestamp, String user, String message) {
         private static final int TIMESTAMP_LENGTH = 19;
 
@@ -57,9 +49,7 @@ public record ImplementationPlan(String title, String goal, List<String> require
         }
     }
 
-    /**
-     * Concise summary of AI token usage and estimated cost.
-     */
+    /** Concise summary of AI token usage and estimated cost. */
     public record UsageSummary(int modelCalls, long promptTokens, long cachedInputTokens, long outputTokens,
             long totalTokens, double estimatedCostUsd) {
 
@@ -161,40 +151,39 @@ public record ImplementationPlan(String title, String goal, List<String> require
     }
 
     public ImplementationPlan withNormalizedStepsFrom(ImplementationPlan previousPlan) {
-        Set<String> previouslyCompleted = Set.of();
-        List<LogEntry> preservedLog = handoffLog;
-        List<FileChange> preservedChanges = fileChanges;
-        UsageSummary preservedUsage = usageSummary;
-        String preservedCommitMsg = commitMessage;
-        String preservedReviewNotes = finalReviewNotes;
+        Set<String> prevCompleted = Set.of();
+        List<LogEntry> log = handoffLog;
+        List<FileChange> changes = fileChanges;
+        UsageSummary usage = usageSummary;
+        String commitMsg = commitMessage;
+        String reviewNotes = finalReviewNotes;
         if (previousPlan != null) {
-            previouslyCompleted = previousPlan.collectCompletedNonVerificationSteps();
-            if (preservedLog.isEmpty()) {
-                preservedLog = previousPlan.handoffLog();
+            prevCompleted = previousPlan.collectCompletedNonVerificationSteps();
+            if (log.isEmpty()) {
+                log = previousPlan.handoffLog();
             }
-            if (preservedChanges.isEmpty()) {
-                preservedChanges = previousPlan.fileChanges();
+            if (changes.isEmpty()) {
+                changes = previousPlan.fileChanges();
             }
             if (previousPlan.usageSummary().hasUsage()) {
-                preservedUsage = previousPlan.usageSummary().merge(usageSummary);
+                usage = previousPlan.usageSummary().merge(usageSummary);
             }
-            if (preservedCommitMsg == null) {
-                preservedCommitMsg = previousPlan.commitMessage();
+            if (commitMsg == null) {
+                commitMsg = previousPlan.commitMessage();
             }
-            if (preservedReviewNotes == null) {
-                preservedReviewNotes = previousPlan.finalReviewNotes();
+            if (reviewNotes == null) {
+                reviewNotes = previousPlan.finalReviewNotes();
             }
         }
-
         List<TechStep> steps = new ArrayList<>();
         boolean hasCompile = false;
         boolean hasTests = false;
         boolean hasReview = false;
         for (TechStep s : technicalSteps) {
             String desc = s.description();
-            boolean preservedCompleted = s.completed() || (!isMandatoryVerificationStep(desc)
-                    && previouslyCompleted.contains(normalizeStepDescription(desc)));
-            steps.add(new TechStep(desc, preservedCompleted));
+            boolean done = s.completed()
+                    || (!isMandatoryVerificationStep(desc) && prevCompleted.contains(normalizeStepDescription(desc)));
+            steps.add(new TechStep(desc, done));
             hasCompile |= isCompileStep(desc);
             hasTests |= isUnitTestStep(desc);
             hasReview |= isCodeReviewStep(desc);
@@ -208,10 +197,8 @@ public record ImplementationPlan(String title, String goal, List<String> require
         if (!hasReview) {
             steps.add(new TechStep(STEP_CODE_REVIEW, false));
         }
-
         return new ImplementationPlan(title, goal, requirements, steps, userApproved, approvalTimestamp, approvedBy,
-                completedBy, completedOn, preservedLog, preservedChanges, preservedUsage, preservedCommitMsg,
-                preservedReviewNotes);
+                completedBy, completedOn, log, changes, usage, commitMsg, reviewNotes);
     }
 
     public List<String> collectIncompleteSteps(boolean excludeCodeReviewStep) {
@@ -302,26 +289,24 @@ public record ImplementationPlan(String title, String goal, List<String> require
         if (StringUtils.isBlank(normalizedPath)) {
             return this;
         }
-        FileChangedEvent.ChangeType resolvedType = Objects.requireNonNullElse(changeType,
+        FileChangedEvent.ChangeType resolved = Objects.requireNonNullElse(changeType,
                 FileChangedEvent.ChangeType.MODIFIED);
         List<FileChange> updated = new ArrayList<>(fileChanges);
-        int existingIndex = -1;
+        int idx = -1;
         for (int i = 0; i < updated.size(); i++) {
             if (updated.get(i).path().equals(normalizedPath)) {
-                existingIndex = i;
+                idx = i;
                 break;
             }
         }
-        if (existingIndex < 0) {
-            updated.add(new FileChange(normalizedPath, resolvedType));
+        if (idx < 0) {
+            updated.add(new FileChange(normalizedPath, resolved));
         } else {
-            FileChangedEvent.ChangeType previousType = updated.get(existingIndex).changeType();
-            FileChangedEvent.ChangeType nextType = resolvedType;
-            if (previousType == FileChangedEvent.ChangeType.CREATED
-                    && resolvedType == FileChangedEvent.ChangeType.MODIFIED) {
-                nextType = FileChangedEvent.ChangeType.CREATED;
+            FileChangedEvent.ChangeType prev = updated.get(idx).changeType();
+            if (prev == FileChangedEvent.ChangeType.CREATED && resolved == FileChangedEvent.ChangeType.MODIFIED) {
+                resolved = FileChangedEvent.ChangeType.CREATED;
             }
-            updated.set(existingIndex, new FileChange(normalizedPath, nextType));
+            updated.set(idx, new FileChange(normalizedPath, resolved));
         }
         return new ImplementationPlan(title, goal, requirements, technicalSteps, userApproved, approvalTimestamp,
                 approvedBy, completedBy, completedOn, handoffLog, updated, usageSummary, commitMessage,
@@ -331,26 +316,23 @@ public record ImplementationPlan(String title, String goal, List<String> require
     public String toMarkdown(boolean includeHandoffLog) {
         StringBuilder md = new StringBuilder("# Implementation Plan: ").append(StringUtils.defaultString(title))
                 .append("\n\n**Goal:** ").append(StringUtils.defaultString(goal)).append('\n');
-
-        boolean hasMoveApproval = userApproved || StringUtils.isNotBlank(approvedBy)
+        boolean hasMove = userApproved || StringUtils.isNotBlank(approvedBy)
                 || StringUtils.isNotBlank(approvalTimestamp);
-        boolean hasFinalAcceptance = StringUtils.isNotBlank(completedBy) || StringUtils.isNotBlank(completedOn);
-        if (hasMoveApproval || hasFinalAcceptance) {
+        boolean hasAccept = StringUtils.isNotBlank(completedBy) || StringUtils.isNotBlank(completedOn);
+        if (hasMove || hasAccept) {
             md.append("\n## Approvals\n");
-            if (hasMoveApproval) {
+            if (hasMove) {
                 md.append("- **Move to Code:** Approved by ").append(StringUtils.defaultIfBlank(approvedBy, "User"))
                         .append(" on ").append(StringUtils.defaultIfBlank(approvalTimestamp, "N/A")).append('\n');
             }
-            if (hasFinalAcceptance) {
+            if (hasAccept) {
                 md.append("- **Final Acceptance:** Accepted by ")
                         .append(StringUtils.defaultIfBlank(completedBy, "User")).append(" on ")
                         .append(StringUtils.defaultIfBlank(completedOn, "N/A")).append('\n');
             }
         }
-
         appendBulletList(md, "## Requirements", requirements);
         md.append("\n## Technical Steps\n").append(formatStepsMarkdown());
-
         if (StringUtils.isNotBlank(finalReviewNotes)) {
             md.append("\n## Final Review Notes\n").append(finalReviewNotes).append('\n');
         }
@@ -374,17 +356,16 @@ public record ImplementationPlan(String title, String goal, List<String> require
 
     private void appendUsageMarkdown(StringBuilder md) {
         long uncachedInput = Math.max(0L, usageSummary.promptTokens() - usageSummary.cachedInputTokens());
-        md.append("\n## Token Usage & Cost\n\n| Metric | Value |\n| :--- | ---: |\n");
-        md.append("| Model Calls | ").append(usageSummary.modelCalls()).append(" |\n");
-        md.append("| Input Tokens (Uncached / Cached) | ").append(TokenUtils.formatTokenCount(uncachedInput))
-                .append(" / ").append(TokenUtils.formatTokenCount(usageSummary.cachedInputTokens())).append(" (")
-                .append(usageSummary.cacheHitPercent()).append("% hit) |\n");
-        md.append("| Output + Thinking Tokens | ").append(TokenUtils.formatTokenCount(usageSummary.outputTokens()))
-                .append(" |\n");
-        md.append("| **Total Tokens** | **").append(TokenUtils.formatTokenCount(usageSummary.totalTokens()))
-                .append(" (").append(usageSummary.totalTokens()).append(")** |\n");
-        md.append("| **Estimated Cost (USD)** | **").append(TokenUtils.formatCostUsd(usageSummary.estimatedCostUsd()))
-                .append("** |\n");
+        md.append("\n## Token Usage & Cost\n\n| Metric | Value |\n| :--- | ---: |\n").append("| Model Calls | ")
+                .append(usageSummary.modelCalls()).append(" |\n").append("| Input Tokens (Uncached / Cached) | ")
+                .append(TokenUtils.formatTokenCount(uncachedInput)).append(" / ")
+                .append(TokenUtils.formatTokenCount(usageSummary.cachedInputTokens())).append(" (")
+                .append(usageSummary.cacheHitPercent()).append("% hit) |\n").append("| Output + Thinking Tokens | ")
+                .append(TokenUtils.formatTokenCount(usageSummary.outputTokens())).append(" |\n")
+                .append("| **Total Tokens** | **").append(TokenUtils.formatTokenCount(usageSummary.totalTokens()))
+                .append(" (").append(usageSummary.totalTokens()).append(")** |\n")
+                .append("| **Estimated Cost (USD)** | **")
+                .append(TokenUtils.formatCostUsd(usageSummary.estimatedCostUsd())).append("** |\n");
     }
 
     public String toArchivedMarkdown(String id, String projectName, String projectPath) {
@@ -406,8 +387,13 @@ public record ImplementationPlan(String title, String goal, List<String> require
     }
 
     public String toFullMarkdown() {
-        StringBuilder sb = new StringBuilder(toMarkdown(true));
-        appendChangesMarkdown(sb);
+        StringBuilder sb = new StringBuilder(toMarkdown(true)).append("\n## Changes\n");
+        String changes = formatChangesText();
+        if (NO_FILES_CHANGED.equals(changes)) {
+            sb.append(NO_FILES_CHANGED).append('\n');
+        } else {
+            sb.append(CODE_FENCE).append("text\n").append(changes).append('\n').append(CODE_FENCE).append('\n');
+        }
         return sb.toString();
     }
 
@@ -424,16 +410,6 @@ public record ImplementationPlan(String title, String goal, List<String> require
             sb.append(change.changeType().getLabel()).append(' ').append(change.path());
         }
         return sb.toString();
-    }
-
-    public void appendChangesMarkdown(StringBuilder sb) {
-        String changes = formatChangesText();
-        sb.append("\n## Changes\n");
-        if (NO_FILES_CHANGED.equals(changes)) {
-            sb.append(NO_FILES_CHANGED).append('\n');
-        } else {
-            sb.append(CODE_FENCE).append("text\n").append(changes).append('\n').append(CODE_FENCE).append('\n');
-        }
     }
 
     public String formatStepsMarkdown() {

@@ -13,32 +13,4 @@ public record SymbolInfo(String name, String kind, String path, int startLine, i
         scope = StringUtils.defaultString(scope);
         signature = StringUtils.defaultString(signature);
     }
-
-    public String getName() {
-        return name;
-    }
-
-    public String getKind() {
-        return kind;
-    }
-
-    public String getPath() {
-        return path;
-    }
-
-    public int getStartLine() {
-        return startLine;
-    }
-
-    public int getEndLine() {
-        return endLine;
-    }
-
-    public String getScope() {
-        return scope;
-    }
-
-    public String getSignature() {
-        return signature;
-    }
 }

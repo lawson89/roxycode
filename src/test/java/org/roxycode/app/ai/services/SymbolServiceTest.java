@@ -327,19 +327,18 @@ class SymbolServiceTest {
         assertEquals(2, usages.size());
 
         SymbolUsage prodUsage = usages.get(0);
-        assertEquals("src/main/java/app/Caller.java", prodUsage.getPath());
-        assertEquals(6, prodUsage.getLine());
-        assertEquals(14, prodUsage.getColumn());
-        assertEquals("tool.executeJexl('1+1');", prodUsage.getSnippet());
-        assertEquals("Caller.run", prodUsage.getEnclosingSymbol());
-        assertFalse(prodUsage.isTestFile());
+        assertEquals("src/main/java/app/Caller.java", prodUsage.path());
+        assertEquals(6, prodUsage.line());
+        assertEquals(14, prodUsage.column());
+        assertEquals("tool.executeJexl('1+1');", prodUsage.snippet());
+        assertEquals("Caller.run", prodUsage.enclosingSymbol());
+        assertFalse(prodUsage.testFile());
 
         SymbolUsage testUsage = usages.get(1);
-        assertEquals("src/test/java/app/CallerTest.java", testUsage.getPath());
-        assertEquals(4, testUsage.getLine());
-        assertEquals("CallerTest.testRun", testUsage.getEnclosingSymbol());
-        assertTrue(testUsage.isTestFile());
-
+        assertEquals("src/test/java/app/CallerTest.java", testUsage.path());
+        assertEquals(4, testUsage.line());
+        assertEquals("CallerTest.testRun", testUsage.enclosingSymbol());
+        assertTrue(testUsage.testFile());
         assertTrue(symbolService.findUsages(null).isEmpty());
         assertTrue(symbolService.findUsages("   ").isEmpty());
     }

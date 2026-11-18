@@ -16,9 +16,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-/**
- * Manages database credentials using the native OS keyring with environment variable and session-only fallbacks.
- */
+/** Manages database and AI credentials using the native OS keyring with env var and session fallbacks. */
 @Service
 public class CredentialStoreService implements AutoCloseable {
 
@@ -61,17 +59,13 @@ public class CredentialStoreService implements AutoCloseable {
         this.backendSupplier = backendSupplier;
     }
 
-    /**
-     * Returns {@code true} if a persistent OS keyring backend is available for storing database passwords.
-     */
+    /** Returns {@code true} if a persistent OS keyring backend is available. */
     public boolean isNativeKeyringAvailable() {
         KeyringBackend resolved = getOrInitBackend();
         return resolved != null && resolved.isPersistent();
     }
 
-    /**
-     * Stores a password for the given connection id in the OS keyring (or session memory if unavailable).
-     */
+    /** Stores a password for {@code connectionId} in the OS keyring (or session memory if unavailable). */
     public void savePassword(String connectionId, String password) {
         if (connectionId == null || connectionId.isBlank() || password == null) {
             return;
@@ -91,28 +85,17 @@ public class CredentialStoreService implements AutoCloseable {
         sessionPasswords.put(key, password.toCharArray());
     }
 
-    /**
-     * Deletes any stored password for the given connection id from both OS keyring and session memory.
-     */
+    /** Deletes any stored password for {@code connectionId} from both OS keyring and session memory. */
     public void deletePassword(String connectionId) {
         if (connectionId == null || connectionId.isBlank()) {
             return;
         }
         String key = connectionId.trim();
         clearSessionPassword(key);
-        KeyringBackend resolved = getOrInitBackend();
-        if (resolved != null) {
-            try {
-                resolved.deletePassword(KEYRING_SERVICE_NAME, key);
-            } catch (PasswordAccessException e) {
-                log.debug("No keyring entry deleted for connection '{}': {}", key, e.getMessage());
-            }
-        }
+        deleteFromKeyring(getOrInitBackend(), KEYRING_SERVICE_NAME, key, "connection '" + key + "'");
     }
 
-    /**
-     * Returns {@code true} if a password is stored in the OS keyring or session memory for {@code connectionId}.
-     */
+    /** Returns {@code true} if a password is stored in the OS keyring or session memory for {@code connectionId}. */
     public boolean hasStoredPassword(String connectionId) {
         if (connectionId == null || connectionId.isBlank()) {
             return false;
@@ -121,28 +104,16 @@ public class CredentialStoreService implements AutoCloseable {
         if (sessionPasswords.containsKey(key)) {
             return true;
         }
-        KeyringBackend resolved = getOrInitBackend();
-        if (resolved == null) {
-            return false;
-        }
-        try {
-            String value = resolved.getPassword(KEYRING_SERVICE_NAME, key);
-            return value != null && !value.isEmpty();
-        } catch (PasswordAccessException e) {
-            return false;
-        }
+        String value = readFromKeyring(getOrInitBackend(), KEYRING_SERVICE_NAME, key, null);
+        return value != null && !value.isEmpty();
     }
 
-    /**
-     * Resolves the runtime password for {@code config} according to its {@link CredentialSource}.
-     */
+    /** Resolves the runtime password for {@code config} according to its {@link CredentialSource}. */
     public @Nullable String resolvePassword(DatabaseConnectionConfig config) {
         return resolvePassword(config, System::getenv);
     }
 
-    /**
-     * Resolves the runtime password for {@code config} using a custom environment lookup function.
-     */
+    /** Resolves the runtime password for {@code config} using a custom environment lookup function. */
     public @Nullable String resolvePassword(DatabaseConnectionConfig config,
             Function<String, @Nullable String> envLookup) {
         if (config == null) {
@@ -160,16 +131,9 @@ public class CredentialStoreService implements AutoCloseable {
             return envLookup.apply(envVar.trim());
         }
         String key = config.id();
-        KeyringBackend resolved = getOrInitBackend();
-        if (resolved != null) {
-            try {
-                String fromKeyring = resolved.getPassword(KEYRING_SERVICE_NAME, key);
-                if (fromKeyring != null) {
-                    return fromKeyring;
-                }
-            } catch (PasswordAccessException e) {
-                log.debug("OS keyring read failed for connection '{}': {}", key, e.getMessage());
-            }
+        String fromKeyring = readFromKeyring(getOrInitBackend(), KEYRING_SERVICE_NAME, key, "connection '" + key + "'");
+        if (fromKeyring != null) {
+            return fromKeyring;
         }
         char[] inMemory = sessionPasswords.get(key);
         if (inMemory != null) {
@@ -178,33 +142,20 @@ public class CredentialStoreService implements AutoCloseable {
         return null;
     }
 
-    /**
-     * Loads the Gemini API key from a persistent native OS keyring, or returns {@code null} if unavailable or unset.
-     */
+    /** Loads the Gemini API key from a persistent native OS keyring, or {@code null} if unavailable/unset. */
     public @Nullable String loadGeminiApiKey() {
-        KeyringBackend resolved = getOrInitBackend();
-        if (resolved == null || !resolved.isPersistent()) {
-            return null;
-        }
-        try {
-            return resolved.getPassword(AI_KEYRING_SERVICE_NAME, GEMINI_API_KEY_ACCOUNT);
-        } catch (PasswordAccessException e) {
-            log.debug("OS keyring read failed for Gemini API key: {}", e.getMessage());
-            return null;
-        }
+        KeyringBackend resolved = getPersistentBackend();
+        return readFromKeyring(resolved, AI_KEYRING_SERVICE_NAME, GEMINI_API_KEY_ACCOUNT, "Gemini API key");
     }
 
-    /**
-     * Stores the Gemini API key in a persistent native OS keyring. Returns {@code true} if persisted to the native
-     * keyring, or {@code false} if no persistent keyring is available or writing failed.
-     */
+    /** Stores the Gemini API key in a persistent native OS keyring, returning {@code true} if persisted. */
     public boolean saveGeminiApiKey(@Nullable String apiKey) {
         if (apiKey == null || apiKey.isBlank()) {
             deleteGeminiApiKey();
             return isNativeKeyringAvailable();
         }
-        KeyringBackend resolved = getOrInitBackend();
-        if (resolved == null || !resolved.isPersistent()) {
+        KeyringBackend resolved = getPersistentBackend();
+        if (resolved == null) {
             return false;
         }
         try {
@@ -216,19 +167,9 @@ public class CredentialStoreService implements AutoCloseable {
         }
     }
 
-    /**
-     * Deletes any stored Gemini API key from the persistent native OS keyring.
-     */
+    /** Deletes any stored Gemini API key from the persistent native OS keyring. */
     public void deleteGeminiApiKey() {
-        KeyringBackend resolved = getOrInitBackend();
-        if (resolved == null || !resolved.isPersistent()) {
-            return;
-        }
-        try {
-            resolved.deletePassword(AI_KEYRING_SERVICE_NAME, GEMINI_API_KEY_ACCOUNT);
-        } catch (PasswordAccessException e) {
-            log.debug("No keyring entry deleted for Gemini API key: {}", e.getMessage());
-        }
+        deleteFromKeyring(getPersistentBackend(), AI_KEYRING_SERVICE_NAME, GEMINI_API_KEY_ACCOUNT, "Gemini API key");
     }
 
     @Override
@@ -247,6 +188,41 @@ public class CredentialStoreService implements AutoCloseable {
                 }
             }
             initialized = false;
+        }
+    }
+
+    private @Nullable KeyringBackend getPersistentBackend() {
+        KeyringBackend resolved = getOrInitBackend();
+        if (resolved == null || !resolved.isPersistent()) {
+            return null;
+        }
+        return resolved;
+    }
+
+    private static @Nullable String readFromKeyring(@Nullable KeyringBackend backend, String service, String account,
+            @Nullable String logLabel) {
+        if (backend == null) {
+            return null;
+        }
+        try {
+            return backend.getPassword(service, account);
+        } catch (PasswordAccessException e) {
+            if (logLabel != null) {
+                log.debug("OS keyring read failed for {}: {}", logLabel, e.getMessage());
+            }
+            return null;
+        }
+    }
+
+    private static void deleteFromKeyring(@Nullable KeyringBackend backend, String service, String account,
+            String logLabel) {
+        if (backend == null) {
+            return;
+        }
+        try {
+            backend.deletePassword(service, account);
+        } catch (PasswordAccessException e) {
+            log.debug("No keyring entry deleted for {}: {}", logLabel, e.getMessage());
         }
     }
 

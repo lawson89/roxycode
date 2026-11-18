@@ -49,35 +49,34 @@ class DbServiceTest {
 
             List<DbConnectionSummary> conns = dbService.listConnections();
             assertEquals(1, conns.size());
-            assertEquals("h2-qa", conns.get(0).getId());
-            assertEquals("QA orders and customers database", conns.get(0).getDescription());
+            assertEquals("h2-qa", conns.get(0).id());
+            assertEquals("QA orders and customers database", conns.get(0).description());
 
             List<String> schemas = dbService.listSchemas("h2-qa");
             assertTrue(schemas.contains("PUBLIC"));
 
             List<DbTableSummary> tables = dbService.listTables("h2-qa");
-            assertTrue(tables.stream().anyMatch(t -> "ORDERS".equalsIgnoreCase(t.getName())));
+            assertTrue(tables.stream().anyMatch(t -> "ORDERS".equalsIgnoreCase(t.name())));
 
             DbTableDescription desc = dbService.describeTable("h2-qa", "ORDERS");
-            assertEquals(3, desc.getColumns().size());
-            assertTrue(
-                    desc.getColumns().stream().anyMatch(c -> "ID".equalsIgnoreCase(c.getName()) && c.isPrimaryKey()));
-            assertFalse(desc.getForeignKeys().isEmpty());
-            assertFalse(desc.getIndexes().isEmpty());
+            assertEquals(3, desc.columns().size());
+            assertTrue(desc.columns().stream().anyMatch(c -> "ID".equalsIgnoreCase(c.name()) && c.primaryKey()));
+            assertFalse(desc.foreignKeys().isEmpty());
+            assertFalse(desc.indexes().isEmpty());
 
             DbQueryResult result = dbService.query("h2-qa", "SELECT id, total FROM orders ORDER BY id");
-            assertEquals(2, result.getRowCount());
-            assertTrue(result.isTruncated());
+            assertEquals(2, result.rowCount());
+            assertTrue(result.truncated());
 
             DbQueryResult explain = dbService.explain("h2-qa", "SELECT * FROM orders WHERE customer_id = 1");
-            assertFalse(explain.getRows().isEmpty());
+            assertFalse(explain.rows().isEmpty());
 
             assertThrows(IllegalArgumentException.class, () -> dbService.query("h2-qa", "DELETE FROM orders"));
             assertThrows(IllegalArgumentException.class, () -> dbService.listTables("ungranted-db"));
 
             DbTestResult testRes = dbService.testConnection(h2Cfg, null);
-            assertTrue(testRes.isSuccess());
-            assertTrue(testRes.getServerSummary().toUpperCase().contains("H2"));
+            assertTrue(testRes.success());
+            assertTrue(testRes.serverSummary().toUpperCase().contains("H2"));
 
             dbService.onDatabaseConfigChanged(new DatabaseConfigChangedEvent(false));
         }
@@ -101,18 +100,18 @@ class DbServiceTest {
             harness.configService.saveProjectGrants(List.of(new ProjectDatabaseGrant("local-sqlite", "", "")));
 
             DbQueryResult qr = dbService.query("local-sqlite", "SELECT id, label FROM items");
-            assertEquals(1, qr.getRowCount());
-            assertEquals("Widget", qr.getRows().get(0).get("label"));
+            assertEquals(1, qr.rowCount());
+            assertEquals("Widget", qr.rows().get(0).get("label"));
 
             DbQueryResult pragmaRes = dbService.query("local-sqlite", "PRAGMA table_info(items)");
-            assertEquals(2, pragmaRes.getRowCount());
+            assertEquals(2, pragmaRes.rowCount());
 
             Path missingSqlite = tempDir.resolve("does-not-exist.db");
             DatabaseConnectionConfig missingCfg = new DatabaseConnectionConfig("missing-sqlite", "Missing", "sqlite",
                     "jdbc:sqlite:" + missingSqlite, "", "none", "", List.of(), "", "", 15, 50);
             DbTestResult missingTest = dbService.testConnection(missingCfg, null);
-            assertFalse(missingTest.isSuccess());
-            assertTrue(missingTest.getMessage().startsWith("Connection failed:"));
+            assertFalse(missingTest.success());
+            assertTrue(missingTest.message().startsWith("Connection failed:"));
             assertFalse(Files.exists(missingSqlite));
 
             String formatted = DbService.formatConnectionFailureMessage(

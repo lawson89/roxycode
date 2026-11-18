@@ -5,16 +5,16 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.HexFormat;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
@@ -24,58 +24,30 @@ import org.apache.commons.lang3.StringUtils;
 import org.roxycode.app.ai.AiConfig;
 import org.springframework.core.io.ClassPathResource;
 
+/** File path, serialization, hashing, and archive naming utilities. */
 public final class PathUtils {
     private static final String CURRENT_DIR = ".";
     private static final String USER_HOME_TOKEN = "~";
-
     private static final String MD_EXTENSION = ".md";
     private static final DateTimeFormatter ARCHIVE_TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss",
             Locale.ROOT);
     private static final Set<PosixFilePermission> OWNER_ONLY_PERMISSIONS = PosixFilePermissions.fromString("rw-------");
 
-    /**
-     * Represents a target file for archiving, including its unique ID and path.
-     *
-     * @param id
-     *            the unique ID for the archived file
-     * @param file
-     *            the path to the archived file
-     */
+    /** Target file for archiving, including its unique ID and path. */
     public record ArchiveFileTarget(String id, Path file) {
     }
 
     private PathUtils() {
     }
 
-    /**
-     * Creates the parent directories for the given file path if they do not exist.
-     *
-     * @param filePath
-     *            the file path
-     * @throws IOException
-     *             if directory creation fails
-     */
+    /** Creates parent directories for the given file path if they do not exist. */
     public static void createParentDirectories(Path filePath) throws IOException {
         if (filePath != null && filePath.getParent() != null) {
             Files.createDirectories(filePath.getParent());
         }
     }
 
-    /**
-     * Reads a TOML file into the specified type, returning a fallback if the file does not exist or parsing fails.
-     *
-     * @param <T>
-     *            the result type
-     * @param path
-     *            the path to the TOML file
-     * @param type
-     *            the target class
-     * @param fallback
-     *            the fallback value
-     * @param mapper
-     *            the TomlMapper to use (optional)
-     * @return the parsed object or fallback
-     */
+    /** Reads a TOML file into {@code type}, returning {@code fallback} if missing or invalid. */
     public static <T> T readTomlOrDefault(Path path, Class<T> type, T fallback, TomlMapper mapper) {
         if (path == null || !Files.exists(path)) {
             return fallback;
@@ -88,36 +60,13 @@ public final class PathUtils {
         }
     }
 
-    /**
-     * Writes the given object to a TOML file.
-     *
-     * @param path
-     *            the target path
-     * @param value
-     *            the object to write
-     * @param mapper
-     *            the TomlMapper to use (optional)
-     * @throws IOException
-     *             if writing fails
-     */
+    /** Writes {@code value} to a TOML file, creating parent directories if needed. */
     public static void writeToml(Path path, Object value, TomlMapper mapper) throws IOException {
         createParentDirectories(path);
         Objects.requireNonNullElse(mapper, AiConfig.SHARED_TOML_MAPPER).writeValue(path.toFile(), value);
     }
 
-    /**
-     * Reads a JSON file into the specified type, returning a fallback if the file does not exist or parsing fails.
-     *
-     * @param <T>
-     *            the result type
-     * @param path
-     *            the path to the JSON file
-     * @param type
-     *            the target class
-     * @param fallback
-     *            the fallback value
-     * @return the parsed object or fallback
-     */
+    /** Reads a JSON file into {@code type}, returning {@code fallback} if missing or invalid. */
     public static <T> T readJsonOrDefault(Path path, Class<T> type, T fallback) {
         if (path == null || !Files.exists(path)) {
             return fallback;
@@ -129,27 +78,13 @@ public final class PathUtils {
         }
     }
 
-    /**
-     * Writes the given object to a JSON file with pretty printing.
-     *
-     * @param path
-     *            the target path
-     * @param value
-     *            the object to write
-     * @throws IOException
-     *             if writing fails
-     */
+    /** Writes {@code value} to a JSON file with pretty printing. */
     public static void writeJson(Path path, Object value) throws IOException {
         createParentDirectories(path);
         AiConfig.SHARED_OBJECT_MAPPER.writerWithDefaultPrettyPrinter().writeValue(path.toFile(), value);
     }
 
-    /**
-     * Deletes the file or directory if it exists, ignoring any IOExceptions.
-     *
-     * @param path
-     *            the path to delete
-     */
+    /** Deletes {@code path} if it exists, ignoring any {@link IOException}. */
     public static void deleteIfExistsQuietly(Path path) {
         if (path == null) {
             return;
@@ -161,19 +96,10 @@ public final class PathUtils {
         }
     }
 
-    /**
-     * Sets owner-only (rw-------) permissions on the given path if the file system supports POSIX attributes.
-     *
-     * @param path
-     *            the path to secure
-     * @throws IOException
-     *             if setting permissions fails
-     */
+    /** Sets owner-only ({@code rw-------}) permissions on {@code path} when POSIX attributes are supported. */
     public static void setOwnerOnlyPermissionsIfPosix(Path path) throws IOException {
-        if (path == null || !Files.exists(path)) {
-            return;
-        }
-        if (!path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
+        if (path == null || !Files.exists(path)
+                || !path.getFileSystem().supportedFileAttributeViews().contains("posix")) {
             return;
         }
         try {
@@ -183,14 +109,7 @@ public final class PathUtils {
         }
     }
 
-    /**
-     * Expands a leading {@code ~}, {@code ~/...}, or {@code ~\...} path prefix against the {@code user.home} system
-     * property. Paths like {@code ~username/...} are returned as-is without stripping characters.
-     *
-     * @param rawPath
-     *            the raw path string
-     * @return the expanded {@link Path}
-     */
+    /** Expands a leading {@code ~}, {@code ~/...}, or {@code ~\...} prefix against {@code user.home}. */
     public static Path expandUserHome(String rawPath) {
         String trimmed = StringUtils.trimToEmpty(rawPath);
         String userHome = System.getProperty("user.home");
@@ -205,13 +124,7 @@ public final class PathUtils {
         return Path.of(trimmed);
     }
 
-    /**
-     * Removes leading './' prefixes from the given path string.
-     *
-     * @param path
-     *            the path string
-     * @return the path without leading current directory markers
-     */
+    /** Removes leading {@code ./} prefixes from {@code path}. */
     public static String stripLeadingCurrentDir(String path) {
         if (path == null || path.isBlank()) {
             return "";
@@ -223,13 +136,7 @@ public final class PathUtils {
         return unix;
     }
 
-    /**
-     * Normalizes the given relative path string, converting separators to Unix style.
-     *
-     * @param path
-     *            the path string
-     * @return the normalized relative path
-     */
+    /** Normalizes a relative path string, converting separators to Unix style. */
     public static String normalizeRelativePath(String path) {
         String unix = stripLeadingCurrentDir(path);
         if (unix.isEmpty()) {
@@ -246,13 +153,7 @@ public final class PathUtils {
         }
     }
 
-    /**
-     * Returns the file name from the given path string.
-     *
-     * @param path
-     *            the path string
-     * @return the file name
-     */
+    /** Returns the file name from {@code path}. */
     public static String getFileName(String path) {
         if (StringUtils.isBlank(path)) {
             return "";
@@ -260,13 +161,7 @@ public final class PathUtils {
         return FilenameUtils.getName(FilenameUtils.separatorsToUnix(path.trim()));
     }
 
-    /**
-     * Returns the base name (file name without extension) from the given path string.
-     *
-     * @param path
-     *            the path string
-     * @return the base name
-     */
+    /** Returns the file name without extension from {@code path}. */
     public static String getBaseName(String path) {
         String fileName = getFileName(path);
         if (fileName.isEmpty() || fileName.lastIndexOf('.') <= 0) {
@@ -275,15 +170,7 @@ public final class PathUtils {
         return FilenameUtils.removeExtension(fileName);
     }
 
-    /**
-     * Returns the lowercase file extension from the given path string.
-     *
-     * @param path
-     *            the path string
-     * @param allowLeadingDotFile
-     *            whether to treat leading dots as part of the filename
-     * @return the lowercase extension, or empty string if none
-     */
+    /** Returns the lowercase file extension from {@code path}, or empty string if none. */
     public static String getLowerExtension(String path, boolean allowLeadingDotFile) {
         String fileName = getFileName(path);
         if (fileName.isEmpty() || (!allowLeadingDotFile && StringUtils.isEmpty(FilenameUtils.getBaseName(fileName)))) {
@@ -292,17 +179,7 @@ public final class PathUtils {
         return FilenameUtils.getExtension(fileName).toLowerCase(Locale.ROOT);
     }
 
-    /**
-     * Sanitizes a string into a URL-friendly slug (lowercase alphanumeric and hyphens).
-     *
-     * @param raw
-     *            the raw string
-     * @param maxLength
-     *            the maximum length of the slug
-     * @param fallback
-     *            the fallback slug if the result is empty
-     * @return the sanitized slug
-     */
+    /** Sanitizes {@code raw} into a lowercase alphanumeric-and-hyphen slug. */
     public static String sanitizeSlug(String raw, int maxLength, String fallback) {
         String normalized = StringUtils.defaultString(raw).toLowerCase(Locale.ROOT);
         String sanitized = normalized.replaceAll("[^a-z0-9]+", "-").replaceAll("(^-+|-+$)", "");
@@ -323,17 +200,7 @@ public final class PathUtils {
         return OffsetDateTime.now().format(ARCHIVE_TIMESTAMP_FORMATTER);
     }
 
-    /**
-     * Formats an ISO-8601 timestamp string for display.
-     *
-     * @param rawTimestamp
-     *            the ISO timestamp string
-     * @param maxLength
-     *            the maximum length for the result
-     * @param emptyFallback
-     *            the fallback string if the timestamp is blank
-     * @return the formatted display timestamp
-     */
+    /** Formats an ISO-8601 timestamp string for display. */
     public static String formatTimestampDisplay(String rawTimestamp, int maxLength, String emptyFallback) {
         if (StringUtils.isBlank(rawTimestamp)) {
             return emptyFallback;
@@ -357,23 +224,7 @@ public final class PathUtils {
         return new ArchiveFileTarget(id, targetFile);
     }
 
-    /**
-     * Prepares a unique archive file target based on a timestamp and title.
-     *
-     * @param archiveDir
-     *            the archive directory
-     * @param isoTimestamp
-     *            the ISO timestamp
-     * @param title
-     *            the title for the archive
-     * @param maxSlugLength
-     *            the maximum slug length
-     * @param fallbackSlug
-     *            the fallback slug
-     * @return the resolved archive file target
-     * @throws IOException
-     *             if directory creation fails
-     */
+    /** Prepares a unique archive file target based on a timestamp and title. */
     public static ArchiveFileTarget prepareArchiveTarget(Path archiveDir, String isoTimestamp, String title,
             int maxSlugLength, String fallbackSlug) throws IOException {
         Files.createDirectories(archiveDir);
@@ -382,15 +233,7 @@ public final class PathUtils {
         return resolveUniqueArchiveFile(archiveDir, tsPrefix + "-" + slug);
     }
 
-    /**
-     * Computes the SHA-256 hash of the given input and returns the first N bytes as a hex string.
-     *
-     * @param input
-     *            the input string
-     * @param byteCount
-     *            the number of bytes to include in the hex string
-     * @return the hex-encoded hash prefix
-     */
+    /** Computes the SHA-256 hash of {@code input} and returns the first {@code byteCount} bytes as hex. */
     public static String computeSha256Hex(String input, int byteCount) {
         try {
             byte[] digest = MessageDigest.getInstance("SHA-256")
@@ -402,17 +245,7 @@ public final class PathUtils {
         }
     }
 
-    /**
-     * Reads a classpath resource as a UTF-8 string.
-     *
-     * @param path
-     *            the resource path
-     * @param anchorClass
-     *            the class whose class loader should be used
-     * @return the resource content as a string
-     * @throws IOException
-     *             if reading fails
-     */
+    /** Reads a classpath resource as a UTF-8 string using {@code anchorClass}'s class loader. */
     @SuppressWarnings("PMD.UseProperClassLoader")
     public static String readClasspathResourceUtf8(String path, Class<?> anchorClass) throws IOException {
         ClassPathResource resource = new ClassPathResource(path, anchorClass.getClassLoader());

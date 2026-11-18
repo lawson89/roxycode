@@ -15,28 +15,4 @@ public record BuildResult(boolean success, int exitCode, String output, List<Str
     public BuildResult(boolean success, int exitCode, String output, List<String> errors, List<String> failedTests) {
         this(success, exitCode, output, errors, failedTests, false);
     }
-
-    public boolean isSuccess() {
-        return success;
-    }
-
-    public int getExitCode() {
-        return exitCode;
-    }
-
-    public String getOutput() {
-        return output;
-    }
-
-    public List<String> getErrors() {
-        return errors;
-    }
-
-    public List<String> getFailedTests() {
-        return failedTests;
-    }
-
-    public boolean isTimedOut() {
-        return timedOut;
-    }
 }

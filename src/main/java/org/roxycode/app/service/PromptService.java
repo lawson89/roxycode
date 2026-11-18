@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.text.StringSubstitutor;
 import org.roxycode.app.ai.JexlServiceRegistry;
@@ -35,9 +36,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
-/**
- * Orchestrates the construction of system and session prompts for the AI agent.
- */
+/** Orchestrates the construction of system and session prompts for the AI agent. */
 @Service
 public class PromptService {
     private static final Logger log = LoggerFactory.getLogger(PromptService.class);
@@ -117,12 +116,7 @@ public class PromptService {
         this.databaseConfigService = databaseConfigService;
     }
 
-    /**
-     * Generates the stable system context including user guide, JEXL documentation, reference folders, configured
-     * databases, and agent memory.
-     * 
-     * @return the stable context string
-     */
+    /** Generates the stable system context including user guide, JEXL docs, refs, databases, and memory. */
     public String getStableContext() {
         return readClasspathResource(CLASSPATH_PROMPT) + HEADER_JEXL_CONTEXT + readClasspathResource(JEXL_DOC_PATH)
                 + HEADER_USER_GUIDE_CONTEXT + readClasspathResource(USER_GUIDE_DOC_PATH) + NEWLINE_DOUBLE
@@ -138,18 +132,13 @@ public class PromptService {
         if (active.isEmpty()) {
             return "";
         }
-        StringBuilder sb = new StringBuilder(HEADER_CONFIGURED_DATABASES);
-        sb.append("The following read-only database connections are granted to this project. Use ").append('`')
-                .append("dbService").append('`').append(" in ").append('`').append("executeJexl").append('`')
-                .append(" to inspect schemas/tables (").append('`').append("listSchemas").append('`').append(", ")
-                .append('`').append("listTables").append('`').append(", ").append('`').append("describeTable")
-                .append('`').append(") and run read-only queries (").append('`').append("query").append('`')
-                .append(", ").append('`').append("explain").append('`').append("):\n");
+        StringBuilder sb = new StringBuilder(HEADER_CONFIGURED_DATABASES).append(
+                "The following read-only database connections are granted to this project. Use `dbService` in `executeJexl` to inspect schemas/tables (`listSchemas`, `listTables`, `describeTable`) and run read-only queries (`query`, `explain`):\n");
         for (ResolvedDatabaseConnection conn : active) {
-            sb.append("- ").append('`').append(conn.config().id()).append('`').append(" (**")
-                    .append(conn.config().displayName()).append("**").append(", type: ").append(conn.config().type());
+            sb.append("- `").append(conn.config().id()).append("` (**").append(conn.config().displayName())
+                    .append("**, type: ").append(conn.config().type());
             if (!conn.effectiveDefaultSchema().isBlank()) {
-                sb.append(", default_schema: ").append('`').append(conn.effectiveDefaultSchema()).append('`');
+                sb.append(", default_schema: `").append(conn.effectiveDefaultSchema()).append('`');
             }
             sb.append(')');
             String description = conn.config().description();
@@ -175,15 +164,10 @@ public class PromptService {
         if (mounts.isEmpty()) {
             return "";
         }
-        StringBuilder sb = new StringBuilder(HEADER_REFERENCE_FOLDERS);
-        sb.append("The following external source folders are mounted read-only. Pass ").append('`').append("@<alias>")
-                .append('`').append(" or ").append('`').append("@<alias>/subpath").append('`').append(" to ")
-                .append('`').append("grepService").append('`').append(", ").append('`').append("fileReadService")
-                .append('`').append(", and ").append('`').append("symbolService").append('`')
-                .append(" to list files, search, or read code on demand:\n");
+        StringBuilder sb = new StringBuilder(HEADER_REFERENCE_FOLDERS).append(
+                "The following external source folders are mounted read-only. Pass `@<alias>` or `@<alias>/subpath` to `grepService`, `fileReadService`, and `symbolService` to list files, search, or read code on demand:\n");
         for (ReferenceFolderMount mount : mounts) {
-            sb.append("- ").append('`').append(mount.aliasPrefix()).append('`').append(" (").append('`')
-                    .append(mount.rootPath()).append('`').append(")\n");
+            sb.append("- `").append(mount.aliasPrefix()).append("` (`").append(mount.rootPath()).append("`)\n");
         }
         return sb.toString();
     }
@@ -205,8 +189,7 @@ public class PromptService {
             return;
         }
         sb.append(HEADER_GLOBAL_AGENT_MEMORY);
-        boolean hasDetails = appendMemoryCatalog(sb, "Global Memories", globalMemories);
-        if (hasDetails) {
+        if (appendMemoryCatalog(sb, "Global Memories", globalMemories)) {
             sb.append(
                     "Call memoryService.read('global', id) or memoryService.readAll('global') when entries marked (+details) are relevant.\n");
         }
@@ -241,13 +224,11 @@ public class PromptService {
         if (entries.isEmpty()) {
             return false;
         }
-        sb.append("### ").append(title).append("\n");
+        sb.append("### ").append(title).append('\n');
         boolean anyHasDetails = false;
         for (MemoryMetadata entry : entries) {
-            sb.append(MemoryService.formatCatalogLine(entry)).append("\n");
-            if (entry.hasDetails()) {
-                anyHasDetails = true;
-            }
+            sb.append(MemoryService.formatCatalogLine(entry)).append('\n');
+            anyHasDetails |= entry.hasDetails();
         }
         return anyHasDetails;
     }
@@ -258,24 +239,20 @@ public class PromptService {
             return hasPreceding;
         }
         if (hasPreceding) {
-            sb.append("\n");
+            sb.append('\n');
         }
-        sb.append("### ").append(title).append("\n");
+        sb.append("### ").append(title).append('\n');
         int count = items.size();
         if (limit > 0) {
             count = Math.min(limit, items.size());
         }
         for (int i = 0; i < count; i++) {
-            sb.append("- ").append(items.get(i)).append("\n");
+            sb.append("- ").append(items.get(i)).append('\n');
         }
         return true;
     }
 
-    /**
-     * Generates the session context for the current workflow phase.
-     * 
-     * @return the session context string
-     */
+    /** Generates the session context for the current workflow phase. */
     public String getSessionContext() {
         return getSessionContext(planService.getCurrentPhase());
     }
@@ -287,13 +264,10 @@ public class PromptService {
 
     String getStaticPhaseContext(WorkflowPhase phase) {
         WorkflowPhase currentPhase = Objects.requireNonNullElseGet(phase, planService::getCurrentPhase);
-        StringBuilder sb = new StringBuilder(HEADER_SESSION_CONTEXT);
-        sb.append("DOMINANT LANGUAGE: ").append(projectAnalysisService.getDominantLanguage())
-                .append("\nCURRENT PHASE: ").append(currentPhase.name()).append("\nYou are the ")
-                .append(currentPhase.getPersonaTitle()).append(". ").append(currentPhase.getDescription())
-                .append(NEWLINE_DOUBLE).append("You have access to the following JEXL tools:\n")
-                .append(jexlServiceRegistry.getDocumentation(currentPhase));
-        return sb.toString();
+        return HEADER_SESSION_CONTEXT + "DOMINANT LANGUAGE: " + projectAnalysisService.getDominantLanguage()
+                + "\nCURRENT PHASE: " + currentPhase.name() + "\nYou are the " + currentPhase.getPersonaTitle() + ". "
+                + currentPhase.getDescription() + NEWLINE_DOUBLE + "You have access to the following JEXL tools:\n"
+                + jexlServiceRegistry.getDocumentation(currentPhase);
     }
 
     String getVolatileSessionContext() {
@@ -327,14 +301,12 @@ public class PromptService {
     public String buildSystemPrompt(WorkflowPhase phase) {
         WorkflowPhase currentPhase = Objects.requireNonNullElseGet(phase, planService::getCurrentPhase);
         StringBuilder systemPrompt = new StringBuilder(getStableContext());
-
         EditorResult repoMap = repoMapPackerService.generateRepoMap();
         if (repoMap != null && repoMap.success()) {
             systemPrompt.append(HEADER_REPO_MAP).append(repoMap.content()).append('\n');
         }
-        systemPrompt.append(NEWLINE_DOUBLE).append(loadPhasePrompt(currentPhase))
-                .append(getStaticPhaseContext(currentPhase)).append(getVolatileSessionContext());
-        return systemPrompt.toString();
+        return systemPrompt.append(NEWLINE_DOUBLE).append(loadPhasePrompt(currentPhase))
+                .append(getStaticPhaseContext(currentPhase)).append(getVolatileSessionContext()).toString();
     }
 
     String loadPhasePrompt(WorkflowPhase phase) {
@@ -392,10 +364,8 @@ public class PromptService {
             for (Path entry : folderFiles) {
                 Path norm = entry.toAbsolutePath().normalize();
                 String fileName = entry.getFileName().toString();
-                Map<String, String> frontmatter = parseMarkdownFrontmatter(norm, fileName);
-                String searchPath = searchPathPrefix + fileName;
-                discovered.putIfAbsent(norm,
-                        new ContextFileItem(dir.toString(), fileName, norm, frontmatter, searchPath));
+                discovered.putIfAbsent(norm, new ContextFileItem(dir.toString(), fileName, norm,
+                        parseMarkdownFrontmatter(norm, fileName), searchPathPrefix + fileName));
             }
         } catch (IOException e) {
             log.warn("Failed to list context files in folder {}: {}", dir, e.getMessage());
@@ -409,8 +379,7 @@ public class PromptService {
             return Map.of();
         }
         try {
-            String raw = Files.readString(filePath, StandardCharsets.UTF_8);
-            return FrontmatterUtils.parseFrontmatter(raw);
+            return FrontmatterUtils.parseFrontmatter(Files.readString(filePath, StandardCharsets.UTF_8));
         } catch (IOException e) {
             log.debug("Failed to read markdown frontmatter from {}: {}", filePath, e.getMessage());
             return Map.of();
@@ -460,17 +429,11 @@ public class PromptService {
                 fullFiles.add(item);
             }
         }
-        StringBuilder sb = new StringBuilder();
-        sb.append(NEWLINE_DOUBLE).append("## ").append(headerTitle).append('\n');
+        StringBuilder sb = new StringBuilder(NEWLINE_DOUBLE).append("## ").append(headerTitle).append('\n');
         if (!fullFiles.isEmpty()) {
-            sb.append("Full-Injected Files: ");
-            for (int i = 0; i < fullFiles.size(); i++) {
-                if (i > 0) {
-                    sb.append(", ");
-                }
-                sb.append('`').append(fullFiles.get(i).searchPath()).append('`');
-            }
-            sb.append('\n');
+            sb.append("Full-Injected Files: ")
+                    .append(fullFiles.stream().map(f -> "`" + f.searchPath() + "`").collect(Collectors.joining(", ")))
+                    .append('\n');
         }
         if (!indexedFiles.isEmpty()) {
             sb.append(
@@ -478,15 +441,8 @@ public class PromptService {
             for (ContextFileItem item : indexedFiles) {
                 sb.append("- `").append(item.searchPath()).append('`');
                 if (!item.frontmatter().isEmpty()) {
-                    sb.append(": ");
-                    boolean first = true;
-                    for (Map.Entry<String, String> entry : item.frontmatter().entrySet()) {
-                        if (!first) {
-                            sb.append(", ");
-                        }
-                        sb.append(entry.getKey()).append("=\"").append(entry.getValue()).append('"');
-                        first = false;
-                    }
+                    sb.append(": ").append(item.frontmatter().entrySet().stream()
+                            .map(e -> e.getKey() + "=\"" + e.getValue() + '"').collect(Collectors.joining(", ")));
                 }
                 sb.append('\n');
             }

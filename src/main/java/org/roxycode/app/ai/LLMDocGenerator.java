@@ -1,8 +1,5 @@
 package org.roxycode.app.ai;
 
-import java.beans.IntrospectionException;
-import java.beans.Introspector;
-import java.beans.PropertyDescriptor;
 import java.lang.reflect.*;
 import java.util.*;
 import org.springframework.aop.support.AopUtils;
@@ -36,7 +33,6 @@ class LLMDocGenerator {
             if (agentService == null) {
                 continue;
             }
-
             AgentDoc agentDoc = AnnotationUtils.findAnnotation(clazz, AgentDoc.class);
             if (agentDoc != null) {
                 sb.append("/**\n").append(DOC_LINE_START).append(agentDoc.value()).append("\n");
@@ -89,14 +85,12 @@ class LLMDocGenerator {
             if (!isMethodAllowedInPhase(doc, currentPhase)) {
                 continue;
             }
-
             sb.append("    // ").append(doc.value());
             String[] examples = doc.examples();
             if (examples.length > 0) {
                 sb.append(" (e.g., ").append(String.join("; ", examples)).append(")");
             }
             sb.append("\n    ").append(m.getName()).append("(");
-
             Parameter[] params = m.getParameters();
             for (int i = 0; i < params.length; i++) {
                 if (i > 0) {
@@ -219,25 +213,14 @@ class LLMDocGenerator {
             sb.append("}\n");
         } else {
             sb.append("interface ").append(type.getSimpleName()).append(" {\n");
-            Map<String, String> properties = new TreeMap<>();
             Field[] fields = type.getDeclaredFields();
             Arrays.sort(fields, Comparator.comparing(Field::getName));
             for (Field f : fields) {
                 if (Modifier.isPublic(f.getModifiers()) && !Modifier.isStatic(f.getModifiers())) {
-                    properties.putIfAbsent(f.getName(), getGenericTypeName(f.getGenericType(), extraTypes));
+                    sb.append("    ").append(f.getName()).append(": ")
+                            .append(getGenericTypeName(f.getGenericType(), extraTypes)).append(";\n");
                 }
             }
-            try {
-                for (PropertyDescriptor pd : Introspector.getBeanInfo(type, Object.class).getPropertyDescriptors()) {
-                    Method readMethod = pd.getReadMethod();
-                    if (readMethod != null && pd.getPropertyType() != null) {
-                        properties.putIfAbsent(pd.getName(),
-                                getGenericTypeName(readMethod.getGenericReturnType(), extraTypes));
-                    }
-                }
-            } catch (IntrospectionException ignored) {
-            }
-            properties.forEach((k, v) -> sb.append("    ").append(k).append(": ").append(v).append(";\n"));
             sb.append("}\n");
         }
     }

@@ -2,9 +2,7 @@ package org.roxycode.app.model;
 
 import java.util.Locale;
 
-/**
- * Supported database dialects for read-only JDBC connections.
- */
+/** Supported database dialects for read-only JDBC connections. */
 public enum DatabaseType {
     POSTGRESQL("postgresql", "PostgreSQL", "jdbc:postgresql://localhost:5432/mydb", "org.postgresql.Driver", true),
     MARIADB("mariadb", "MariaDB", "jdbc:mariadb://localhost:3306/mydb", "org.mariadb.jdbc.Driver", true),
@@ -33,44 +31,27 @@ public enum DatabaseType {
         this.bundledDriver = bundledDriver;
     }
 
-    /**
-     * Returns the stable TOML identifier for this database type.
-     */
     public String getId() {
         return id;
     }
 
-    /**
-     * Returns the human-readable dialect name.
-     */
     public String getDisplayName() {
         return displayName;
     }
 
-    /**
-     * Returns an example JDBC URL for UI placeholders.
-     */
     public String getSampleUrl() {
         return sampleUrl;
     }
 
-    /**
-     * Returns the conventional JDBC driver class name, or empty string for custom drivers.
-     */
     public String getDefaultDriverClass() {
         return defaultDriverClass;
     }
 
-    /**
-     * Returns {@code true} if RoxyCode bundles an open-source JDBC driver for this dialect.
-     */
     public boolean isBundledDriver() {
         return bundledDriver;
     }
 
-    /**
-     * Parses a database type identifier or display name, defaulting to {@link #CUSTOM} when unrecognized.
-     */
+    /** Parses a database type identifier or display name, defaulting to {@link #CUSTOM}. */
     public static DatabaseType fromString(String raw) {
         if (raw == null || raw.isBlank()) {
             return CUSTOM;

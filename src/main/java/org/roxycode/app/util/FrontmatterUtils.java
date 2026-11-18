@@ -17,9 +17,7 @@ import org.roxycode.app.ui.SwingHtmlUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * Utility for parsing and formatting YAML frontmatter in Markdown files using Flexmark and Jackson YAML.
- */
+/** Utility for parsing and formatting YAML frontmatter in Markdown files using Flexmark and Jackson YAML. */
 public final class FrontmatterUtils {
 
     private static final Logger log = LoggerFactory.getLogger(FrontmatterUtils.class);
@@ -36,8 +34,7 @@ public final class FrontmatterUtils {
             return null;
         }
         Node document = SwingHtmlUtils.getMarkdownParser().parse(content);
-        Node firstChild = document.getFirstChild();
-        if (firstChild instanceof YamlFrontMatterBlock block) {
+        if (document.getFirstChild() instanceof YamlFrontMatterBlock block) {
             String blockText = content.substring(block.getStartOffset(), block.getEndOffset());
             if (blockText.trim().endsWith(YAML_DELIMITER)) {
                 return block;
@@ -46,15 +43,9 @@ public final class FrontmatterUtils {
         return null;
     }
 
-    /**
-     * Removes YAML frontmatter from the given Markdown text.
-     *
-     * @param rawMarkdown
-     *            the raw Markdown content
-     * @return the Markdown content without frontmatter
-     */
+    /** Removes YAML frontmatter from the given Markdown text. */
     public static String stripFrontmatter(String rawMarkdown) {
-        if (rawMarkdown == null || rawMarkdown.isEmpty()) {
+        if (StringUtils.isEmpty(rawMarkdown)) {
             return "";
         }
         YamlFrontMatterBlock block = findClosedFrontmatterBlock(rawMarkdown);
@@ -64,13 +55,7 @@ public final class FrontmatterUtils {
         return rawMarkdown;
     }
 
-    /**
-     * Parses YAML frontmatter from a file.
-     *
-     * @param file
-     *            the path to the Markdown file
-     * @return a map of frontmatter fields
-     */
+    /** Parses YAML frontmatter from a file. */
     public static Map<String, String> parseFrontmatter(Path file) {
         if (file == null || !Files.isRegularFile(file)) {
             return Collections.emptyMap();
@@ -83,13 +68,7 @@ public final class FrontmatterUtils {
         }
     }
 
-    /**
-     * Parses YAML frontmatter from a string.
-     *
-     * @param content
-     *            the Markdown content
-     * @return a map of frontmatter fields
-     */
+    /** Parses YAML frontmatter from a string. */
     public static Map<String, String> parseFrontmatter(String content) {
         YamlFrontMatterBlock block = findClosedFrontmatterBlock(content);
         if (block == null) {
@@ -116,13 +95,7 @@ public final class FrontmatterUtils {
         }
     }
 
-    /**
-     * Formats the given fields as a YAML frontmatter block.
-     *
-     * @param fields
-     *            the fields to include
-     * @return the formatted YAML frontmatter string
-     */
+    /** Formats the given fields as a YAML frontmatter block. */
     public static String formatFrontmatter(Map<String, Object> fields) {
         if (fields == null || fields.isEmpty()) {
             return YAML_DELIMITER + "\n" + YAML_DELIMITER + "\n\n";

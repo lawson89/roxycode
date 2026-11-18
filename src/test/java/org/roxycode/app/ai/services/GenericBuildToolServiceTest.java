@@ -146,9 +146,9 @@ class GenericBuildToolServiceTest {
         writeBuildToml("[commands]\ncompile = ''\nformat = ''\n");
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
             BuildResult compileNoOp = buildToolService.compile();
-            assertTrue(compileNoOp.isSuccess());
-            assertEquals("Command 'commands.compile' is not configured (no-op).", compileNoOp.getOutput());
-            assertEquals("Command 'commands.format' is not configured (no-op).", buildToolService.format().getOutput());
+            assertTrue(compileNoOp.success());
+            assertEquals("Command 'commands.compile' is not configured (no-op).", compileNoOp.output());
+            assertEquals("Command 'commands.format' is not configured (no-op).", buildToolService.format().output());
             runner.verifyNoInteractions();
             verifyNoInteractions(eventPublisher);
         }
@@ -162,14 +162,14 @@ class GenericBuildToolServiceTest {
                 format = 'echo project-format'
                 """);
 
-        assertTrue(buildToolService.build().getOutput().contains("fallback-compile"));
-        assertTrue(buildToolService.lint().getOutput().contains("project-lint"));
-        assertTrue(buildToolService.format().getOutput().contains("project-format"));
-        assertTrue(buildToolService.install().getOutput().contains("installed-deps"));
+        assertTrue(buildToolService.build().output().contains("fallback-compile"));
+        assertTrue(buildToolService.lint().output().contains("project-lint"));
+        assertTrue(buildToolService.format().output().contains("project-format"));
+        assertTrue(buildToolService.install().output().contains("installed-deps"));
         verify(eventPublisher, times(2)).publishEvent(new FileChangedEvent(""));
 
         writeBuildToml("[commands]\nbuild = 'echo explicit-build'\n");
-        assertTrue(buildToolService.build().getOutput().contains("explicit-build"));
+        assertTrue(buildToolService.build().output().contains("explicit-build"));
 
         when(planService.getCurrentPhase()).thenReturn(WorkflowPhase.REVIEW);
         assertThrows(IllegalStateException.class, () -> buildToolService.install());
@@ -182,18 +182,18 @@ class GenericBuildToolServiceTest {
         writeBuildToml(
                 "[commands]\ncompile = 'echo step-compile'\ntest_all = 'echo step-test'\nlint = 'echo step-lint'\n");
         BuildResult allPass = buildToolService.buildAndTest();
-        assertTrue(allPass.isSuccess());
-        assertContainsAll(allPass.getOutput(), "COMPILE OUTPUT:", "step-compile", "TEST OUTPUT:", "step-test",
+        assertTrue(allPass.success());
+        assertContainsAll(allPass.output(), "COMPILE OUTPUT:", "step-compile", "TEST OUTPUT:", "step-test",
                 "LINT OUTPUT:", "step-lint");
 
         writeBuildToml("[commands]\ncompile = 'echo step-compile'\ntest_all = 'exit 2'\nlint = 'echo no-lint'\n");
         BuildResult testFail = buildToolService.buildAndTest();
-        assertFalse(testFail.isSuccess());
-        assertEquals(2, testFail.getExitCode());
-        assertFalse(testFail.getOutput().contains("no-lint"));
+        assertFalse(testFail.success());
+        assertEquals(2, testFail.exitCode());
+        assertFalse(testFail.output().contains("no-lint"));
 
         writeBuildToml("[commands]\ntest_single = 'echo {testName}'\n");
-        assertTrue(buildToolService.runSingleTest("MyTest").getOutput().contains("MyTest"));
+        assertTrue(buildToolService.runSingleTest("MyTest").output().contains("MyTest"));
         assertTrue(Files.readString(projectDataDir.resolve("tmp/build.log")).contains("MyTest"));
 
         String truncated = BuildOutputParser.getLogTail("HEADER-" + "A".repeat(5000) + "-TAIL");
@@ -206,13 +206,13 @@ class GenericBuildToolServiceTest {
     void testContainerAndNativeSandboxExecutionAndSessionLifecycle() throws IOException {
         writeBuildToml("[commands]\ncompile = './mvnw test-compile'\n[sandbox]\nmode = 'native'\n");
         when(systemToolService.checkNativeSandboxAvailable()).thenReturn(false);
-        assertTrue(buildToolService.compile().getOutput().contains("Native OS sandbox is not available"));
+        assertTrue(buildToolService.compile().output().contains("Native OS sandbox is not available"));
 
         when(systemToolService.checkNativeSandboxAvailable()).thenReturn(true);
         try (MockedStatic<ProcessRunner> runner = mockStatic(ProcessRunner.class)) {
             runner.when(() -> ProcessRunner.run(anyList(), eq(projectRoot), anyMap(), any(), eq(true), any()))
                     .thenReturn(new ProcessResult(0, "native-sandbox-ok", "", false));
-            assertEquals("native-sandbox-ok", buildToolService.compile().getOutput());
+            assertEquals("native-sandbox-ok", buildToolService.compile().output());
         }
 
         String dockerToml = """
@@ -230,7 +230,7 @@ class GenericBuildToolServiceTest {
         writeBuildToml(dockerToml);
 
         stubDockerAvailable(false);
-        assertTrue(buildToolService.compile().getOutput().contains("Docker is not available"));
+        assertTrue(buildToolService.compile().output().contains("Docker is not available"));
 
         stubDockerAvailable(true);
         AtomicInteger sessionsCreated = new AtomicInteger(0);
@@ -248,9 +248,9 @@ class GenericBuildToolServiceTest {
                     .thenReturn(new ProcessResult(0, "FAIL: MyTest#fail\n", "", false));
 
             BuildResult result = buildToolService.runTests();
-            assertFalse(result.isSuccess());
-            assertEquals(List.of("[ERROR] Compile err"), result.getErrors());
-            assertEquals(List.of("FAIL: MyTest#fail"), result.getFailedTests());
+            assertFalse(result.success());
+            assertEquals(List.of("[ERROR] Compile err"), result.errors());
+            assertEquals(List.of("FAIL: MyTest#fail"), result.failedTests());
         }
         assertTrue(persistedLog.toFile().exists());
 
@@ -315,11 +315,11 @@ class GenericBuildToolServiceTest {
         realPlanService.approveTransition();
 
         writeBuildToml("[commands]\ncompile = 'echo ok'\ntest_all = 'echo ok'\nlint = 'echo ok'\n");
-        assertTrue(integratedBuildService.compile().isSuccess());
+        assertTrue(integratedBuildService.compile().success());
         assertTrue(realPlanService.getCurrentPlan().technicalSteps().get(1).completed());
         assertFalse(realPlanService.getCurrentPlan().technicalSteps().get(2).completed());
 
-        assertTrue(integratedBuildService.runTests().isSuccess());
+        assertTrue(integratedBuildService.runTests().success());
         assertTrue(realPlanService.getCurrentPlan().technicalSteps().get(1).completed());
         assertTrue(realPlanService.getCurrentPlan().technicalSteps().get(2).completed());
 
@@ -337,21 +337,20 @@ class GenericBuildToolServiceTest {
                 lint = 'echo pmd-violation && exit 1'
                 """);
         BuildResult runTestsLintFail = integratedBuildService.runTests();
-        assertFalse(runTestsLintFail.isSuccess());
-        assertContainsAll(runTestsLintFail.getOutput(), "TEST OUTPUT:", "tests-passed", "LINT OUTPUT:",
-                "pmd-violation");
+        assertFalse(runTestsLintFail.success());
+        assertContainsAll(runTestsLintFail.output(), "TEST OUTPUT:", "tests-passed", "LINT OUTPUT:", "pmd-violation");
         assertTrue(realPlanService.getCurrentPlan().technicalSteps().get(1).completed());
         assertFalse(realPlanService.getCurrentPlan().technicalSteps().get(2).completed());
         assertThrows(IllegalStateException.class, () -> realPlanService.requestReview("Should be blocked by lint"));
 
         realPlanService.updateVerificationStep("Unit tests pass", true);
-        assertFalse(integratedBuildService.lint().isSuccess());
+        assertFalse(integratedBuildService.lint().success());
         assertFalse(realPlanService.getCurrentPlan().technicalSteps().get(2).completed());
 
         realPlanService.updateVerificationStep("Unit tests pass", true);
         BuildResult buildAndTestLintFail = integratedBuildService.buildAndTest();
-        assertFalse(buildAndTestLintFail.isSuccess());
-        assertContainsAll(buildAndTestLintFail.getOutput(), "COMPILE OUTPUT:", "TEST OUTPUT:", "LINT OUTPUT:",
+        assertFalse(buildAndTestLintFail.success());
+        assertContainsAll(buildAndTestLintFail.output(), "COMPILE OUTPUT:", "TEST OUTPUT:", "LINT OUTPUT:",
                 "pmd-violation");
         assertFalse(realPlanService.getCurrentPlan().technicalSteps().get(2).completed());
 
@@ -361,7 +360,7 @@ class GenericBuildToolServiceTest {
                 test_all = 'echo ok'
                 lint = 'echo ok'
                 """);
-        assertTrue(integratedBuildService.buildAndTest().isSuccess());
+        assertTrue(integratedBuildService.buildAndTest().success());
         assertTrue(realPlanService.requestReview("All steps verified").contains("Autonomous transition"));
         assertEquals(WorkflowPhase.REVIEW, realPlanService.getCurrentPhase());
         realPlanService.awaitPendingPersistence();
@@ -484,17 +483,17 @@ class GenericBuildToolServiceTest {
                     new ProcessResult(0, "FAIL: console failure" + nl + "  at ConsoleTest.java:12" + nl, "", false));
             testResult = buildToolService.runTests();
         }
-        assertFalse(testResult.isSuccess());
-        assertFalse(testResult.getOutput().contains(esc));
-        assertEquals(3, testResult.getFailedTests().size());
-        assertEquals("FAIL: console failure" + nl + "  at ConsoleTest.java:12", testResult.getFailedTests().get(0));
-        assertContainsAll(testResult.getFailedTests().get(1),
+        assertFalse(testResult.success());
+        assertFalse(testResult.output().contains(esc));
+        assertEquals(3, testResult.failedTests().size());
+        assertEquals("FAIL: console failure" + nl + "  at ConsoleTest.java:12", testResult.failedTests().get(0));
+        assertContainsAll(testResult.failedTests().get(1),
                 "com.example.FreshTest#testAssertion [FAILURE]: org.opentest4j.AssertionFailedError: expected: <200> but was: <401>",
                 "  at com.example.FreshTest.testAssertion(FreshTest.java:25)");
-        assertContainsAll(testResult.getFailedTests().get(2),
+        assertContainsAll(testResult.failedTests().get(2),
                 "com.example.FreshTest#testUnhandledError [ERROR]: java.lang.NullPointerException: Cannot invoke method on null",
                 "  at com.example.FreshTest.testUnhandledError(FreshTest.java:39)");
-        for (String failure : testResult.getFailedTests()) {
+        for (String failure : testResult.failedTests()) {
             assertFalse(failure.contains("StaleTest"));
         }
     }
@@ -558,9 +557,9 @@ class GenericBuildToolServiceTest {
                     .thenReturn(new ProcessResult(-1, "timed out", "", true));
 
             BuildResult result = buildToolService.compile();
-            assertFalse(result.isSuccess());
-            assertTrue(result.isTimedOut());
-            assertContainsAll(result.getErrors().get(0), "Command timed out after 2 seconds");
+            assertFalse(result.success());
+            assertTrue(result.timedOut());
+            assertContainsAll(result.errors().get(0), "Command timed out after 2 seconds");
         }
 
         writeBuildToml("""
@@ -595,8 +594,8 @@ class GenericBuildToolServiceTest {
                     .thenReturn(new ProcessResult(-1, "test timed out", "", true));
 
             BuildResult result = buildToolService.buildAndTest();
-            assertFalse(result.isSuccess());
-            assertTrue(result.isTimedOut());
+            assertFalse(result.success());
+            assertTrue(result.timedOut());
         }
     }
 

@@ -2,6 +2,7 @@ package org.roxycode.app.util;
 
 import java.util.Locale;
 
+/** Token estimation, cost formatting, and cache-hit calculation utilities. */
 public final class TokenUtils {
 
     private static final long THOUSAND = 1_000L;
@@ -14,13 +15,7 @@ public final class TokenUtils {
     private TokenUtils() {
     }
 
-    /**
-     * Provides a rough estimate of the number of tokens in the given text.
-     *
-     * @param text
-     *            the text to estimate
-     * @return the estimated token count
-     */
+    /** Provides a rough estimate of the number of tokens in {@code text}. */
     public static long estimateTokens(String text) {
         if (text == null) {
             return 0;
@@ -28,13 +23,7 @@ public final class TokenUtils {
         return text.length() / 4;
     }
 
-    /**
-     * Formats a token count for display (e.g., "1.2k", "1.5M").
-     *
-     * @param tokens
-     *            the token count
-     * @return the formatted token count string
-     */
+    /** Formats a token count for display (e.g., {@code "1.2k"}, {@code "1.5M"}). */
     public static String formatTokenCount(long tokens) {
         long safeTokens = Math.max(0L, tokens);
         if (safeTokens < THOUSAND) {
@@ -46,13 +35,7 @@ public final class TokenUtils {
         return String.format(Locale.US, "%.1fM", safeTokens / MILLION_DOUBLE);
     }
 
-    /**
-     * Formats a USD cost for display.
-     *
-     * @param costUsd
-     *            the cost in USD
-     * @return the formatted cost string
-     */
+    /** Formats a USD cost for display. */
     public static String formatCostUsd(double costUsd) {
         if (costUsd <= ZERO_COST) {
             return "$0.00";
@@ -63,15 +46,7 @@ public final class TokenUtils {
         return String.format(Locale.US, "$%.2f", costUsd);
     }
 
-    /**
-     * Computes the cache hit percentage.
-     *
-     * @param cachedTokens
-     *            the number of cached tokens
-     * @param promptTokens
-     *            the total number of prompt tokens
-     * @return the cache hit percentage (0-100)
-     */
+    /** Computes the cache hit percentage (0-100). */
     public static int computeCacheHitPercent(long cachedTokens, long promptTokens) {
         if (promptTokens <= 0L || cachedTokens <= 0L) {
             return 0;

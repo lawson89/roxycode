@@ -4,24 +4,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.commons.lang3.StringUtils;
 
-/**
- * Represents a system tool required or used by RoxyCode (e.g., Ripgrep, Git, Docker).
- *
- * @param name
- *            the name of the tool
- * @param version
- *            the version of the tool detected on the system
- * @param status
- *            the status of the tool (e.g., "Detected", "Not Found")
- * @param description
- *            a brief description of the tool's purpose
- * @param license
- *            the license under which the tool is distributed
- * @param websiteUrl
- *            the URL to the tool's official website
- * @param required
- *            whether the tool is strictly required for core functionality
- */
+/** Represents a system tool required or used by RoxyCode (e.g., Ripgrep, Git, Docker). */
 public record SystemTool(String name, String version, String status, String description, String license,
         String websiteUrl, boolean required) {
 
@@ -36,6 +19,8 @@ public record SystemTool(String name, String version, String status, String desc
 
     private record ToolMetadata(String description, String license, String websiteUrl, boolean required) {
     }
+
+    private static final ToolMetadata EMPTY_METADATA = new ToolMetadata("", "", "", false);
 
     private static final Map<String, ToolMetadata> KNOWN_METADATA = Map.of(TOOL_RIPGREP, new ToolMetadata(
             "Powers GrepService and MemoryService for fast regex, literal, and file-listing searches across the workspace while respecting .gitignore.",
@@ -62,21 +47,11 @@ public record SystemTool(String name, String version, String status, String desc
         name = StringUtils.defaultString(name);
         version = StringUtils.defaultString(version);
         status = StringUtils.defaultString(status);
-        ToolMetadata meta = KNOWN_METADATA.get(name);
-        String defaultDesc = "";
-        String defaultLicense = "";
-        String defaultUrl = "";
-        boolean defaultReq = false;
-        if (meta != null) {
-            defaultDesc = meta.description();
-            defaultLicense = meta.license();
-            defaultUrl = meta.websiteUrl();
-            defaultReq = meta.required();
-        }
-        description = StringUtils.defaultIfBlank(description, defaultDesc);
-        license = StringUtils.defaultIfBlank(license, defaultLicense);
-        websiteUrl = StringUtils.defaultIfBlank(websiteUrl, defaultUrl);
-        required = required || defaultReq;
+        ToolMetadata meta = KNOWN_METADATA.getOrDefault(name, EMPTY_METADATA);
+        description = StringUtils.defaultIfBlank(description, meta.description());
+        license = StringUtils.defaultIfBlank(license, meta.license());
+        websiteUrl = StringUtils.defaultIfBlank(websiteUrl, meta.websiteUrl());
+        required = required || meta.required();
     }
 
     public static SystemTool ofKnownTool(String name, String version, String status) {
