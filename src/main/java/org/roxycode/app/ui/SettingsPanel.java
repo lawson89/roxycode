@@ -20,8 +20,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
 import javax.swing.*;
 import net.miginfocom.swing.MigLayout;
 import org.kordamp.ikonli.codicons.Codicons;
@@ -130,11 +128,7 @@ public final class SettingsPanel extends JPanel {
     private JLabel appearanceHeaderLabel;
     private JLabel agentExecutionHeaderLabel;
     private transient SettingsSnapshot savedBaseline;
-    private transient Consumer<String> urlOpener = UiComponents::openUrlOrCopyToClipboard;
-    private transient Supplier<File> credentialsFileChooser = this::chooseServiceAccountJsonFile;
-    private transient Consumer<Path> logFileOpener = SettingsPanel::openLogFileOnDesktop;
     private transient Runnable onInitialApiKeyConfiguredCallback;
-    transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
 
     private final transient UiComponents.UiGuard settingsUpdateGuard = new UiComponents.UiGuard();
 
@@ -212,7 +206,7 @@ public final class SettingsPanel extends JPanel {
         getApiKeyLinkButton.setHorizontalTextPosition(SwingConstants.LEFT);
         getApiKeyLinkButton.setIconTextGap(5);
         getApiKeyLinkButton.setToolTipText(GEMINI_API_KEY_URL);
-        getApiKeyLinkButton.addActionListener(e -> urlOpener.accept(GEMINI_API_KEY_URL));
+        getApiKeyLinkButton.addActionListener(e -> UiComponents.openUrlOrCopyToClipboard(GEMINI_API_KEY_URL));
 
         vertexProjectIdField = new JTextField(24);
         vertexProjectIdField.setText(settingsService.getSettings().getVertexProjectId());
@@ -609,7 +603,7 @@ public final class SettingsPanel extends JPanel {
     }
 
     void browseServiceAccountCredentials() {
-        File selected = credentialsFileChooser.get();
+        File selected = chooseServiceAccountJsonFile();
         if (selected != null) {
             vertexCredentialsPathField.setText(selected.getAbsolutePath());
         }
@@ -628,7 +622,7 @@ public final class SettingsPanel extends JPanel {
 
     void openToolCallLog() {
         Path logFile = resolveToolCallLogFile();
-        logFileOpener.accept(logFile);
+        openLogFileOnDesktop(logFile);
     }
 
     private static void openLogFileOnDesktop(Path logFile) {
@@ -820,7 +814,6 @@ public final class SettingsPanel extends JPanel {
             restoreTestConnectionButtonState();
             showTestConnectionStatus(CONNECTION_FAILED_PREFIX + ExceptionUtils.getRootCauseMessage(error), false);
         });
-        lastAsyncFuture = future;
         return future;
     }
 
@@ -878,19 +871,6 @@ public final class SettingsPanel extends JPanel {
 
     void setOnInitialApiKeyConfiguredCallback(Runnable callback) {
         this.onInitialApiKeyConfiguredCallback = callback;
-    }
-
-    void setUrlOpener(Consumer<String> urlOpener) {
-        this.urlOpener = Objects.requireNonNull(urlOpener, "urlOpener must not be null");
-    }
-
-    void setCredentialsFileChooser(Supplier<File> credentialsFileChooser) {
-        this.credentialsFileChooser = Objects.requireNonNull(credentialsFileChooser,
-                "credentialsFileChooser must not be null");
-    }
-
-    void setLogFileOpener(Consumer<Path> logFileOpener) {
-        this.logFileOpener = Objects.requireNonNull(logFileOpener, "logFileOpener must not be null");
     }
 
     public static void applyTheme(String themeName) {

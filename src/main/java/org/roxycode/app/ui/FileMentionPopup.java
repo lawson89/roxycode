@@ -17,7 +17,6 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicLong;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
@@ -193,7 +192,6 @@ public final class FileMentionPopup {
 
     private volatile GrepService grepService;
     private volatile MemoryService memoryService;
-    private volatile Executor backgroundExecutor = Edt.VIRTUAL_EXECUTOR;
     private volatile List<FileCandidate> cachedCandidates = List.of();
 
     private boolean popupActive = false;
@@ -203,14 +201,12 @@ public final class FileMentionPopup {
     private MentionToken activeToken;
     final Timer evaluationDebounceTimer;
     private final AtomicLong evaluationGeneration = new AtomicLong();
-    CompletableFuture<Void> lastEvaluationFuture = CompletableFuture.completedFuture(null);
     private int lastPopupWidth = -1;
     private int lastPopupHeight = -1;
     private int lastPopupRowCount = -1;
     private int lastPopupX = Integer.MIN_VALUE;
     private int lastPopupY = Integer.MIN_VALUE;
     private Component lastAnchorComponent;
-    int packCountForTesting = 0;
 
     public FileMentionPopup(JTextArea inputArea, JScrollPane inputScrollPane) {
         this.inputArea = inputArea;
@@ -490,14 +486,6 @@ public final class FileMentionPopup {
         clearEvaluationCache();
     }
 
-    void setBackgroundExecutor(Executor backgroundExecutor) {
-        if (backgroundExecutor != null) {
-            this.backgroundExecutor = backgroundExecutor;
-        } else {
-            this.backgroundExecutor = Edt.VIRTUAL_EXECUTOR;
-        }
-    }
-
     public void invalidateCache() {
         cachedCandidates = List.of();
         clearEvaluationCache();
@@ -536,7 +524,7 @@ public final class FileMentionPopup {
             List<FileCandidate> indexed = performFileIndexing();
             cachedCandidates = indexed;
             return indexed;
-        }, backgroundExecutor);
+        }, Edt.VIRTUAL_EXECUTOR);
     }
 
     void evaluateCurrentInput() {
@@ -575,8 +563,9 @@ public final class FileMentionPopup {
         List<FileCandidate> candidatesSnapshot = cachedCandidates;
         MemoryService memoryServiceSnapshot = memoryService;
         long generation = evaluationGeneration.incrementAndGet();
-        lastEvaluationFuture = CompletableFuture
-                .supplyAsync(() -> rankCandidates(candidatesSnapshot, token, memoryServiceSnapshot), backgroundExecutor)
+        CompletableFuture
+                .supplyAsync(() -> rankCandidates(candidatesSnapshot, token, memoryServiceSnapshot),
+                        Edt.VIRTUAL_EXECUTOR)
                 .thenAcceptAsync(matches -> applyRankedMatches(matches, token, caretOffset, generation), Edt.EXECUTOR);
     }
 
@@ -642,7 +631,6 @@ public final class FileMentionPopup {
         popupScrollPane.setPreferredSize(new Dimension(targetWidth, listPref.height));
         if (rowCount != lastPopupRowCount || targetWidth != lastPopupWidth || listPref.height != lastPopupHeight) {
             popupMenu.pack();
-            packCountForTesting++;
             lastPopupRowCount = rowCount;
             lastPopupWidth = targetWidth;
             lastPopupHeight = listPref.height;

@@ -47,20 +47,6 @@ final class HtmlExportService {
     private static final String SPAN_CLOSE = "</span>";
     private static final String DIV_CLOSE = "</div>";
 
-    @FunctionalInterface
-    interface BrowserLauncher {
-        void browse(Path htmlFile) throws IOException;
-    }
-
-    private static final BrowserLauncher DEFAULT_BROWSER_LAUNCHER = htmlFile -> {
-        if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-            throw new IOException("Desktop browse action is not supported on this platform");
-        }
-        Desktop.getDesktop().browse(htmlFile.toUri());
-    };
-
-    private static volatile BrowserLauncher browserLauncher = DEFAULT_BROWSER_LAUNCHER;
-
     private static final DataHolder HTML5_OPTIONS = new MutableDataSet().set(HtmlRenderer.ESCAPE_HTML, true)
             .set(Parser.EXTENSIONS,
                     Arrays.asList(TablesExtension.create(), StrikethroughExtension.create(), TaskListExtension.create(),
@@ -335,14 +321,6 @@ final class HtmlExportService {
     private HtmlExportService() {
     }
 
-    static void setBrowserLauncherForTesting(BrowserLauncher launcher) {
-        if (launcher == null) {
-            browserLauncher = DEFAULT_BROWSER_LAUNCHER;
-        } else {
-            browserLauncher = launcher;
-        }
-    }
-
     static String renderMarkdownToHtml5(String markdown) {
         if (markdown == null || markdown.isEmpty()) {
             return "";
@@ -545,7 +523,10 @@ final class HtmlExportService {
                 Path tempFile = Files.createTempFile(safePrefix, HTML_EXTENSION);
                 tempFile.toFile().deleteOnExit();
                 Files.writeString(tempFile, safeHtml, StandardCharsets.UTF_8);
-                browserLauncher.browse(tempFile);
+                if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
+                    throw new IOException("Desktop browse action is not supported on this platform");
+                }
+                Desktop.getDesktop().browse(tempFile.toUri());
                 return tempFile;
             } catch (IOException e) {
                 log.warn("Failed to open HTML export in browser: {}", e.getMessage());

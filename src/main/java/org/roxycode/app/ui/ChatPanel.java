@@ -5,17 +5,13 @@ import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.*;
 import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.DataFlavor;
-import java.awt.datatransfer.Transferable;
-import java.awt.dnd.DropTargetDropEvent;
 import java.awt.event.ActionEvent;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
 import java.awt.event.KeyEvent;
-import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
@@ -33,7 +29,6 @@ import org.roxycode.app.ai.services.PlanService;
 import org.roxycode.app.ai.services.UserInputService;
 import org.roxycode.app.events.UserInputRequestEvent;
 import org.roxycode.app.model.ChatTranscriptEntry;
-import org.roxycode.app.ui.ChatModel.PendingAttachment;
 import org.roxycode.app.service.AiService;
 import org.roxycode.app.service.EnvironmentService;
 import org.roxycode.app.service.ProjectService;
@@ -410,32 +405,8 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         }
     }
 
-    static boolean isRateLimitOrRetryStatus(String statusText) {
-        return ChatActivityStrip.isRateLimitOrRetryStatus(statusText);
-    }
-
-    static String formatElapsedSeconds(long elapsedSeconds) {
-        return ChatActivityStrip.formatElapsedSeconds(elapsedSeconds);
-    }
-
-    void advanceActivityIconFrame() {
-        activityStripPanel.advanceActivityIconFrame();
-    }
-
-    void updateElapsedTimeLabel() {
-        activityStripPanel.updateElapsedTimeLabel();
-    }
-
-    void updateActivityStepLabel() {
-        activityStripPanel.updateStepLabel();
-    }
-
     void updateActivityStatus(String statusText) {
         activityStripPanel.updateStatus(statusText);
-    }
-
-    String getActivityStatusText() {
-        return activityStripPanel.getStatusText();
     }
 
     @Override
@@ -842,32 +813,12 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         controller.sendMessage(inputArea.getText());
     }
 
-    void chooseAttachment() {
+    private void chooseAttachment() {
         attachmentPanel.chooseAttachment(this);
     }
 
-    CompletableFuture<PendingAttachment> loadAttachmentAsync(File file) {
-        return attachmentPanel.loadAttachmentAsync(file);
-    }
-
-    CompletableFuture<List<PendingAttachment>> loadAttachmentsAsync(List<File> files) {
-        return attachmentPanel.loadAttachmentsAsync(files);
-    }
-
-    void addPendingImage(Image img) {
+    private void addPendingImage(Image img) {
         attachmentPanel.addPendingImage(img);
-    }
-
-    void addPendingAttachment(PendingAttachment attachment) {
-        attachmentPanel.addPendingAttachment(attachment);
-    }
-
-    void handleDrop(DropTargetDropEvent dtde) {
-        attachmentPanel.handleDrop(dtde);
-    }
-
-    boolean ingestTransferable(Transferable transferable) {
-        return attachmentPanel.ingestTransferable(transferable);
     }
 
     void setLoading(boolean loading) {

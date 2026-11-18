@@ -85,7 +85,6 @@ public final class SwingHtmlUtils {
     private static final int MAX_COMPACT_CELL_LENGTH = 24;
     private static final int MAX_COMPACT_WHITESPACE_RUNS = 1;
     private static final String RESPONSIVE_RESIZE_LISTENER_KEY = "roxycode.responsiveResizeListener";
-    private static volatile boolean testMode = Boolean.getBoolean("roxycode.testMode");
 
     private static final Cache<Boolean, Theme> RSYNTAX_THEME_CACHE = Caffeine.newBuilder().maximumSize(2).build();
 
@@ -607,12 +606,8 @@ public final class SwingHtmlUtils {
         });
     }
 
-    static void setTestMode(boolean enabled) {
-        testMode = enabled;
-    }
-
     static void copyToClipboard(String text) {
-        if (text == null || testMode) {
+        if (text == null) {
             return;
         }
         try {

@@ -12,7 +12,8 @@
 *   **private:** Use for all fields, constructors, methods, and nested types that are not referenced outside the declaring class and are not directly invoked by unit tests.
 *   **Package-Private (no modifier):** Use for classes, constructors, methods, and fields that are only used within the same package or exposed solely for direct unit testing within the same package.
 *   **protected:** Use only for methods or fields accessed by subclasses (or required when overriding protected superclass methods) and possibly unit tested. Never use protected members in final classes.
-*   **public:** Reserve strictly for the cross-package public API (and framework entry points such as @AgentDoc methods, Jackson/TOML beans, or interface implementations). Every public API type and method must have Javadoc and must be unit tested.
+*   **public:** Reserve strictly for the cross-package public API (and framework entry points such as @AgentDoc methods, Jackson/TOML beans, or interface implementations). Every public API type and method must have Javadoc and must be unit tested (excluding Swing UI classes).
+*   **Backend-Focused Unit Testing:** Concentrate unit testing on backend services, domain models, and algorithmic logic. Do **not** write unit tests for Swing UI classes (`org.roxycode.app.ui.*`) beyond the single launch and initialization smoke test in `MainFrameTest` ensuring the application frame and panels launch cleanly. Do not widen access modifiers or add test-only hooks in `org.roxycode.app.ui.*` for UI unit testing.
 *   **Always use a full set of brackets on if statements: **
 
 ### Syntax and Typing

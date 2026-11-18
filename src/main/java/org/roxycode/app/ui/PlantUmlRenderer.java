@@ -32,7 +32,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.imageio.ImageIO;
@@ -289,7 +288,6 @@ public final class PlantUmlRenderer {
     private static final Cache<String, DiagramExportSource> DIAGRAM_SOURCE_CACHE = Caffeine.newBuilder()
             .maximumSize(MAX_CACHE_ENTRIES).build();
 
-    private static final AtomicInteger RENDER_COUNT = new AtomicInteger(0);
     private static volatile Path tempDiagramDir;
 
     private PlantUmlRenderer() {
@@ -862,7 +860,6 @@ public final class PlantUmlRenderer {
     }
 
     private static Optional<String> generateDiagramHtml(DiagramCacheKey key) {
-        RENDER_COUNT.incrementAndGet();
         try {
             byte[] pngBytes = renderDiagramPngBytes(key);
             Path outputDir = getOrCreateTempDir();
@@ -1439,15 +1436,5 @@ public final class PlantUmlRenderer {
         created.toFile().deleteOnExit();
         tempDiagramDir = created;
         return created;
-    }
-
-    static void clearCacheForTesting() {
-        DIAGRAM_CACHE.invalidateAll();
-        DIAGRAM_SOURCE_CACHE.invalidateAll();
-        RENDER_COUNT.set(0);
-    }
-
-    static int getRenderCountForTesting() {
-        return RENDER_COUNT.get();
     }
 }
