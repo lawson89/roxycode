@@ -23,7 +23,6 @@ import org.roxycode.app.events.SettingsChangedEvent;
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.model.AgentProfile;
 import org.roxycode.app.model.AppSettings;
-import org.roxycode.app.model.ThinkingLevel;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,23 +51,11 @@ public class ProjectService {
     private static final String NO_PROJECT_ROOT_MSG = "Project root is not set.";
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    public record ProjectConfig(String agentProfile, String geminiModel, String thinkingLevel, boolean buildConfirmed) {
-        public static final ProjectConfig DEFAULT = new ProjectConfig("", "", "", false);
+    public record ProjectConfig(String agentProfile, boolean buildConfirmed) {
+        public static final ProjectConfig DEFAULT = new ProjectConfig("", false);
 
         public ProjectConfig {
-            geminiModel = StringUtils.trimToEmpty(geminiModel);
-            thinkingLevel = normalizeProjectThinkingLevel(thinkingLevel);
-            if (StringUtils.isNotBlank(agentProfile)) {
-                agentProfile = normalizeProjectAgentProfile(agentProfile);
-            } else if (!geminiModel.isEmpty()) {
-                agentProfile = AgentProfile.fromString(geminiModel).getId();
-            } else {
-                agentProfile = "";
-            }
-        }
-
-        public ProjectConfig(String agentProfile, boolean buildConfirmed) {
-            this(agentProfile, "", "", buildConfirmed);
+            agentProfile = normalizeProjectAgentProfile(agentProfile);
         }
     }
 
@@ -144,23 +131,16 @@ public class ProjectService {
         return AgentProfile.fromString(rawAgentProfile).getId();
     }
 
-    private static String normalizeProjectThinkingLevel(String rawThinkingLevel) {
-        if (StringUtils.isBlank(rawThinkingLevel)) {
-            return "";
-        }
-        return ThinkingLevel.fromString(rawThinkingLevel).getId();
-    }
-
     private record FileStamp(Instant lastModified, long size) {
     }
 
-    private record CachedConfig<T>(Path filePath, FileStamp stamp, T config) {
+    private record CachedProjectConfig(Path filePath, FileStamp stamp, ProjectConfig config) {
     }
 
     private final SettingsService settingsService;
     private final ApplicationEventPublisher eventPublisher;
     private volatile Path currentProjectRoot;
-    private volatile CachedConfig<ProjectConfig> cachedProjectConfig;
+    private volatile CachedProjectConfig cachedProjectConfig;
 
     public ProjectService(SettingsService settingsService, ApplicationEventPublisher eventPublisher) {
         this.settingsService = settingsService;
@@ -216,24 +196,9 @@ public class ProjectService {
         if (settingsService == null || settingsService.getSettings() == null) {
             return List.of();
         }
-        List<String> rawPaths = settingsService.getSettings().getRecentProjectPaths();
-        List<Path> result = new ArrayList<>();
-        Set<String> seenNormalized = new HashSet<>();
-        if (rawPaths != null) {
-            for (String raw : rawPaths) {
-                if (StringUtils.isNotBlank(raw)) {
-                    Path normalized = Paths.get(raw.trim()).toAbsolutePath().normalize();
-                    if (seenNormalized.add(normalized.toString())) {
-                        result.add(normalized);
-                        if (result.size() >= AppSettings.MAX_RECENT_PROJECTS) {
-                            break;
-                        }
-                    }
-                }
-            }
-        }
+        List<Path> result = collectNormalizedRecentPaths(settingsService.getSettings().getRecentProjectPaths(), null);
         if (result.isEmpty() && currentProjectRoot != null) {
-            result.add(currentProjectRoot.toAbsolutePath().normalize());
+            return List.of(currentProjectRoot.toAbsolutePath().normalize());
         }
         return List.copyOf(result);
     }
@@ -243,24 +208,32 @@ public class ProjectService {
             return;
         }
         AppSettings settings = settingsService.getSettings();
-        String targetNormalized = projectRoot.toAbsolutePath().normalize().toString();
-        List<String> updated = new ArrayList<>();
-        updated.add(targetNormalized);
-        List<String> existing = settings.getRecentProjectPaths();
-        if (existing != null) {
-            for (String raw : existing) {
-                if (StringUtils.isNotBlank(raw)) {
-                    String candidate = Paths.get(raw.trim()).toAbsolutePath().normalize().toString();
-                    if (!updated.contains(candidate)) {
-                        updated.add(candidate);
-                        if (updated.size() >= AppSettings.MAX_RECENT_PROJECTS) {
-                            break;
-                        }
+        List<Path> updated = collectNormalizedRecentPaths(settings.getRecentProjectPaths(),
+                projectRoot.toAbsolutePath().normalize());
+        List<String> updatedStrings = new ArrayList<>(updated.size());
+        for (Path p : updated) {
+            updatedStrings.add(p.toString());
+        }
+        settings.setRecentProjectPaths(updatedStrings);
+    }
+
+    private static List<Path> collectNormalizedRecentPaths(List<String> rawPaths, Path prependedPath) {
+        List<Path> result = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
+        if (prependedPath != null && seen.add(prependedPath.toString())) {
+            result.add(prependedPath);
+        }
+        if (rawPaths != null) {
+            for (String raw : rawPaths) {
+                if (StringUtils.isNotBlank(raw) && result.size() < AppSettings.MAX_RECENT_PROJECTS) {
+                    Path normalized = Paths.get(raw.trim()).toAbsolutePath().normalize();
+                    if (seen.add(normalized.toString())) {
+                        result.add(normalized);
                     }
                 }
             }
         }
-        settings.setRecentProjectPaths(updated);
+        return result;
     }
 
     /**
@@ -288,47 +261,34 @@ public class ProjectService {
         return new FileStamp(Instant.EPOCH, -1L);
     }
 
-    private <T> T readCachedProjectToml(String fileName, Class<T> type, T defaultValue, CachedConfig<T> currentCache,
-            java.util.function.Consumer<CachedConfig<T>> cacheSetter) {
+    private ProjectConfig readProjectConfig() {
         if (!hasActiveProject()) {
-            return defaultValue;
+            return ProjectConfig.DEFAULT;
         }
-        Path configFile = resolveProjectDataPath(fileName);
+        Path configFile = resolveProjectDataPath(PROJECT_CONFIG_FILE);
         FileStamp stamp = readFileStamp(configFile);
+        CachedProjectConfig currentCache = this.cachedProjectConfig;
         if (currentCache != null && currentCache.filePath().equals(configFile) && currentCache.stamp().equals(stamp)) {
             return currentCache.config();
         }
-        T loaded = PathUtils.readTomlOrDefault(configFile, type, defaultValue, AiConfig.SHARED_TOML_MAPPER);
-        cacheSetter.accept(new CachedConfig<>(configFile, stamp, loaded));
+        ProjectConfig loaded = PathUtils.readTomlOrDefault(configFile, ProjectConfig.class, ProjectConfig.DEFAULT,
+                AiConfig.SHARED_TOML_MAPPER);
+        this.cachedProjectConfig = new CachedProjectConfig(configFile, stamp, loaded);
         return loaded;
     }
 
-    private <T> void writeCachedProjectToml(String fileName, T config, String errorLabel,
-            java.util.function.Consumer<CachedConfig<T>> cacheSetter) {
+    private void writeProjectConfig(ProjectConfig config) {
         if (!hasActiveProject()) {
             throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
-        Path configFile = resolveProjectDataPath(fileName);
+        Path configFile = resolveProjectDataPath(PROJECT_CONFIG_FILE);
         try {
             PathUtils.writeToml(configFile, config, AiConfig.SHARED_TOML_MAPPER);
-            cacheSetter.accept(new CachedConfig<>(configFile, readFileStamp(configFile), config));
+            this.cachedProjectConfig = new CachedProjectConfig(configFile, readFileStamp(configFile), config);
         } catch (IOException e) {
-            log.error("Failed to save {} {}: {}", errorLabel, configFile, e.getMessage());
-            throw new UncheckedIOException("Failed to save " + errorLabel, e);
+            log.error("Failed to save project config {}: {}", configFile, e.getMessage());
+            throw new UncheckedIOException("Failed to save project config", e);
         }
-    }
-
-    private ProjectConfig readProjectConfig() {
-        return readCachedProjectToml(PROJECT_CONFIG_FILE, ProjectConfig.class, ProjectConfig.DEFAULT,
-                this.cachedProjectConfig, c -> {
-                    this.cachedProjectConfig = c;
-                });
-    }
-
-    private void writeProjectConfig(ProjectConfig config) {
-        writeCachedProjectToml(PROJECT_CONFIG_FILE, config, "project config", c -> {
-            this.cachedProjectConfig = c;
-        });
     }
 
     /**
@@ -383,8 +343,7 @@ public class ProjectService {
             throw new IllegalStateException(NO_PROJECT_ROOT_MSG);
         }
         ProjectConfig existing = readProjectConfig();
-        writeProjectConfig(new ProjectConfig(existing.agentProfile(), existing.geminiModel(), existing.thinkingLevel(),
-                confirmed));
+        writeProjectConfig(new ProjectConfig(existing.agentProfile(), confirmed));
         publishSettingsChangedSnapshot();
     }
 
@@ -399,10 +358,6 @@ public class ProjectService {
             return AgentProfile.fromString(projectProfile);
         }
         return SettingsService.resolveGlobalAgentProfile(settingsService);
-    }
-
-    public String getEffectiveGeminiModel() {
-        return getEffectiveGeminiModel(null);
     }
 
     /**
@@ -434,32 +389,6 @@ public class ProjectService {
             }
         }
         return SettingsService.resolveGlobalAgentProfile(settingsService);
-    }
-
-    public static String resolveEffectiveGeminiModel(ProjectService projectService, SettingsService settingsService) {
-        return resolveEffectiveGeminiModel(projectService, settingsService, null);
-    }
-
-    /**
-     * Resolves the effective Gemini model API name for the given workflow phase using the active {@link AgentProfile}.
-     *
-     * @param projectService
-     *            the project service (may be null)
-     * @param settingsService
-     *            the settings service (may be null)
-     * @param phase
-     *            the workflow phase (may be null)
-     * @return the resolved Gemini model API name
-     */
-    public static String resolveEffectiveGeminiModel(ProjectService projectService, SettingsService settingsService,
-            WorkflowPhase phase) {
-        if (projectService != null) {
-            String model = projectService.getEffectiveGeminiModel(phase);
-            if (StringUtils.isNotBlank(model)) {
-                return model;
-            }
-        }
-        return resolveEffectiveAgentProfile(projectService, settingsService).resolveModelForPhase(phase);
     }
 
     public static String resolveNormalizedProjectPath(ProjectService projectService) {

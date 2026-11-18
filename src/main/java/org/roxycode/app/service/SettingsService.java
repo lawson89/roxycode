@@ -14,7 +14,6 @@ import org.apache.commons.lang3.concurrent.ConcurrentException;
 import org.apache.commons.lang3.concurrent.LazyInitializer;
 import org.roxycode.app.ai.AiConfig;
 import org.roxycode.app.events.SettingsChangedEvent;
-import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.model.AgentProfile;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.model.GeminiModelConfig;
@@ -163,7 +162,7 @@ public class SettingsService {
     public GeminiModelConfig resolveModelConfig(String apiName) {
         String target = StringUtils.trimToEmpty(apiName);
         if (target.isEmpty()) {
-            target = resolveGlobalGeminiModel(this);
+            target = resolveGlobalAgentProfile(this).resolveModelForPhase(null);
         }
         for (GeminiModelConfig model : getAvailableModels()) {
             if (model != null && target.equalsIgnoreCase(StringUtils.trimToEmpty(model.apiName()))) {
@@ -175,10 +174,7 @@ public class SettingsService {
 
     public static GeminiModelConfig resolveModelConfig(SettingsService settingsService, String apiName) {
         if (settingsService != null) {
-            GeminiModelConfig cfg = settingsService.resolveModelConfig(apiName);
-            if (cfg != null) {
-                return cfg;
-            }
+            return settingsService.resolveModelConfig(apiName);
         }
         return GeminiModelConfig.defaultForApiName(apiName);
     }
@@ -196,14 +192,6 @@ public class SettingsService {
             return AgentProfile.fromString(settingsService.getSettings().getAgentProfile());
         }
         return AgentProfile.DEFAULT;
-    }
-
-    public static String resolveGlobalGeminiModel(SettingsService settingsService) {
-        return resolveGlobalGeminiModel(settingsService, null);
-    }
-
-    public static String resolveGlobalGeminiModel(SettingsService settingsService, WorkflowPhase phase) {
-        return resolveGlobalAgentProfile(settingsService).resolveModelForPhase(phase);
     }
 
     public synchronized boolean hasSettingsFile() {

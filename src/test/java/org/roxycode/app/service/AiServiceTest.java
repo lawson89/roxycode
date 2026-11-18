@@ -308,9 +308,7 @@ class AiServiceTest {
         assertEquals("gemini-4-argon", planOptionsCaptor.getValue().build().getModel());
 
         ProjectService mockProjectService = mock(ProjectService.class);
-        lenient().when(mockProjectService.getEffectiveAgentProfile()).thenReturn(AgentProfile.MAX);
-        when(mockProjectService.getEffectiveGeminiModel(WorkflowPhase.PLAN)).thenReturn("gemini-4-carbon");
-        when(mockProjectService.getEffectiveGeminiModel(WorkflowPhase.CODE)).thenReturn("gemini-4-hydrogen");
+        when(mockProjectService.getEffectiveAgentProfile()).thenReturn(AgentProfile.MAX);
         AiService aiServiceWithProject = new AiService(chatClientBuilder, settingsService, mockProjectService,
                 promptService, jexlTool, planService, chatMemory, toolCallingManager, eventPublisher);
         assertEquals(AgentProfile.MAX, aiServiceWithProject.resolveEffectiveAgentProfile());
@@ -334,9 +332,10 @@ class AiServiceTest {
         assertEquals(2, captureTurnCompleteEvent().totalTurns());
 
         AtomicReference<AiConfig.GenAiConnectionConfig> reloadedKeyRef = new AtomicReference<>();
-        aiService.setConnectionChatClientBuilderFactory(cfg -> {
+        ChatModel mockReloadedModel = mock(ChatModel.class);
+        aiService.setConnectionChatModelFactory(cfg -> {
             reloadedKeyRef.set(cfg);
-            return chatClientBuilder;
+            return mockReloadedModel;
         });
         settings.setGeminiApiKey("  hot-reloaded-key-123  ");
         aiService.onSettingsChanged(new SettingsChangedEvent(settings));
@@ -369,14 +368,11 @@ class AiServiceTest {
 
         assertThrows(IllegalArgumentException.class,
                 () -> aiService.testConnection(AiConfig.GenAiConnectionConfig.forApiKey("   "), "gemini-3.5-flash"));
-        aiService.setConnectionConfigTester((cfg, model) -> cfg.apiKey() + ":" + model);
-        assertEquals("my-key:gemini-3.5-pro",
-                aiService.testConnection(AiConfig.GenAiConnectionConfig.forApiKey("  my-key  "), " gemini-3.5-pro "));
 
         AtomicReference<AiConfig.GenAiConnectionConfig> reloadedConfigRef = new AtomicReference<>();
-        aiService.setConnectionChatClientBuilderFactory(cfg -> {
+        aiService.setConnectionChatModelFactory(cfg -> {
             reloadedConfigRef.set(cfg);
-            return chatClientBuilder;
+            return mockReloadedModel;
         });
         settings.setVertexAiEnabled(true);
         settings.setVertexProjectId("  vertex-proj-42 ");
@@ -394,10 +390,6 @@ class AiServiceTest {
                 .testConnection(AiConfig.GenAiConnectionConfig.forVertexAi("", "global", ""), "gemini-3.5-flash"));
         assertThrows(IllegalArgumentException.class, () -> aiService
                 .testConnection(AiConfig.GenAiConnectionConfig.forVertexAi("proj", "", ""), "gemini-3.5-flash"));
-        aiService.setConnectionConfigTester(
-                (cfg, model) -> cfg.vertexAi() + ":" + cfg.projectId() + ":" + cfg.location() + ":" + model);
-        assertEquals("true:vertex-proj-42:us-central1:gemini-3.5-flash", aiService.testConnection(
-                AiConfig.GenAiConnectionConfig.forVertexAi("vertex-proj-42", "us-central1", ""), "gemini-3.5-flash"));
     }
 
     @Test
@@ -606,7 +598,6 @@ class AiServiceTest {
         ToolCallingManager customToolManager = mock(ToolCallingManager.class);
         AiService serviceWithRealClient = createRealClientService(mockChatModel, customToolManager);
         serviceWithRealClient.setRateLimitCooldown(Duration.ofMillis(10));
-        settings.setThinkingLevel("ADAPTIVE");
         when(promptService.buildSystemPrompt(any())).thenReturn("SYSTEM PROMPT");
 
         AssistantMessage toolCall1 = createToolCallMessage();
@@ -706,7 +697,6 @@ class AiServiceTest {
         ToolCallingManager customToolManager = mock(ToolCallingManager.class);
         AiService serviceWithRealClient = createRealClientService(mockChatModel, customToolManager);
         settings.setAgentProfile("MAX");
-        settings.setThinkingLevel("ADAPTIVE");
         when(promptService.buildSystemPrompt(any())).thenReturn("SYSTEM PROMPT");
         when(planService.getCurrentPlan()).thenReturn(null);
 

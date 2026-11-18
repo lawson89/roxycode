@@ -3,6 +3,10 @@ package org.roxycode.app.ai;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.lang.reflect.Array;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
+import java.lang.reflect.RecordComponent;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -160,6 +164,15 @@ public final class JsPolyfillUberspect implements JexlUberspect {
         }
         if (PROP_LENGTH.equals(identifier) && resolveLength(obj) >= 0) {
             return LENGTH_PROPERTY_GET;
+        }
+        if (obj != null && obj.getClass().isRecord() && Modifier.isPublic(obj.getClass().getModifiers())
+                && identifier instanceof String propName) {
+            for (RecordComponent comp : obj.getClass().getRecordComponents()) {
+                Method accessor = comp.getAccessor();
+                if (comp.getName().equals(propName) && Modifier.isPublic(accessor.getModifiers())) {
+                    return new RecordComponentPropertyGet(accessor, propName);
+                }
+            }
         }
         return null;
     }
@@ -537,6 +550,44 @@ public final class JsPolyfillUberspect implements JexlUberspect {
                 return length;
             }
             return JexlEngine.TRY_FAILED;
+        }
+
+        @Override
+        public boolean tryFailed(Object rval) {
+            return rval == JexlEngine.TRY_FAILED;
+        }
+
+        @Override
+        public boolean isCacheable() {
+            return true;
+        }
+    }
+
+    private static final class RecordComponentPropertyGet implements JexlPropertyGet {
+
+        private final Method accessor;
+        private final String propertyName;
+
+        private RecordComponentPropertyGet(Method accessor, String propertyName) {
+            this.accessor = accessor;
+            this.propertyName = propertyName;
+        }
+
+        @Override
+        public Object invoke(Object obj) throws Exception {
+            return accessor.invoke(obj);
+        }
+
+        @Override
+        public Object tryInvoke(Object obj, Object key) {
+            if (!propertyName.equals(key) || obj == null || !accessor.getDeclaringClass().isInstance(obj)) {
+                return JexlEngine.TRY_FAILED;
+            }
+            try {
+                return accessor.invoke(obj);
+            } catch (IllegalAccessException | InvocationTargetException e) {
+                return JexlEngine.TRY_FAILED;
+            }
         }
 
         @Override

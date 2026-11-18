@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeoutException;
+import org.roxycode.app.model.AgentProfile;
 import org.roxycode.app.model.AppSettings;
 import org.roxycode.app.service.SystemToolService;
 import org.roxycode.app.util.ExceptionUtils;
@@ -260,7 +261,7 @@ public class AiConfig {
 
     public static GoogleGenAiChatModel createChatModel(Client client, String defaultModel,
             ToolCallingManager toolCallingManager) {
-        String modelName = StringUtils.defaultIfBlank(defaultModel, AppSettings.DEFAULT_GEMINI_MODEL).trim();
+        String modelName = StringUtils.defaultIfBlank(defaultModel, AgentProfile.DEFAULT.getPlanModel()).trim();
         GoogleGenAiChatOptions options = GoogleGenAiChatOptions.builder().model(modelName).build();
         GoogleGenAiChatModel.Builder builder = GoogleGenAiChatModel.builder().genAiClient(client).options(options)
                 .retryTemplate(createNoOpRetryTemplate());

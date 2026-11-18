@@ -38,7 +38,7 @@ public class RoxyCode {
     static final String PROP_VERTEX_LOCATION = "spring.ai.google.genai.location";
     static final String PROP_VERTEX_CREDENTIALS_URI = "spring.ai.google.genai.credentials-uri";
     static final String PROP_GEMINI_MODEL = "spring.ai.google.genai.chat.options.model";
-    private static final String DEFAULT_GEMINI_MODEL = AppSettings.DEFAULT_GEMINI_MODEL;
+    private static final String DEFAULT_GEMINI_MODEL = org.roxycode.app.model.AgentProfile.DEFAULT.getPlanModel();
 
     /**
      * Main entry point for the application.

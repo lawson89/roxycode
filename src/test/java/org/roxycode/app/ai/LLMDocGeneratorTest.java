@@ -5,10 +5,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import java.lang.reflect.Method;
-import java.lang.reflect.Modifier;
-import java.lang.reflect.ParameterizedType;
-import java.lang.reflect.RecordComponent;
-import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -90,32 +86,6 @@ class LLMDocGeneratorTest {
                 assertTrue(hasArrayOverload, serviceClass.getSimpleName() + "#" + method.getName());
             }
             assertTrue(ALLOWED_JS_PARAM_TYPES.contains(paramType));
-        }
-        Class<?> returnType = method.getReturnType();
-        if (returnType.isRecord()) {
-            assertRecordExposesJavaBeanGetters(returnType);
-        }
-        if (method.getGenericReturnType() instanceof ParameterizedType pt) {
-            for (Type typeArg : pt.getActualTypeArguments()) {
-                if (typeArg instanceof Class<?> typeArgClass && typeArgClass.isRecord()) {
-                    assertRecordExposesJavaBeanGetters(typeArgClass);
-                }
-            }
-        }
-    }
-
-    private static void assertRecordExposesJavaBeanGetters(Class<?> recordType) {
-        for (RecordComponent comp : recordType.getRecordComponents()) {
-            String compName = comp.getName();
-            String cap = Character.toUpperCase(compName.charAt(0)) + compName.substring(1);
-            String prefix = "get";
-            if (comp.getType() == boolean.class) {
-                prefix = "is";
-            }
-            String getterName = prefix + cap;
-            Method getter = assertDoesNotThrow(() -> recordType.getMethod(getterName));
-            assertTrue(Modifier.isPublic(getter.getModifiers()));
-            assertEquals(comp.getType(), getter.getReturnType());
         }
     }
 

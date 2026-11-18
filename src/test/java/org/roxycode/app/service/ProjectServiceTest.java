@@ -181,8 +181,6 @@ class ProjectServiceTest {
                 geminiModel = "gemini-4-carbon"
                 buildConfirmed = true
                 """));
-        assertEquals("MAX", projectService.getProjectAgentProfile());
-        assertEquals(AgentProfile.MAX, projectService.getEffectiveAgentProfile());
         assertTrue(projectService.isBuildConfirmed());
 
         // External modification with a newer mtime invalidates the cached ProjectConfig

@@ -138,7 +138,7 @@ class MemoryServiceTest {
 
         assertContainsAll(memoryService.readArchivedTopic("20250514-153000-memory-service-architecture"),
                 "Memory Service Architecture", "Alice", "messageCount: 2");
-        assertEquals(2, memoryService.listArchivedTopicSummaries().size());
+        assertEquals(2, memoryService.listArchiveSummaries(MemoryService.ArchiveKind.TOPIC).size());
 
         Path plansDir = Files.createDirectories(projectDataDir.resolve("archive/plans"));
         Files.writeString(plansDir.resolve("20250514-120000-feature-plan.md"), """
@@ -153,13 +153,13 @@ class MemoryServiceTest {
                 UniqueBodyMatchToken in plan steps
                 """, StandardCharsets.UTF_8);
 
-        assertEquals(1, memoryService.listArchivedPlanSummaries().size());
+        assertEquals(1, memoryService.listArchiveSummaries(MemoryService.ArchiveKind.PLAN).size());
         try (MockedStatic<ProcessRunner> runnerMock = mockStatic(ProcessRunner.class)) {
             runnerMock.when(() -> ProcessRunner.run(anyList(), eq(plansDir.toAbsolutePath().normalize()), eq(false)))
                     .thenReturn(new ProcessResult(0,
                             "./20250514-120000-feature-plan.md:UniqueBodyMatchToken in plan steps", "", false));
             List<MemoryService.ArchiveEntrySummary> planMatched = memoryService
-                    .searchArchivedPlans("UniqueBodyMatchToken");
+                    .searchArchiveSummaries(MemoryService.ArchiveKind.PLAN, "UniqueBodyMatchToken");
             assertEquals(1, planMatched.size());
             assertEquals("UniqueBodyMatchToken in plan steps", planMatched.get(0).matchSnippet());
         }
@@ -203,10 +203,12 @@ class MemoryServiceTest {
                 entries);
         assertNotNull(filename);
 
-        EditorResult blankErr = topicMemoryService.renameArchivedTopic(filename, "   ");
+        EditorResult blankErr = topicMemoryService.renameArchivedEntry(MemoryService.ArchiveKind.TOPIC, filename,
+                "   ");
         assertFalse(blankErr.success());
 
-        EditorResult renameRes = topicMemoryService.renameArchivedTopic(filename, "  **Updated Topic Name**  ");
+        EditorResult renameRes = topicMemoryService.renameArchivedEntry(MemoryService.ArchiveKind.TOPIC, filename,
+                "  **Updated Topic Name**  ");
         assertTrue(renameRes.success());
         assertEquals("Updated Topic Name", renameRes.content());
         assertEquals(1, archiveEvents.size());
@@ -214,13 +216,13 @@ class MemoryServiceTest {
         String updatedMd = topicMemoryService.readArchivedTopic(filename);
         assertContainsAll(updatedMd, "title: \"Updated Topic Name\"", "# Topic: Updated Topic Name", "Initial answer");
 
-        EditorResult deleteRes = topicMemoryService.deleteArchivedTopic(filename);
+        EditorResult deleteRes = topicMemoryService.deleteArchivedEntry(MemoryService.ArchiveKind.TOPIC, filename);
         assertTrue(deleteRes.success());
         assertEquals(filename, deleteRes.content());
         assertEquals("", topicMemoryService.readArchivedTopic(filename));
         assertEquals(2, archiveEvents.size());
 
-        EditorResult missingErr = topicMemoryService.deleteArchivedTopic(filename);
+        EditorResult missingErr = topicMemoryService.deleteArchivedEntry(MemoryService.ArchiveKind.TOPIC, filename);
         assertFalse(missingErr.success());
     }
 
@@ -238,10 +240,11 @@ class MemoryServiceTest {
                 + "# Implementation Plan: Original Plan\n\n## Goal\nShip it.\n";
         Files.writeString(plansDir.resolve(filename), initialMd, StandardCharsets.UTF_8);
 
-        EditorResult blankErr = planMemoryService.renameArchivedPlan(filename, "   ");
+        EditorResult blankErr = planMemoryService.renameArchivedEntry(MemoryService.ArchiveKind.PLAN, filename, "   ");
         assertFalse(blankErr.success());
 
-        EditorResult renameRes = planMemoryService.renameArchivedPlan(filename, "  **Updated Plan Name**  ");
+        EditorResult renameRes = planMemoryService.renameArchivedEntry(MemoryService.ArchiveKind.PLAN, filename,
+                "  **Updated Plan Name**  ");
         assertTrue(renameRes.success());
         assertEquals("Updated Plan Name", renameRes.content());
         assertEquals(1, archiveEvents.size());
@@ -250,7 +253,7 @@ class MemoryServiceTest {
         String updatedMd = planMemoryService.readArchivedPlan(filename);
         assertContainsAll(updatedMd, "title: \"Updated Plan Name\"", "# Implementation Plan: Updated Plan Name",
                 "Ship it.");
-        EditorResult deleteRes = planMemoryService.deleteArchivedPlan(filename);
+        EditorResult deleteRes = planMemoryService.deleteArchivedEntry(MemoryService.ArchiveKind.PLAN, filename);
         assertTrue(deleteRes.success());
         assertEquals(filename, deleteRes.content());
         assertEquals("", planMemoryService.readArchivedPlan(filename));
@@ -258,7 +261,7 @@ class MemoryServiceTest {
         assertEquals(new org.roxycode.app.events.ArchiveUpdatedEvent(
                 org.roxycode.app.events.ArchiveUpdatedEvent.TYPE_PLAN, filename), archiveEvents.get(1));
 
-        EditorResult missingErr = planMemoryService.deleteArchivedPlan(filename);
+        EditorResult missingErr = planMemoryService.deleteArchivedEntry(MemoryService.ArchiveKind.PLAN, filename);
         assertFalse(missingErr.success());
     }
 }

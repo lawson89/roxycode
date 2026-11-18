@@ -1,6 +1,5 @@
 package org.roxycode.app.ai.services;
 
-import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -9,11 +8,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.UnaryOperator;
 import javax.swing.SwingUtilities;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -36,7 +36,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
-import org.springframework.core.annotation.AnnotationUtils;
 import org.springframework.lang.Nullable;
 
 @AgentService(value = "planService", phases = {"PLAN", "CODE", "REVIEW"})
@@ -133,26 +132,6 @@ public class PlanService {
             new TransitionKey(WorkflowPhase.REVIEW, WorkflowPhase.CODE), new TransitionRule(true, true),
             new TransitionKey(WorkflowPhase.REVIEW, WorkflowPhase.PLAN), new TransitionRule(false, true));
 
-    private static final Map<String, List<WorkflowPhase>> ALLOWED_PHASES_BY_METHOD = buildAllowedPhasesByMethod();
-
-    private static Map<String, List<WorkflowPhase>> buildAllowedPhasesByMethod() {
-        Map<String, List<WorkflowPhase>> map = new LinkedHashMap<>();
-        for (Method method : PlanService.class.getDeclaredMethods()) {
-            AgentDoc doc = AnnotationUtils.findAnnotation(method, AgentDoc.class);
-            if (doc == null) {
-                continue;
-            }
-            List<WorkflowPhase> phases = new ArrayList<>();
-            for (WorkflowPhase candidate : WorkflowPhase.values()) {
-                if (WorkflowPhase.isAllowed(doc.phases(), candidate)) {
-                    phases.add(candidate);
-                }
-            }
-            map.putIfAbsent(method.getName(), List.copyOf(phases));
-        }
-        return Collections.unmodifiableMap(map);
-    }
-
     private final EnvironmentService environmentService;
     private final ApplicationEventPublisher eventPublisher;
     private final ProjectService projectService;
@@ -187,13 +166,11 @@ public class PlanService {
         if (event == null) {
             return;
         }
-        ImplementationPlan updated;
-        PersistSnapshot snapshot;
-        synchronized (stateLock) {
-            if (currentPlan == null) {
-                return;
+        mutatePlan(false, plan -> {
+            if (plan == null) {
+                return null;
             }
-            updated = currentPlan;
+            ImplementationPlan updated = plan;
             if (StringUtils.isNotBlank(event.path())) {
                 updated = updated.withRecordedFileChange(event.path(), event.changeType());
             }
@@ -201,11 +178,8 @@ public class PlanService {
                 updated = updated.withVerificationStepCompleted(ImplementationPlan.STEP_COMPILE, false)
                         .withVerificationStepCompleted(ImplementationPlan.STEP_UNIT_TESTS, false);
             }
-            this.currentPlan = updated;
-            snapshot = capturePersistSnapshotLocked();
-        }
-        enqueueWorkflowDiskOperation(snapshot);
-        publishPlanUpdated(updated);
+            return updated;
+        });
     }
 
     @EventListener
@@ -238,24 +212,19 @@ public class PlanService {
      * @return a status message
      */
     public String submitPlan(ImplementationPlan plan) {
-        requirePhase("submitPlan");
+        requirePhase("submitPlan", WorkflowPhase.PLAN);
         if (plan == null) {
             throw new IllegalArgumentException("Error: Plan cannot be null.");
         }
-        ImplementationPlan normalized;
-        PersistSnapshot snapshot;
-        synchronized (stateLock) {
-            requirePhase("submitPlan");
-            normalized = plan.withNormalizedStepsFrom(currentPlan);
+        mutatePlan(false, existing -> {
+            requirePhase("submitPlan", WorkflowPhase.PLAN);
+            ImplementationPlan normalized = plan.withNormalizedStepsFrom(existing);
             if (unassignedTaskUsage.hasUsage()) {
                 normalized = normalized.withUsageSummary(normalized.usageSummary().merge(unassignedTaskUsage));
                 unassignedTaskUsage = ImplementationPlan.UsageSummary.EMPTY;
             }
-            this.currentPlan = normalized;
-            snapshot = capturePersistSnapshotLocked();
-        }
-        enqueueWorkflowDiskOperation(snapshot);
-        publishPlanUpdated(normalized);
+            return normalized;
+        });
         return "Implementation plan submitted successfully with mandatory verification checklist items.";
     }
 
@@ -267,7 +236,7 @@ public class PlanService {
             @AgentDoc("The high-level goal of the plan") String goal,
             @AgentDoc("Array of functional requirements") String[] requirements,
             @AgentDoc("Array of technical implementation steps") String[] technicalSteps) {
-        requirePhase("submitPlan");
+        requirePhase("submitPlan", WorkflowPhase.PLAN);
         List<String> safeRequirements = Arrays.asList(ArrayUtils.nullToEmpty(requirements));
         List<ImplementationPlan.TechStep> steps = Arrays.stream(ArrayUtils.nullToEmpty(technicalSteps))
                 .map(s -> new ImplementationPlan.TechStep(s, false)).toList();
@@ -287,23 +256,16 @@ public class PlanService {
             "PLAN", "CODE", "REVIEW"}, examples = {"planService.addTechnicalStep('Add unit tests for edge cases')"})
     public String addTechnicalStep(
             @AgentDoc("Description of the new technical implementation step") String description) {
-        requirePhase("addTechnicalStep");
+        requirePhase("addTechnicalStep", WorkflowPhase.PLAN, WorkflowPhase.CODE, WorkflowPhase.REVIEW);
         String trimmed = requireNonBlankDescription(description);
-        int insertIndex;
-        ImplementationPlan updated;
-        PersistSnapshot snapshot;
-        synchronized (stateLock) {
-            requirePhase("addTechnicalStep");
-            ensureActivePlanLocked();
-            List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
-            insertIndex = insertStepBeforeVerificationGates(steps, trimmed);
-            updated = currentPlan.withTechnicalSteps(steps);
-            this.currentPlan = updated;
-            snapshot = capturePersistSnapshotLocked();
-        }
-        enqueueWorkflowDiskOperation(snapshot);
-        publishPlanUpdated(updated);
-        return String.format("Added technical step at index %d: '%s'. %s", insertIndex, trimmed,
+        AtomicInteger insertIndex = new AtomicInteger();
+        ImplementationPlan updated = mutatePlan(true, existing -> {
+            requirePhase("addTechnicalStep", WorkflowPhase.PLAN, WorkflowPhase.CODE, WorkflowPhase.REVIEW);
+            List<ImplementationPlan.TechStep> steps = new ArrayList<>(existing.technicalSteps());
+            insertIndex.set(insertStepBeforeVerificationGates(steps, trimmed));
+            return existing.withTechnicalSteps(steps);
+        });
+        return String.format("Added technical step at index %d: '%s'. %s", insertIndex.get(), trimmed,
                 updated.formatRemainingIncompleteSteps());
     }
 
@@ -311,70 +273,54 @@ public class PlanService {
             "PLAN", "CODE", "REVIEW"}, examples = {"planService.updateTechnicalStep(0, 'Updated step description')"})
     public String updateTechnicalStep(@AgentDoc("The 0-based index of the step to update") int index,
             @AgentDoc("The updated description for the technical step") String description) {
-        requirePhase("updateTechnicalStep");
+        requirePhase("updateTechnicalStep", WorkflowPhase.PLAN, WorkflowPhase.CODE, WorkflowPhase.REVIEW);
         String trimmed = requireNonBlankDescription(description);
-        ImplementationPlan updated;
-        PersistSnapshot snapshot;
-        synchronized (stateLock) {
-            requirePhase("updateTechnicalStep");
-            ensureActivePlanLocked();
-            List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
+        ImplementationPlan updated = mutatePlan(true, existing -> {
+            requirePhase("updateTechnicalStep", WorkflowPhase.PLAN, WorkflowPhase.CODE, WorkflowPhase.REVIEW);
+            List<ImplementationPlan.TechStep> steps = new ArrayList<>(existing.technicalSteps());
             validateStepIndex(index, steps.size());
             steps.set(index, new ImplementationPlan.TechStep(trimmed, steps.get(index).completed()));
-            updated = currentPlan.withTechnicalSteps(steps);
-            this.currentPlan = updated;
-            snapshot = capturePersistSnapshotLocked();
-        }
-        enqueueWorkflowDiskOperation(snapshot);
-        publishPlanUpdated(updated);
+            return existing.withTechnicalSteps(steps);
+        });
         return String.format("Updated technical step %d to '%s'. %s", index, trimmed,
                 updated.formatRemainingIncompleteSteps());
     }
 
     void updateVerificationStep(String stepDescription, boolean completed) {
-        ImplementationPlan updated;
-        PersistSnapshot snapshot;
-        synchronized (stateLock) {
-            if (currentPlan == null) {
-                return;
+        mutatePlan(false, existing -> {
+            if (existing == null) {
+                return null;
             }
-            updated = currentPlan.withVerificationStepCompleted(stepDescription, completed);
-            if (updated.equals(currentPlan)) {
-                return;
-            }
-            this.currentPlan = updated;
-            snapshot = capturePersistSnapshotLocked();
-        }
-        enqueueWorkflowDiskOperation(snapshot);
-        publishPlanUpdated(updated);
+            return existing.withVerificationStepCompleted(stepDescription, completed);
+        });
     }
 
     @AgentDoc(value = "Marks a specific technical implementation step (0..N) as completed using its 0-based index. Call this in the same executeJexl turn immediately after applying the file edits for that step (build and test verification steps are marked automatically by buildToolService).", phases = {
             "CODE", "REVIEW"}, examples = {"planService.markStepCompleted(0)"})
     public String markStepCompleted(
             @AgentDoc("The index of the step (0-based). Must be valid for the current plan") int index) {
-        requirePhase("markStepCompleted");
+        requirePhase("markStepCompleted", WorkflowPhase.CODE, WorkflowPhase.REVIEW);
         return updateStepsStatus(new int[]{index}, true);
     }
 
     @AgentDoc(value = "Marks multiple technical implementation steps (0..N) as completed in a single batch call (0-based indices). Call this in the same executeJexl turn immediately after applying the file edits for those steps (build and test verification steps are marked automatically by buildToolService).", phases = {
             "CODE", "REVIEW"}, examples = {"planService.markStepsCompleted([0, 1])"})
     public String markStepsCompleted(@AgentDoc("Array of 0-based step indices to mark as completed") int... indices) {
-        requirePhase("markStepsCompleted");
+        requirePhase("markStepsCompleted", WorkflowPhase.CODE, WorkflowPhase.REVIEW);
         return updateStepsStatus(indices, true);
     }
 
     @AgentDoc(value = "Marks a technical implementation step as incomplete using its 0-based index.", phases = {"CODE",
             "REVIEW"}, examples = {"planService.markStepIncomplete(0)"})
     public String markStepIncomplete(@AgentDoc("The index of the step (0-based)") int index) {
-        requirePhase("markStepIncomplete");
+        requirePhase("markStepIncomplete", WorkflowPhase.CODE, WorkflowPhase.REVIEW);
         return updateStepsStatus(new int[]{index}, false);
     }
 
     @AgentDoc(value = "Marks multiple technical implementation steps as incomplete in a single batch call (0-based indices).", phases = {
             "CODE", "REVIEW"}, examples = {"planService.markStepsIncomplete([0, 1])"})
     public String markStepsIncomplete(@AgentDoc("Array of 0-based step indices to mark as incomplete") int... indices) {
-        requirePhase("markStepsIncomplete");
+        requirePhase("markStepsIncomplete", WorkflowPhase.CODE, WorkflowPhase.REVIEW);
         return updateStepsStatus(indices, false);
     }
 
@@ -382,11 +328,8 @@ public class PlanService {
         if (indices == null || indices.length == 0) {
             throw new IllegalArgumentException("Error: Step indices cannot be null or empty.");
         }
-        ImplementationPlan updated;
-        PersistSnapshot snapshot;
-        synchronized (stateLock) {
-            ensureActivePlanLocked();
-            List<ImplementationPlan.TechStep> steps = new ArrayList<>(currentPlan.technicalSteps());
+        ImplementationPlan updated = mutatePlan(true, existing -> {
+            List<ImplementationPlan.TechStep> steps = new ArrayList<>(existing.technicalSteps());
             for (int index : indices) {
                 validateStepIndex(index, steps.size());
                 if (completed && currentPhase == WorkflowPhase.CODE) {
@@ -396,18 +339,34 @@ public class PlanService {
             for (int index : indices) {
                 steps.set(index, new ImplementationPlan.TechStep(steps.get(index).description(), completed));
             }
-            updated = currentPlan.withTechnicalSteps(steps);
-            this.currentPlan = updated;
-            snapshot = capturePersistSnapshotLocked();
-        }
-        enqueueWorkflowDiskOperation(snapshot);
-        publishPlanUpdated(updated);
+            return existing.withTechnicalSteps(steps);
+        });
         String statusWord = "incomplete";
         if (completed) {
             statusWord = "completed";
         }
         return String.format("Marked steps %s %s. %s", Arrays.toString(indices), statusWord,
                 updated.formatRemainingIncompleteSteps());
+    }
+
+    private ImplementationPlan mutatePlan(boolean requireActivePlan, UnaryOperator<ImplementationPlan> mutator) {
+        ImplementationPlan updated;
+        PersistSnapshot snapshot;
+        synchronized (stateLock) {
+            if (requireActivePlan) {
+                ensureActivePlanLocked();
+            }
+            ImplementationPlan base = currentPlan;
+            updated = mutator.apply(base);
+            if (updated == null || updated.equals(base)) {
+                return base;
+            }
+            this.currentPlan = updated;
+            snapshot = capturePersistSnapshotLocked();
+        }
+        enqueueWorkflowDiskOperation(snapshot);
+        publishPlanUpdated(updated);
+        return updated;
     }
 
     private void ensureActivePlanLocked() {
@@ -445,21 +404,21 @@ public class PlanService {
             "planService.requestDevelopment('Plan is complete and ready for implementation')"})
     public String requestDevelopment(
             @AgentDoc("The reason for requesting transition to the CODE phase") String reason) {
-        requirePhase("requestDevelopment");
+        requirePhase("requestDevelopment", WorkflowPhase.PLAN);
         return routeToPhase(WorkflowPhase.CODE, reason);
     }
 
     @AgentDoc(value = "Requests transition to the review phase.", phases = {"CODE"}, examples = {
             "planService.requestReview('All implementation steps and unit tests are complete')"})
     public String requestReview(@AgentDoc("The reason for requesting transition to the REVIEW phase") String reason) {
-        requirePhase("requestReview");
+        requirePhase("requestReview", WorkflowPhase.CODE);
         return routeToPhase(WorkflowPhase.REVIEW, reason);
     }
 
     @AgentDoc(value = "Requests transition back to development to address fixes.", phases = {"REVIEW"}, examples = {
             "planService.requestFixes('Found failing edge case in unit test')"})
     public String requestFixes(@AgentDoc("The reason for requesting transition back to the CODE phase") String reason) {
-        requirePhase("requestFixes");
+        requirePhase("requestFixes", WorkflowPhase.REVIEW);
         return routeToPhase(WorkflowPhase.CODE, reason);
     }
 
@@ -477,14 +436,14 @@ public class PlanService {
     public String requestCompletion(
             @AgentDoc("The structured Final Review Notes (Markdown audit summary covering Requirements, Code Quality/Guidelines, and Test Coverage)") String reason,
             @AgentDoc("The proposed Conventional Commit message") String commitMessage) {
-        requirePhase("requestCompletion");
+        requirePhase("requestCompletion", WorkflowPhase.REVIEW);
         return routeToPhase(WorkflowPhase.PLAN, reason, commitMessage);
     }
 
     @AgentDoc(value = "Requests transition back to the planning phase (PLAN) due to technical blockers or needed revisions.", phases = {
             "CODE"}, examples = {"planService.requestPlanRevision('Need architectural adjustment before proceeding')"})
     public String requestPlanRevision(@AgentDoc("The reason for requesting a plan revision") String reason) {
-        requirePhase("requestPlanRevision");
+        requirePhase("requestPlanRevision", WorkflowPhase.CODE);
         return routeToPhase(WorkflowPhase.PLAN, reason);
     }
 
@@ -940,14 +899,15 @@ public class PlanService {
                 """ + plan.toMarkdown(false).trim();
     }
 
-    private void requirePhase(String methodName) {
-        List<WorkflowPhase> allowedPhases = ALLOWED_PHASES_BY_METHOD.getOrDefault(methodName, List.of());
+    private void requirePhase(String methodName, WorkflowPhase... allowedPhases) {
         WorkflowPhase current = getCurrentPhase();
-        if (allowedPhases.contains(current)) {
-            return;
+        for (WorkflowPhase allowed : allowedPhases) {
+            if (allowed == current) {
+                return;
+            }
         }
-        throw new IllegalStateException("Method '" + methodName + "' is only allowed in phase(s) " + allowedPhases
-                + ". Current phase: " + current);
+        throw new IllegalStateException("Method '" + methodName + "' is only allowed in phase(s) "
+                + Arrays.toString(allowedPhases) + ". Current phase: " + current);
     }
 
     private void addHandoffLogEntryLocked(String timestamp, String user, String message) {
@@ -959,21 +919,14 @@ public class PlanService {
     @AgentDoc(value = "Adds a high-level summary entry to the handoff log.", phases = {"PLAN", "CODE",
             "REVIEW"}, examples = {"planService.addHandoffLogEntry('Completed refactoring of service layer')"})
     public String addHandoffLogEntry(@AgentDoc("The summary entry to add to the handoff log") String entry) {
-        requirePhase("addHandoffLogEntry");
+        requirePhase("addHandoffLogEntry", WorkflowPhase.PLAN, WorkflowPhase.CODE, WorkflowPhase.REVIEW);
         if (StringUtils.isBlank(entry)) {
             throw new IllegalArgumentException("Error: Handoff log entry cannot be null or blank.");
         }
-        ImplementationPlan updated;
-        PersistSnapshot snapshot;
-        synchronized (stateLock) {
-            requirePhase("addHandoffLogEntry");
-            ensureActivePlanLocked();
-            addHandoffLogEntryLocked(OffsetDateTime.now().toString(), "System", entry.trim());
-            updated = currentPlan;
-            snapshot = capturePersistSnapshotLocked();
-        }
-        enqueueWorkflowDiskOperation(snapshot);
-        publishPlanUpdated(updated);
+        mutatePlan(true, existing -> {
+            requirePhase("addHandoffLogEntry", WorkflowPhase.PLAN, WorkflowPhase.CODE, WorkflowPhase.REVIEW);
+            return existing.withAddedHandoffLogEntry(OffsetDateTime.now().toString(), "System", entry.trim());
+        });
         return "Handoff log entry added.";
     }
 }

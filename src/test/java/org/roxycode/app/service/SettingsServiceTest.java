@@ -68,9 +68,10 @@ class SettingsServiceTest {
         assertTrue(listenerCalled.get(), "SettingsChangedEvent should be published when settings are saved");
         assertTrue(service.hasSettingsFile());
         assertTrue(service.hasConfiguredCredentials());
-        assertEquals(AgentProfile.MAX, SettingsService.resolveGlobalAgentProfile(service));
-        assertEquals("gemini-4-carbon", SettingsService.resolveGlobalGeminiModel(service, WorkflowPhase.PLAN));
-        assertEquals("gemini-4-hydrogen", SettingsService.resolveGlobalGeminiModel(service, WorkflowPhase.CODE));
+        AgentProfile globalProfile = SettingsService.resolveGlobalAgentProfile(service);
+        assertEquals(AgentProfile.MAX, globalProfile);
+        assertEquals("gemini-4-carbon", globalProfile.resolveModelForPhase(WorkflowPhase.PLAN));
+        assertEquals("gemini-4-hydrogen", globalProfile.resolveModelForPhase(WorkflowPhase.CODE));
 
         SettingsService service2 = new SettingsService(null, null);
         service2.setSettingsPathOverride(settingsFile);
@@ -172,7 +173,6 @@ class SettingsServiceTest {
         AppSettings fromCorrupt = SettingsService.loadFromDisk(corruptFile, null);
         assertEquals("FlatLaf Light", fromCorrupt.getTheme());
         assertEquals("NORMAL", fromCorrupt.getAgentProfile());
-        assertEquals("ADAPTIVE", fromCorrupt.getThinkingLevel());
         assertEquals(AgentProfile.NORMAL, SettingsService.resolveGlobalAgentProfile(null));
 
         Path legacyToml = Files.writeString(tempDir.resolve("legacy.toml"), """
@@ -180,8 +180,8 @@ class SettingsServiceTest {
                 geminiModel = "gemini-3.5-flash"
                 """);
         AppSettings fromLegacy = SettingsService.loadFromDisk(legacyToml, AiConfig.SHARED_TOML_MAPPER);
+        assertEquals("FlatLaf Dark", fromLegacy.getTheme());
         assertEquals("NORMAL", fromLegacy.getAgentProfile());
-        assertEquals("ADAPTIVE", fromLegacy.getThinkingLevel());
 
         assertEquals(AgentProfile.NORMAL, AgentProfile.fromString(null));
         assertEquals(AgentProfile.NORMAL, AgentProfile.fromString("  "));

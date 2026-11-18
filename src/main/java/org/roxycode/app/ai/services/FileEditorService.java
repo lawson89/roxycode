@@ -77,9 +77,7 @@ public class FileEditorService {
         if (existed && Files.isDirectory(path)) {
             return new EditorResult(false, "", "Path is a directory: " + relativePath);
         }
-        PathUtils.createParentDirectories(path);
-        Files.writeString(path, content);
-        return completeFileMutation(path, relativePath, "File written successfully: " + relativePath,
+        return writeAndCompleteMutation(path, relativePath, content, "File written successfully: " + relativePath,
                 FileChangedEvent.ChangeType.ofExisted(existed));
     }
 
@@ -100,10 +98,8 @@ public class FileEditorService {
         Path path = projectService.resolvePath(relativePath);
         String safeContent = Objects.requireNonNullElse(content, "");
         if (!Files.exists(path)) {
-            PathUtils.createParentDirectories(path);
-            Files.writeString(path, safeContent);
-            return completeFileMutation(path, relativePath, "File created and written successfully: " + relativePath,
-                    FileChangedEvent.ChangeType.CREATED);
+            return writeAndCompleteMutation(path, relativePath, safeContent,
+                    "File created and written successfully: " + relativePath, FileChangedEvent.ChangeType.CREATED);
         }
         if (Files.isDirectory(path)) {
             return new EditorResult(false, "", "Path is a directory: " + relativePath);
@@ -593,6 +589,13 @@ public class FileEditorService {
             return new EditorResult(false, "", directoryErrorPrefix + relativePath);
         }
         return null;
+    }
+
+    private EditorResult writeAndCompleteMutation(Path path, String relativePath, String content, String message,
+            FileChangedEvent.ChangeType changeType) throws IOException {
+        PathUtils.createParentDirectories(path);
+        Files.writeString(path, content);
+        return completeFileMutation(path, relativePath, message, changeType);
     }
 
     private EditorResult completeFileMutation(Path path, String relativePath, String message) throws IOException {

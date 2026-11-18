@@ -26,6 +26,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.roxycode.app.ai.services.BuildResult;
 import org.roxycode.app.ai.services.EditorResult;
 import org.roxycode.app.ai.services.FileReadService;
+import org.roxycode.app.ai.services.MemoryService;
 import org.roxycode.app.ai.services.UserInputService;
 import org.roxycode.app.events.AgentActivityEvent;
 import org.roxycode.app.events.AgentTurnEvent;
@@ -57,6 +58,21 @@ public class JexlToolTest {
         @AgentDoc("Returns a sample EditorResult.")
         public EditorResult sampleEditorResult() {
             return new EditorResult(true, "matched content", null);
+        }
+
+        @AgentDoc("Returns a sample MemoryEntry without JavaBean getters.")
+        public MemoryService.MemoryEntry sampleMemoryEntry() {
+            return new MemoryService.MemoryEntry("arch-note", "Use records", List.of("java", "jexl"), "Details body",
+                    "2026-11-18T12:00:00Z");
+        }
+
+        @AgentDoc("Returns sample MemoryMetadata records without JavaBean getters.")
+        public List<MemoryService.MemoryMetadata> sampleMemoryMetadataList() {
+            return List.of(
+                    new MemoryService.MemoryMetadata("project", "first-id", "First summary", List.of("a"), true,
+                            "2026-11-18T12:00:00Z"),
+                    new MemoryService.MemoryMetadata("global", "second-id", "Second summary", List.of("b"), false,
+                            "2026-11-18T12:01:00Z"));
         }
 
         @AgentDoc("Signals that a background loop has started.")
@@ -123,9 +139,20 @@ public class JexlToolTest {
         JsonNode node = evalJson(tool, """
                 var res = testService.sampleBuildResult();
                 var ed = testService.sampleEditorResult();
+                var mem = testService.sampleMemoryEntry();
+                var metas = testService.sampleMemoryMetadataList();
+                var metaIds = [...];
+                var metaDetails = [...];
+                for (var m : metas) {
+                  metaIds.add(m.scope + ':' + m.id);
+                  metaDetails.add(m.hasDetails);
+                }
                 {
                   "buildSuccess": res.success, "buildExit": res.exitCode, "buildErrors": res.errors,
-                  "edSuccess": ed.success, "edContent": ed.content, "edHint": ed.errorHint
+                  "edSuccess": ed.success, "edContent": ed.content, "edHint": ed.errorHint,
+                  "memId": mem.id, "memSummary": mem.summary, "memTags": mem.tags,
+                  "memDetails": mem.details, "memUpdated": mem.updatedAt,
+                  "metaIds": metaIds, "metaDetails": metaDetails
                 }
                 """);
         assertFalse(node.get("buildSuccess").asBoolean());
@@ -134,6 +161,15 @@ public class JexlToolTest {
         assertTrue(node.get("edSuccess").asBoolean());
         assertEquals("matched content", node.get("edContent").asText());
         assertTrue(node.get("edHint").isNull());
+        assertEquals("arch-note", node.get("memId").asText());
+        assertEquals("Use records", node.get("memSummary").asText());
+        assertEquals("java", node.get("memTags").get(0).asText());
+        assertEquals("Details body", node.get("memDetails").asText());
+        assertEquals("2026-11-18T12:00:00Z", node.get("memUpdated").asText());
+        assertEquals("project:first-id", node.get("metaIds").get(0).asText());
+        assertEquals("global:second-id", node.get("metaIds").get(1).asText());
+        assertTrue(node.get("metaDetails").get(0).asBoolean());
+        assertFalse(node.get("metaDetails").get(1).asBoolean());
     }
 
     @Test

@@ -237,17 +237,19 @@ final class ArchiveBrowserPanel extends JPanel {
         if (memoryService == null) {
             return List.of();
         }
+        MemoryService.ArchiveKind kind = resolveArchiveKind();
         String trimmed = StringUtils.trimToEmpty(query);
-        if (mode == ArchiveMode.TOPICS) {
-            if (trimmed.isEmpty()) {
-                return memoryService.listArchivedTopicSummaries();
-            }
-            return memoryService.searchArchivedTopics(trimmed);
-        }
         if (trimmed.isEmpty()) {
-            return memoryService.listArchivedPlanSummaries();
+            return memoryService.listArchiveSummaries(kind);
         }
-        return memoryService.searchArchivedPlans(trimmed);
+        return memoryService.searchArchiveSummaries(kind, trimmed);
+    }
+
+    private MemoryService.ArchiveKind resolveArchiveKind() {
+        if (mode == ArchiveMode.PLANS) {
+            return MemoryService.ArchiveKind.PLAN;
+        }
+        return MemoryService.ArchiveKind.TOPIC;
     }
 
     @SuppressWarnings("PMD.NullAssignment")
@@ -309,10 +311,7 @@ final class ArchiveBrowserPanel extends JPanel {
         if (memoryService == null || filename == null || filename.isBlank()) {
             return "";
         }
-        if (mode == ArchiveMode.TOPICS) {
-            return memoryService.readArchivedTopic(filename);
-        }
-        return memoryService.readArchivedPlan(filename);
+        return memoryService.readArchivedEntry(resolveArchiveKind(), filename);
     }
 
     private void applyDetailContent(ArchiveEntrySummary entry, String rawMarkdown) {
@@ -455,15 +454,11 @@ final class ArchiveBrowserPanel extends JPanel {
         String filename = currentSelectedEntry.filename();
         String newTitle = renameField.getText();
         saveRenameButton.setEnabled(false);
-        return runArchiveMutation("rename", filename, () -> {
-            if (mode == ArchiveMode.PLANS) {
-                return memoryService.renameArchivedPlan(filename, newTitle);
-            }
-            return memoryService.renameArchivedTopic(filename, newTitle);
-        }, () -> {
-            saveRenameButton.setEnabled(true);
-            cancelRename();
-        }, () -> saveRenameButton.setEnabled(true));
+        return runArchiveMutation("rename", filename,
+                () -> memoryService.renameArchivedEntry(resolveArchiveKind(), filename, newTitle), () -> {
+                    saveRenameButton.setEnabled(true);
+                    cancelRename();
+                }, () -> saveRenameButton.setEnabled(true));
     }
 
     void promptDeleteEntry() {
@@ -481,14 +476,10 @@ final class ArchiveBrowserPanel extends JPanel {
         if (memoryService == null || StringUtils.isBlank(filename)) {
             return CompletableFuture.completedFuture(new EditorResult(false, "", "Invalid " + mode.singularNoun));
         }
-        return runArchiveMutation("delete", filename, () -> {
-            if (mode == ArchiveMode.PLANS) {
-                return memoryService.deleteArchivedPlan(filename);
-            }
-            return memoryService.deleteArchivedTopic(filename);
-        }, () -> {
-        }, () -> {
-        });
+        return runArchiveMutation("delete", filename,
+                () -> memoryService.deleteArchivedEntry(resolveArchiveKind(), filename), () -> {
+                }, () -> {
+                });
     }
 
     private CompletableFuture<EditorResult> runArchiveMutation(String action, String filename,

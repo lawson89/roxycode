@@ -70,8 +70,29 @@ public class MemoryService {
     private static final String DOC_DETAILS = "Optional extended Markdown details (read on demand)";
 
     /**
-     * A single persisted memory entry in {@code memories.json}. Provides both record accessors and JavaBean getters for
-     * JEXL evaluation.
+     * Kind of archived Markdown artifact managed by {@link MemoryService}.
+     */
+    public enum ArchiveKind {
+        TOPIC(ARCHIVE_TOPICS_SUBDIR, TYPE_TOPIC, TOPIC_HEADING_PREFIX, "Topic", ArchiveUpdatedEvent.TYPE_TOPIC),
+        PLAN(ARCHIVE_PLANS_SUBDIR, TYPE_PLAN, PLAN_HEADING_PREFIX, "Plan", ArchiveUpdatedEvent.TYPE_PLAN);
+
+        private final String subdir;
+        private final String label;
+        private final String headingPrefix;
+        private final String capitalizedLabel;
+        private final String eventType;
+
+        ArchiveKind(String subdir, String label, String headingPrefix, String capitalizedLabel, String eventType) {
+            this.subdir = subdir;
+            this.label = label;
+            this.headingPrefix = headingPrefix;
+            this.capitalizedLabel = capitalizedLabel;
+            this.eventType = eventType;
+        }
+    }
+
+    /**
+     * A single persisted memory entry in {@code memories.json}.
      */
     public record MemoryEntry(String id, String summary, List<String> tags, String details, String updatedAt) {
         public MemoryEntry {
@@ -85,31 +106,10 @@ public class MemoryService {
             details = StringUtils.defaultString(details).stripTrailing();
             updatedAt = StringUtils.defaultString(updatedAt).trim();
         }
-
-        public String getId() {
-            return id;
-        }
-
-        public String getSummary() {
-            return summary;
-        }
-
-        public List<String> getTags() {
-            return tags;
-        }
-
-        public String getDetails() {
-            return details;
-        }
-
-        public String getUpdatedAt() {
-            return updatedAt;
-        }
     }
 
     /**
-     * Lightweight metadata view of a memory entry for prompt injection and listing. Provides both record accessors and
-     * JavaBean getters for JEXL evaluation.
+     * Lightweight metadata view of a memory entry for prompt injection and listing.
      */
     public record MemoryMetadata(String scope, String id, String summary, List<String> tags, boolean hasDetails,
             String updatedAt) {
@@ -123,34 +123,6 @@ public class MemoryService {
                 tags = List.copyOf(tags);
             }
             updatedAt = StringUtils.defaultString(updatedAt).trim();
-        }
-
-        public String getScope() {
-            return scope;
-        }
-
-        public String getId() {
-            return id;
-        }
-
-        public String getSummary() {
-            return summary;
-        }
-
-        public List<String> getTags() {
-            return tags;
-        }
-
-        public boolean getHasDetails() {
-            return hasDetails;
-        }
-
-        public boolean isHasDetails() {
-            return hasDetails;
-        }
-
-        public String getUpdatedAt() {
-            return updatedAt;
         }
     }
 
@@ -348,22 +320,22 @@ public class MemoryService {
 
     @AgentDoc(value = "Lists archived completed implementation plans from <projectDataDir>/archive/plans/*.md (most recent first).", examples = "memoryService.listArchivedPlans()")
     public List<String> listArchivedPlans() {
-        return listArchivedPlanSummaries().stream().map(entry -> entry.filename() + ": " + entry.title()).toList();
+        return listArchiveSummaries(ArchiveKind.PLAN).stream().map(e -> e.filename() + ": " + e.title()).toList();
     }
 
     @AgentDoc(value = "Reads an archived implementation plan from <projectDataDir>/archive/plans/<filename>.", examples = "memoryService.readArchivedPlan('20250514-153000-feature-plan.md')")
     public String readArchivedPlan(@AgentDoc("The archived plan filename (with or without .md)") String filename) {
-        return readArchivedFile(ARCHIVE_PLANS_SUBDIR, filename, "plan");
+        return readArchivedEntry(ArchiveKind.PLAN, filename);
     }
 
     @AgentDoc(value = "Lists archived Q&A topic conversations from <projectDataDir>/archive/topics/*.md (most recent first).", examples = "memoryService.listArchivedTopics()")
     public List<String> listArchivedTopics() {
-        return listArchivedTopicSummaries().stream().map(entry -> entry.filename() + ": " + entry.title()).toList();
+        return listArchiveSummaries(ArchiveKind.TOPIC).stream().map(e -> e.filename() + ": " + e.title()).toList();
     }
 
     @AgentDoc(value = "Reads an archived Q&A topic conversation from <projectDataDir>/archive/topics/<filename>.", examples = "memoryService.readArchivedTopic('20250514-153000-memory-architecture.md')")
     public String readArchivedTopic(@AgentDoc("The archived topic filename (with or without .md)") String filename) {
-        return readArchivedFile(ARCHIVE_TOPICS_SUBDIR, filename, TYPE_TOPIC);
+        return readArchivedEntry(ArchiveKind.TOPIC, filename);
     }
 
     private void publishMemoryChanged(boolean globalScope) {
@@ -482,141 +454,90 @@ public class MemoryService {
         return StringUtils.containsIgnoreCase(value, query);
     }
 
-    private String readArchivedFile(String subdir, String filename, String label) {
-        Path target = resolveArchivedFilePath(subdir, filename, label);
+    /** Reads the raw Markdown content of an archived topic or plan by filename. */
+    public String readArchivedEntry(ArchiveKind kind, String filename) {
+        Path target = resolveArchivedFilePath(kind, filename);
         if (target == null) {
             return "";
         }
         return readFileIfExists(target);
     }
 
-    private Path resolveArchivedFilePath(String subdir, String filename, String label) {
+    private Path resolveArchivedFilePath(ArchiveKind kind, String filename) {
         if (projectService == null || !projectService.hasActiveProject()) {
             return null;
         }
-        Path archiveDir = resolveProjectSubdir(subdir);
+        Path archiveDir = resolveProjectSubdir(kind.subdir);
         if (archiveDir == null) {
             return null;
         }
         String cleanName = sanitizeArchiveFilename(filename);
         Path target = archiveDir.resolve(cleanName).toAbsolutePath().normalize();
         if (!target.startsWith(archiveDir)) {
-            throw new IllegalArgumentException("Invalid archived " + label + " filename: " + filename);
+            throw new IllegalArgumentException("Invalid archived " + kind.label + " filename: " + filename);
         }
         return target;
     }
 
-    /**
-     * Renames an archived Q&amp;A topic by updating its frontmatter {@code title} and leading {@code # Topic:} heading
-     * on disk, then publishes an {@link ArchiveUpdatedEvent}.
-     *
-     * @param filename
-     *            the archived topic filename
-     * @param newTitle
-     *            the new topic title
-     * @return the {@link EditorResult} containing the cleaned title on success or an error hint on failure
-     */
-    public EditorResult renameArchivedTopic(String filename, String newTitle) {
-        return renameArchivedEntry(ARCHIVE_TOPICS_SUBDIR, filename, newTitle, TOPIC_HEADING_PREFIX, "Topic", TYPE_TOPIC,
-                ArchiveUpdatedEvent.TYPE_TOPIC);
-    }
-
-    /**
-     * Renames an archived implementation plan by updating its frontmatter {@code title} and leading
-     * {@code # Implementation Plan:} heading on disk, then publishes an {@link ArchiveUpdatedEvent}.
-     *
-     * @param filename
-     *            the archived plan filename
-     * @param newTitle
-     *            the new plan title
-     * @return the {@link EditorResult} containing the cleaned title on success or an error hint on failure
-     */
-    public EditorResult renameArchivedPlan(String filename, String newTitle) {
-        return renameArchivedEntry(ARCHIVE_PLANS_SUBDIR, filename, newTitle, PLAN_HEADING_PREFIX, "Plan", TYPE_PLAN,
-                ArchiveUpdatedEvent.TYPE_PLAN);
-    }
-
-    /**
-     * Deletes an archived Q&amp;A topic Markdown file from disk and publishes an {@link ArchiveUpdatedEvent}.
-     *
-     * @param filename
-     *            the archived topic filename
-     * @return the {@link EditorResult} containing the deleted filename on success or an error hint on failure
-     */
-    public EditorResult deleteArchivedTopic(String filename) {
-        return deleteArchivedEntry(ARCHIVE_TOPICS_SUBDIR, filename, TYPE_TOPIC, ArchiveUpdatedEvent.TYPE_TOPIC);
-    }
-
-    /**
-     * Deletes an archived implementation plan Markdown file from disk and publishes an {@link ArchiveUpdatedEvent}.
-     *
-     * @param filename
-     *            the archived plan filename
-     * @return the {@link EditorResult} containing the deleted filename on success or an error hint on failure
-     */
-    public EditorResult deleteArchivedPlan(String filename) {
-        return deleteArchivedEntry(ARCHIVE_PLANS_SUBDIR, filename, TYPE_PLAN, ArchiveUpdatedEvent.TYPE_PLAN);
-    }
-
-    private EditorResult renameArchivedEntry(String subdir, String filename, String newTitle, String headingPrefix,
-            String capitalizedLabel, String label, String eventType) {
+    /** Renames an archived topic or plan by updating its frontmatter title and leading Markdown heading. */
+    public EditorResult renameArchivedEntry(ArchiveKind kind, String filename, String newTitle) {
         if (projectService == null || !projectService.hasActiveProject()) {
             return new EditorResult(false, "", NO_ACTIVE_PROJECT);
         }
         String cleanedTitle = cleanTopicTitle(newTitle);
         if (cleanedTitle.isEmpty()) {
-            return new EditorResult(false, "", capitalizedLabel + " title must not be blank.");
+            return new EditorResult(false, "", kind.capitalizedLabel + " title must not be blank.");
         }
         try {
-            Path target = resolveArchivedFilePath(subdir, filename, label);
+            Path target = resolveArchivedFilePath(kind, filename);
             if (target == null || !Files.isRegularFile(target)) {
-                return new EditorResult(false, "", "Archived " + label + " not found: " + filename);
+                return new EditorResult(false, "", "Archived " + kind.label + " not found: " + filename);
             }
             String rawMarkdown = Files.readString(target, StandardCharsets.UTF_8);
-            Map<String, String> existingFm = FrontmatterUtils.parseFrontmatter(rawMarkdown);
-            Map<String, Object> updatedFm = new LinkedHashMap<>(existingFm);
+            Map<String, Object> updatedFm = new LinkedHashMap<>(FrontmatterUtils.parseFrontmatter(rawMarkdown));
             updatedFm.put(KEY_TITLE, cleanedTitle);
 
             String body = FrontmatterUtils.stripFrontmatter(rawMarkdown).stripLeading();
             String updatedBody;
-            if (body.startsWith(headingPrefix.trim())) {
+            if (body.startsWith(kind.headingPrefix.trim())) {
                 int newlineIdx = body.indexOf(LF);
                 if (newlineIdx >= 0) {
-                    updatedBody = headingPrefix + cleanedTitle + body.substring(newlineIdx);
+                    updatedBody = kind.headingPrefix + cleanedTitle + body.substring(newlineIdx);
                 } else {
-                    updatedBody = headingPrefix + cleanedTitle + NL;
+                    updatedBody = kind.headingPrefix + cleanedTitle + NL;
                 }
             } else {
-                updatedBody = headingPrefix + cleanedTitle + NL + NL + body;
+                updatedBody = kind.headingPrefix + cleanedTitle + NL + NL + body;
             }
-            String updatedMarkdown = FrontmatterUtils.formatFrontmatter(updatedFm) + updatedBody;
-            Files.writeString(target, updatedMarkdown, StandardCharsets.UTF_8);
+            Files.writeString(target, FrontmatterUtils.formatFrontmatter(updatedFm) + updatedBody,
+                    StandardCharsets.UTF_8);
             if (eventPublisher != null) {
-                eventPublisher.publishEvent(new ArchiveUpdatedEvent(eventType, target.getFileName().toString()));
+                eventPublisher.publishEvent(new ArchiveUpdatedEvent(kind.eventType, target.getFileName().toString()));
             }
             return new EditorResult(true, cleanedTitle, "");
         } catch (IllegalArgumentException | IOException e) {
-            return new EditorResult(false, "", "Failed to rename " + label + ": " + e.getMessage());
+            return new EditorResult(false, "", "Failed to rename " + kind.label + ": " + e.getMessage());
         }
     }
 
-    private EditorResult deleteArchivedEntry(String subdir, String filename, String label, String eventType) {
+    /** Deletes an archived topic or plan Markdown file from disk and publishes an {@link ArchiveUpdatedEvent}. */
+    public EditorResult deleteArchivedEntry(ArchiveKind kind, String filename) {
         if (projectService == null || !projectService.hasActiveProject()) {
             return new EditorResult(false, "", NO_ACTIVE_PROJECT);
         }
         try {
-            Path target = resolveArchivedFilePath(subdir, filename, label);
+            Path target = resolveArchivedFilePath(kind, filename);
             if (target == null || !Files.isRegularFile(target)) {
-                return new EditorResult(false, "", "Archived " + label + " not found: " + filename);
+                return new EditorResult(false, "", "Archived " + kind.label + " not found: " + filename);
             }
             String deletedName = target.getFileName().toString();
             Files.deleteIfExists(target);
             if (eventPublisher != null) {
-                eventPublisher.publishEvent(new ArchiveUpdatedEvent(eventType, deletedName));
+                eventPublisher.publishEvent(new ArchiveUpdatedEvent(kind.eventType, deletedName));
             }
             return new EditorResult(true, deletedName, "");
         } catch (IllegalArgumentException | IOException e) {
-            return new EditorResult(false, "", "Failed to delete " + label + ": " + e.getMessage());
+            return new EditorResult(false, "", "Failed to delete " + kind.label + ": " + e.getMessage());
         }
     }
 
@@ -737,20 +658,14 @@ public class MemoryService {
         }
     }
 
-    public List<ArchiveEntrySummary> listArchivedTopicSummaries() {
-        return listArchivedEntrySummaries(resolveProjectSubdir(ARCHIVE_TOPICS_SUBDIR), TYPE_TOPIC);
+    /** Lists archived summaries for the given {@link ArchiveKind} (most recent first). */
+    public List<ArchiveEntrySummary> listArchiveSummaries(ArchiveKind kind) {
+        return listArchivedEntrySummaries(resolveProjectSubdir(kind.subdir), kind.label);
     }
 
-    public List<ArchiveEntrySummary> listArchivedPlanSummaries() {
-        return listArchivedEntrySummaries(resolveProjectSubdir(ARCHIVE_PLANS_SUBDIR), "plan");
-    }
-
-    public List<ArchiveEntrySummary> searchArchivedTopics(String query) {
-        return searchArchiveEntries(listArchivedTopicSummaries(), resolveProjectSubdir(ARCHIVE_TOPICS_SUBDIR), query);
-    }
-
-    public List<ArchiveEntrySummary> searchArchivedPlans(String query) {
-        return searchArchiveEntries(listArchivedPlanSummaries(), resolveProjectSubdir(ARCHIVE_PLANS_SUBDIR), query);
+    /** Searches archived summaries for the given {@link ArchiveKind} using RipGrep and metadata matching. */
+    public List<ArchiveEntrySummary> searchArchiveSummaries(ArchiveKind kind, String query) {
+        return searchArchiveEntries(listArchiveSummaries(kind), resolveProjectSubdir(kind.subdir), query);
     }
 
     private List<ArchiveEntrySummary> listArchivedEntrySummaries(Path archiveDir, String defaultType) {
