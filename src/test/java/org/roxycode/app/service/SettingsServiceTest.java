@@ -7,8 +7,11 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
+import com.github.javakeyring.BackendNotSupportedException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -381,5 +384,98 @@ class SettingsServiceTest {
         AppSettings diskSettings = SettingsService.loadFromDisk(settingsFile, AiConfig.SHARED_TOML_MAPPER);
         assertEquals("Theme-3", diskSettings.getTheme());
         assertEquals(List.of("/folder/1", "/folder/2", "/folder/3"), diskSettings.getGlobalContextFolders());
+    }
+
+    @Test
+    void testGeminiApiKeyKeyringStorageAutoMigrationAndFallback() throws IOException {
+        String prevTestMode = System.getProperty("roxycode.testMode");
+        System.clearProperty("roxycode.testMode");
+        Map<String, String> keyringStore = new HashMap<>();
+        CredentialStoreService.KeyringBackend persistentBackend = new CredentialStoreService.KeyringBackend() {
+            @Override
+            public String getPassword(String service, String account) {
+                return keyringStore.get(service + ":" + account);
+            }
+
+            @Override
+            public void setPassword(String service, String account, String password) {
+                keyringStore.put(service + ":" + account, password);
+            }
+
+            @Override
+            public void deletePassword(String service, String account) {
+                keyringStore.remove(service + ":" + account);
+            }
+
+            @Override
+            public boolean isPersistent() {
+                return true;
+            }
+        };
+
+        try (CredentialStoreService keyringCreds = new CredentialStoreService(() -> persistentBackend)) {
+            Path settingsFile = tempDir.resolve("keyring-roxy").resolve("settings.toml");
+            SettingsService service = new SettingsService(AiConfig.SHARED_TOML_MAPPER, null, keyringCreds);
+            service.setSettingsPathOverride(settingsFile);
+            assertTrue(service.isNativeKeyringAvailable());
+
+            service.getSettings().setGeminiApiKey("AIza-keyring-secret");
+            service.saveSettingsSync();
+
+            assertEquals("AIza-keyring-secret", service.getSettings().getGeminiApiKey());
+            assertEquals("AIza-keyring-secret", keyringCreds.loadGeminiApiKey());
+
+            AppSettings rawOnDisk = SettingsService.loadFromDisk(settingsFile, AiConfig.SHARED_TOML_MAPPER);
+            assertEquals("", rawOnDisk.getGeminiApiKey());
+
+            SettingsService reloaded = new SettingsService(AiConfig.SHARED_TOML_MAPPER, null, keyringCreds);
+            reloaded.setSettingsPathOverride(settingsFile);
+            assertEquals("AIza-keyring-secret", reloaded.getSettings().getGeminiApiKey());
+            assertTrue(reloaded.hasConfiguredCredentials());
+
+            // Auto-migrate legacy plaintext geminiApiKey from settings.toml into keyring and scrub disk file
+            keyringStore.clear();
+            Path legacyFile = tempDir.resolve("legacy-migration").resolve("settings.toml");
+            Files.createDirectories(legacyFile.getParent());
+            Files.writeString(legacyFile, """
+                    theme = "FlatLaf Dark"
+                    geminiApiKey = "AIza-legacy-plaintext"
+                    """);
+
+            SettingsService migratingService = new SettingsService(AiConfig.SHARED_TOML_MAPPER, null, keyringCreds);
+            migratingService.setSettingsPathOverride(legacyFile);
+            assertEquals("AIza-legacy-plaintext", migratingService.getSettings().getGeminiApiKey());
+            assertEquals("AIza-legacy-plaintext", keyringCreds.loadGeminiApiKey());
+            assertEquals("", SettingsService.loadFromDisk(legacyFile, AiConfig.SHARED_TOML_MAPPER).getGeminiApiKey());
+        } finally {
+            if (prevTestMode != null) {
+                System.setProperty("roxycode.testMode", prevTestMode);
+            } else {
+                System.clearProperty("roxycode.testMode");
+            }
+        }
+
+        // Fallback to settings.toml when native keyring is unavailable
+        System.clearProperty("roxycode.testMode");
+        try (CredentialStoreService unavailableCreds = new CredentialStoreService(() -> {
+            throw new BackendNotSupportedException("headless");
+        })) {
+            Path fallbackFile = tempDir.resolve("fallback-roxy").resolve("settings.toml");
+            SettingsService fallbackService = new SettingsService(AiConfig.SHARED_TOML_MAPPER, null, unavailableCreds);
+            fallbackService.setSettingsPathOverride(fallbackFile);
+            assertFalse(fallbackService.isNativeKeyringAvailable());
+
+            fallbackService.getSettings().setGeminiApiKey("AIza-fallback-secret");
+            fallbackService.saveSettingsSync();
+
+            AppSettings rawFallback = SettingsService.loadFromDisk(fallbackFile, AiConfig.SHARED_TOML_MAPPER);
+            assertEquals("AIza-fallback-secret", rawFallback.getGeminiApiKey());
+        } finally {
+            if (prevTestMode != null) {
+                System.setProperty("roxycode.testMode", prevTestMode);
+            } else {
+                System.clearProperty("roxycode.testMode");
+            }
+        }
     }
 }

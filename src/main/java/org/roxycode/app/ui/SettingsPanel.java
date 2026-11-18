@@ -58,6 +58,9 @@ public final class SettingsPanel extends JPanel {
     static final String AUTH_TOGGLE_API_KEY_TEXT = "Google AI Studio (API Key)";
     static final String AUTH_TOGGLE_VERTEX_TEXT = "Google Cloud Vertex AI";
     static final String GET_API_KEY_BUTTON_TEXT = "Get a Gemini API Key";
+    static final String KEYRING_READY_BADGE_TEXT = "OS Keyring Ready";
+    static final String KEYRING_FALLBACK_BADGE_TEXT = "Fallback: settings.toml (0600)";
+    static final String GEMINI_API_KEY_DESCRIPTION = "Stored in the native OS keyring when available (falls back to ~/.roxycode/settings.toml with 0600 permissions).";
     static final String GEMINI_API_KEY_URL = "https://aistudio.google.com/apikey";
     static final String BROWSE_CREDENTIALS_TEXT = "Browse...";
     static final String TEST_CONNECTION_TEXT = "Test Connection";
@@ -106,6 +109,7 @@ public final class SettingsPanel extends JPanel {
     final JPanel segmentedProviderPanel;
     final JPanel apiKeyPanel;
     final JPanel vertexAiPanel;
+    final JLabel apiKeyStorageBadge = new JLabel();
     final JPasswordField geminiApiKeyField;
     final JButton getApiKeyLinkButton;
     final JTextField vertexProjectIdField;
@@ -331,8 +335,9 @@ public final class SettingsPanel extends JPanel {
         JPanel apiKeyRow = new JPanel(
                 new MigLayout("fillx, insets 0, gapx 12", "[grow, fill][240:340:440][]", ROW_CENTER));
         apiKeyRow.setOpaque(false);
-        apiKeyRow.add(UiComponents.createFieldTextBlock("Gemini API Key",
-                "Stored locally in ~/.roxycode/settings.toml (0600 permissions).", null), GROWX_WMIN_0);
+        apiKeyRow.add(
+                UiComponents.createFieldTextBlock("Gemini API Key", GEMINI_API_KEY_DESCRIPTION, apiKeyStorageBadge),
+                GROWX_WMIN_0);
         apiKeyRow.add(geminiApiKeyField, "growx");
         apiKeyRow.add(getApiKeyLinkButton);
         apiKeyPanel.add(apiKeyRow, GROWX_WMIN_0);
@@ -553,10 +558,25 @@ public final class SettingsPanel extends JPanel {
         openToolLogButton.putClientProperty(FlatClientProperties.STYLE,
                 "font: -1; arc: 8; margin: 3,10,3,10; borderColor: " + borderHex + "; background: " + pillBg);
 
+        updateApiKeyStorageBadge();
         for (UiComponents.AgentProfileCard card : profileCards.values()) {
             card.applyCardTheme();
         }
         updateSaveButtonState();
+    }
+
+    void updateApiKeyStorageBadge() {
+        if (settingsService != null && settingsService.isNativeKeyringAvailable()) {
+            Color green = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
+            apiKeyStorageBadge.setText(KEYRING_READY_BADGE_TEXT);
+            apiKeyStorageBadge.setForeground(green);
+            apiKeyStorageBadge.setIcon(FontIcon.of(Codicons.PASS, 13, green));
+        } else {
+            Color warn = SwingHtmlUtils.getWarningColor();
+            apiKeyStorageBadge.setText(KEYRING_FALLBACK_BADGE_TEXT);
+            apiKeyStorageBadge.setForeground(warn);
+            apiKeyStorageBadge.setIcon(FontIcon.of(Codicons.WARNING, 13, warn));
+        }
     }
 
     private void applyProviderToggleStyling() {

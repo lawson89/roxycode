@@ -23,6 +23,7 @@ import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
@@ -38,6 +39,7 @@ public class SettingsService {
 
     private final TomlMapper mapper;
     private final ApplicationEventPublisher eventPublisher;
+    private final CredentialStoreService credentialStoreService;
     private final Object writeLock = new Object();
     private AppSettings settings;
     private Path settingsPathOverride;
@@ -46,9 +48,24 @@ public class SettingsService {
     private volatile CompletableFuture<Void> lastSaveFuture = CompletableFuture.completedFuture(null);
 
     public SettingsService(TomlMapper mapper, ApplicationEventPublisher eventPublisher) {
+        this(mapper, eventPublisher, new CredentialStoreService());
+    }
+
+    @Autowired
+    public SettingsService(TomlMapper mapper, ApplicationEventPublisher eventPublisher,
+            CredentialStoreService credentialStoreService) {
         this.mapper = Objects.requireNonNullElse(mapper, AiConfig.SHARED_TOML_MAPPER);
         this.eventPublisher = Objects.requireNonNullElse(eventPublisher, event -> {
         });
+        this.credentialStoreService = Objects.requireNonNullElseGet(credentialStoreService,
+                CredentialStoreService::new);
+    }
+
+    /**
+     * Returns {@code true} if a persistent native OS keyring is available for storing the Gemini API key.
+     */
+    public boolean isNativeKeyringAvailable() {
+        return credentialStoreService.isNativeKeyringAvailable();
     }
 
     public static Path getDefaultRoxyHomeDir() {
@@ -72,11 +89,40 @@ public class SettingsService {
     }
 
     public static AppSettings loadFromDisk() {
-        return loadFromDisk(getDefaultSettingsPath(), AiConfig.SHARED_TOML_MAPPER);
+        try (CredentialStoreService credentialStore = new CredentialStoreService()) {
+            return loadFromDisk(getDefaultSettingsPath(), AiConfig.SHARED_TOML_MAPPER, credentialStore);
+        }
     }
 
     public static AppSettings loadFromDisk(Path path, TomlMapper mapper) {
         return PathUtils.readTomlOrDefault(path, AppSettings.class, new AppSettings(), mapper);
+    }
+
+    static AppSettings loadFromDisk(Path path, TomlMapper mapper, CredentialStoreService credentialStore) {
+        AppSettings loaded = loadFromDisk(path, mapper);
+        if (credentialStore == null) {
+            return loaded;
+        }
+        String diskApiKey = loaded.getGeminiApiKey();
+        if (StringUtils.isNotBlank(diskApiKey)) {
+            if (credentialStore.saveGeminiApiKey(diskApiKey)) {
+                AppSettings scrubbed = loaded.copy();
+                scrubbed.setGeminiApiKey("");
+                try {
+                    PathUtils.writeToml(path, scrubbed,
+                            Objects.requireNonNullElse(mapper, AiConfig.SHARED_TOML_MAPPER));
+                    PathUtils.setOwnerOnlyPermissionsIfPosix(path);
+                } catch (IOException e) {
+                    log.warn("Migrated Gemini API key to OS keyring, but failed to scrub {}: {}", path, e.getMessage());
+                }
+            }
+        } else {
+            String fromKeyring = credentialStore.loadGeminiApiKey();
+            if (StringUtils.isNotBlank(fromKeyring)) {
+                loaded.setGeminiApiKey(fromKeyring);
+            }
+        }
+        return loaded;
     }
 
     /**
@@ -187,7 +233,7 @@ public class SettingsService {
 
     public synchronized AppSettings getSettings() {
         if (settings == null) {
-            settings = loadFromDisk(getSettingsPath(), mapper);
+            settings = loadFromDisk(getSettingsPath(), mapper, credentialStoreService);
         }
         return settings;
     }
@@ -225,8 +271,15 @@ public class SettingsService {
 
     private void writeSettingsToDisk(Path path, AppSettings currentSettings) {
         synchronized (writeLock) {
+            AppSettings diskSettings = currentSettings.copy();
+            if (StringUtils.isBlank(diskSettings.getGeminiApiKey())) {
+                credentialStoreService.deleteGeminiApiKey();
+                diskSettings.setGeminiApiKey("");
+            } else if (credentialStoreService.saveGeminiApiKey(diskSettings.getGeminiApiKey())) {
+                diskSettings.setGeminiApiKey("");
+            }
             try {
-                PathUtils.writeToml(path, currentSettings, mapper);
+                PathUtils.writeToml(path, diskSettings, mapper);
                 PathUtils.setOwnerOnlyPermissionsIfPosix(path);
             } catch (IOException e) {
                 log.error("Failed to save settings: {}", e.getMessage(), e);

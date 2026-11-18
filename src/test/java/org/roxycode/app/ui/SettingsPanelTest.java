@@ -174,6 +174,11 @@ class SettingsPanelTest {
 
     @Test
     void testVertexAiProviderSelectionValidationBrowseAndSaveOnboarding() {
+        assertEquals(SettingsPanel.KEYRING_FALLBACK_BADGE_TEXT, settingsPanel.apiKeyStorageBadge.getText());
+        when(settingsService.isNativeKeyringAvailable()).thenReturn(true);
+        SwingTestUtils.runOnEdt(() -> settingsPanel.updateApiKeyStorageBadge());
+        assertEquals(SettingsPanel.KEYRING_READY_BADGE_TEXT, settingsPanel.apiKeyStorageBadge.getText());
+
         assertEquals(SettingsPanel.AUTH_PROVIDER_API_KEY, settingsPanel.authProviderCombo.getSelectedItem());
         assertTrue(settingsPanel.apiKeyProviderToggleBtn.isSelected());
         assertFalse(settingsPanel.vertexAiProviderToggleBtn.isSelected());

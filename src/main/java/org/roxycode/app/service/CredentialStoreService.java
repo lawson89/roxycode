@@ -23,6 +23,8 @@ import org.springframework.stereotype.Service;
 public class CredentialStoreService implements AutoCloseable {
 
     static final String KEYRING_SERVICE_NAME = "org.roxycode.db";
+    static final String AI_KEYRING_SERVICE_NAME = "org.roxycode.ai";
+    static final String GEMINI_API_KEY_ACCOUNT = "gemini-api-key";
     private static final Logger log = LoggerFactory.getLogger(CredentialStoreService.class);
 
     interface KeyringBackend {
@@ -174,6 +176,59 @@ public class CredentialStoreService implements AutoCloseable {
             return new String(inMemory);
         }
         return null;
+    }
+
+    /**
+     * Loads the Gemini API key from a persistent native OS keyring, or returns {@code null} if unavailable or unset.
+     */
+    public @Nullable String loadGeminiApiKey() {
+        KeyringBackend resolved = getOrInitBackend();
+        if (resolved == null || !resolved.isPersistent()) {
+            return null;
+        }
+        try {
+            return resolved.getPassword(AI_KEYRING_SERVICE_NAME, GEMINI_API_KEY_ACCOUNT);
+        } catch (PasswordAccessException e) {
+            log.debug("OS keyring read failed for Gemini API key: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Stores the Gemini API key in a persistent native OS keyring. Returns {@code true} if persisted to the native
+     * keyring, or {@code false} if no persistent keyring is available or writing failed.
+     */
+    public boolean saveGeminiApiKey(@Nullable String apiKey) {
+        if (apiKey == null || apiKey.isBlank()) {
+            deleteGeminiApiKey();
+            return isNativeKeyringAvailable();
+        }
+        KeyringBackend resolved = getOrInitBackend();
+        if (resolved == null || !resolved.isPersistent()) {
+            return false;
+        }
+        try {
+            resolved.setPassword(AI_KEYRING_SERVICE_NAME, GEMINI_API_KEY_ACCOUNT, apiKey);
+            return true;
+        } catch (PasswordAccessException e) {
+            log.warn("OS keyring write failed for Gemini API key; falling back to settings.toml: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Deletes any stored Gemini API key from the persistent native OS keyring.
+     */
+    public void deleteGeminiApiKey() {
+        KeyringBackend resolved = getOrInitBackend();
+        if (resolved == null || !resolved.isPersistent()) {
+            return;
+        }
+        try {
+            resolved.deletePassword(AI_KEYRING_SERVICE_NAME, GEMINI_API_KEY_ACCOUNT);
+        } catch (PasswordAccessException e) {
+            log.debug("No keyring entry deleted for Gemini API key: {}", e.getMessage());
+        }
     }
 
     @Override
