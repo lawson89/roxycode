@@ -69,11 +69,9 @@ public class AiService implements AutoCloseable {
 
     public static final int MAX_AUTO_NUDGES = 2;
     public static final int MAX_AUTO_CONTINUES = 2;
-    public static final int MAX_DIAGRAM_FIXES = 1;
     public static final int TEST_CONNECTION_TIMEOUT_MS = 15_000;
     public static final String AUTO_NUDGE_PROMPT = "You completed the turn without returning any text response. Please summarize what you just did or provide your final response to the user.";
     public static final String AUTO_CONTINUE_ACTIVITY_MESSAGE = "API connection reset — resuming turn automatically";
-    public static final String DIAGRAM_FIX_ACTIVITY_MESSAGE = "Fixing diagram syntax error...";
     static final String GROUNDED_SEARCH_SYSTEM_PROMPT = "You are a technical research assistant. Use Google Search to provide accurate, up-to-date facts, synthesis, and source URLs or citations when available.";
     static final String FLASH_UTILITY_MODEL = "gemini-3.8-flash";
     static final int PDF_ANALYSIS_MAX_OUTPUT_TOKENS = 65_536;
@@ -971,7 +969,7 @@ public class AiService implements AutoCloseable {
         promptSpec.tools(jexlTool);
         promptSpec.advisors(MessageChatMemoryAdvisor.builder(chatMemory).build(),
                 ToolCallingAdvisor.builder().toolCallingManager(toolCallingManager).build(),
-                new AutoNudgeAdvisor(effectiveTurnContext, chatMemory, eventPublisher));
+                new AutoNudgeAdvisor(effectiveTurnContext, chatMemory));
         return promptSpec.toolContext(effectiveTurnContext.toMap());
     }
 
