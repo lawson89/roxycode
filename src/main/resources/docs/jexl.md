@@ -71,13 +71,12 @@ if (!build.success) {
 }
 ```
 
-### Built-In JavaScript / TypeScript Polyfills & Globals (`JsPolyfillUberspect`)
-To reduce syntax friction, RoxyCode's JEXL sandbox includes built-in JS-style property/method polyfills and global helpers:
-- **`.length`**: Works on `String`, `Collection`/`List`, `Map`, and Java arrays.
-- **Array / List methods**: `.includes(x)`, `.indexOf(x)`, `.slice(start, end?)`, `.join(sep?)`, `.push(...)` (on mutable `Collection`s), and higher-order lambda methods `.map(x -> ...)`, `.filter(x -> ...)`, `.find(x -> ...)`, `.some(x -> ...)`, `.every(x -> ...)`, and `.forEach(x -> ...)`.
-- **String methods**: `.includes(s)`, `.slice(start, end?)`, `.trimStart()`, `.trimEnd()`, `.padStart(len, fill?)`, `.padEnd(len, fill?)`.
-- **Map methods**: `.has(key)`, `.delete(key)`.
-- **Global helpers**: `JSON.stringify(obj, replacer?, indent?)`, `JSON.parse(str)`, `Object.keys(map)`, `Object.values(map)`, `Object.entries(map)`.
+### Built-In Property & Convenience Helpers (`JsPolyfillUberspect`)
+To reduce syntax friction, RoxyCode's JEXL sandbox includes lightweight property and collection helpers:
+- **`.length`**: Works on `String`/`CharSequence`, `Collection`/`List`, `Map` (when key `"length"` is absent), and Java arrays.
+- **`.includes(x)`**: Works on `String`/`CharSequence`, `Collection`/`List`, and Java arrays.
+- **Native Java `record` property access**: Access public record components directly as properties (e.g., `result.success`, `entry.summary`).
+- **`Map` property assignment**: Assign keys directly using property or bracket syntax on mutable maps (e.g., `map.key = value`, `map['key'] = value`).
 
 ### Iterating over Collections
 JEXL handles Java Lists and Arrays seamlessly in iteration.

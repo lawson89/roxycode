@@ -44,24 +44,24 @@ public class JexlTool {
     private static final long NANOS_PER_MILLI = 1_000_000L;
     public static final String MAX_TURNS_EXCEEDED_PREFIX = "Autonomous execution stopped: Maximum tool turns (";
 
-    private final JexlFeatures jexlFeatures;
-    private final JexlUberspect baseUberspect;
+    private final JexlEngine jexlEngine;
     private final JexlServiceRegistry registry;
     private final SettingsService settingsService;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper mapper;
-    private final JsPolyfillUberspect.JsJsonGlobal jsonGlobal;
 
     public JexlTool(JexlServiceRegistry registry, @Nullable ApplicationEventPublisher eventPublisher,
             @Nullable ObjectMapper objectMapper, @Nullable SettingsService settingsService) {
-        this.jexlFeatures = new JexlFeatures().newInstance(false).fatArrow(true);
-        this.baseUberspect = new JexlBuilder().features(this.jexlFeatures).permissions(AgentJexlPermissions.INSTANCE)
-                .arithmetic(new MutableMapJexlArithmetic(true)).strict(true).silent(false).safe(false).create()
-                .getUberspect();
+        JexlFeatures jexlFeatures = new JexlFeatures().newInstance(false).fatArrow(true);
+        JexlUberspect baseUberspect = new JexlBuilder().features(jexlFeatures)
+                .permissions(AgentJexlPermissions.INSTANCE).arithmetic(new MutableMapJexlArithmetic(true)).strict(true)
+                .silent(false).safe(false).create().getUberspect();
+        this.jexlEngine = new JexlBuilder().features(jexlFeatures).permissions(AgentJexlPermissions.INSTANCE)
+                .arithmetic(new MutableMapJexlArithmetic(true)).uberspect(new JsPolyfillUberspect(baseUberspect))
+                .strict(true).silent(false).safe(false).create();
         this.registry = registry;
         this.eventPublisher = eventPublisher;
         this.mapper = Objects.requireNonNullElse(objectMapper, AiConfig.SHARED_OBJECT_MAPPER);
-        this.jsonGlobal = new JsPolyfillUberspect.JsJsonGlobal(this.mapper);
         this.settingsService = settingsService;
     }
 
@@ -111,10 +111,8 @@ public class JexlTool {
         log.info("Executing JEXL script in phase {} (turn {}/{}): {}", phase, currentTurn, maxTurns, script);
 
         Map<String, Object> bindings = new HashMap<>(registry.getServices(phase, conversationId));
-        bindings.put("JSON", jsonGlobal);
-        bindings.put("Object", JsPolyfillUberspect.OBJECT_GLOBAL);
         JexlContext context = new MapContext(bindings);
-        JexlEngine jexl = createEngine(context);
+        JexlEngine jexl = this.jexlEngine;
 
         long startNanos = System.nanoTime();
         boolean cancelled = false;
@@ -138,9 +136,9 @@ public class JexlTool {
                 cancelled = true;
                 try {
                     publishToolEvent(ctx, currentTurn, elapsedMillis(startNanos), script, null, false,
-                            new JexlErrorAnalyzer.ErrorAnalysis(JexlErrorAnalyzer.ErrorCategory.RUNTIME_ERROR.name(),
-                                    null, null, null, "Execution cancelled", null, false, e.getClass().getName(), null,
-                                    List.of(), List.of()));
+                            new JexlErrorAnalyzer.ErrorAnalysis("EXECUTION_ERROR", null, null, null,
+                                    "Execution cancelled", null, false, e.getClass().getName(), null, List.of(),
+                                    List.of()));
                 } catch (Exception ignored) {
                 }
                 throw ExceptionUtils.asCancellationException(e, "JEXL execution cancelled");
@@ -158,13 +156,6 @@ public class JexlTool {
 
     private static long elapsedMillis(long startNanos) {
         return Math.max(0L, (System.nanoTime() - startNanos) / NANOS_PER_MILLI);
-    }
-
-    private JexlEngine createEngine(JexlContext context) {
-        return new JexlBuilder().features(jexlFeatures).permissions(AgentJexlPermissions.INSTANCE)
-                .arithmetic(new MutableMapJexlArithmetic(true))
-                .uberspect(new JsPolyfillUberspect(baseUberspect, context)).strict(true).silent(false).safe(false)
-                .create();
     }
 
     private int resolveMaxTurns() {

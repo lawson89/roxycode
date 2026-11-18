@@ -4,9 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import org.apache.commons.jexl3.JexlBuilder;
 import org.apache.commons.jexl3.JexlEngine;
-import org.apache.commons.jexl3.JexlException;
 import org.apache.commons.jexl3.JexlFeatures;
-import org.apache.commons.jexl3.JexlInfo;
 import org.apache.commons.jexl3.JexlScript;
 import org.apache.commons.jexl3.MapContext;
 import org.junit.jupiter.api.Test;
@@ -34,116 +32,39 @@ class JexlErrorAnalyzerTest {
     }
 
     @Test
-    void testSyntaxErrorClassificationsAndLocationExtraction() {
-        String multilineStr = "var x = " + '"' + "line1" + "\n" + "line2" + '"' + ";";
-        JexlErrorAnalyzer.ErrorAnalysis multilineAnalysis = analyzeScript(multilineStr);
-        assertEquals("MULTILINE_QUOTED_STRING", multilineAnalysis.errorCategory());
-        assertEquals(1, multilineAnalysis.line());
-        assertNotNull(multilineAnalysis.offendingLine());
-        assertTrue(multilineAnalysis.hint().contains("backticks"));
-
-        String constScript = "var a = 1;\nconst b = 2;";
-        JexlErrorAnalyzer.ErrorAnalysis constAnalysis = JexlErrorAnalyzer
-                .analyze(new JexlException.Parsing(new JexlInfo("script", 2, 1), "const"), constScript, true);
-        assertEquals("JS_CONST_LET", constAnalysis.errorCategory());
-        assertEquals(2, constAnalysis.line());
-        assertEquals("const b = 2;", constAnalysis.offendingLine());
-        assertTrue(constAnalysis.hint().contains("'var'"));
-
-        JexlErrorAnalyzer.ErrorAnalysis bracketMap = analyzeScript("var m = ['key': 1];");
-        assertEquals("BRACKET_MAP_LITERAL", bracketMap.errorCategory());
-        assertTrue(bracketMap.hint().contains("curly braces"));
-
-        JexlErrorAnalyzer.ErrorAnalysis forOf = analyzeScript("for (var x of [1, 2]) { x; }");
-        assertEquals("JS_FOR_OF_OR_IN", forOf.errorCategory());
-        assertTrue(forOf.hint().contains("':'"));
-
-        JexlErrorAnalyzer.ErrorAnalysis strictEq = JexlErrorAnalyzer
-                .analyze(new JexlException.Parsing(new JexlInfo("script", 1, 7), "==="), "if (1 === 1) { 1; }", true);
-        assertEquals("STRICT_EQUALITY", strictEq.errorCategory());
-        assertTrue(strictEq.hint().contains("'=='"));
-
-        JexlErrorAnalyzer.ErrorAnalysis shorthand = analyzeScript("var a = 1; var m = { 'k': 1, a };");
-        assertEquals("OBJECT_SHORTHAND", shorthand.errorCategory());
-        assertTrue(shorthand.hint().contains("explicit key-value"));
-
-        JexlErrorAnalyzer.ErrorAnalysis genericSyntax = analyzeScript("if (");
-        assertEquals("SYNTAX_ERROR", genericSyntax.errorCategory());
-        assertNotNull(genericSyntax.hint());
-    }
-
-    @Test
-    void testUnescapedBacktickInTemplateDetection() {
-        String unescapedTripleBacktickScript = "var s = `line 1\n" + "String bt = \"```\";\n" + "line 3`;";
-        JexlErrorAnalyzer.ErrorAnalysis tripleBacktickAnalysis = analyzeScript(unescapedTripleBacktickScript);
-        assertEquals("UNESCAPED_BACKTICK", tripleBacktickAnalysis.errorCategory());
-        assertTrue(tripleBacktickAnalysis.hint().contains("\\`"));
-
-        String brokenConcatScript = "var s = `prefix\n" + "`someVar` + \"`unicode`\" + `\n" + "suffix`;";
-        JexlErrorAnalyzer.ErrorAnalysis brokenConcatAnalysis = analyzeScript(brokenConcatScript);
-        assertEquals("UNESCAPED_BACKTICK", brokenConcatAnalysis.errorCategory());
-        assertTrue(brokenConcatAnalysis.hint().contains("\\`"));
-
-        String escapedBacktickScript = "var s = `line 1\n" + "String bt = \"\\`\\`\\`\";\n" + "line 3`;";
-        JexlScript compiled = ENGINE.createScript(escapedBacktickScript);
-        assertNotNull(compiled);
-
-        String multilineStr = "var x = " + '"' + "line1" + "\n" + "line2" + '"' + ";";
-        JexlErrorAnalyzer.ErrorAnalysis multilineAnalysis = analyzeScript(multilineStr);
-        assertEquals("MULTILINE_QUOTED_STRING", multilineAnalysis.errorCategory());
-
-        String constWithBalancedBacktick = "const s = `a\nb`;";
-        JexlErrorAnalyzer.ErrorAnalysis constWithBacktickAnalysis = JexlErrorAnalyzer.analyze(
-                new JexlException.Parsing(new JexlInfo("script", 1, 1), "const"), constWithBalancedBacktick, true);
-        assertEquals("JS_CONST_LET", constWithBacktickAnalysis.errorCategory());
-
-        String multilineWithBalancedBacktick = "var ok = `a`; var x = " + '"' + "line1" + "\n" + "line2" + '"' + ";";
-        JexlErrorAnalyzer.ErrorAnalysis multilineWithBacktickAnalysis = analyzeScript(multilineWithBalancedBacktick);
-        assertEquals("MULTILINE_QUOTED_STRING", multilineWithBacktickAnalysis.errorCategory());
-    }
-
-    @Test
-    void testRuntimeErrorClassifications() {
-        JexlErrorAnalyzer.ErrorAnalysis arrayAdd = analyzeScript("var list = ['a', 'b']; list.add('c');");
-        assertEquals("ARRAY_ADD_MUTATION", arrayAdd.errorCategory());
-        assertTrue(arrayAdd.hint().contains("[..., ...]"));
-
-        JexlErrorAnalyzer.ErrorAnalysis unsolvableMethod = analyzeScript("'hello'.noSuchMethod();");
-        assertEquals("UNSOLVABLE_METHOD", unsolvableMethod.errorCategory());
-        assertTrue(unsolvableMethod.hint().contains("noSuchMethod"));
-
-        JexlErrorAnalyzer.ErrorAnalysis unsolvableProp = analyzeScript("'hello'.noSuchProp;");
-        assertEquals("UNSOLVABLE_PROPERTY", unsolvableProp.errorCategory());
-        assertTrue(unsolvableProp.hint().contains("noSuchProp"));
-
-        JexlErrorAnalyzer.ErrorAnalysis unsolvableVar = analyzeScript("unknownService.doWork();");
-        assertEquals("UNSOLVABLE_PROPERTY", unsolvableVar.errorCategory());
-        assertTrue(unsolvableVar.hint().contains("unknownService"));
-
-        JexlErrorAnalyzer.ErrorAnalysis runtime = JexlErrorAnalyzer
-                .analyze(new IllegalArgumentException("Bad argument"), "foo()", false);
-        assertEquals("RUNTIME_ERROR", runtime.errorCategory());
-        assertEquals("Bad argument", runtime.error());
-        assertNotNull(runtime.hint());
-    }
-
-    @Test
-    void testDiagnosticMetadataPopulation() {
-        JexlErrorAnalyzer.ErrorAnalysis syntax = analyzeScript("if (");
+    void testSyntaxAndRuntimeErrorClassifications() {
+        JexlErrorAnalyzer.ErrorAnalysis syntax = analyzeScript("var a = 1;\nif (");
+        assertEquals("SYNTAX_ERROR", syntax.errorCategory());
         assertTrue(syntax.syntaxStage());
-        assertNotNull(syntax.exceptionType());
-        assertNotNull(syntax.rootCauseType());
-        assertFalse(syntax.causeChain().isEmpty());
+        assertEquals(2, syntax.line());
+        assertEquals("if (", syntax.offendingLine());
+        assertNotNull(syntax.hint());
+
+        JexlErrorAnalyzer.ErrorAnalysis unknownMethod = analyzeScript("'hello'.noSuchMethod();");
+        assertEquals("UNKNOWN_METHOD", unknownMethod.errorCategory());
+        assertTrue(unknownMethod.hint().contains("noSuchMethod"));
+
+        JexlErrorAnalyzer.ErrorAnalysis unknownProp = analyzeScript("'hello'.noSuchProp;");
+        assertEquals("UNKNOWN_PROPERTY", unknownProp.errorCategory());
+        assertTrue(unknownProp.hint().contains("noSuchProp"));
+
+        JexlErrorAnalyzer.ErrorAnalysis unknownVar = analyzeScript("unknownService.doWork();");
+        assertEquals("UNKNOWN_VARIABLE", unknownVar.errorCategory());
+        assertTrue(unknownVar.hint().contains("unknownService"));
+
+        JexlErrorAnalyzer.ErrorAnalysis nullOperand = analyzeScript("null + 1;");
+        assertEquals("NULL_OPERAND", nullOperand.errorCategory());
+        assertNotNull(nullOperand.hint());
 
         IllegalStateException wrapped = new IllegalStateException("outer failure",
                 new IllegalArgumentException("inner failure"));
         JexlErrorAnalyzer.ErrorAnalysis runtime = JexlErrorAnalyzer.analyze(wrapped, "svc.op()", false);
+        assertEquals("EXECUTION_ERROR", runtime.errorCategory());
+        assertEquals("inner failure", runtime.error());
         assertFalse(runtime.syntaxStage());
         assertEquals(IllegalStateException.class.getName(), runtime.exceptionType());
         assertEquals(IllegalArgumentException.class.getName(), runtime.rootCauseType());
         assertEquals(2, runtime.causeChain().size());
-        assertTrue(runtime.causeChain().get(0).contains("IllegalStateException: outer failure"));
-        assertTrue(runtime.causeChain().get(1).contains("IllegalArgumentException: inner failure"));
         assertFalse(runtime.appStackFrames().isEmpty());
         assertTrue(runtime.appStackFrames().get(0).startsWith("JexlErrorAnalyzerTest."));
     }

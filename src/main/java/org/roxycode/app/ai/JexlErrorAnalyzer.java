@@ -5,8 +5,7 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import org.apache.commons.jexl3.JexlArithmetic;
 import org.apache.commons.jexl3.JexlException;
 import org.apache.commons.jexl3.JexlInfo;
 import org.apache.commons.lang3.StringUtils;
@@ -23,28 +22,6 @@ public final class JexlErrorAnalyzer {
     private static final int MAX_CAUSE_CHAIN_DEPTH = 8;
     private static final int MAX_CAUSE_MESSAGE_LENGTH = 500;
     private static final int MAX_APP_STACK_FRAMES = 10;
-    private static final char BACKTICK = '`';
-
-    private static final Pattern JS_CONST_LET_PATTERN = Pattern.compile("\\b(const|let)\\s+[A-Za-z_$]");
-    private static final Pattern BRACKET_MAP_LITERAL_PATTERN = Pattern
-            .compile("\\[\\s*(['\"][^'\"]+['\"]|[A-Za-z_]\\w*)\\s*:");
-    private static final Pattern JS_FOR_OF_OR_IN_PATTERN = Pattern.compile("\\bfor\\s*\\([^)]*\\b(of|in)\\b");
-    private static final Pattern STRICT_EQUALITY_PATTERN = Pattern.compile("(===|!==)");
-    private static final Pattern OBJECT_SHORTHAND_PATTERN = Pattern
-            .compile("\\{\\s*[A-Za-z_]\\w*\\s*(,|\\})|,\\s*[A-Za-z_]\\w*\\s*\\}");
-    private static final Pattern ARRAY_TYPE_PATTERN = Pattern.compile("(\\[\\]|Object\\[|\\bArray\\b)");
-    private static final Pattern BROKEN_BACKTICK_CONCAT_PATTERN = Pattern
-            .compile("`\\s*\\+\\s*['\"]`|`['\"]\\s*\\+\\s*`");
-    private static final String UNESCAPED_BACKTICK_HINT = "Literal backticks inside JEXL 3 backtick strings (`...`) must be escaped as \\` (and literal ${...} as \\${...}). Do not break out of backticks with + \"`...`\" +.";
-
-    /**
-     * Structured classification of common JEXL syntax and runtime errors.
-     */
-    public enum ErrorCategory {
-        MULTILINE_QUOTED_STRING, UNESCAPED_BACKTICK, JS_CONST_LET, BRACKET_MAP_LITERAL, JS_FOR_OF_OR_IN,
-        STRICT_EQUALITY, OBJECT_SHORTHAND, ARRAY_ADD_MUTATION, UNSOLVABLE_METHOD, UNSOLVABLE_PROPERTY, SYNTAX_ERROR,
-        RUNTIME_ERROR
-    }
 
     /**
      * Structured diagnostic result from analyzing a JEXL exception.
@@ -89,7 +66,6 @@ public final class JexlErrorAnalyzer {
                 appStackFrames = List.copyOf(appStackFrames);
             }
         }
-
     }
 
     private JexlErrorAnalyzer() {
@@ -123,8 +99,6 @@ public final class JexlErrorAnalyzer {
         }
         String offendingLine = extractOffendingLine(script, line);
         String errorMessage = resolveErrorMessage(throwable, jexlException, syntaxStage);
-        String inspectionTarget = resolveInspectionTarget(offendingLine, script);
-
         String exceptionType = throwable.getClass().getName();
         Throwable rootCause = ExceptionUtils.getRootCause(throwable);
         String rootCauseType = null;
@@ -134,73 +108,35 @@ public final class JexlErrorAnalyzer {
         List<String> causeChain = extractCauseChain(throwable);
         List<String> appStackFrames = extractAppStackFrames(throwable, rootCause);
 
-        if (jexlException instanceof JexlException.Tokenization) {
-            if (isUnescapedBacktickInTemplate(inspectionTarget, script, line)) {
-                return new ErrorAnalysis(ErrorCategory.UNESCAPED_BACKTICK.name(), line, column, offendingLine,
-                        errorMessage, UNESCAPED_BACKTICK_HINT, syntaxStage, exceptionType, rootCauseType, causeChain,
-                        appStackFrames);
-            }
-            if (isMultilineQuotedString(inspectionTarget, errorMessage)) {
-                return new ErrorAnalysis(ErrorCategory.MULTILINE_QUOTED_STRING.name(), line, column, offendingLine,
-                        errorMessage,
-                        "Multi-line strings in JEXL 3 MUST use backticks (`...`), not single (') or double (\") quotes.",
-                        syntaxStage, exceptionType, rootCauseType, causeChain, appStackFrames);
-            }
-        }
-
+        String category = "EXECUTION_ERROR";
+        String hint = "Verify arguments, file paths, and null/success checks before accessing properties or calling service methods.";
         if (syntaxStage || jexlException instanceof JexlException.Parsing
                 || jexlException instanceof JexlException.Tokenization) {
-            if (isUnescapedBacktickInTemplate(inspectionTarget, script, line)) {
-                return new ErrorAnalysis(ErrorCategory.UNESCAPED_BACKTICK.name(), line, column, offendingLine,
-                        errorMessage, UNESCAPED_BACKTICK_HINT, syntaxStage, exceptionType, rootCauseType, causeChain,
-                        appStackFrames);
-            }
-            ErrorCategory syntaxCategory = classifySyntaxPattern(inspectionTarget);
-            if (syntaxCategory != null) {
-                return new ErrorAnalysis(syntaxCategory.name(), line, column, offendingLine, errorMessage,
-                        hintForSyntaxCategory(syntaxCategory), syntaxStage, exceptionType, rootCauseType, causeChain,
-                        appStackFrames);
-            }
-            return new ErrorAnalysis(ErrorCategory.SYNTAX_ERROR.name(), line, column, offendingLine, errorMessage,
-                    "Check JEXL 3 syntax: declare variables with 'var', use { 'k': v } for maps, backticks for multi-line strings, and ';' between statements.",
-                    syntaxStage, exceptionType, rootCauseType, causeChain, appStackFrames);
-        }
-
-        if (jexlException instanceof JexlException.Method methodEx) {
+            category = "SYNTAX_ERROR";
+            hint = "Check JEXL 3 syntax: declare variables with 'var', use { 'k': v } for maps, backticks for multi-line strings, and ';' between statements.";
+        } else if (jexlException instanceof JexlException.Method methodEx) {
+            category = "UNKNOWN_METHOD";
             String methodName = StringUtils.defaultIfBlank(methodEx.getMethod(), "unknown");
-            if (isArrayAddMutation(methodName, errorMessage, script)) {
-                return new ErrorAnalysis(ErrorCategory.ARRAY_ADD_MUTATION.name(), line, column, offendingLine,
-                        errorMessage,
-                        "Standard '[...]' creates a fixed-size Java array that does not support .add(). Use a mutable list literal '[..., ...]' or pass an array directly to batch service methods.",
-                        syntaxStage, exceptionType, rootCauseType, causeChain, appStackFrames);
-            }
-            return new ErrorAnalysis(ErrorCategory.UNSOLVABLE_METHOD.name(), line, column, offendingLine, errorMessage,
-                    "Method '" + methodName
-                            + "' is not available on this target or is not permitted by the sandbox. Check the JEXL API Documentation for valid @AgentDoc methods and parameter types.",
-                    syntaxStage, exceptionType, rootCauseType, causeChain, appStackFrames);
-        }
-
-        if (jexlException instanceof JexlException.Property propEx) {
+            hint = "Method '" + methodName
+                    + "' is not available on this target or is not permitted by the sandbox. Check the JEXL API Documentation for valid @AgentDoc methods.";
+        } else if (jexlException instanceof JexlException.Property propEx) {
+            category = "UNKNOWN_PROPERTY";
             String propertyName = StringUtils.defaultIfBlank(propEx.getProperty(), "unknown");
-            return new ErrorAnalysis(ErrorCategory.UNSOLVABLE_PROPERTY.name(), line, column, offendingLine,
-                    errorMessage,
-                    "Property '" + propertyName
-                            + "' could not be resolved. Check the exact field/getter name in the JEXL API Documentation or verify the object is not null.",
-                    syntaxStage, exceptionType, rootCauseType, causeChain, appStackFrames);
-        }
-
-        if (jexlException instanceof JexlException.Variable varEx) {
+            hint = "Property '" + propertyName
+                    + "' could not be resolved. Check the exact field or record component name, or verify the object is not null.";
+        } else if (jexlException instanceof JexlException.Variable varEx) {
+            category = "UNKNOWN_VARIABLE";
             String varName = StringUtils.defaultIfBlank(varEx.getVariable(), "unknown");
-            return new ErrorAnalysis(ErrorCategory.UNSOLVABLE_PROPERTY.name(), line, column, offendingLine,
-                    errorMessage,
-                    "Variable or service '" + varName
-                            + "' is undefined. Declare local variables with 'var' and check available service names in the JEXL API Documentation.",
-                    syntaxStage, exceptionType, rootCauseType, causeChain, appStackFrames);
+            hint = "Variable or service '" + varName
+                    + "' is undefined. Declare local variables with 'var' and check available service names in the JEXL API Documentation.";
+        } else if (jexlException instanceof JexlException.Operator
+                || ExceptionUtils.findCause(throwable, JexlArithmetic.NullOperand.class) != null) {
+            category = "NULL_OPERAND";
+            hint = "Operator failed (possibly due to a null operand or incompatible types). Check for null values before operating on variables.";
         }
 
-        return new ErrorAnalysis(ErrorCategory.RUNTIME_ERROR.name(), line, column, offendingLine, errorMessage,
-                "Verify arguments, file paths, and null/success checks before accessing properties or calling service methods.",
-                syntaxStage, exceptionType, rootCauseType, causeChain, appStackFrames);
+        return new ErrorAnalysis(category, line, column, offendingLine, errorMessage, hint, syntaxStage, exceptionType,
+                rootCauseType, causeChain, appStackFrames);
     }
 
     private static List<String> extractCauseChain(Throwable throwable) {
@@ -263,8 +199,7 @@ public final class JexlErrorAnalyzer {
     private static String resolveErrorMessage(Throwable throwable, @Nullable JexlException jexlException,
             boolean syntaxStage) {
         if (syntaxStage) {
-            String detail = ExceptionUtils.getMessageOrSimpleName(throwable);
-            return "Syntax Error: " + detail;
+            return "Syntax Error: " + ExceptionUtils.getMessageOrSimpleName(throwable);
         }
         Throwable rootCause = ExceptionUtils.getRootCause(throwable);
         if (rootCause != null && !(rootCause instanceof JexlException)) {
@@ -274,116 +209,5 @@ public final class JexlErrorAnalyzer {
             return ExceptionUtils.getMessageOrSimpleName(jexlException);
         }
         return ExceptionUtils.getMessageOrSimpleName(throwable);
-    }
-
-    private static String resolveInspectionTarget(@Nullable String offendingLine, @Nullable String script) {
-        if (StringUtils.isNotBlank(offendingLine)) {
-            return offendingLine;
-        }
-        return StringUtils.defaultString(script);
-    }
-
-    static boolean isUnescapedBacktickInTemplate(String inspectionTarget, @Nullable String script,
-            @Nullable Integer line) {
-        if (StringUtils.isNotBlank(inspectionTarget)
-                && BROKEN_BACKTICK_CONCAT_PATTERN.matcher(inspectionTarget).find()) {
-            return true;
-        }
-        if (StringUtils.isBlank(script)) {
-            return StringUtils.isNotBlank(inspectionTarget) && countUnescapedBackticks(inspectionTarget) % 2 != 0;
-        }
-        if (line != null && line > 1) {
-            String[] lines = script.split("\r?\n", -1);
-            int precedingLineCount = Math.min(line - 1, lines.length);
-            int precedingBackticks = 0;
-            for (int i = 0; i < precedingLineCount; i++) {
-                precedingBackticks += countUnescapedBackticks(lines[i]);
-            }
-            if (precedingBackticks % 2 != 0) {
-                return true;
-            }
-        }
-        return countUnescapedBackticks(script) % 2 != 0;
-    }
-
-    private static int countUnescapedBackticks(String text) {
-        int count = 0;
-        for (int i = 0; i < text.length(); i++) {
-            if (text.charAt(i) == BACKTICK) {
-                int backslashes = 0;
-                int j = i - 1;
-                while (j >= 0 && text.charAt(j) == '\\') {
-                    backslashes++;
-                    j--;
-                }
-                if (backslashes % 2 == 0) {
-                    count++;
-                }
-            }
-        }
-        return count;
-    }
-
-    private static boolean isMultilineQuotedString(String target, String errorMessage) {
-        if (countUnescapedBackticks(target) % 2 != 0) {
-            return false;
-        }
-        if (target.indexOf('"') >= 0 || target.indexOf('\'') >= 0) {
-            return true;
-        }
-        String lower = errorMessage.toLowerCase(java.util.Locale.ROOT);
-        return lower.contains("tokenization") && (lower.contains("\\n") || lower.contains("unterminated"));
-    }
-
-    private static @Nullable ErrorCategory classifySyntaxPattern(String target) {
-        if (StringUtils.isBlank(target)) {
-            return null;
-        }
-        if (JS_CONST_LET_PATTERN.matcher(target).find()) {
-            return ErrorCategory.JS_CONST_LET;
-        }
-        if (BRACKET_MAP_LITERAL_PATTERN.matcher(target).find()) {
-            return ErrorCategory.BRACKET_MAP_LITERAL;
-        }
-        if (JS_FOR_OF_OR_IN_PATTERN.matcher(target).find()) {
-            return ErrorCategory.JS_FOR_OF_OR_IN;
-        }
-        if (STRICT_EQUALITY_PATTERN.matcher(target).find()) {
-            return ErrorCategory.STRICT_EQUALITY;
-        }
-        Matcher shorthandMatcher = OBJECT_SHORTHAND_PATTERN.matcher(target);
-        if (shorthandMatcher.find()) {
-            return ErrorCategory.OBJECT_SHORTHAND;
-        }
-        return null;
-    }
-
-    private static String hintForSyntaxCategory(ErrorCategory category) {
-        return switch (category) {
-            case UNESCAPED_BACKTICK -> UNESCAPED_BACKTICK_HINT;
-            case JS_CONST_LET ->
-                "JEXL 3 does not support 'const' or 'let'. Use 'var' to declare variables (e.g., var x = 1;).";
-            case BRACKET_MAP_LITERAL ->
-                "Map literals in JEXL 3 MUST use curly braces { 'key': value }, not square brackets [ ... ].";
-            case JS_FOR_OF_OR_IN ->
-                "JEXL 3 uses colon ':' in for-each loops, not 'of' or 'in' (e.g., for (var item : list) { ... }).";
-            case STRICT_EQUALITY -> "JEXL 3 does not support '===' or '!=='. Use '==' or '!=' instead.";
-            case OBJECT_SHORTHAND ->
-                "JEXL 3 map literals do not support ES6 shorthand properties ({ a, b }). Use explicit key-value pairs: { 'a': a, 'b': b }.";
-            default -> "Check JEXL 3 syntax.";
-        };
-    }
-
-    private static boolean isArrayAddMutation(String methodName, String errorMessage, @Nullable String script) {
-        if (!"add".equals(methodName) && !"push".equals(methodName)) {
-            return false;
-        }
-        if (ARRAY_TYPE_PATTERN.matcher(errorMessage).find()) {
-            return true;
-        }
-        if (script != null && script.contains("[") && !script.contains("...")) {
-            return true;
-        }
-        return false;
     }
 }
