@@ -543,12 +543,6 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         }
     }
 
-    public void setOnApplyBuildTomlListener(Consumer<String> listener) {
-        if (outputArea != null) {
-            outputArea.setOnApplyBuildTomlListener(listener);
-        }
-    }
-
     public void setInputText(String text) {
         if (inputArea != null) {
             inputArea.setText(text);
@@ -576,7 +570,7 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         if (trimmed.isEmpty() || "---".equals(trimmed) || "***".equals(trimmed)) {
             return true;
         }
-        return trimmed.contains("[Move to Feature Request]") || trimmed.contains("[Apply to build.toml]");
+        return trimmed.contains("[Move to Feature Request]");
     }
 
     public boolean submitPrompt(String prompt) {
@@ -611,11 +605,6 @@ final class ChatPanel extends JPanel implements AutoCloseable {
             notice = "Feature request copied to the **Feature Development** composer.";
         }
         appendMessage(ChatHtmlTemplates.ROLE_SYSTEM, notice);
-        controller.persistActiveChatSession();
-    }
-
-    public void notifyBuildTomlApplied() {
-        appendMessage(ChatHtmlTemplates.ROLE_SYSTEM, "Configuration applied to **Project Settings** (`build.toml`).");
         controller.persistActiveChatSession();
     }
 
@@ -692,14 +681,13 @@ final class ChatPanel extends JPanel implements AutoCloseable {
         outputArea.appendMessage(role, content);
     }
 
-    void appendPreRenderedMessage(String role, String content, String renderedHtml, String extractedToml) {
-        outputArea.appendPreRenderedMessage(role, content, renderedHtml, extractedToml, List.of(), List.of());
+    void appendPreRenderedMessage(String role, String content, String renderedHtml) {
+        outputArea.appendPreRenderedMessage(role, content, renderedHtml, List.of(), List.of());
     }
 
-    void appendPreRenderedMessage(String role, String content, String renderedHtml, String extractedToml,
-            List<String> thumbnailBase64List, List<String> attachedFileNames) {
-        outputArea.appendPreRenderedMessage(role, content, renderedHtml, extractedToml, thumbnailBase64List,
-                attachedFileNames);
+    void appendPreRenderedMessage(String role, String content, String renderedHtml, List<String> thumbnailBase64List,
+            List<String> attachedFileNames) {
+        outputArea.appendPreRenderedMessage(role, content, renderedHtml, thumbnailBase64List, attachedFileNames);
     }
 
     void appendToolLog(String output, boolean success, String error) {

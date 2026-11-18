@@ -368,33 +368,6 @@ class GenericBuildToolServiceTest {
     }
 
     @Test
-    void testSanitizeTomlEscapesAndSaveValidation() throws IOException {
-        String bs = "\\";
-        String dq = "\"";
-        String nl = "\n";
-        String rawTomlWithUnescapedDoubleQuotedRegex = "[commands]" + nl + "compile = " + dq + "./mvnw test-compile"
-                + dq + nl + "lint = " + dq + "./mvnw pmd:check spotless:check -DspotlessFiles=.*" + bs + "QApp.java"
-                + bs + "E$" + dq + nl + nl + "[parse]" + nl + "error_regex = " + dq + bs + "[ERROR" + bs + "].*" + bs
-                + "[" + bs + "d+," + bs + "d+" + bs + "]|PMD Failure:" + dq + nl;
-        writeBuildToml(rawTomlWithUnescapedDoubleQuotedRegex);
-
-        GenericBuildToolService.BuildConfig loaded = buildToolService.loadConfig();
-        assertEquals("./mvnw test-compile", loaded.commands().compile());
-        assertEquals("./mvnw pmd:check spotless:check -DspotlessFiles=.*" + bs + "QApp.java" + bs + "E$",
-                loaded.commands().lint());
-        assertEquals(bs + "[ERROR" + bs + "].*" + bs + "[" + bs + "d+," + bs + "d+" + bs + "]|PMD Failure:",
-                loaded.parse().errorRegex());
-
-        assertDoesNotThrow(() -> buildToolService.saveConfigContent(rawTomlWithUnescapedDoubleQuotedRegex));
-
-        Path configPath = projectDataDir.resolve("build.toml");
-        String beforeInvalidSave = Files.readString(configPath);
-        assertThrows(IOException.class,
-                () -> buildToolService.saveConfigContent("[commands" + nl + "compile = " + dq + "unclosed"));
-        assertEquals(beforeInvalidSave, Files.readString(configPath));
-    }
-
-    @Test
     void testAnsiStrippingMultiLineRipGrepBlocksAndJunitXmlExtraction() throws IOException {
         String esc = "\u001b";
         String nl = "\n";
@@ -569,26 +542,6 @@ class GenericBuildToolServiceTest {
         assertFalse(failedRelated.success());
         assertContainsAll(failedRelated.output(), "PASS:FooServiceTest", "FAIL:Bar");
         verify(planService).updateVerificationStep(ImplementationPlan.STEP_UNIT_TESTS, false);
-
-        // 4. enrichErrorsWithSourceContext appends numbered source snippets (up to 3 distinct locations)
-        Path srcDir = Files.createDirectories(projectRoot.resolve("src/main/java/com/example"));
-        Path brokenJava = srcDir.resolve("Broken.java");
-        Files.writeString(brokenJava,
-                String.join("\n", "package com.example;", "public class Broken {", "    public int calc(int x) {",
-                        "        int a = x + 1;", "        int b = unknownCall(a);", "        return b;", "    }",
-
-                        "}"));
-        List<String> rawErrors = List.of(
-                "[ERROR] " + brokenJava.toAbsolutePath()
-                        + ":[5,17] cannot find symbol\n  symbol: method unknownCall(int)",
-                "src/main/java/com/example/Broken.java:5: duplicate location should not re-append",
-                "src/main/java/com/example/Missing.java:10: missing file should be ignored gracefully");
-        List<String> enriched = BuildOutputParser.enrichErrorsWithSourceContext(rawErrors, projectRoot);
-        assertEquals(3, enriched.size());
-        assertContainsAll(enriched.get(0), "--- Source Context (src/main/java/com/example/Broken.java:1-8) ---",
-                "5:         int b = unknownCall(a);");
-        assertFalse(enriched.get(1).contains("--- Source Context"));
-        assertFalse(enriched.get(2).contains("--- Source Context"));
     }
 
     @Test
@@ -645,109 +598,6 @@ class GenericBuildToolServiceTest {
             assertFalse(result.isSuccess());
             assertTrue(result.isTimedOut());
         }
-    }
-
-    @Test
-    void testCollectBuildConfigurationContextAndExtractAndValidateGeneratedToml() throws IOException {
-        Files.writeString(projectRoot.resolve("pom.xml"),
-                "<project><properties><java.version>21</java.version></properties></project>");
-        Files.writeString(projectRoot.resolve(".java-version"), "21.0.5-tem");
-        Path fakeHome = Files.createDirectories(projectRoot.resolve("fake-home"));
-        Path fakeSdkmanJava = Files.createDirectories(fakeHome.resolve(".sdkman/candidates/java/21.0.5-tem"));
-        Files.createDirectories(fakeHome.resolve(".m2"));
-        when(buildContainerService.isNativeSandboxAvailable()).thenReturn(true);
-
-        List<String> discoveredJdks = GenericBuildToolService.discoverHostJdkDirectories(fakeHome.toString());
-        assertTrue(discoveredJdks.contains(fakeSdkmanJava.toAbsolutePath().normalize().toString()));
-
-        String currentToml = """
-                [commands]
-                compile = 'mvn compile'
-                """;
-        String context = buildToolService.collectBuildConfigurationContext("maven", currentToml);
-        assertContainsAll(context, "## Target Build Template (maven)", "~/.sdkman", "## Current Editor build.toml",
-                "## Host Environment & Detected Toolchains", "- Native Sandbox Available (bwrap / sandbox-exec): true",
-                "### pom.xml", "<java.version>21</java.version>", "### .java-version", "21.0.5-tem");
-
-        String fencedResponse = """
-                ~~~toml
-                timeout_seconds = 600
-                [commands]
-                compile = "./mvnw test-compile"
-                [env]
-                JAVA_HOME = "/opt/jdk-21"
-                [sandbox]
-                mode = "native"
-                readable_paths = ["~/.sdkman"]
-                writable_paths = ["~/.m2"]
-                ~~~
-                """;
-        String validated = GenericBuildToolService.extractValidBuildTomlBlock(fencedResponse);
-        assertNotNull(validated);
-        assertTrue(validated.endsWith(System.lineSeparator()));
-        GenericBuildToolService.BuildConfig parsed = buildToolService.validateConfig(validated);
-        assertEquals("./mvnw test-compile", parsed.commands().compile());
-        assertEquals("/opt/jdk-21", parsed.env().get("JAVA_HOME"));
-        assertEquals("native", parsed.sandbox().mode());
-        assertEquals(List.of("~/.sdkman"), parsed.sandbox().readablePaths());
-        assertEquals(List.of("~/.m2"), parsed.sandbox().writablePaths());
-
-        assertNull(GenericBuildToolService.extractValidBuildTomlBlock("   "));
-        assertThrows(IOException.class, () -> buildToolService.validateConfig("not = [valid toml"));
-
-        String interactivePrompt = buildToolService.buildInteractiveConfigurationPrompt("maven", currentToml);
-        assertContainsAll(interactivePrompt, "### Interactive Configuration Instructions", "userInputService",
-                "[Apply to build.toml]", "## Target Build Template (maven)", "### pom.xml");
-
-        String markdownWithBuildToml = """
-                Here is your tailored configuration:
-
-                ~~~toml
-                [commands]
-                compile = './mvnw test-compile'
-
-                [sandbox]
-                mode = 'native'
-                ~~~
-
-                Click **[Apply to build.toml]** to apply it.
-                """;
-        String extractedBlock = GenericBuildToolService.extractValidBuildTomlBlock(markdownWithBuildToml);
-        assertNotNull(extractedBlock);
-        assertTrue(extractedBlock.endsWith(System.lineSeparator()));
-        assertContainsAll(extractedBlock, "[commands]", "compile = './mvnw test-compile'", "mode = 'native'");
-
-        String nestedBlockquoteMarkdown = """
-                > Recommended setup:
-                > ~~~toml
-                > [commands]
-                > compile = './mvnw compile'
-                > ~~~
-                """;
-        String nestedBlock = GenericBuildToolService.extractValidBuildTomlBlock(nestedBlockquoteMarkdown);
-        assertNotNull(nestedBlock);
-        assertContainsAll(nestedBlock, "[commands]", "compile = './mvnw compile'");
-
-        assertNull(GenericBuildToolService.extractValidBuildTomlBlock("No code blocks here."));
-        assertNull(GenericBuildToolService.extractValidBuildTomlBlock("""
-                ~~~toml
-                key = 'no commands or sandbox section'
-                ~~~
-                """));
-        assertNull(GenericBuildToolService.extractValidBuildTomlBlock("""
-                ~~~toml
-                [commands]
-                compile = [invalid
-                ~~~
-                """));
-        assertNull(GenericBuildToolService.extractValidBuildTomlBlock("""
-                ~~~toml
-                [commands]
-                compile = './mvnw compile'
-                [sandbox]
-                mode = 'podman'
-                ~~~
-                """));
     }
 
     @Test

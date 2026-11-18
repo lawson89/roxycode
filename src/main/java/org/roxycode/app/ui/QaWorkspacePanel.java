@@ -148,12 +148,6 @@ final class QaWorkspacePanel extends JPanel {
         }
     }
 
-    public void setOnApplyBuildTomlListener(java.util.function.Consumer<String> listener) {
-        if (qaChatPanel != null) {
-            qaChatPanel.setOnApplyBuildTomlListener(listener);
-        }
-    }
-
     public void focusChatInput() {
         if (qaChatPanel != null) {
             qaTabs.setSelectedComponent(qaChatPanel);

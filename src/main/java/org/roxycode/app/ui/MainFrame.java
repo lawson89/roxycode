@@ -197,16 +197,7 @@ public final class MainFrame extends JPanel {
                 showCard(QA_VIEW);
             });
             buildConfigPanel.setOnManageGlobalDatabasesCallback(() -> showCard(DATABASES_VIEW));
-            buildConfigPanel.setOnConfigureWithRoxyCallback(prompt -> {
-                showCard(QA_VIEW);
-                if (qaWorkspacePanel != null) {
-                    qaWorkspacePanel.focusChatInput();
-                }
-                ChatPanel qaChat = qaChatPanel();
-                if (qaChat != null) {
-                    qaChat.submitPrompt(prompt);
-                }
-            });
+
         }
         if (qaWorkspacePanel != null) {
             qaWorkspacePanel.addWorkspaceStateListener(() -> Edt.run(() -> {
@@ -240,9 +231,7 @@ public final class MainFrame extends JPanel {
         }
         Edt.run(() -> {
             showCard(event.viewId());
-            if (event.generatedToml() != null && buildConfigPanel != null) {
-                buildConfigPanel.applyGeneratedBuildToml(event.generatedToml());
-            }
+
             if (event.initialPrompt() != null) {
                 if (TASK_VIEW.equals(event.viewId())) {
                     ChatPanel taskChat = taskChatPanel();
@@ -657,16 +646,7 @@ public final class MainFrame extends JPanel {
                 }
             }
         });
-        qaWorkspacePanel.setOnApplyBuildTomlListener(toml -> {
-            ChatPanel qaChat = qaChatPanel();
-            if (qaChat != null) {
-                qaChat.notifyBuildTomlApplied();
-            }
-            showCard(BUILD_CONFIG_VIEW);
-            if (buildConfigPanel != null) {
-                buildConfigPanel.applyGeneratedBuildToml(toml);
-            }
-        });
+
         // Workspace state listeners (busy, waiting, tab/export updates) are wired in constructor via
         // addWorkspaceStateListener
 

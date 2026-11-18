@@ -6,8 +6,7 @@ import com.fasterxml.jackson.core.JsonLocation;
 import com.fasterxml.jackson.databind.exc.MismatchedInputException;
 import com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException;
 import com.fasterxml.jackson.dataformat.toml.TomlMapper;
-import com.vladsch.flexmark.ast.FencedCodeBlock;
-import com.vladsch.flexmark.util.ast.Node;
+
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
@@ -36,7 +35,7 @@ import org.apache.commons.text.StringSubstitutor;
 import org.jspecify.annotations.Nullable;
 import org.roxycode.app.ai.AgentDoc;
 import org.roxycode.app.ai.AgentService;
-import org.roxycode.app.ai.AiConfig;
+
 import org.roxycode.app.ai.WorkflowPhase;
 import org.roxycode.app.ai.services.BuildContainerService.ContainerExecResult;
 import org.roxycode.app.ai.services.BuildContainerService.SandboxConfig;
@@ -50,7 +49,7 @@ import org.roxycode.app.model.ImplementationPlan;
 import org.roxycode.app.service.ProcessRunner;
 import org.roxycode.app.service.ProcessRunner.ProcessResult;
 import org.roxycode.app.service.ProjectService;
-import org.roxycode.app.ui.SwingHtmlUtils;
+
 import org.roxycode.app.util.Edt;
 import org.roxycode.app.util.PathUtils;
 import org.slf4j.Logger;
@@ -569,19 +568,6 @@ public class GenericBuildToolService {
         return parseConfig(getConfigContent());
     }
 
-    /**
-     * Parses and validates a raw {@code build.toml} string using the shared TOML mapper.
-     *
-     * @param rawToml
-     *            the raw TOML configuration content
-     * @return the parsed {@link BuildConfig}
-     * @throws IOException
-     *             if the TOML is empty, malformed, or specifies an invalid sandbox mode
-     */
-    public static BuildConfig parseConfigStatic(String rawToml) throws IOException {
-        return parseConfig(rawToml, org.roxycode.app.ai.AiConfig.SHARED_TOML_MAPPER);
-    }
-
     BuildConfig parseConfig(String rawToml) throws IOException {
         return parseConfig(rawToml, tomlMapper);
     }
@@ -593,7 +579,7 @@ public class GenericBuildToolService {
         }
         BuildConfig config;
         try {
-            config = mapper.readValue(BuildOutputParser.sanitizeTomlEscapes(content), BuildConfig.class);
+            config = mapper.readValue(content, BuildConfig.class);
         } catch (JacksonException e) {
             throw new IOException(formatTomlValidationError(e), e);
         }
@@ -758,12 +744,7 @@ public class GenericBuildToolService {
         ParseSection effectiveParse = Objects.requireNonNullElse(parseSection, ParseSection.EMPTY);
         int contextLines = effectiveParse.resolvedContextLines();
         errors.addAll(BuildOutputParser.extractWithRipGrep(effectiveParse.errorRegex(), logFile, contextLines));
-        if (projectService.hasActiveProject() && !errors.isEmpty()) {
-            List<String> enrichedErrors = BuildOutputParser.enrichErrorsWithSourceContext(errors,
-                    projectService.getCurrentProjectRoot());
-            errors.clear();
-            errors.addAll(enrichedErrors);
-        }
+
         List<String> failedTests = new ArrayList<>(
                 BuildOutputParser.extractWithRipGrep(effectiveParse.testFailureRegex(), logFile, contextLines));
         if (exitCode != 0 && projectService.hasActiveProject()) {
@@ -797,286 +778,6 @@ public class GenericBuildToolService {
             }
         }
         return loadTemplateContent(detectTemplate());
-    }
-
-    private static final int MAX_BUILD_CONTEXT_FILE_CHARS = 8_000;
-    private static final int MAX_DISCOVERED_JDKS = 25;
-    private static final int MAX_ROOT_LISTING_ENTRIES = 60;
-    private static final List<String> BUILD_CONTEXT_FILES = List.of("pom.xml", "build.gradle", "build.gradle.kts",
-            "settings.gradle", "settings.gradle.kts", "gradle.properties", ".mvn/jvm.config", "package.json",
-            "pyproject.toml", "requirements.txt", "Cargo.toml", "rust-toolchain.toml", "go.mod", "CMakeLists.txt",
-            "Makefile", ".sdkmanrc", ".java-version", ".nvmrc", ".node-version", ".python-version", ".tool-versions",
-            "mise.toml");
-
-    /**
-     * Collects project build files, version files, host environment/toolchain hints, and the selected template to
-     * provide rich context for AI-assisted {@code build.toml} generation.
-     *
-     * @param templateId
-     *            the selected or detected template ID (e.g., {@code "maven"}, {@code "gradle"})
-     * @param currentEditorToml
-     *            the current {@code build.toml} content in the editor (optional)
-     * @return a structured Markdown/text summary of project and host build context
-     */
-    public String collectBuildConfigurationContext(@Nullable String templateId, @Nullable String currentEditorToml) {
-        String effectiveTemplateId = StringUtils.defaultIfBlank(templateId, detectTemplate());
-        String templateContent = loadTemplateContent(effectiveTemplateId);
-        String nl = System.lineSeparator();
-        StringBuilder sb = new StringBuilder(4096);
-        sb.append("## Target Build Template (").append(effectiveTemplateId).append(')').append(nl).append("~~~toml")
-                .append(nl).append(templateContent.trim()).append(nl).append("~~~").append(nl).append(nl);
-
-        if (StringUtils.isNotBlank(currentEditorToml)
-                && !StringUtils.equals(currentEditorToml.trim(), templateContent.trim())) {
-            sb.append("## Current Editor build.toml").append(nl).append("~~~toml").append(nl)
-                    .append(StringUtils.abbreviate(currentEditorToml.trim(), MAX_BUILD_CONTEXT_FILE_CHARS)).append(nl)
-                    .append("~~~").append(nl).append(nl);
-        }
-
-        appendHostEnvironmentSection(sb);
-        if (projectService.hasActiveProject()) {
-            appendProjectFilesSection(sb, projectService.getCurrentProjectRoot());
-        }
-        return sb.toString();
-    }
-
-    private void appendHostEnvironmentSection(StringBuilder sb) {
-        String nl = System.lineSeparator();
-        sb.append("## Host Environment & Detected Toolchains").append(nl);
-        sb.append("- OS: ").append(SystemUtils.OS_NAME).append(" (").append(SystemUtils.OS_ARCH).append(')').append(nl);
-        String userHome = System.getProperty("user.home", "");
-        sb.append("- User Home: ").append(userHome).append(nl);
-        sb.append("- RoxyCode Runtime Java: ").append(System.getProperty("java.version", "")).append(" (")
-                .append(System.getProperty("java.home", "")).append(')').append(nl);
-        String envJavaHome = System.getenv("JAVA_HOME");
-        if (StringUtils.isNotBlank(envJavaHome)) {
-            sb.append("- Host JAVA_HOME env: ").append(envJavaHome).append(nl);
-        }
-        boolean nativeSandbox = buildContainerService != null && buildContainerService.isNativeSandboxAvailable();
-        boolean dockerAvailable = buildContainerService != null && buildContainerService.isDockerAvailable();
-        sb.append("- Native Sandbox Available (bwrap / sandbox-exec): ").append(nativeSandbox).append(nl);
-        sb.append("- Docker Available: ").append(dockerAvailable).append(nl);
-
-        List<String> jdkDirs = discoverHostJdkDirectories(userHome);
-        if (!jdkDirs.isEmpty()) {
-            sb.append("- Installed Host JDKs:").append(nl);
-            for (String jdk : jdkDirs) {
-                sb.append("  - ").append(jdk).append(nl);
-            }
-        }
-        List<String> toolchainRoots = discoverHostToolchainDirectories(userHome);
-        if (!toolchainRoots.isEmpty()) {
-            sb.append("- Existing User Toolchain / Cache Directories:").append(nl);
-            for (String dir : toolchainRoots) {
-                sb.append("  - ").append(dir).append(nl);
-            }
-        }
-        sb.append(nl);
-    }
-
-    static List<String> discoverHostJdkDirectories(@Nullable String userHome) {
-        List<Path> searchRoots = new ArrayList<>();
-        if (StringUtils.isNotBlank(userHome)) {
-            Path home = Path.of(userHome);
-            searchRoots.add(home.resolve(".sdkman/candidates/java"));
-            searchRoots.add(home.resolve(".jdks"));
-            searchRoots.add(home.resolve(".asdf/installs/java"));
-            searchRoots.add(home.resolve(".local/share/mise/installs/java"));
-            searchRoots.add(home.resolve(".jabba/jdk"));
-        }
-        searchRoots.add(Path.of("/Library/Java/JavaVirtualMachines"));
-        searchRoots.add(Path.of("/usr/lib/jvm"));
-        searchRoots.add(Path.of("/opt/java"));
-        searchRoots.add(Path.of("/opt/jdk"));
-
-        Set<String> discovered = new LinkedHashSet<>();
-        for (Path root : searchRoots) {
-            if (!Files.isDirectory(root)) {
-                continue;
-            }
-            try (java.util.stream.Stream<Path> stream = Files.list(root)) {
-                List<Path> children = stream.sorted().toList();
-                for (Path child : children) {
-                    if (!Files.isDirectory(child)) {
-                        continue;
-                    }
-                    Path contentsHome = child.resolve("Contents/Home");
-                    if (Files.isDirectory(contentsHome)) {
-                        discovered.add(contentsHome.toAbsolutePath().normalize().toString());
-                    } else {
-                        discovered.add(child.toAbsolutePath().normalize().toString());
-                    }
-                    if (discovered.size() >= MAX_DISCOVERED_JDKS) {
-                        return List.copyOf(discovered);
-                    }
-                }
-            } catch (IOException e) {
-                log.debug("Failed to list JDK directory {}: {}", root, e.getMessage());
-            }
-        }
-        return List.copyOf(discovered);
-    }
-
-    private static List<String> discoverHostToolchainDirectories(@Nullable String userHome) {
-        if (StringUtils.isBlank(userHome)) {
-            return List.of();
-        }
-        Path home = Path.of(userHome);
-        List<String> candidates = List.of(".sdkman", ".jdks", ".m2", ".gradle", ".nvm", ".fnm", ".volta", ".npm",
-                ".local/share/pnpm", ".yarn", ".pyenv", ".local", ".cache/pip", ".cache/uv", ".rustup", ".cargo", "sdk",
-                "go/pkg", ".cache/go-build", ".asdf", ".mise");
-        List<String> existing = new ArrayList<>();
-        for (String rel : candidates) {
-            if (Files.exists(home.resolve(rel))) {
-                existing.add("~/" + rel);
-            }
-        }
-        return List.copyOf(existing);
-    }
-
-    private static void appendProjectFilesSection(StringBuilder sb, Path projectRoot) {
-        String nl = System.lineSeparator();
-        sb.append("## Project Root Directory Listing").append(nl);
-        try (java.util.stream.Stream<Path> stream = Files.list(projectRoot)) {
-            List<String> names = stream.map(p -> {
-                String name = p.getFileName().toString();
-                if (Files.isDirectory(p)) {
-                    return name + "/";
-                }
-                return name;
-            }).sorted().limit(MAX_ROOT_LISTING_ENTRIES).toList();
-            sb.append(String.join(", ", names)).append(nl).append(nl);
-        } catch (IOException e) {
-            sb.append("(Unable to list directory)").append(nl).append(nl);
-        }
-
-        sb.append("## Project Build & Version Files").append(nl);
-        for (String relPath : BUILD_CONTEXT_FILES) {
-            Path file = projectRoot.resolve(relPath);
-            if (!Files.isRegularFile(file)) {
-                continue;
-            }
-            try {
-                String content = Files.readString(file, StandardCharsets.UTF_8);
-                if (StringUtils.isNotBlank(content)) {
-                    sb.append("### ").append(relPath).append(nl).append("~~~").append(nl)
-                            .append(StringUtils.abbreviate(content.trim(), MAX_BUILD_CONTEXT_FILE_CHARS)).append(nl)
-                            .append("~~~").append(nl).append(nl);
-                }
-            } catch (IOException e) {
-                log.debug("Skipping unreadable build context file {}: {}", relPath, e.getMessage());
-            }
-        }
-    }
-
-    /**
-     * Builds an interactive prompt for Ask Roxy ({@code EXPLORE} phase) containing the detected build template, current
-     * editor {@code build.toml}, host environment/toolchains, and project build files, instructing Roxy to ask
-     * clarifying questions via {@code userInputService} before generating the final fenced {@code build.toml} block.
-     *
-     * @param templateId
-     *            the target template identifier (or {@code null} to auto-detect)
-     * @param currentEditorToml
-     *            the current {@code build.toml} content in the editor (optional)
-     * @return the interactive configuration prompt string
-     */
-    public String buildInteractiveConfigurationPrompt(@Nullable String templateId, @Nullable String currentEditorToml) {
-        String context = collectBuildConfigurationContext(templateId, currentEditorToml);
-        String nl = System.lineSeparator();
-        String backtickFence = "~~~".replace('~', (char) 96);
-        StringBuilder sb = new StringBuilder(context.length() + 1200);
-        sb.append("Please help me configure build.toml for this project.").append(nl).append(nl);
-        sb.append("### Interactive Configuration Instructions").append(nl);
-        sb.append(
-                "1. **Inspect Context**: Review the host environment, detected JDKs/toolchains, sandbox availability, ")
-                .append("and project build files below (use fileReadService if you need to inspect any additional project files).")
-                .append(nl);
-        sb.append(
-                "2. **Ask Clarifying Questions First**: Before generating the final build.toml, use userInputService ")
-                .append("(selectOption, askText, or confirm) via executeJexl to ask me about any meaningful configuration choices up front:")
-                .append(nl);
-        sb.append(
-                "   - **Sandbox Mode**: If multiple execution modes are available (e.g., Native Sandbox bwrap/sandbox-exec, Docker, or host 'none'), ask which sandbox mode I prefer.")
-                .append(nl);
-        sb.append(
-                "   - **Toolchain / Runtime & Custom Flags**: If multiple JDKs, toolchains, Docker images, or custom build/test/lint flags are relevant, ask for my preference.")
-                .append(nl);
-        sb.append(
-                "3. **Output Complete build.toml**: Once I answer, output the complete, tailored build.toml inside a single fenced ")
-                .append(backtickFence).append("toml")
-                .append(" code block (including [commands], [env], [parse], and [sandbox]), ")
-                .append("and remind me that I can click **[Apply to build.toml]** on your message to apply it directly to **Project Settings**.")
-                .append(nl).append(nl);
-        sb.append(context);
-        return sb.toString();
-    }
-
-    /**
-     * Scans a Markdown message for fenced code blocks and returns the last valid {@code build.toml} block that contains
-     * a {@code [commands]} or {@code [sandbox]} section and parses cleanly into a {@link BuildConfig}.
-     *
-     * @param markdown
-     *            the raw Markdown message text
-     * @return the normalized TOML content ending with a line separator, or {@code null} if no valid {@code build.toml}
-     *         block is present
-     */
-    public static @Nullable String extractValidBuildTomlBlock(@Nullable String markdown) {
-        if (StringUtils.isBlank(markdown)) {
-            return null;
-        }
-        List<String> blocks = extractFencedCodeBlocks(markdown);
-        if (blocks.isEmpty()) {
-            return null;
-        }
-        String nl = System.lineSeparator();
-        String validToml = null;
-        for (String block : blocks) {
-            String trimmed = block.trim();
-            if (!containsBuildTomlSectionHeader(trimmed)) {
-                continue;
-            }
-            try {
-                parseConfig(trimmed, AiConfig.SHARED_TOML_MAPPER);
-                if (trimmed.endsWith(nl)) {
-                    validToml = trimmed;
-                } else {
-                    validToml = trimmed + nl;
-                }
-            } catch (IOException ignored) {
-                // Not a valid build.toml block
-            }
-        }
-        return validToml;
-    }
-
-    private static boolean containsBuildTomlSectionHeader(String tomlContent) {
-        for (String line : tomlContent.lines().toList()) {
-            String stripped = line.trim();
-            if ("[commands]".equals(stripped) || "[sandbox]".equals(stripped)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static List<String> extractFencedCodeBlocks(String markdown) {
-        List<String> blocks = new ArrayList<>();
-        Node document = SwingHtmlUtils.getMarkdownParser().parse(markdown);
-        collectFencedCodeBlocks(document, blocks);
-        return blocks;
-    }
-
-    private static void collectFencedCodeBlocks(Node parent, List<String> blocks) {
-        for (Node child = parent.getFirstChild(); child != null; child = child.getNext()) {
-            if (child instanceof FencedCodeBlock fenced) {
-                String info = fenced.getInfo().toString().trim().toLowerCase(java.util.Locale.ROOT);
-                if (info.isEmpty() || "toml".equals(info) || "ini".equals(info) || "build.toml".equals(info)) {
-                    blocks.add(fenced.getContentChars().toString());
-                }
-            } else {
-                collectFencedCodeBlocks(child, blocks);
-            }
-        }
     }
 
     public void saveConfigContent(String content) throws IOException {

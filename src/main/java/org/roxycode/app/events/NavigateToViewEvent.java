@@ -4,14 +4,14 @@ import org.springframework.lang.Nullable;
 
 /**
  * UI navigation event requesting {@link org.roxycode.app.ui.MainFrame} to switch views and optionally submit an initial
- * prompt or apply generated {@code build.toml} content.
+ * prompt.
  */
-public record NavigateToViewEvent(String viewId, @Nullable String initialPrompt, @Nullable String generatedToml) {
+public record NavigateToViewEvent(String viewId, @Nullable String initialPrompt) {
 
     /**
-     * Creates a simple view navigation event without an initial prompt or TOML payload.
+     * Creates a simple view navigation event without an initial prompt.
      */
     public NavigateToViewEvent(String viewId) {
-        this(viewId, null, null);
+        this(viewId, null);
     }
 }

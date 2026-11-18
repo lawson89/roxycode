@@ -3,8 +3,6 @@ package org.roxycode.app.ui;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -85,7 +83,7 @@ class MainFrameTest {
         SettingsPanel settingsPanel = new SettingsPanel(settingsService, null);
         GenericBuildToolService buildToolService = mock(GenericBuildToolService.class);
         when(buildToolService.getConfigContent()).thenReturn("");
-        when(buildToolService.buildInteractiveConfigurationPrompt(any(), anyString())).thenReturn("Interactive prompt");
+
         BuildConfigPanel buildConfigPanel = new BuildConfigPanel(buildToolService, settingsService, projectService);
         AgentMemoryPanel agentMemoryPanel = new AgentMemoryPanel(memoryService, projectService, settingsService);
 

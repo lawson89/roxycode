@@ -681,8 +681,7 @@ final class ChatController implements AutoCloseable {
                     return;
                 }
                 String renderedHtml = MarkdownPane.renderMarkdownBodySafely(response);
-                String extractedToml = view.outputArea.resolveExtractedBuildToml(ROLE_AI, response);
-                Edt.run(() -> finishTurn(turnId, ROLE_AI, response, renderedHtml, extractedToml));
+                Edt.run(() -> finishTurn(turnId, ROLE_AI, response, renderedHtml));
             } catch (Exception ex) {
                 if (ExceptionUtils.isCancellation(ex) || model.isTurnCancelled()) {
                     Edt.run(() -> finishTurnCancelled(turnId));
@@ -691,7 +690,7 @@ final class ChatController implements AutoCloseable {
                 log.error("AI chat interaction failed: {}", ex.getMessage(), ex);
                 String errorMsg = "Error: " + ExceptionUtils.getRootCauseMessage(ex);
                 String renderedHtml = MarkdownPane.renderMarkdownBodySafely(errorMsg);
-                Edt.run(() -> finishTurn(turnId, ROLE_AI, errorMsg, renderedHtml, null));
+                Edt.run(() -> finishTurn(turnId, ROLE_AI, errorMsg, renderedHtml));
             }
         }, null);
         activeTurnFuture = task;
@@ -703,11 +702,11 @@ final class ChatController implements AutoCloseable {
         if (activeTurnId != turnId || model.isTurnCancelled()) {
             return;
         }
-        view.appendPreRenderedMessage(ROLE_USER, text, renderedHtml, null, thumbnailBase64List, attachedFileNames);
+        view.appendPreRenderedMessage(ROLE_USER, text, renderedHtml, thumbnailBase64List, attachedFileNames);
         persistActiveChatSession();
     }
 
-    private void finishTurn(long turnId, String role, String message, String renderedHtml, String extractedToml) {
+    private void finishTurn(long turnId, String role, String message, String renderedHtml) {
         if (activeTurnId != turnId || model.isTurnCancelled()) {
             return;
         }
@@ -717,7 +716,7 @@ final class ChatController implements AutoCloseable {
         WorkflowTransitionEvent transition = deferredTransitionEvent;
         deferredTransitionEvent = null;
 
-        view.appendPreRenderedMessage(role, message, renderedHtml, extractedToml);
+        view.appendPreRenderedMessage(role, message, renderedHtml);
         persistActiveChatSession();
         view.setLoading(false);
         if (transition != null && !model.isTurnCancelled()) {

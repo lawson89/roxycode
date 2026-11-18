@@ -5,14 +5,13 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
 ## 1. Workspaces & Workflow Lifecycle
 
 ### Ask Roxy (EXPLORE Phase — Technical Mentor)
-- **Purpose**: Read-only codebase exploration, architecture Q&A, debugging guidance, interactive `build.toml` configuration, and answering questions about RoxyCode itself.
+- **Purpose**: Read-only codebase exploration, architecture Q&A, debugging guidance, and answering questions about RoxyCode itself.
 - **Capabilities**: Uses fileReadService, grepService, symbolService, pdfService, gitService, buildToolService (read/test commands), memoryService, userInputService, and webSearchService via executeJexl. File mutation (fileEditorService) is disabled.
 - **Composer & Action Features**:
   - Type '@' or click **@ Mention** to fuzzy-search and attach project file paths.
   - Type '/' or click **/ Commands** to run slash commands: `/reset` (reset session), `/clear` (clear chat view), `/help` (list commands), and symmetrical memory commands `/mem-p-view`, `/mem-p-put`, `/mem-p-find`, `/mem-p-del` (Project) and `/mem-g-view`, `/mem-g-put`, `/mem-g-find`, `/mem-g-del` (Global).
   - Press **Enter** to send, **Shift+Enter** for a newline, and **Ctrl+V** (or the image button) to attach screenshots/images.
   - Click **[Move to Feature Request]** on any Roxy response to copy that architectural finding or prompt directly into the **Build Feature** workspace.
-  - Click **[Apply to build.toml]** on any Roxy response containing a valid `build.toml` code block to populate the **Project Settings** editor and switch to it for confirmation.
   - Renders fenced `plantuml`, `ditaa`, and `svg` code blocks as inline theme-aware diagrams and UI wireframes in chat and plans.
 - **Past Topics Tab**: Browse, search, copy, rename, and delete archived Q&A conversations (<projectDataDir>/archive/topics/*.md) with a live **Past Topics (N)** count badge. Starting a **New Topic** automatically archives non-empty conversations in the background with an AI-generated title (`gemini-3.8-flash`).
 
@@ -66,7 +65,7 @@ This guide describes RoxyCode's workspaces, context & memory system, and configu
 ### Project Settings & build.toml (Project Settings Sidebar View)
 - **Two-Tabbed Project Settings Hub**:
   - **Build Configuration (<projectDataDir>/build.toml — Tab 1)**:
-    - Must be reviewed and confirmed (**Confirm & Save Settings**) before Build Feature chat is unlocked for a project. Templates are auto-detected on project initialization (Maven, Gradle, npm/Node, Python, Rust, Go, CMake, or Default), and the editor displays a 4-card live summary strip (**Pipeline Commands**, **Sandbox Isolation**, **Log Parser**, **Timeout & Syntax**), section quick-jump buttons (`[commands]`, `[env]`, `[parse]`, `[sandbox]`), and a **Copy** button. Click **Configure with Roxy** to open an interactive **Ask Roxy** session where Roxy inspects your project files and installed host toolchains, asks clarifying questions if needed, and generates a tailored `build.toml` with a one-click **[Apply to build.toml]** action.
+    - Must be reviewed and confirmed (**Confirm & Save Settings**) before Build Feature chat is unlocked for a project. Templates are auto-detected on project initialization (Maven, Gradle, npm/Node, Python, Rust, Go, CMake, or Default), and the editor includes a **Copy** button and an info tooltip documenting all supported `build.toml` sections.
   - **AI Model Override (Tab 2 — or click the active profile pill in the top header bar)**:
     - Optionally override the Global Settings **Agent Profile** (Use Global Default, Max, Normal, or Speed) for the active project and save independently via **Save Model Settings**. Every profile uses phase-aware model routing (EXPLORE/PLAN -> gemini-4-carbon, gemini-4-argon, or gemini-4-hydrogen; CODE/REVIEW -> gemini-4-hydrogen) and automatic **Adaptive (Phase-Aware)** sub-turn thinking (PLAN: MEDIUM on initial discovery -> HIGH while designing the blueprint -> LOW after submitPlan; CODE: MEDIUM for fast execution -> HIGH after any tool/build/test failure; REVIEW: HIGH; EXPLORE: LOW on initial discovery -> MEDIUM on synthesis).
     - **[commands]**: Shell commands executed from the project root:

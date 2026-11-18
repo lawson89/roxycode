@@ -2,18 +2,13 @@ package org.roxycode.app.ui;
 
 import com.formdev.flatlaf.FlatClientProperties;
 import java.awt.*;
-import java.awt.geom.Rectangle2D;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Consumer;
 import javax.swing.*;
-import javax.swing.text.BadLocationException;
 import net.miginfocom.swing.MigLayout;
 import org.apache.commons.lang3.StringUtils;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
@@ -21,7 +16,6 @@ import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rtextarea.RTextScrollPane;
 import org.kordamp.ikonli.codicons.Codicons;
 import org.kordamp.ikonli.swing.FontIcon;
-import org.roxycode.app.ai.services.BuildContainerService;
 import org.roxycode.app.ai.services.GenericBuildToolService;
 import org.roxycode.app.events.DatabaseConfigChangedEvent;
 import org.roxycode.app.events.ProjectChangedEvent;
@@ -47,7 +41,6 @@ final class BuildConfigPanel extends JPanel {
 
     private static final long serialVersionUID = 1L;
     private static final Logger log = LoggerFactory.getLogger(BuildConfigPanel.class);
-    static final int SUMMARY_DEBOUNCE_MS = 200;
     static final int TAB_INDEX_BUILD_CONFIG = 0;
     static final int TAB_INDEX_AI_MODEL = 1;
     static final int TAB_INDEX_DATABASES = 2;
@@ -59,40 +52,24 @@ final class BuildConfigPanel extends JPanel {
     static final String MODEL_TITLE_TEXT = "AI Model Override";
     static final String MODEL_SUBTITLE_TEXT = "Override the default Global Settings Agent Profile specifically for the active project.";
     static final String SECTION_AI_MODEL_TITLE = "AI Model Override";
-    static final String BUILD_CONFIG_HINT_TEXT = "Need help customizing for your stack?";
-    static final String CONFIGURE_WITH_ROXY_TEXT = "Configure with Roxy";
     static final String COPY_TOML_TEXT = "Copy";
-    static final String APPLIED_FROM_ASK_ROXY_STATUS = "Applied build.toml from Ask Roxy! Review and click 'Confirm & Save Settings'.";
     static final String SAVE_BUTTON_TEXT = "Confirm & Save Settings";
     static final String SAVED_FEEDBACK_BUTTON_TEXT = "Confirmed & Saved!";
     static final String CONFIRMED_BUTTON_TEXT = "Settings Confirmed";
     static final String MODEL_SAVE_BUTTON_TEXT = "Save Model Settings";
     static final String MODEL_SAVED_FEEDBACK_BUTTON_TEXT = "Saved!";
     static final String MODEL_SAVED_STATUS_TEXT = "Model override settings saved!";
-    private static final String DEFAULT_TEMPLATE_ID = "default";
-    private static final String HEADER_FONT_STYLE = "font: bold +2";
     private static final String SAVE_BUTTON_BASE_STYLE = "arc: 8; font: bold; ";
     private static final String GROW_FILL = "[grow, fill]";
-    private static final String WMIN_0 = "wmin 0";
-    private static final String GROWX_WMIN_0 = "growx, wmin 0";
     private static final String ROW_CENTER = "[center]";
-    private static final String BORDER_BG_STYLE = ",1,10; background: ";
-    private static final int MAX_SUMMARY_COMMANDS_PREVIEW = 4;
-    private static final Color LIGHT_VIOLET_BG = new Color(0xF5, 0xF3, 0xFF);
-    private static final Color LIGHT_VIOLET_BORDER = new Color(0x8B, 0x5C, 0xF6);
-    private static final Color LIGHT_VIOLET_FG = new Color(0x5B, 0x21, 0xB6);
-    private static final Color DARK_VIOLET_BG = new Color(0x2E, 0x10, 0x65);
-    private static final Color DARK_VIOLET_BORDER = new Color(0x7C, 0x3A, 0xED);
-    private static final Color DARK_VIOLET_FG = new Color(0xDD, 0xD6, 0xFE);
-    static final String UNCONFIRMED_BUILD_NOTICE_TEXT = "Build configuration was initialized from the auto-detected template. Please review the commands below (or click 'Configure with Roxy') and click 'Confirm & Save Settings'.";
+    static final String UNCONFIRMED_BUILD_NOTICE_TEXT = "Build configuration was initialized from the auto-detected template. Please review the commands below and click 'Confirm & Save Settings'.";
     static final String BUILD_TOML_GUIDE_TOOLTIP_HTML = """
             <html><div style='width: 390px;'>
             <b>build.toml Quick Reference</b><br><br>
             &bull; <b><code>[commands]</code></b>: Shell commands for <code>install</code>, <code>clean</code>, <code>compile</code>, <code>build</code>, <code>test_all</code>, <code>test_single</code> (uses <code>{testName}</code> placeholder), <code>lint</code>, and <code>format</code>.<br>
             &bull; <b><code>[env]</code></b>: Key-value environment variables passed to all build processes (e.g., <code>JAVA_HOME</code>).<br>
             &bull; <b><code>[parse]</code></b>: <code>error_regex</code>, <code>test_failure_regex</code>, <code>context_lines</code>, and optional <code>junit_xml_paths</code> for structured failure extraction.<br>
-            &bull; <b><code>[sandbox]</code></b>: <code>mode</code> (<code>"none"</code>, <code>"native"</code> for Linux <code>bwrap</code> / macOS <code>sandbox-exec</code>, or <code>"docker"</code>), <code>readable_paths</code>, <code>writable_paths</code>, <code>image</code>, and <code>workdir</code>.<br><br>
-            <i>Click <b>Configure with Roxy</b> to automatically tailor build.toml to your project and host toolchains!</i>
+            &bull; <b><code>[sandbox]</code></b>: <code>mode</code> (<code>"none"</code>, <code>"native"</code> for Linux <code>bwrap</code> / macOS <code>sandbox-exec</code>, or <code>"docker"</code>), <code>readable_paths</code>, <code>writable_paths</code>, <code>image</code>, and <code>workdir</code>.
             </div></html>""";
 
     private final transient GenericBuildToolService buildToolService;
@@ -109,11 +86,6 @@ final class BuildConfigPanel extends JPanel {
     final List<ProjectDatabaseGrantsPanel.GrantRowControls> grantRowControls;
     final JLabel titleLabel;
     final JLabel subtitleLabel;
-    final JPanel summaryStripPanel;
-    final SummaryCard pipelineSummaryCard;
-    final SummaryCard sandboxSummaryCard;
-    final SummaryCard parserSummaryCard;
-    final SummaryCard syntaxSummaryCard;
     final JPanel buildCardPanel;
     final ProjectModelOverridePanel.GlobalDefaultCard globalDefaultProfileCard;
     final Map<AgentProfile, UiComponents.AgentProfileCard> profileCards;
@@ -124,13 +96,6 @@ final class BuildConfigPanel extends JPanel {
     final Timer modelSaveFeedbackTimer;
     final JLabel buildTomlFileBadge;
     final JLabel buildConfigInfoIcon;
-    final JLabel jumpLabel;
-    final JButton jumpCommandsButton;
-    final JButton jumpEnvButton;
-    final JButton jumpParseButton;
-    final JButton jumpSandboxButton;
-    final JLabel buildConfigHintLabel;
-    final JButton configureWithRoxyButton;
     final JButton copyTomlButton;
     final UiComponents.WarningBanner unconfirmedBanner;
     final RSyntaxTextArea textArea;
@@ -138,19 +103,14 @@ final class BuildConfigPanel extends JPanel {
     final JLabel statusLabel;
     final Timer statusTimer;
     final Timer saveFeedbackTimer;
-    final Timer summaryDebounceTimer;
     private Timer copyTomlTimer;
 
     private final transient UiComponents.UiGuard textUpdateGuard = new UiComponents.UiGuard();
     private boolean textEditedByUser = false;
     private boolean lastStatusSuccess = true;
     private String savedTomlContent = "";
-    String detectedTemplateId = DEFAULT_TEMPLATE_ID;
     private transient Runnable onConfirmSavedCallback;
-    private transient Consumer<String> onConfigureWithRoxyCallback;
-    private final transient AtomicLong summaryParseGeneration = new AtomicLong();
     transient CompletableFuture<?> lastAsyncFuture = CompletableFuture.completedFuture(null);
-    transient CompletableFuture<?> summaryParseFuture = CompletableFuture.completedFuture(null);
 
     public BuildConfigPanel(GenericBuildToolService buildToolService, SettingsService settingsService,
             @Nullable ProjectService projectService) {
@@ -168,7 +128,7 @@ final class BuildConfigPanel extends JPanel {
         setOpaque(true);
 
         // --- Tab 1: Build Configuration (build.toml) ---
-        buildTabPanel = new JPanel(new MigLayout("fill, insets 20, hidemode 3", GROW_FILL, "[][]14" + GROW_FILL));
+        buildTabPanel = new JPanel(new MigLayout("fill, insets 20, hidemode 3", GROW_FILL, "[]14" + GROW_FILL));
         buildTabPanel.setOpaque(true);
 
         titleLabel = new JLabel(TITLE_TEXT);
@@ -183,23 +143,8 @@ final class BuildConfigPanel extends JPanel {
         saveButton.setIconTextGap(6);
 
         saveFeedbackTimer = createFeedbackTimer(this::updateSaveButtonState);
-        summaryDebounceTimer = new Timer(SUMMARY_DEBOUNCE_MS, e -> updateSummaryCards());
-        summaryDebounceTimer.setRepeats(false);
 
         buildTabPanel.add(UiComponents.createPageHeader(titleLabel, subtitleLabel, saveButton), "growx, wmin 0, wrap");
-
-        summaryStripPanel = new JPanel(new MigLayout("insets 0, fillx, gap 12",
-                "[grow, fill, sg sum][grow, fill, sg sum][grow, fill, sg sum][grow, fill, sg sum]", "[grow, fill]"));
-        summaryStripPanel.setOpaque(false);
-        pipelineSummaryCard = new SummaryCard("Pipeline Commands", Codicons.TERMINAL);
-        sandboxSummaryCard = new SummaryCard("Sandbox Isolation", Codicons.SHIELD);
-        parserSummaryCard = new SummaryCard("Log Parser", Codicons.FILTER);
-        syntaxSummaryCard = new SummaryCard("Timeout & Syntax", Codicons.PULSE);
-        summaryStripPanel.add(pipelineSummaryCard);
-        summaryStripPanel.add(sandboxSummaryCard);
-        summaryStripPanel.add(parserSummaryCard);
-        summaryStripPanel.add(syntaxSummaryCard);
-        buildTabPanel.add(summaryStripPanel, "growx, wmin 0, wrap, gapbottom 10");
 
         buildCardPanel = new JPanel(
                 new MigLayout("fill, insets 14 18 16 18, hidemode 3", GROW_FILL, "[][]" + GROW_FILL));
@@ -209,45 +154,19 @@ final class BuildConfigPanel extends JPanel {
         UiComponents.styleCodePillBadge(buildTomlFileBadge);
         buildConfigInfoIcon = UiComponents.createInfoIcon(BUILD_TOML_GUIDE_TOOLTIP_HTML);
 
-        jumpLabel = new JLabel("Jump:");
-        jumpLabel.putClientProperty(FlatClientProperties.STYLE, "font: -1; foreground: $Label.disabledForeground");
-        jumpCommandsButton = createSectionJumpButton("[commands]");
-        jumpEnvButton = createSectionJumpButton("[env]");
-        jumpParseButton = createSectionJumpButton("[parse]");
-        jumpSandboxButton = createSectionJumpButton("[sandbox]");
-
-        buildConfigHintLabel = new JLabel(BUILD_CONFIG_HINT_TEXT);
-        buildConfigHintLabel.putClientProperty(FlatClientProperties.STYLE,
-                "font: -1; foreground: $Label.disabledForeground");
-        configureWithRoxyButton = UiComponents.createActionButton(CONFIGURE_WITH_ROXY_TEXT, Codicons.LIGHTBULB_AUTOFIX,
-                null, false, null, e -> configureWithRoxy());
-        configureWithRoxyButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        configureWithRoxyButton.setToolTipText(
-                "Inspect project build files and installed host toolchains to automatically generate build.toml with Roxy");
-
         copyTomlButton = UiComponents.createActionButton(COPY_TOML_TEXT, Codicons.CLIPPY, new Insets(4, 10, 4, 10),
                 false, "arc: 8; font: -1", e -> copyTomlToClipboard());
         copyTomlButton.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         copyTomlButton.setToolTipText("Copy build.toml content to clipboard");
 
-        JPanel buildToolbarRow = new JPanel(new MigLayout("fillx, insets 0, gapx 6, hidemode 3",
-                "[][][][][][][][0:0, grow, right][][]", ROW_CENTER));
+        JPanel buildToolbarRow = new JPanel(
+                new MigLayout("fillx, insets 0, gapx 6, hidemode 3", "[][][0:0, grow, right][]", ROW_CENTER));
         buildToolbarRow.setOpaque(false);
         buildToolbarRow.add(buildTomlFileBadge);
         buildToolbarRow.add(buildConfigInfoIcon, "gapright 6");
-        buildToolbarRow.add(jumpLabel);
-        buildToolbarRow.add(jumpCommandsButton);
-        buildToolbarRow.add(jumpEnvButton);
-        buildToolbarRow.add(jumpParseButton);
-        buildToolbarRow.add(jumpSandboxButton);
-        buildToolbarRow.add(statusLabel, "cell 7 0, wmin 0, hidemode 3");
-        buildToolbarRow.add(buildConfigHintLabel, "cell 7 0, wmin 0, hidemode 3");
-        buildToolbarRow.add(configureWithRoxyButton, "cell 8 0");
-        buildToolbarRow.add(copyTomlButton, "cell 9 0");
+        buildToolbarRow.add(statusLabel, "cell 2 0, wmin 0, hidemode 3");
+        buildToolbarRow.add(copyTomlButton, "cell 3 0");
         buildCardPanel.add(buildToolbarRow, "growx, wmin 0, wrap, gapbottom 8");
-
-        refreshDetectedTemplate();
-
         unconfirmedBanner = new UiComponents.WarningBanner(UNCONFIRMED_BUILD_NOTICE_TEXT);
         buildCardPanel.add(unconfirmedBanner, "growx, wmin 0, wrap, gapbottom 8, hidemode 3");
 
@@ -298,48 +217,8 @@ final class BuildConfigPanel extends JPanel {
         statusTimer.setRepeats(false);
 
         applySectionStyling();
-        updateSummaryCards();
         lastAsyncFuture = CompletableFuture.allOf(loadConfig(), loadDatabaseGrants());
         updateBannerState();
-    }
-
-    private JButton createSectionJumpButton(String sectionHeader) {
-        JButton btn = UiComponents.createActionButton(sectionHeader, null, new Insets(2, 8, 2, 8), false,
-                "font: $monospaced.font -1; arc: 8", e -> jumpToSection(sectionHeader));
-        btn.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        btn.setToolTipText("Jump to " + sectionHeader + " section in build.toml");
-        return btn;
-    }
-
-    void jumpToSection(String sectionHeader) {
-        if (textArea == null || StringUtils.isBlank(sectionHeader)) {
-            return;
-        }
-        String content = StringUtils.defaultString(textArea.getText());
-        String[] lines = content.split("\\R", -1);
-        int offset = 0;
-        int matchedOffset = -1;
-        for (String line : lines) {
-            if (line.trim().equals(sectionHeader)) {
-                matchedOffset = offset;
-                break;
-            }
-            offset += line.length() + 1;
-        }
-        if (matchedOffset < 0) {
-            return;
-        }
-        int clampedOffset = Math.min(matchedOffset, textArea.getDocument().getLength());
-        textArea.setCaretPosition(clampedOffset);
-        try {
-            Rectangle2D rect = textArea.modelToView2D(clampedOffset);
-            if (rect != null) {
-                textArea.scrollRectToVisible(rect.getBounds());
-            }
-        } catch (BadLocationException ignored) {
-            // Caret already moved safely
-        }
-        textArea.requestFocusInWindow();
     }
 
     private void copyTomlToClipboard() {
@@ -363,16 +242,7 @@ final class BuildConfigPanel extends JPanel {
         loadDatabaseGrants();
     }
 
-    void refreshDetectedTemplate() {
-        if (buildToolService != null) {
-            detectedTemplateId = StringUtils.defaultIfBlank(buildToolService.detectTemplate(), DEFAULT_TEMPLATE_ID);
-        } else {
-            detectedTemplateId = DEFAULT_TEMPLATE_ID;
-        }
-    }
-
     private void setEditorContentProgrammatically(String content, boolean updateSavedBaseline) {
-        UiComponents.stopTimer(summaryDebounceTimer);
         String normalizedContent = StringUtils.defaultString(content);
         textUpdateGuard.run(() -> {
             textArea.setText(normalizedContent);
@@ -384,13 +254,11 @@ final class BuildConfigPanel extends JPanel {
                 textEditedByUser = !Objects.equals(normalizedContent, savedTomlContent);
             }
         });
-        updateSummaryCards();
         updateBannerState();
     }
 
     void showBuildStatus(String message, boolean success) {
         lastStatusSuccess = success;
-        buildConfigHintLabel.setVisible(false);
         statusLabel.setVisible(true);
         UiComponents.showStatusMessage(statusLabel, statusTimer, message, success);
         statusLabel.setToolTipText(message);
@@ -398,7 +266,6 @@ final class BuildConfigPanel extends JPanel {
 
     void clearBuildStatus() {
         UiComponents.clearStatusMessage(statusLabel, statusTimer, true);
-        buildConfigHintLabel.setVisible(true);
     }
 
     void showModelStatus(String message, boolean success) {
@@ -407,30 +274,6 @@ final class BuildConfigPanel extends JPanel {
 
     void clearModelStatus() {
         modelTabPanel.clearModelStatus();
-    }
-
-    void configureWithRoxy() {
-        if (buildToolService == null || onConfigureWithRoxyCallback == null) {
-            showBuildStatus("Roxy AI service is not available.", false);
-            return;
-        }
-        performConfigureWithRoxy();
-    }
-
-    CompletableFuture<String> performConfigureWithRoxy() {
-        refreshDetectedTemplate();
-        final String templateId = detectedTemplateId;
-        final String currentEditorText = textArea.getText();
-        final Consumer<String> callback = onConfigureWithRoxyCallback;
-        CompletableFuture<String> future = Edt.supplyAsync(
-                () -> buildToolService.buildInteractiveConfigurationPrompt(templateId, currentEditorText),
-                callback::accept, ex -> {
-                    Throwable cause = ExceptionUtils.getRootCause(ex);
-                    log.error("Failed to prepare interactive build.toml prompt: {}", cause.getMessage());
-                    showBuildStatus("Roxy configuration failed: " + cause.getMessage(), false);
-                });
-        lastAsyncFuture = future;
-        return future;
     }
 
     void loadProfileOptions() {
@@ -494,187 +337,13 @@ final class BuildConfigPanel extends JPanel {
         button.setIcon(FontIcon.of(icon, 16, UiComponents.resolveActionButtonIconColor(style)));
     }
 
-    private GenericBuildToolService.BuildConfig parseEditorToml(String rawToml) throws IOException {
-        return GenericBuildToolService.parseConfigStatic(rawToml);
-    }
-
-    private record SummaryParseResult(@Nullable GenericBuildToolService.BuildConfig config,
-            @Nullable String errorMessage) {
-    }
-
-    void updateSummaryCards() {
-        if (pipelineSummaryCard == null) {
-            return;
-        }
-        final String rawToml;
-        if (textArea != null) {
-            rawToml = StringUtils.defaultString(textArea.getText());
-        } else {
-            rawToml = "";
-        }
-        long generation = summaryParseGeneration.incrementAndGet();
-        summaryParseFuture = Edt.supplyAsync(() -> {
-            try {
-                return new SummaryParseResult(parseEditorToml(rawToml), null);
-            } catch (IOException ex) {
-                return new SummaryParseResult(null, StringUtils.defaultIfBlank(ex.getMessage(), "Invalid TOML syntax"));
-            }
-        }, result -> {
-            if (generation == summaryParseGeneration.get()) {
-                applySummaryParseResult(result);
-            }
-        });
-    }
-
-    private void applySummaryParseResult(SummaryParseResult result) {
-        if (pipelineSummaryCard == null) {
-            return;
-        }
-        Color accentColor = SwingHtmlUtils.getAccentColor();
-        Color mutedColor = SwingHtmlUtils.getMutedForegroundColor();
-        Color greenColor = SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green");
-        Color redColor = SwingHtmlUtils.getUiColor(new Color(0xdc, 0x35, 0x45), "Actions.Red");
-
-        GenericBuildToolService.BuildConfig config = result.config();
-        if (config != null) {
-            updatePipelineCard(config.commands(), accentColor, mutedColor);
-            updateSandboxCard(config.sandbox(), accentColor, greenColor, mutedColor);
-            updateParserCard(config.parse(), accentColor, mutedColor);
-
-            int timeout = GenericBuildToolService.DEFAULT_TIMEOUT_SECONDS;
-            if (config.timeoutSeconds() != null) {
-                timeout = config.timeoutSeconds();
-            }
-            String envSummary = config.env().size() + " env var(s)";
-            syntaxSummaryCard.updateContent(timeout + "s • Valid TOML", envSummary, greenColor, Codicons.CHECK);
-        } else {
-            String errorMsg = StringUtils.defaultIfBlank(result.errorMessage(), "Invalid TOML syntax");
-            pipelineSummaryCard.updateContent("— / 8 configured", "Fix TOML syntax to inspect", mutedColor,
-                    Codicons.TERMINAL);
-            sandboxSummaryCard.updateContent("Unavailable", "Fix TOML syntax to inspect", mutedColor, Codicons.SHIELD);
-            parserSummaryCard.updateContent("Unavailable", "Fix TOML syntax to inspect", mutedColor, Codicons.FILTER);
-            syntaxSummaryCard.updateContent("Invalid TOML Syntax", errorMsg, redColor, Codicons.WARNING);
-        }
-    }
-
-    private void updatePipelineCard(GenericBuildToolService.CommandsSection cmds, Color accentColor, Color mutedColor) {
-        List<String> configured = new ArrayList<>();
-        addIfNotBlank(configured, "install", cmds.install());
-        addIfNotBlank(configured, "clean", cmds.clean());
-        addIfNotBlank(configured, "compile", cmds.compile());
-        addIfNotBlank(configured, "build", cmds.build());
-        addIfNotBlank(configured, "test_all", cmds.testAll());
-        addIfNotBlank(configured, "test_single", cmds.testSingle());
-        addIfNotBlank(configured, "lint", cmds.lint());
-        addIfNotBlank(configured, "format", cmds.format());
-
-        int count = configured.size();
-        String subtitle;
-        Color valueColor;
-        if (count == 0) {
-            subtitle = "No commands configured";
-            valueColor = mutedColor;
-        } else {
-            valueColor = accentColor;
-            if (count <= MAX_SUMMARY_COMMANDS_PREVIEW) {
-                subtitle = String.join(", ", configured);
-            } else {
-                subtitle = String.join(", ", configured.subList(0, MAX_SUMMARY_COMMANDS_PREVIEW)) + " +"
-                        + (count - MAX_SUMMARY_COMMANDS_PREVIEW);
-            }
-        }
-        pipelineSummaryCard.updateContent(count + " / 8 configured", subtitle, valueColor, Codicons.TERMINAL);
-    }
-
-    private static void addIfNotBlank(List<String> target, String label, @Nullable String command) {
-        if (StringUtils.isNotBlank(command)) {
-            target.add(label);
-        }
-    }
-
-    private void updateSandboxCard(BuildContainerService.SandboxConfig sandbox, Color accentColor, Color greenColor,
-            Color mutedColor) {
-        BuildContainerService.SandboxMode mode = sandbox.resolvedMode();
-        if (mode == BuildContainerService.SandboxMode.NATIVE) {
-            String subtitle = sandbox.readablePaths().size() + " read, " + sandbox.writablePaths().size()
-                    + " write paths";
-            sandboxSummaryCard.updateContent("native (OS sandbox)", subtitle, greenColor, Codicons.SHIELD);
-        } else if (mode == BuildContainerService.SandboxMode.DOCKER) {
-            sandboxSummaryCard.updateContent("docker (" + sandbox.image() + ")", "workdir: " + sandbox.workdir(),
-                    accentColor, Codicons.SHIELD);
-        } else {
-            sandboxSummaryCard.updateContent("none (Host execution)", "Runs directly on host", mutedColor,
-                    Codicons.SHIELD);
-        }
-    }
-
-    private void updateParserCard(GenericBuildToolService.ParseSection parse, Color accentColor, Color mutedColor) {
-        boolean hasErrorRegex = StringUtils.isNotBlank(parse.errorRegex());
-        boolean hasTestRegex = StringUtils.isNotBlank(parse.testFailureRegex());
-        int contextLines = parse.resolvedContextLines();
-        int xmlCount = parse.resolvedJunitXmlPaths().size();
-
-        String value;
-        Color color;
-        if (hasErrorRegex && hasTestRegex) {
-            value = "Error & Test regexes";
-            color = accentColor;
-        } else if (hasErrorRegex) {
-            value = "Error regex";
-            color = accentColor;
-        } else if (hasTestRegex) {
-            value = "Test regex";
-            color = accentColor;
-        } else {
-            value = "Default log tail";
-            color = mutedColor;
-        }
-        String subtitle = contextLines + " lines • " + xmlCount + " JUnit path(s)";
-        parserSummaryCard.updateContent(value, subtitle, color, Codicons.FILTER);
-    }
-
-    private void applyConfigureWithRoxyButtonStyling() {
-        if (configureWithRoxyButton == null) {
-            return;
-        }
-        boolean dark = SwingHtmlUtils.isDarkTheme(resolveCurrentThemeName());
-        Color bgColor;
-        Color borderColor;
-        Color fgColor;
-        if (dark) {
-            bgColor = DARK_VIOLET_BG;
-            borderColor = DARK_VIOLET_BORDER;
-            fgColor = DARK_VIOLET_FG;
-        } else {
-            bgColor = LIGHT_VIOLET_BG;
-            borderColor = LIGHT_VIOLET_BORDER;
-            fgColor = LIGHT_VIOLET_FG;
-        }
-        String style = "arc: 10; font: bold; border: 1,10,1,10," + SwingHtmlUtils.toHex(borderColor)
-                + ",1,10; background: " + SwingHtmlUtils.toHex(bgColor) + "; foreground: "
-                + SwingHtmlUtils.toHex(fgColor);
-        configureWithRoxyButton.putClientProperty(FlatClientProperties.STYLE, style);
-        configureWithRoxyButton.setForeground(fgColor);
-        configureWithRoxyButton.setIcon(FontIcon.of(Codicons.LIGHTBULB_AUTOFIX, 15, fgColor));
-    }
-
-    @Nullable
-    private String resolveCurrentThemeName() {
-        if (settingsService != null && settingsService.getSettings() != null) {
-            return settingsService.getSettings().getTheme();
-        }
-        return null;
-    }
-
     private void applySectionStyling() {
         UiComponents.styleCardPanel(buildCardPanel);
         UiComponents.styleCodePillBadge(buildTomlFileBadge);
-        applyConfigureWithRoxyButtonStyling();
         updateSaveButtonState();
         if (modelTabPanel != null) {
             modelTabPanel.applyThemeStyling();
         }
-        updateSummaryCards();
 
         if (lastStatusSuccess) {
             statusLabel.setForeground(SwingHtmlUtils.getUiColor(new Color(0x28, 0xa7, 0x45), "Actions.Green"));
@@ -698,11 +367,9 @@ final class BuildConfigPanel extends JPanel {
         Edt.run(() -> {
             UiComponents.stopTimer(saveFeedbackTimer);
             UiComponents.stopTimer(modelTabPanel.modelSaveFeedbackTimer);
-            UiComponents.stopTimer(summaryDebounceTimer);
             clearBuildStatus();
             clearModelStatus();
             loadProfileOptions();
-            refreshDetectedTemplate();
             loadConfig();
             loadDatabaseGrants();
             updateBannerState();
@@ -726,7 +393,7 @@ final class BuildConfigPanel extends JPanel {
             } else if (wasEdited) {
                 updateBannerState();
             }
-            summaryDebounceTimer.restart();
+
         }
     }
 
@@ -768,7 +435,7 @@ final class BuildConfigPanel extends JPanel {
 
     CompletableFuture<Void> saveConfig() {
         UiComponents.stopTimer(saveFeedbackTimer);
-        UiComponents.stopTimer(summaryDebounceTimer);
+
         if (buildToolService == null && projectService == null) {
             CompletableFuture<Void> done = CompletableFuture.completedFuture(null);
             lastAsyncFuture = done;
@@ -794,7 +461,7 @@ final class BuildConfigPanel extends JPanel {
             textEditedByUser = false;
             saveFeedbackTimer.restart();
             updateBannerState();
-            updateSummaryCards();
+
             showBuildStatus("Configuration saved successfully!", true);
             if (!wasBuildConfirmed && onConfirmSavedCallback != null) {
                 onConfirmSavedCallback.run();
@@ -824,10 +491,6 @@ final class BuildConfigPanel extends JPanel {
         this.onConfirmSavedCallback = callback;
     }
 
-    void setOnConfigureWithRoxyCallback(Consumer<String> callback) {
-        this.onConfigureWithRoxyCallback = callback;
-    }
-
     void setOnManageGlobalDatabasesCallback(Runnable callback) {
         databasesTabPanel.setOnManageGlobalDatabasesCallback(callback);
     }
@@ -852,70 +515,6 @@ final class BuildConfigPanel extends JPanel {
             settingsTabs.setTitleAt(TAB_INDEX_DATABASES, TAB_DATABASES_TITLE + " (" + grantedCount + " Granted)");
         } else {
             settingsTabs.setTitleAt(TAB_INDEX_DATABASES, TAB_DATABASES_TITLE);
-        }
-    }
-
-    void applyGeneratedBuildToml(String toml) {
-        selectBuildConfigTab();
-        setEditorContentProgrammatically(toml, false);
-        showBuildStatus(APPLIED_FROM_ASK_ROXY_STATUS, true);
-    }
-
-    final class SummaryCard extends JPanel {
-        private static final long serialVersionUID = 1L;
-
-        final JLabel iconLabel;
-        final JLabel titleLabel;
-        final JLabel valueLabel;
-        final JLabel subtitleLabel;
-
-        SummaryCard(String title, Codicons icon) {
-            super(new MigLayout("fillx, wrap 1, insets 10 12 10 12, gapy 3", GROW_FILL, ""));
-            setOpaque(true);
-
-            JPanel topRow = new JPanel(new MigLayout("insets 0, gapx 6", "[][grow, fill]", ROW_CENTER));
-            topRow.setOpaque(false);
-            iconLabel = new JLabel(FontIcon.of(icon, 14, SwingHtmlUtils.getAccentColor()));
-            titleLabel = new JLabel(title);
-            titleLabel.putClientProperty(FlatClientProperties.STYLE,
-                    "font: bold -1; foreground: $Label.disabledForeground");
-            topRow.add(iconLabel);
-            topRow.add(titleLabel, WMIN_0);
-            add(topRow, GROWX_WMIN_0);
-
-            valueLabel = new JLabel("—");
-            valueLabel.putClientProperty(FlatClientProperties.STYLE, "font: bold +0");
-            add(valueLabel, GROWX_WMIN_0);
-
-            subtitleLabel = new JLabel(" ");
-            subtitleLabel.putClientProperty(FlatClientProperties.STYLE,
-                    "font: -1; foreground: $Label.disabledForeground");
-            add(subtitleLabel, GROWX_WMIN_0);
-
-            applyCardTheme();
-        }
-
-        void updateContent(String valueText, String subtitleText, Color valueColor, Codicons icon) {
-            valueLabel.setText(valueText);
-            valueLabel.setForeground(valueColor);
-            subtitleLabel.setText(subtitleText);
-            subtitleLabel.setToolTipText(subtitleText);
-            iconLabel.setIcon(FontIcon.of(icon, 14, valueColor));
-        }
-
-        void applyCardTheme() {
-            if (titleLabel == null) {
-                return;
-            }
-            String borderHex = UiComponents.getCardBorderHex();
-            putClientProperty(FlatClientProperties.STYLE,
-                    "arc: 12; border: 1,1,1,1," + borderHex + ",1,12; background: $TextArea.background");
-        }
-
-        @Override
-        public void updateUI() {
-            super.updateUI();
-            applyCardTheme();
         }
     }
 

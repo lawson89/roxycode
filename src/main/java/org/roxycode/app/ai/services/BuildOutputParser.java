@@ -6,15 +6,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HexFormat;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
-import org.roxycode.app.util.PathUtils;
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -30,8 +25,7 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 /**
- * Stateless build output, TOML escape, RipGrep error block, and JUnit XML failure parser used by
- * {@link GenericBuildToolService}.
+ * Stateless build output, RipGrep error block, and JUnit XML failure parser used by {@link GenericBuildToolService}.
  */
 final class BuildOutputParser {
 
@@ -42,161 +36,8 @@ final class BuildOutputParser {
     private static final String RG_BLOCK_SEPARATOR = "--";
     private static final String TAG_FAILURE = "failure";
     private static final String TAG_ERROR = "error";
-    private static final int MAX_ENRICHED_ERROR_LOCATIONS = 3;
-    private static final int ERROR_CONTEXT_PADDING = 5;
-    private static final Pattern ERROR_FILE_LINE_PATTERN = Pattern.compile(
-            "([A-Za-z0-9_./\\\\-]+\\.[A-Za-z0-9_]+)(?::\\[(\\d+)(?:,\\d+)?\\]|:(\\d+)(?::\\d+)?|\\((\\d+)(?:,\\d+)?\\))");
-
-    private static final char COMMENT_CHAR = '#';
-    private static final char DOUBLE_QUOTE_CHAR = '"';
-    private static final char SINGLE_QUOTE_CHAR = '\'';
-    private static final char BACKSLASH_CHAR = '\\';
-    private static final char UNICODE_ESCAPE_LOWER = 'u';
-    private static final char UNICODE_ESCAPE_UPPER = 'U';
-    private static final String TRIPLE_DOUBLE_QUOTE = "\"\"\"";
-    private static final String DOUBLE_BACKSLASH = "\\\\";
-    private static final String VALID_SIMPLE_TOML_ESCAPES = "btnfr\"\\";
-
-    private enum TomlLexerState {
-        NORMAL, COMMENT, BASIC_STRING, MULTILINE_BASIC_STRING, LITERAL_STRING, MULTILINE_LITERAL_STRING
-    }
 
     private BuildOutputParser() {
-    }
-
-    /**
-     * Escapes unescaped single backslashes inside TOML basic strings (such as regex patterns like {@code \d} or
-     * {@code \s} in {@code build.toml}) while preserving valid TOML escape sequences and literal strings.
-     *
-     * <p>
-     * This is necessary because Jackson's {@code TomlMapper} strictly follows the TOML specification, which treats
-     * backslashes in basic strings as the start of an escape sequence. If the character following the backslash is not
-     * a valid escape character (like 'd' in {@code \d}), the parser will fail. By doubling the backslash to {@code \d},
-     * we ensure the regex is parsed correctly as a literal backslash followed by 'd'.
-     */
-    static String sanitizeTomlEscapes(String toml) {
-        if (toml == null || toml.indexOf(BACKSLASH_CHAR) < 0) {
-            return StringUtils.defaultString(toml);
-        }
-        StringBuilder sb = new StringBuilder(toml.length() + 16);
-        int len = toml.length();
-        TomlLexerState state = TomlLexerState.NORMAL;
-        int i = 0;
-        while (i < len) {
-            char c = toml.charAt(i);
-            switch (state) {
-                case COMMENT :
-                    sb.append(c);
-                    if (isLineBreak(c)) {
-                        state = TomlLexerState.NORMAL;
-                    }
-                    i++;
-                    break;
-                case LITERAL_STRING :
-                    sb.append(c);
-                    if (c == SINGLE_QUOTE_CHAR || isLineBreak(c)) {
-                        state = TomlLexerState.NORMAL;
-                    }
-                    i++;
-                    break;
-                case MULTILINE_LITERAL_STRING :
-                    if (startsWithTripleQuote(toml, i, SINGLE_QUOTE_CHAR)) {
-                        sb.append("'''");
-                        state = TomlLexerState.NORMAL;
-                        i += 3;
-                    } else {
-                        sb.append(c);
-                        i++;
-                    }
-                    break;
-                case BASIC_STRING :
-                case MULTILINE_BASIC_STRING :
-                    boolean multiline = state == TomlLexerState.MULTILINE_BASIC_STRING;
-                    if (multiline && startsWithTripleQuote(toml, i, DOUBLE_QUOTE_CHAR)) {
-                        sb.append(TRIPLE_DOUBLE_QUOTE);
-                        state = TomlLexerState.NORMAL;
-                        i += 3;
-                    } else if (!multiline && (c == DOUBLE_QUOTE_CHAR || isLineBreak(c))) {
-                        sb.append(c);
-                        state = TomlLexerState.NORMAL;
-                        i++;
-                    } else if (c == BACKSLASH_CHAR && i + 1 < len) {
-                        if (isValidTomlEscape(toml, i + 1, multiline)) {
-                            sb.append(BACKSLASH_CHAR).append(toml.charAt(i + 1));
-                            i += 2;
-                        } else {
-                            sb.append(DOUBLE_BACKSLASH);
-                            i++;
-                        }
-                    } else {
-                        sb.append(c);
-                        i++;
-                    }
-                    break;
-                default :
-                    if (c == COMMENT_CHAR) {
-                        state = TomlLexerState.COMMENT;
-                        sb.append(c);
-                        i++;
-                    } else if (startsWithTripleQuote(toml, i, DOUBLE_QUOTE_CHAR)) {
-                        state = TomlLexerState.MULTILINE_BASIC_STRING;
-                        sb.append(TRIPLE_DOUBLE_QUOTE);
-                        i += 3;
-                    } else if (startsWithTripleQuote(toml, i, SINGLE_QUOTE_CHAR)) {
-                        state = TomlLexerState.MULTILINE_LITERAL_STRING;
-                        sb.append("'''");
-                        i += 3;
-                    } else if (c == DOUBLE_QUOTE_CHAR) {
-                        state = TomlLexerState.BASIC_STRING;
-                        sb.append(c);
-                        i++;
-                    } else if (c == SINGLE_QUOTE_CHAR) {
-                        state = TomlLexerState.LITERAL_STRING;
-                        sb.append(c);
-                        i++;
-                    } else {
-                        sb.append(c);
-                        i++;
-                    }
-                    break;
-            }
-        }
-        return sb.toString();
-    }
-
-    private static boolean isLineBreak(char c) {
-        return c == '\n' || c == '\r';
-    }
-
-    private static boolean startsWithTripleQuote(String text, int index, char quoteChar) {
-        return index + 2 < text.length() && text.charAt(index) == quoteChar && text.charAt(index + 1) == quoteChar
-                && text.charAt(index + 2) == quoteChar;
-    }
-
-    private static boolean isValidTomlEscape(String text, int escapeCharIndex, boolean multilineBasic) {
-        char next = text.charAt(escapeCharIndex);
-        if (VALID_SIMPLE_TOML_ESCAPES.indexOf(next) >= 0) {
-            return true;
-        }
-        if (next == UNICODE_ESCAPE_LOWER) {
-            return hasHexDigits(text, escapeCharIndex + 1, 4);
-        }
-        if (next == UNICODE_ESCAPE_UPPER) {
-            return hasHexDigits(text, escapeCharIndex + 1, 8);
-        }
-        return multilineBasic && (Character.isWhitespace(next) || isLineBreak(next));
-    }
-
-    private static boolean hasHexDigits(String text, int start, int count) {
-        if (start + count > text.length()) {
-            return false;
-        }
-        for (int i = 0; i < count; i++) {
-            if (!HexFormat.isHexDigit(text.charAt(start + i))) {
-                return false;
-            }
-        }
-        return true;
     }
 
     static String stripAnsiCodes(String text) {
@@ -303,141 +144,6 @@ final class BuildOutputParser {
         String block = sb.toString();
         if (!block.isEmpty() && !blocks.contains(block)) {
             blocks.add(block);
-        }
-    }
-
-    static List<String> enrichErrorsWithSourceContext(List<String> errors, Path projectRoot) {
-        if (errors == null || errors.isEmpty() || projectRoot == null || !Files.isDirectory(projectRoot)) {
-            if (errors == null) {
-                return List.of();
-            }
-            return errors;
-        }
-        Path normalizedRoot = projectRoot.toAbsolutePath().normalize();
-        Set<String> enrichedLocations = new LinkedHashSet<>();
-        List<String> enriched = new ArrayList<>(errors.size());
-
-        for (String errorBlock : errors) {
-            if (errorBlock == null || errorBlock.isBlank()
-                    || enrichedLocations.size() >= MAX_ENRICHED_ERROR_LOCATIONS) {
-                enriched.add(errorBlock);
-                continue;
-            }
-            enriched.add(enrichSingleErrorBlock(errorBlock, normalizedRoot, enrichedLocations));
-        }
-        return enriched;
-    }
-
-    private static String enrichSingleErrorBlock(String errorBlock, Path normalizedRoot,
-            Set<String> enrichedLocations) {
-        StringBuilder updatedBlock = new StringBuilder(errorBlock);
-        Matcher matcher = ERROR_FILE_LINE_PATTERN.matcher(errorBlock);
-        while (matcher.find() && enrichedLocations.size() < MAX_ENRICHED_ERROR_LOCATIONS) {
-            String rawPath = matcher.group(1);
-            int lineNumber = parseMatchedLineNumber(matcher);
-            if (lineNumber <= 0) {
-                continue;
-            }
-            Path resolvedFile = resolveProjectSourceFile(normalizedRoot, rawPath);
-            if (resolvedFile == null) {
-                continue;
-            }
-            String relPath = PathUtils.normalizeRelativePath(normalizedRoot.relativize(resolvedFile).toString());
-            String locationKey = relPath + ":" + lineNumber;
-            if (enrichedLocations.contains(locationKey)) {
-                continue;
-            }
-            String contextBlock = buildSourceContextAppendBlock(resolvedFile, relPath, lineNumber, updatedBlock);
-            if (contextBlock != null) {
-                updatedBlock.append(contextBlock);
-                enrichedLocations.add(locationKey);
-            }
-        }
-        return updatedBlock.toString();
-    }
-
-    private static int parseMatchedLineNumber(Matcher matcher) {
-        for (int groupIdx = 2; groupIdx <= 4; groupIdx++) {
-            String rawLine = matcher.group(groupIdx);
-            if (rawLine != null && !rawLine.isEmpty()) {
-                try {
-                    return Integer.parseInt(rawLine);
-                } catch (NumberFormatException ignored) {
-                    return -1;
-                }
-            }
-        }
-        return -1;
-    }
-
-    private static Path resolveProjectSourceFile(Path normalizedRoot, String rawPath) {
-        if (rawPath == null || rawPath.isBlank()) {
-            return null;
-        }
-        String cleaned = PathUtils.stripLeadingCurrentDir(rawPath);
-        try {
-            Path directCandidate = Path.of(cleaned);
-            if (directCandidate.isAbsolute()) {
-                Path normalizedCandidate = directCandidate.normalize();
-                if (normalizedCandidate.startsWith(normalizedRoot) && isReadableSourceFile(normalizedCandidate)) {
-                    return normalizedCandidate;
-                }
-                return resolveSuffixUnderRoot(normalizedRoot, cleaned);
-            }
-            Path relativeCandidate = normalizedRoot.resolve(cleaned).normalize();
-            if (relativeCandidate.startsWith(normalizedRoot) && isReadableSourceFile(relativeCandidate)) {
-                return relativeCandidate;
-            }
-            return resolveSuffixUnderRoot(normalizedRoot, cleaned);
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
-
-    private static Path resolveSuffixUnderRoot(Path normalizedRoot, String slashPath) {
-        int slashIdx = slashPath.indexOf('/');
-        while (slashIdx >= 0 && slashIdx + 1 < slashPath.length()) {
-            String subPath = slashPath.substring(slashIdx + 1);
-            if (!subPath.isEmpty() && !subPath.startsWith("/")) {
-                try {
-                    Path candidate = normalizedRoot.resolve(subPath).normalize();
-                    if (candidate.startsWith(normalizedRoot) && isReadableSourceFile(candidate)) {
-                        return candidate;
-                    }
-                } catch (Exception ignored) {
-                    // Try next path segment
-                }
-            }
-            slashIdx = slashPath.indexOf('/', slashIdx + 1);
-        }
-        return null;
-    }
-
-    private static boolean isReadableSourceFile(Path file) {
-        try {
-            return Files.isRegularFile(file) && !FileReadService.isBinaryFile(file);
-        } catch (IOException e) {
-            return false;
-        }
-    }
-
-    private static String buildSourceContextAppendBlock(Path resolvedFile, String relPath, int lineNumber,
-            CharSequence existingErrorBlock) {
-        try {
-            List<String> lines = Files.readAllLines(resolvedFile);
-            if (lines.isEmpty() || lineNumber > lines.size()) {
-                return null;
-            }
-            int startLine = Math.max(1, lineNumber - ERROR_CONTEXT_PADDING);
-            int endLine = Math.min(lines.size(), lineNumber + ERROR_CONTEXT_PADDING);
-            String header = "--- Source Context (" + relPath + ":" + startLine + "-" + endLine + ") ---";
-            if (existingErrorBlock.toString().contains(header)) {
-                return null;
-            }
-            String snippet = FileReadService.formatNumberedLines(lines, startLine, endLine);
-            return "\n" + header + "\n" + snippet;
-        } catch (Exception e) {
-            return null;
         }
     }
 
